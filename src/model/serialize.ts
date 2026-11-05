@@ -6,18 +6,19 @@ import {
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
-import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, withoutV11Meta, withoutV12Slides, type RawObject } from "./migrations";
+import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, v17OnlyElement, withoutV11Meta, withoutV12Slides, type RawObject } from "./migrations";
+import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE, CHECKBOX_PATH_MAX, isOurBlockId } from "./checklist";
 import { commentLine, normalizeComments, readComments } from "./comments-format";
 import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
 import { normalizePageTags } from "./page-tags";
 import { STICKY_INK_MAX, STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STICKY_MIN_SIZE, STICKY_TEXT_MAX } from "./sticky";
 import { normalizePosition } from "./position";
 import {
-	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, FORMAT_ID, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
+	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
 	SLIDE_ID_MAX, SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type SlideRef,
 	STATES_ID_MAX, STATES_MAX_ITEMS, STATES_MAX_PARTS, STATES_MAX_ROT, STATES_MAX_SCALE, STATES_MAX_SHIFT, STATES_MAX_STATES, STATES_MIN_SCALE, STATES_NAME_MAX,
 	type PageState, type PageStates, type PartPose, type StatePart,
-	type Asset, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
+	type Asset, type CheckboxElement, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageComment, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type StickyElement, type Stroke,
 	type TextElement, type Tool,
@@ -209,6 +210,19 @@ function stickyLine(e: StickyElement): string {
 	return line + "}";
 }
 
+/**
+ * v17 checkbox: frame and colour, then the optional tick (`checked`), the time of the last toggle (`at`), the typed label and the
+ * task link, in that order (one line).
+ */
+function checkboxLine(e: CheckboxElement): string {
+	let line = `				{"id":${j(e.id)},"type":"checkbox","x":${j(e.x)},"y":${j(e.y)},"size":${j(e.size)},"color":${j(e.color)}`;
+	if (e.checked === true) line += `,"checked":true`;
+	if (e.at !== undefined) line += `,"at":${j(e.at)}`;
+	if (e.label !== undefined && e.label !== "") line += `,"label":${j(e.label)}`;
+	if (e.task !== undefined) line += `,"task":{"path":${j(e.task.path)},"block":${j(e.task.block)}}`;
+	return line + "}";
+}
+
 function elementLine(e: PageElement): string {
 	if (e.type === "text") {
 		return `\t\t\t\t{"id":${j(e.id)},"type":"text","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"text":${j(e.text)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}}`;
@@ -222,6 +236,7 @@ function elementLine(e: PageElement): string {
 	if (e.type === "graph") return graphLine(e);
 	if (e.type === "excerpt") return excerptLine(e);
 	if (e.type === "sticky") return stickyLine(e);
+	if (e.type === "checkbox") return checkboxLine(e);
 	return fail("element", "unknown element type");
 }
 
@@ -664,6 +679,7 @@ function readElement(v: unknown, path: string, assets: Assets, drop: Dropped | n
 	if (v.type === "graph") return readGraph(v, id, path, drop);
 	if (v.type === "excerpt") return readExcerpt(v, id, path, assets, drop);
 	if (v.type === "sticky") return readSticky(v, id, path, drop);
+	if (v.type === "checkbox") return readCheckbox(v, id, path, drop);
 	return fail(`${path}.type`, "unknown element type");
 }
 
@@ -855,6 +871,47 @@ function readSticky(v: RawObject, id: string, path: string, drop: Dropped | null
 		if (!drop) fail(`${path}.ink`, "only a collapsed note has an ink list");
 		drop.count++;
 	}
+	return el;
+}
+
+/**
+ * v17 checkbox. Position, size (within CHECKBOX_MIN_SIZE..CHECKBOX_MAX_SIZE) and colour are required (an invalid one fails the
+ * checkbox); the tick, the time of the toggle, the label and the task link are details, each dropped and counted on its own when
+ * invalid and reading leniently (the checkbox is then open, was never toggled, has no label, or is not linked). A label that
+ * normalising changes is not what this plugin writes: leniently it is kept normalised and counted, strictly it fails.
+ */
+function readCheckbox(v: RawObject, id: string, path: string, drop: Dropped | null): CheckboxElement {
+	const size = positive(v.size, `${path}.size`);
+	if (size < CHECKBOX_MIN_SIZE || size > CHECKBOX_MAX_SIZE) fail(`${path}.size`, `expected ${CHECKBOX_MIN_SIZE} to ${CHECKBOX_MAX_SIZE} pt`);
+	const el: CheckboxElement = { id, type: "checkbox", x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`), size, color: colour(v.color, `${path}.color`) };
+	if (readTrue(v.checked, `${path}.checked`, drop)) el.checked = true;
+	const at = orDrop(drop, () => {
+		if (v.at === undefined) return undefined;
+		if (typeof v.at !== "number" || !Number.isSafeInteger(v.at) || v.at < 0) fail(`${path}.at`, "expected a time in ms");
+		return v.at;
+	});
+	if (at !== undefined) el.at = at;
+	const label = orDrop(drop, () => {
+		if (v.label === undefined) return undefined;
+		const s = boundedString(v.label, `${path}.label`, CHECKBOX_LABEL_MAX * 4);
+		const clean = Array.from(s.replace(/\s+/g, " ").trim()).slice(0, CHECKBOX_LABEL_MAX).join("");
+		if (clean !== s) {
+			if (!drop) fail(`${path}.label`, "not a normalised label");
+			drop.count++;
+		}
+		return clean;
+	});
+	if (label !== undefined && label !== "") el.label = label;
+	const task = orDrop(drop, () => {
+		if (v.task === undefined) return undefined;
+		if (!isObject(v.task)) fail(`${path}.task`, "expected an object");
+		const taskPath = boundedString(v.task.path, `${path}.task.path`, CHECKBOX_PATH_MAX);
+		if (taskPath === "" || Array.from(taskPath).some((ch) => ch.charCodeAt(0) < 32)) fail(`${path}.task.path`, "expected a note path");
+		const block = boundedString(v.task.block, `${path}.task.block`, CHECKBOX_BLOCK_MAX);
+		if (!isOurBlockId(block)) fail(`${path}.task.block`, "expected a block id written by this plugin (nb-…)");
+		return { path: taskPath, block };
+	});
+	if (task !== undefined) el.task = task;
 	return el;
 }
 
@@ -1207,7 +1264,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 			// v8 markers and boxes, v9 equations and graphs, v10 excerpts are details: an invalid one is dropped and counted when
 			// reading leniently.
 			const v8 = isObject(e) && typeof e.type === "string"
-				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type) || ELEMENT_TYPES_V15.includes(e.type));
+				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type) || ELEMENT_TYPES_V15.includes(e.type) || ELEMENT_TYPES_V17.includes(e.type));
 			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop)) : readElement(e, at, assets, drop);
 			if (!el) return;
 			if (ids.has(el.id)) fail(`${at}.id`, "duplicate id");
@@ -1276,6 +1333,7 @@ export function freezeElement<T extends PageElement>(element: T): T {
 	if (element.type === "graph" && !Object.isFrozen(element)) deepFreezeGraph(element);
 	if (element.type === "excerpt") Object.freeze(element.source);
 	if (element.type === "sticky" && element.ink) Object.freeze(element.ink);
+	if (element.type === "checkbox" && element.task) Object.freeze(element.task);
 	return Object.freeze(element);
 }
 
@@ -1431,7 +1489,7 @@ export class StagedParse {
 	}
 
 	/**
-	 * Prepares a staged parse of a file at the current version, or at version 9 to 15, whose migrations only refuse
+	 * Prepares a staged parse of a file at the current version, or at version 9 to 16, whose migrations only refuse
 	 * excerpts (v9: checked page by page as they are read) and drop the v11 metadata fields, with page `first` (0-based) read in full.
 	 */
 	static create(raw: RawObject, first: number, from: number = CURRENT_VERSION): StagedParse | ParseFailureResult {
@@ -1461,6 +1519,11 @@ export class StagedParse {
 		// v15: a sticky note in a file of an older format was not written by any version of this plugin (the migration refuses it).
 		if (this.from < 15) {
 			const problem = v15OnlyElement(this.rawPages[i], i);
+			if (problem) fail(`pages[${i}]`, problem);
+		}
+		// v17: the same for a checkbox (the v16 -> v17 migration refuses it).
+		if (this.from < 17) {
+			const problem = v17OnlyElement(this.rawPages[i], i);
 			if (problem) fail(`pages[${i}]`, problem);
 		}
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
@@ -1527,7 +1590,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v13 → v14 only drops the pages' `locked` keys (ignored page by page), so large v13 files are staged too.
 	// v14 → v15 only refuses sticky notes (checked page by page as they are read), so large v14 files are staged too.
 	// v15 → v16 only drops the pages' `comments` keys (ignored page by page), so large v15 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15) return StagedParse.create(pre.raw, first, pre.version);
+	// v16 → v17 only refuses checkboxes (checked page by page as they are read), so large v16 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }

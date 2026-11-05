@@ -1,3 +1,4 @@
+import { copiedCheckbox } from "./checklist";
 import { createId, createPage } from "./document";
 import { freezeElement, freezeStroke } from "./serialize";
 import { copyComments } from "./comments";
@@ -5,6 +6,8 @@ import { remapStates } from "./states";
 import { PAPER_SPACING, type Asset, type Page, type PageElement, type Stroke } from "./types";
 
 function copyElement(el: PageElement): PageElement {
+	// v17: a copy of a checkbox keeps its tick but never the link to the task line of the original.
+	if (el.type === "checkbox") return freezeElement(copiedCheckbox(el, createId()));
 	return freezeElement({ ...el, id: createId() });
 }
 

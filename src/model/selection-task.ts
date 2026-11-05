@@ -123,6 +123,8 @@ export interface TaskLineParts {
 	image: string | null;
 	/** Link to the page of the notebook. */
 	pageLink: string;
+	/** 0.19 (#103): a block id (`nb-…`, without the `^`) written at the very end of the line, so the line can be found again to tick it. */
+	block?: string;
 }
 
 /**
@@ -135,6 +137,7 @@ export function buildTaskLine(p: TaskLineParts): string {
 	if (p.pageLink) parts.push(p.pageLink);
 	const due = dueText(p.due, p.emoji);
 	if (due) parts.push(due);
+	if (p.block) parts.push(`^${p.block}`);
 	return parts.filter((s) => s !== "").join(" ");
 }
 

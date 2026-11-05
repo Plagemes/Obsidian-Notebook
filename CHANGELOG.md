@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### checklists
+- **Handwritten checklists (#103), document format 17.** A small square drawn with the pen is offered as a checkbox (a *Make checkbox* chip next to it; the setting *Squares drawn as checkboxes* can also make it one at once, or leave it as ink). A checkbox can also be inserted from the Insert sheet. A tap with the pen, a mouse or a finger ticks it (one undo step, refused on a locked page); the tick is drawn above the ink and in exports. The handwriting on the same line to its right is its label: *Select with text* selects both, and the crop of a task is the box and its line.
+- **Send to tasks.** *Send to tasks…* on a selected checkbox adds `- [ ] <label> ![[picture]] [[page]]` to the daily note, the tasks note or a chosen note (the same code and dialog as *Make task*, with an optional text), ending in a block id `^nb-…` that the plugin wrote. Ticking the checkbox (or undoing, redoing, merging) then ticks that one line of the note and nothing else; if the line is gone the checkbox is unlinked with a notice. *Unlink task* stops the link.
+- **Open items.** The notebook map has an *Open items* filter: the pages that still have an unticked checkbox, with the count on the badge.
+- **Document format v17.** A new page element `checkbox` (place, size, colour, optional tick, tick time, typed label and task link), one line. The v16 to v17 migration only refuses a checkbox in a v16 file (large v16 files still stage); 0.18 and older open a v17 file read-only and never overwrite it. Read leniently (an invalid detail is dropped and counted), written strictly, repaired from the line scan. Copies of a page or a selection keep the tick but never the task link; notebooks and pages made from or saved as templates are unticked and unlinked. Merging a conflicted copy keeps one checkbox and the later toggle wins.
+
 ## 0.18.0 — 2026-11-05
 
 Review a page and move between notes more freely: margin comments anchored to a region of the page, an infinite page split into sheets of paper for export, a selection sent into a Markdown note, pages copied to another notebook with a link back, a QR code for a page, the notes that mention a page, annotating a PDF from Obsidian's PDF viewer, and quick tabs for the pages you keep going back to. The notebook format moves to version 16 (an older plugin opens a v16 file read-only).

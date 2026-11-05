@@ -25,6 +25,11 @@
  *   just enough in the same step so it stays visible: wider margins on a page with a background
  *   (`SetPageMargins`: its own ink moves with the background), a larger plain page, or more height on an
  *   infinite page (`SetPageSize`, which follows the margin rule).
+ * - v17: a checkbox is its place, size and colour; whether it is ticked, when it was last toggled (`at`), its typed label and its
+ *   task link are its state, not content. The same checkbox (same id) on both sides is kept once; when both toggled it the later
+ *   toggle wins (`mergedCheckbox`: ticked or unticked as the later one left it, a tie keeps the main notebook's) and a label or
+ *   task link only the copy has is added (counted in `checkboxesUpdated`). A checkbox only the copy has comes as it is, link
+ *   included (it names the same task line). Edits to the task line itself are not merged: they live in the note.
  * - v16: the margin comments of a common page are united by id (`mergeComments`): two devices that added comments or replies
  *   both keep theirs; for one comment (or reply) both have, the later edit wins (`edited`, else `created`; the main notebook on a
  *   tie), and when both edited the text the losing version is kept beside it as a marked comment or reply (`conflictId`, counted in
@@ -60,7 +65,9 @@ import { normalizeBookmarkInfo } from "./bookmarks";
 import { SetPageTags, unionPageTags } from "./page-tags";
 import { copyStroke as copyStrokeWithId } from "./pages";
 import { freezeElement } from "./serialize";
-import { DEFAULT_META, type BookmarkInfo, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageMargins, type Stroke } from "./types";
+import { UpdateCheckbox } from "./checklist-commands";
+import { copiedCheckbox, withChecked, withCheckboxLabel, withCheckboxTask } from "./checklist";
+import { DEFAULT_META, type BookmarkInfo, type CheckboxElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement, type PageMargins, type Stroke } from "./types";
 
 export interface MergeSummary {
 	/** Pages only in the copy, added. */
@@ -97,6 +104,8 @@ export interface MergeSummary {
 	commentsAdded: number;
 	/** v8: markers resolved in the copy only, resolved in the main notebook too ("either", like favourite). */
 	markersResolved: number;
+	/** v17: checkboxes both have whose state is taken from the copy because it was toggled later (or it has a label or task link the main one lacks). */
+	checkboxesUpdated: number;
 }
 
 export interface MergePlan {
@@ -130,6 +139,13 @@ export function elementContentKey(e: PageElement): string {
 		const { ink: _i, ...note } = rest;
 		void _i;
 		return stableStringify(note);
+	}
+	// v17: what a checkbox is (where, how big, which colour) is its content; whether it is ticked, when, its typed label and its
+	// task link are its state (merged by `mergedCheckbox`: the later toggle wins).
+	if (rest.type === "checkbox") {
+		const { checked: _c, at: _t, label: _l, task: _k, ...box } = rest;
+		void _c; void _t; void _l; void _k;
+		return stableStringify(box);
 	}
 	if (rest.type === "equation") {
 		const { outline: _o, ...eq } = rest;
@@ -181,6 +197,12 @@ function fitOnPage(target: Page, copy: Page, fresh: { strokes: readonly Stroke[]
 		}
 	}
 	for (const e of fresh.elements) {
+		if (e.type === "checkbox") {
+			minX = Math.min(minX, e.x);
+			maxX = Math.max(maxX, e.x + e.size);
+			maxY = Math.max(maxY, e.y + e.size);
+			continue;
+		}
 		if (e.type === "marker" || e.type === "box" || e.type === "equation" || e.type === "graph" || e.type === "excerpt" || e.type === "sticky") {
 			const b = e.type === "marker" ? markerBounds(e) : e.type === "box" ? boxBounds(e) : { minX: e.x, maxX: e.x + e.width, maxY: e.y + e.height };
 			minX = Math.min(minX, b.minX);
@@ -232,7 +254,24 @@ function copyStroke(s: Stroke, id: string, slide?: string | null): Stroke {
 }
 
 function copyElement(e: PageElement, id: string): PageElement {
+	// v17: a copy under a new id never keeps the link to the task line of the original.
+	if (e.type === "checkbox") return freezeElement(copiedCheckbox(e, id));
 	return freezeElement({ ...e, id });
+}
+
+/**
+ * v17: the state of the same checkbox (same id, same content) in the main notebook and in the copy, or null when the main notebook's
+ * is kept. The later toggle wins (`at`; never toggled counts as 0; a tie keeps the main notebook's). A typed label or a task link
+ * that only the copy has is taken either way (the main notebook's own stays when both have one).
+ */
+export function mergedCheckbox(main: CheckboxElement, copy: CheckboxElement): CheckboxElement | null {
+	const later = (copy.at ?? 0) > (main.at ?? 0);
+	let out: CheckboxElement = main;
+	if (later && (copy.checked === true) !== (main.checked === true)) out = withChecked(out, copy.checked === true, copy.at ?? 0);
+	else if (later) out = { ...out, at: copy.at! };
+	if (main.label === undefined && copy.label !== undefined) out = withCheckboxLabel(out, copy.label);
+	if (main.task === undefined && copy.task !== undefined) out = withCheckboxTask(out, copy.task);
+	return out === main ? null : out;
 }
 
 /**
@@ -253,7 +292,7 @@ function carriedInk(e: PageElement, strokeMap: ReadonlyMap<string, string>, adde
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0,
 	};
 	const commands: Command[] = [];
 	// v12: the copy's slide ids in the main notebook's table.
@@ -270,6 +309,8 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 	const mainPages = new Map<string, Page>();
 	/** v8: markers of the main notebook by id, to carry a resolved state over (see `resolveFrom`). */
 	const mainMarkers = new Map<string, { pageId: string; done: boolean }>();
+	/** v17: checkboxes of the main notebook by id (see `checkFrom`). */
+	const mainCheckboxes = new Map<string, { pageId: string; el: CheckboxElement }>();
 	/** Content keys present on each page of the result, for the idempotence of copies. */
 	const contentOn = new Map<string, Set<string>>();
 	for (const page of main.pages) {
@@ -285,6 +326,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			used.set(e.id, k);
 			keys.add(k);
 			if (e.type === "marker") mainMarkers.set(e.id, { pageId: page.id, done: !!e.done });
+			if (e.type === "checkbox") mainCheckboxes.set(e.id, { pageId: page.id, el: e });
 		}
 		contentOn.set(page.id, keys);
 	}
@@ -299,6 +341,21 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		commands.push(new SetMarkerDone(main.pageId, e.id, true));
 		mainMarkers.set(e.id, { pageId: main.pageId, done: true });
 		summary.markersResolved++;
+	};
+	/**
+	 * v17: a checkbox of the copy that is the same checkbox as one of the main notebook (same id, same content: `key`): its state
+	 * follows the later toggle. Found by id when applied, so a margin change in the same step does not matter.
+	 */
+	const checkFrom = (e: PageElement, key: string): void => {
+		if (e.type !== "checkbox" || used.get(e.id) !== key) return;
+		const have = mainCheckboxes.get(e.id);
+		if (!have) return;
+		const next = mergedCheckbox(have.el, e);
+		if (!next) return;
+		// Merged against the element as it is when the command runs (a margin change in the same step moves every element).
+		commands.push(new UpdateCheckbox(have.pageId, e.id, (current) => mergedCheckbox(current, e) ?? current, "Merge checkbox"));
+		mainCheckboxes.set(e.id, { pageId: have.pageId, el: next });
+		summary.checkboxesUpdated++;
 	};
 	const freshId = () => {
 		let id = createId();
@@ -426,6 +483,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 				const d = decide(e.id, key, page.id, "element");
 				if (d.kind === "skip") {
 					resolveFrom(e, key);
+					checkFrom(e, key);
 					continue;
 				}
 				const el = carriedInk(d.kind === "keep" ? e : copyElement(e, d.id), strokeMap, addedStrokes);
@@ -590,7 +648,7 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
 	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded
-		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded;
+		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated;
 }
 
 /**
@@ -607,6 +665,8 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 	/** v8: content keys of resolved markers per page, and resolved marker ids. */
 	const resolvedOn = new Map<string, Set<string>>();
 	const resolvedIds = new Set<string>();
+	/** v17: when each checkbox of the result was last toggled (0: never). */
+	const toggledAt = new Map<string, number>();
 	for (const p of result.pages) {
 		const keys = new Set<string>();
 		for (const s of p.strokes) {
@@ -623,6 +683,7 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 				resolved.add(k);
 				resolvedIds.add(e.id);
 			}
+			if (e.type === "checkbox") toggledAt.set(e.id, e.at ?? 0);
 		}
 		onPage.set(p.id, keys);
 		resolvedOn.set(p.id, resolved);
@@ -642,6 +703,8 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 			if (byId.get(e.id) !== k && !keys.has(k)) return false;
 			// v8: a marker the copy resolved is resolved in the result (the same marker, or the same content on the page).
 			if (e.type === "marker" && e.done && !(byId.get(e.id) === k && resolvedIds.has(e.id)) && !resolvedOn.get(p.id)?.has(k)) return false;
+			// v17: the same checkbox is in the result toggled at least as late as in the copy.
+			if (e.type === "checkbox" && byId.get(e.id) === k && (toggledAt.get(e.id) ?? 0) < (e.at ?? 0)) return false;
 		}
 	}
 	for (const id of Object.keys(other.assets ?? {})) if (!result.assets?.[id]) return false;

@@ -119,6 +119,7 @@ export function elementBox(el: PageElement): Box {
 		const h = Math.max(lines, wrapped) * el.fontSize * 1.25;
 		return { minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + h };
 	}
+	if (el.type === "checkbox") return { minX: el.x, minY: el.y, maxX: el.x + el.size, maxY: el.y + el.size };
 	// Markers (format v8) may be point-sized: no width or height.
 	return { minX: el.x, minY: el.y, maxX: el.x + (el.width ?? 0), maxY: el.y + (el.height ?? 0) };
 }

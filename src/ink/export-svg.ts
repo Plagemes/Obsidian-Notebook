@@ -1,5 +1,5 @@
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import type { BoxElement, EquationElement, MarkerElement, Page, StickyElement, TextElement } from "../model/types";
+import type { BoxElement, CheckboxElement, EquationElement, MarkerElement, Page, StickyElement, TextElement } from "../model/types";
 import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
 import { graphScene, GRAPH_STYLE, type GraphScene } from "../math/graph-scene";
 import type { Polygon } from "../math/outline";
@@ -7,6 +7,7 @@ import { equationOutline } from "./math-render";
 import { boundGraphId } from "./attach";
 import { hiddenStickyInk, stickyColours } from "../model/sticky";
 import { stickyShapes, stickyTextBox } from "./sticky-render";
+import { checkboxPaths } from "./checkbox-render";
 import type { BBox } from "./hit-test";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
 import { layerFlags, type ExportLayers } from "./export-layers";
@@ -166,6 +167,8 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 		);
 	}
 	for (const el of page.elements ?? []) if (el.type === "marker") out.push(markerTag(el));
+	// v17 checkboxes above the ink, like marker badges.
+	for (const el of page.elements ?? []) if (el.type === "checkbox") out.push(checkboxTag(el));
 	out.push("</svg>");
 	return out.join("\n") + "\n";
 }
@@ -334,4 +337,13 @@ function textTag(el: TextElement): string {
 		return `<tspan x="${num(el.x)}" dy="${dy}">${escapeAttr(line)}</tspan>`;
 	});
 	return `<text x="${num(el.x)}" y="${num(el.y + size * TEXT_BASELINE)}" font-family="Helvetica, Arial, sans-serif" font-size="${num(size)}" fill="${escapeAttr(el.color)}">${tspans.join("")}</text>`;
+}
+
+/** v17 checkbox: its outline and, when ticked, its tick (the shapes are the canvas's, ink/checkbox-render.ts). */
+function checkboxTag(el: CheckboxElement): string {
+	const paths = checkboxPaths(el).map((p) => {
+		const d = p.points.map(([x, y], i) => `${i === 0 ? "M" : "L"}${num(x)} ${num(y)}`).join("") + (p.closed ? "Z" : "");
+		return `<path d="${d}" fill="none" stroke="${el.color}" stroke-width="${num(p.width)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+	});
+	return `<g>${paths.join("")}</g>`;
 }

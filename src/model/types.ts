@@ -2,6 +2,7 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v17: handwritten checklists (#103): the page element "checkbox" (a drawn square that is tapped to tick it; optional link to an Obsidian task).
  * v16: margin comments (#86): `Page.comments` anchors comments, with their replies, to regions of a page.
  * v15: sticky notes (#20): coloured notes on the page (page elements with typed text; ink written on a note belongs to it).
  * v14: a finished page can be locked (#124): `Page.locked` makes the page refuse every edit until it is unlocked.
@@ -13,7 +14,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 16;
+export const CURRENT_VERSION = 17;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -408,7 +409,36 @@ export interface StickyElement {
 	ink?: string[];
 }
 
-export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement | ExcerptElement | StickyElement;
+/**
+ * v17 link of a checkbox to a task line of an Obsidian note (#103): the vault `path` of the note and the block id `block`
+ * (`nb-…`, without the `^`) that the plugin wrote at the end of the line. Only the line that ends with that block id is ever changed.
+ */
+export interface CheckboxTask {
+	path: string;
+	block: string;
+}
+
+/**
+ * v17 handwritten checkbox (#103): the square `size` pt on a side whose top-left corner is (`x`, `y`) (page coordinates, pt), drawn
+ * in `color`. A tap ticks it. `checked`: ticked (written only when ticked). `at`: when it was last ticked or unticked (ms since
+ * 1970; written only once it has been toggled): the later toggle wins when two copies of a notebook are merged. `label`: a typed
+ * name of the item (shown in lists; the ink on the same line to its right is its handwritten label, found geometrically,
+ * ink/checklist.ts). `task`: the link to a task line of a note (absent: none). A copy of a checkbox never keeps the link.
+ */
+export interface CheckboxElement {
+	id: string;
+	type: "checkbox";
+	x: number;
+	y: number;
+	size: number;
+	color: string;
+	checked?: true;
+	at?: number;
+	label?: string;
+	task?: CheckboxTask;
+}
+
+export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement | ExcerptElement | StickyElement | CheckboxElement;
 /** Element types that exist only from format v8: an older file that uses one was not written by this plugin. */
 export const ELEMENT_TYPES_V8: readonly string[] = ["marker", "box"];
 /** Element types that exist only from format v9. */
@@ -417,6 +447,8 @@ export const ELEMENT_TYPES_V9: readonly string[] = ["equation", "graph"];
 export const ELEMENT_TYPES_V10: readonly string[] = ["excerpt"];
 /** Element types that exist only from format v15. */
 export const ELEMENT_TYPES_V15: readonly string[] = ["sticky"];
+/** Element types that exist only from format v17. */
+export const ELEMENT_TYPES_V17: readonly string[] = ["checkbox"];
 
 /**
  * v6: blank space added around a page's background (a PDF page or a scan), in pt. The background is

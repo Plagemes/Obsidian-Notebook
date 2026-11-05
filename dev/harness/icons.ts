@@ -167,6 +167,9 @@ const P: Record<string, string> = {
 	"split": "M16 3h5v5 M8 3H3v5 M12 22v-8.3a4 4 0 0 0-1.2-2.8L3 3 M15 9l6-6",
 	"shield-check": "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z M9 12l2 2 4-4",
 	"sticky-note": "M4 4h16v10l-6 6H4z M14 20v-6h6",
+	"square-check": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z M9 12l2 2 4-4",
+	"text-select": "M5 3a2 2 0 0 0-2 2 M19 3a2 2 0 0 1 2 2 M21 19a2 2 0 0 1-2 2 M5 21a2 2 0 0 1-2-2 M9 3h1 M9 21h1 M14 3h1 M14 21h1 M3 9v1 M21 9v1 M3 14v1 M21 14v1 M7 8h10 M7 12h10 M7 16h6",
+	unlink: "M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71 M5.17 11.75l-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71 M8 2v3 M2 8h3 M16 22v-3 M22 16h-3",
 	// wave 0.12: creation dialog
 	"heart-pulse": "M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 12 5 5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z M3.2 12h5.3l1-2 2 4 1-2h8.3",
 	"flask-conical": "M10 2v7.5L4 20h16l-6-10.5V2 M8.5 2h7 M7 16h10",
