@@ -2763,6 +2763,7 @@ Needs *Companion notes* on. Not verified on hardware.
 1525. Put a very long text (more than 4000 characters in total) on one page: the page lists text up to the limit and ends with "(more text on this page is not listed)".
 1526. Update again without changing anything: the companion file is not modified (check the modified time); editing a sticky note and waiting a few seconds updates it once.
 1527. Switch the setting off and update: the extra lines and wikilinks go back to the previous form; user text outside the block is untouched.
+1528. Give a checkbox a label (*Label…*), tick another labelled one, update the companion note with the setting on: the page lists `checkbox: ☐ label` and `checkbox: ☑ label`; a box without a typed label adds nothing.
 
 ### 0.19 — templates: notebooks from note templates (steps 1640-1659)
 

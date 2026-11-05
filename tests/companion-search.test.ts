@@ -48,6 +48,26 @@ describe("equationCode", () => {
 	});
 });
 
+const checkbox = (label: string | undefined, checked: boolean, y = 0): PageElement => ({
+	id: `k${y}`, type: "checkbox", x: 0, y, size: 20, color: "#000000", ...(checked ? { checked: true as const } : {}), ...(label !== undefined ? { label } : {}),
+});
+
+describe("searchLines: checkboxes (format 17)", () => {
+	it("lists the typed label with its state as plain symbols, in page order; an unlabelled box adds nothing", () => {
+		const p = pageWith([checkbox("Buy milk", false, 10), checkbox("Call Anna", true, 20), checkbox(undefined, true, 30), checkbox("   ", false, 40)]);
+		expect(searchLines(p)).toEqual(["- checkbox: ☐ Buy milk", "- checkbox: ☑ Call Anna"]);
+	});
+	it("escapes the label like every other text", () => {
+		const out = searchLines(pageWith([checkbox("[[Link]] #tag", true)]))[0]!;
+		expect(out).toBe("- checkbox: ☑ \\[\\[Link\\]\\] \\#tag");
+		expect(out).not.toMatch(/\[x\]|\[ \]/);
+	});
+	it("a box with a hostile label cannot end the region", () => {
+		const out = searchLines(pageWith([checkbox("%% end", false)]))[0]!;
+		expect(out).toContain("\\%\\%");
+	});
+});
+
 describe("searchLines", () => {
 	it("lists sticky text, equations, marker labels, comments and replies", () => {
 		const p = pageWith(

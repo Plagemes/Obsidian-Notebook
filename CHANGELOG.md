@@ -19,7 +19,7 @@
 
 ### search
 
-- Companion notes: new setting *Include typed text in search* (off by default). The companion note also lists, per page, the text of sticky notes, margin comments and replies, equation sources and marker labels, with a wikilink back to the page, so Obsidian search finds them. Text is escaped, bounded to 4000 characters per page, and written only inside the generated block. No format change.
+- Companion notes: new setting *Include typed text in search* (off by default). The companion note also lists, per page, the text of sticky notes, margin comments and replies, equation sources, marker labels and the typed labels of checkboxes (with ☐ / ☑ for the state), with a wikilink back to the page, so Obsidian search finds them. Text is escaped, bounded to 4000 characters per page, and written only inside the generated block. No format change.
 
 ### templates
 - **Notebooks from note templates (O13).** The public API (now 1.2.0) has `api.newNotebook({ name, folder?, template?, content?, open? })`, which creates a notebook, optionally from a notebook template, and returns ready-to-paste `link` and `embed` Markdown; `createNotebook` gained the `template` and `templateContent` options. A fenced `notebook-new` block (`name="{{title}} sketches"`, `template="Lecture"`) survives core Templates and Templater and shows a *Create notebook* card; only a press creates the notebook, and then only that block is replaced by `![[…]]`, through `vault.process` with an exact match (no match, or two identical blocks that cannot be told apart: nothing is created). Copy-paste examples for core Templates and Templater in `docs/templates.md`. No format change. Pure parsing and replacement in `src/integration/new-block.ts`. Tests: `tests/new-block.test.ts`.

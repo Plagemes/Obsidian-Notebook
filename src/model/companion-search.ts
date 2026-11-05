@@ -3,7 +3,8 @@
  * Markdown lines safe to put inside the generated region. Pure: no 'obsidian'.
  *
  * Sources: sticky notes, margin comments and their replies, equation sources (LaTeX, as inline code), and the labels of
- * markers (questions, gaps, importance; homework is already a task line). Text boxes and box titles are written by
+ * markers (questions, gaps, importance; homework is already a task line) and the typed labels of checkboxes (with a ☐ / ☑
+ * for their state; an unlabelled box has no typed text and adds nothing). Text boxes and box titles are written by
  * companion-content.ts itself. Everything is escaped so the text stays plain text: no link, tag, comment, math, HTML or block.
  * The result per page is bounded (`SEARCH_PAGE_MAX` characters); when it is cut, the last line says so.
  */
@@ -53,6 +54,10 @@ function items(page: Page): string[] {
 			const label = cleanMarkerText(e.text);
 			const t = label ? escapeSearchText(clip(label, SEARCH_ITEM_MAX)) : "";
 			if (t) out.push(`- ${e.kind}: ${t}`);
+		} else if (e.type === "checkbox" && typeof e.label === "string") {
+			// v17 (#103): the typed label, with the tick as a plain symbol (no `[x]`: that would be a task or a link to the reader).
+			const t = escapeSearchText(clip(e.label, SEARCH_ITEM_MAX));
+			if (t) out.push(`- checkbox: ${e.checked === true ? "☑" : "☐"} ${t}`);
 		}
 	}
 	const comments = Array.isArray(page.comments) ? page.comments : [];
