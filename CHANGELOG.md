@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### carry
+- **Dropped files are never trashed after a recorded change.** Once the History has recorded a drop, the steps that follow (layout refresh, page navigation, scrolling to the page) can no longer make the edit report a failure, so the files the notebook already references are never moved to the trash; a failing step is logged.
+- **Heading pictures: edited pictures are recognised better.** The checksum of a heading picture now covers every chunk except text and time (so a gamma, colour-profile or transparency edit counts as the user's edit, not only a change of the pixels). Pictures written by 0.20 (image-data checksum) are still recognised.
+- **Heading pictures: no silent drop when the names run out.** Up to 24 names are tried; if all are taken, the previous picture stays linked in the companion note and one notice per session explains why.
+- **Reference window keeps its page.** When the lending pane switches to another notebook or closes, the window reads the file and keeps its current page if it still exists, instead of jumping to page 1.
+- **Heading pictures: narrower overwrite window.** A stale picture of ours is rewritten only if the file's size and time are still the ones probed, checked right before the write; otherwise the picture takes a new free name.
+
 ## 0.20.0 — 2026-11-05
 
 Eight features: groups and locked elements, a quick share of a page or a selection, files dragged straight onto a page, ghost guide lines on blank paper, headings found from the size of the handwriting, a floating reference window, a planner generator and a visual version diff. The notebook format moves to version 18 (groups and locks): the migration from version 17 is automatic, and 0.19 and older open a v18 file read-only and never overwrite it.

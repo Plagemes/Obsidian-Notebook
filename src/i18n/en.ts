@@ -3817,6 +3817,8 @@ export const en = {
 	"settings.ghostSpacing": "Guide spacing",
 	"settings.ghostSpacing.desc": "Follow your handwriting, or use a fixed ruled spacing.",
 	"settings.ghostSpacing.auto": "Auto (from your writing)",
+	// 0.21 carry
+	"notice.companionPicturesFull": "Companion note: a heading picture could not be updated because all its file names are taken by files that were edited. The previous picture stays linked; move or delete the edited copies in the (Headings) folder.",
 } as const;
 
 export type MessageKey = keyof typeof en;

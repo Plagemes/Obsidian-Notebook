@@ -58,3 +58,12 @@ export function movesContent(pointerType: string): boolean {
 export function usesChrome(_pointerType: string): boolean {
 	return true;
 }
+
+/**
+ * 0.21 (R4): the page to draw when the source has `count` pages. An empty or unknown count (the lending pane went away and the
+ * file is not read yet, or could not be read) keeps the index: the window never jumps to page 1 because it knows nothing.
+ */
+export function keepIndex(index: number, count: number): number {
+	if (count <= 0) return Math.max(0, index);
+	return Math.min(Math.max(0, index), count - 1);
+}

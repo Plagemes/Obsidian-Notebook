@@ -73,15 +73,61 @@ export function readPngText(png: Uint8Array, keyword: string): string | null {
 	return null;
 }
 
-/** Keyword of the chunk that holds the checksum of the pixels the plugin wrote (see `pngPixelSum`). */
+/** Keyword of the chunk that holds the checksum of the pixels the plugin wrote in 0.20 (image data only, see `pngDataSum`). Still read. */
 export const PIXEL_SUM_KEYWORD = "notebook-heading-pixels";
 
+/** Keyword of the chunk that holds the checksum of every chunk but our own text chunks (see `pngPixelSum`). New pictures get this one. */
+export const PIXEL_SUM_V2_KEYWORD = "notebook-heading-pixels-2";
+
+/** Chunks the checksum of the whole picture leaves out: text (ours and any editor's) and the modification time. */
+const NOT_SUMMED = new Set(["tEXt", "zTXt", "iTXt", "tIME"]);
+
+function sumChunks(png: Uint8Array, wanted: (type: string) => boolean): string | null {
+	if (!isPng(png)) return null;
+	const parts: Uint8Array[] = [];
+	let total = 0;
+	let at = 8;
+	let seenEnd = false;
+	while (at + 12 <= png.length) {
+		const length = u32(png, at);
+		const type = String.fromCharCode(png[at + 4]!, png[at + 5]!, png[at + 6]!, png[at + 7]!);
+		const start = at + 8;
+		const end = start + length;
+		if (end + 4 > png.length) return null;
+		if (wanted(type)) {
+			// The type is part of the sum: a chunk renamed or moved changes the picture, even with the same bytes.
+			const part = new Uint8Array(4 + length);
+			part.set(png.subarray(at + 4, end), 0);
+			parts.push(part);
+			total += part.length;
+		}
+		if (type === "IEND") {
+			seenEnd = true;
+			break;
+		}
+		at = end + 4;
+	}
+	if (!seenEnd || parts.length === 0) return null;
+	const all = new Uint8Array(total);
+	let o = 0;
+	for (const part of parts) {
+		all.set(part, o);
+		o += part.length;
+	}
+	return crc32(all).toString(16).padStart(8, "0");
+}
+
 /**
- * A checksum (8 hex digits) of the image data of `png` (all `IDAT` chunks), or null for something that is not a PNG or is cut
- * short. Text chunks do not count, so it still matches after an editor that keeps them but re-encodes the pixels has not run,
- * and stops matching once the pixels were cropped, annotated or re-encoded.
+ * 0.21 (R2): a checksum (8 hex digits) of every chunk of `png` except text chunks and the time: the header, the palette,
+ * transparency, gamma, colour profile, physical size and the image data. A user who only changes how the picture looks (a
+ * gamma, profile or transparency edit that keeps the pixels) changes this sum. Null for something that is not a PNG or is cut short.
  */
 export function pngPixelSum(png: Uint8Array): string | null {
+	return sumChunks(png, (type) => !NOT_SUMMED.has(type));
+}
+
+/** The 0.20 checksum, of the image data (`IDAT`) only. Kept so a picture written by 0.20 is still recognised as untouched. */
+export function pngDataSum(png: Uint8Array): string | null {
 	if (!isPng(png)) return null;
 	const parts: Uint8Array[] = [];
 	let total = 0;
@@ -107,4 +153,15 @@ export function pngPixelSum(png: Uint8Array): string | null {
 		o += part.length;
 	}
 	return crc32(all).toString(16).padStart(8, "0");
+}
+
+/**
+ * True when the pixels of `png` are still the ones the plugin wrote: the 0.21 mark (every chunk but text) when there is one,
+ * else the 0.20 mark (image data only), else no mark at all (not ours, or an editor dropped it): false.
+ */
+export function pictureIntact(png: Uint8Array): boolean {
+	const v2 = readPngText(png, PIXEL_SUM_V2_KEYWORD);
+	if (v2 !== null) return v2 === pngPixelSum(png);
+	const v1 = readPngText(png, PIXEL_SUM_KEYWORD);
+	return v1 !== null && v1 === pngDataSum(png);
 }

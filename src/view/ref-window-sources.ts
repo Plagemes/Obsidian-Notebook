@@ -28,6 +28,8 @@ export interface RefSource {
 	readonly file: TFile;
 	/** "pages": a fixed-shape picture the window pans and zooms. "flow": a document that scrolls. */
 	readonly layout: "pages" | "flow";
+	/** Makes the page count known when it is not: a notebook whose lending pane went away is read from the file first. Optional. */
+	prepare?(): Promise<void>;
 	pageCount(): number;
 	/** The 0-based page a request names. */
 	indexFor(request: Pick<ReferenceRequest, "page" | "pageId">): number;
@@ -125,6 +127,13 @@ async function openNotebook(deps: SourceDeps, file: TFile): Promise<RefSource> {
 		kind: "notebook",
 		file,
 		layout: "pages",
+		prepare: async () => {
+			try {
+				await ensureDocument();
+			} catch {
+				// Unreadable now: render() reports it, and the window keeps the page it was on.
+			}
+		},
 		pageCount: () => pagesNow().length,
 		indexFor: (request) => requestedIndex(pagesNow().length, pagesNow().map((p) => p.id), request),
 		async render(index, pixelWidth, parent) {

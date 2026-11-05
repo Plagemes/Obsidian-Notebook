@@ -3819,4 +3819,6 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.ghostSpacing": "Distanza delle righe guida",
 	"settings.ghostSpacing.desc": "Segui la tua scrittura oppure una spaziatura fissa.",
 	"settings.ghostSpacing.auto": "Auto (dalla tua scrittura)",
+	// 0.21 carry
+	"notice.companionPicturesFull": "Nota compagna: l'immagine di un titolo non è stata aggiornata perché tutti i suoi nomi di file sono occupati da file modificati. Resta collegata l'immagine precedente; sposta o elimina le copie modificate nella cartella (Headings).",
 };
