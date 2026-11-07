@@ -41,6 +41,8 @@ export interface InboxContext {
 	notebooksFolder: string;
 	templatesFolder: string;
 	notebookTemplatesFolder: string;
+	/** 0.21 (#127): the zip backups folder; nothing in it is offered. */
+	backupFolder?: string;
 	/** Lowercase base names of the notebooks sitting in the same folder (a PDF with the name of a notebook is its export). */
 	siblingNotebooks?: ReadonlySet<string>;
 	/**
@@ -119,7 +121,7 @@ export function isInboxCandidate(path: string, ctx: InboxContext): boolean {
 	const name = rel[0]!;
 	if (name.startsWith(".") || !inboxKind(name)) return false;
 	// Reserved folders of the library (assets, _meta, _trash, backups) and the templates folders.
-	if (isHiddenNotebookPath(path, ctx.notebooksFolder, ctx.templatesFolder, ctx.notebookTemplatesFolder)) return false;
+	if (isHiddenNotebookPath(path, ctx.notebooksFolder, ctx.templatesFolder, ctx.notebookTemplatesFolder, ctx.backupFolder)) return false;
 	// What the plugin itself wrote in this folder (a digest crop, an exported page picture or PDF): by its record and by its name.
 	if (isPluginPictureName(name) || ctx.pluginWritten?.has(path.toLowerCase())) return false;
 	// The heading pictures of a companion note live in `<Notebook> (Headings)`: that folder is the plugin's, so its files are not
