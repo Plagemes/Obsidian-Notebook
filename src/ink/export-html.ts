@@ -135,13 +135,14 @@ button:hover{border-color:var(--acc)}button:focus-visible,a:focus-visible{outlin
 main{flex:1;display:flex;min-height:0}
 nav{width:128px;flex:none;overflow:auto;padding:10px;background:var(--bar);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
 nav a{display:block;text-decoration:none;color:var(--mut);text-align:center;font-size:12px;border:2px solid transparent;border-radius:6px;padding:3px}
-nav a[aria-current=page]{border-color:var(--acc);color:var(--fg)}nav a svg{display:block;width:100%;height:auto;background:#fff;box-shadow:var(--sh);margin-bottom:3px}
+nav a[aria-current=page]{border-color:var(--acc);color:var(--fg)}nav a svg,nav a .ph{display:block;width:100%;height:auto;background:#fff;box-shadow:var(--sh);margin-bottom:3px}
 #stage{flex:1;min-width:0;overflow:auto;touch-action:pan-x pan-y;padding:16px;cursor:grab}
 #stage.drag{cursor:grabbing;user-select:none}
 #sheet{margin:0 auto;width:max-content;box-shadow:var(--sh);background:#fff}
 #sheet svg{display:block}#sheet a{cursor:pointer}#sheet a:hover rect{fill:rgba(37,99,235,.12)}
 @media (max-width:640px){nav{display:none}#stage{padding:8px}}
-@media print{header,nav{display:none}#stage{overflow:visible;padding:0}#sheet{box-shadow:none}}`;
+@page{margin:10mm}
+@media print{html,body{height:auto;background:#fff}body{display:block}header,nav,#stage{display:none}main{display:block}div[hidden]{display:block}.pg{break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}.pg svg{display:block;width:100%;height:auto;break-inside:avoid}}`;
 
 const SCRIPT = `(function(){
 var L=JSON.parse(document.getElementById('nb-labels').textContent);
@@ -171,16 +172,25 @@ function show(i,top){
  var h='#p'+(cur+1);if(location.hash!==h)history.replaceState(null,'',h);
 }
 function setZoom(z,fixed){fit=!!fixed;zoom=Math.max(.1,Math.min(8,z));apply(true);}
-function build(){
- for(var i=0;i<N;i++){(function(i){
-  var a=document.createElement('a');a.href='#p'+(i+1);a.title=pg[i].getAttribute('data-label')||'';
-  var c=svgOf(i).cloneNode(true);c.removeAttribute('width');c.removeAttribute('height');
-  [].forEach.call(c.querySelectorAll('a'),function(x){x.parentNode.removeChild(x);});
-  [].forEach.call(c.querySelectorAll('[id]'),function(x){x.removeAttribute('id');});
-  a.appendChild(c);a.appendChild(document.createTextNode(String(i+1)));
-  a.addEventListener('click',function(e){e.preventDefault();show(i);});
-  nav.appendChild(a);thumbs.push(a);})(i);}
+function fill(a){
+ var ph=a.querySelector('.ph');if(!ph)return;
+ var c=svgOf(a.nbi).cloneNode(true);c.removeAttribute('width');c.removeAttribute('height');
+ [].forEach.call(c.querySelectorAll('a'),function(x){x.parentNode.removeChild(x);});
+ [].forEach.call(c.querySelectorAll('[id]'),function(x){x.removeAttribute('id');});
+ a.replaceChild(c,ph);
 }
+function build(){
+ var io=typeof IntersectionObserver==='function'?new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){io.unobserve(en.target);fill(en.target);}});},{root:nav,rootMargin:'300px 0px'}):null;
+ for(var i=0;i<N;i++){(function(i){
+  var a=document.createElement('a');a.href='#p'+(i+1);a.title=pg[i].getAttribute('data-label')||'';a.nbi=i;
+  var d=dims(i),ph=document.createElement('div');ph.className='ph';ph.style.aspectRatio=d[0]+' / '+d[1];
+  a.appendChild(ph);a.appendChild(document.createTextNode(String(i+1)));
+  a.addEventListener('click',function(e){e.preventDefault();show(i);});
+  nav.appendChild(a);thumbs.push(a);if(io)io.observe(a);else fill(a);})(i);}
+}
+var printing=false;
+window.addEventListener('beforeprint',function(){if(cur>=0&&svgOf(cur).parentNode!==pg[cur]){pg[cur].appendChild(svgOf(cur));printing=true;}});
+window.addEventListener('afterprint',function(){if(printing){printing=false;sheet.appendChild(svgOf(cur));apply(false);}});
 function fromHash(){var m=/^#p(\\d+)$/.exec(location.hash);return m?Number(m[1])-1:0;}
 document.getElementById('fit').onclick=function(){fit=true;zoom=fitZoom(cur);apply(false);};
 document.getElementById('zin').onclick=function(){setZoom(zoom*1.25);};

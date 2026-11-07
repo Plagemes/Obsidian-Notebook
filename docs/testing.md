@@ -3097,8 +3097,8 @@ Interactive HTML export (roadmap #164). *Export…*, format *Interactive HTML*. 
 1887. **Links.** A text box with `[[<notebook name>#p3]]` is a link in the file that jumps to page 3 (if page 3 is in the file); a `[[https://example.com|site]]` link opens the address in a new tab; any other note link is plain text.
 1888. **Pictures.** A notebook with pictures and a PDF background: they appear in the file (as JPEG data inside it). A notebook whose pictures exceed about 32 MB shows a notice that some images were left out.
 1889. **No overwrite, no network.** Export again: a second file `… 2.html` is written, the first is untouched. Open the browser developer tools, Network tab: reloading the file makes no request.
-1890. **Big notebook.** Export a notebook of 100+ pages: Obsidian stays responsive while the notice counts the pages.
-1891. **Print.** Printing the file from the browser prints the current page without the bar and strip.
+1890. **Big notebook.** Export a notebook of 100+ pages: Obsidian stays responsive while the notice counts the pages. Open the file: it opens at once; the thumbnails in the strip fill in as you scroll it (empty white boxes of the right shape until then).
+1891. **Print.** Printing the file from the browser (Ctrl+P) prints every page, one per sheet and fitted to the width, without the bar and strip; the page on screen is not duplicated and is still shown after the print dialog closes.
 1892. **Hostile text.** A notebook titled `<img src=x onerror=alert(1)>` and a text box with `<script>alert(1)</script>`: the exported file shows both as text and runs nothing.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |

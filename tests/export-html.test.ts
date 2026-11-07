@@ -88,6 +88,39 @@ describe("interactive HTML export (#164)", () => {
 	});
 });
 
+describe("the viewer on large notebooks and on paper", () => {
+	const html = buildHtml({ title: "N" }, [{ svg: pageToSvg(page("a")), label: "1" }, { svg: pageToSvg(page("b")), label: "2" }]);
+	const script = /<script>([\s\S]*?)<\/script>/.exec(html)![1]!;
+
+	it("renders the page strip on demand, not one clone of every page when the file opens", () => {
+		// A placeholder with the page's aspect ratio per page; the picture is cloned only when its thumbnail comes into view.
+		expect(script).toContain("new IntersectionObserver");
+		expect(script).toContain("className='ph'");
+		expect(script).toContain("aspectRatio");
+		// The only clone of a page SVG is inside fill(), which build() reaches only from the observer (or without one).
+		expect(script.match(/cloneNode\(true\)/g)).toHaveLength(1);
+		const build = /function build\(\)\{([\s\S]*?)\n\}\n/.exec(script)![1]!;
+		expect(build).not.toContain("cloneNode");
+		expect(build).toContain("io.observe(a)");
+		expect(script.indexOf("function fill(a)")).toBeLessThan(script.indexOf("cloneNode(true)"));
+		expect(script).toContain("io.unobserve(en.target)");
+	});
+
+	it("prints every page: all sections shown one per sheet, the viewer chrome hidden", () => {
+		const css = /@media print\{([^`]*?)\}\}/.exec(html)![0]!;
+		expect(css).toContain("div[hidden]{display:block}");
+		expect(css).toContain("header,nav,#stage{display:none}");
+		expect(css).toContain(".pg{break-after:page");
+		expect(css).toContain(".pg svg{display:block;width:100%;height:auto");
+		expect(html).toContain("@page{margin:10mm}");
+		// The page on screen lives in the stage: it goes back to its section for printing and returns afterwards.
+		expect(script).toContain("addEventListener('beforeprint'");
+		expect(script).toContain("addEventListener('afterprint'");
+		expect(script.lastIndexOf("pg[cur].appendChild(svgOf(cur))")).toBeGreaterThan(script.indexOf("beforeprint"));
+		expect(script.lastIndexOf("sheet.appendChild(svgOf(cur))")).toBeGreaterThan(script.indexOf("afterprint"));
+	});
+});
+
 describe("the inline viewer script", () => {
 	it("is valid JavaScript (compiled, not run)", () => {
 		const html = buildHtml({ title: "N" }, [{ svg: "<svg></svg>", label: "1" }]);
