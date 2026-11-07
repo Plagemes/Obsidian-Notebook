@@ -66,12 +66,12 @@ async function driveViewer(): Promise<Record<string, boolean>> {
 	const html = buildHtml({ title: "Demo <b>" }, pages.map((p, i) => ({ svg: pageToSvg(p), label: `Page ${i + 1}`, links: pageHtmlLinks(p, "Demo", (n) => (n >= 1 && n <= 3 ? n - 1 : null)) })));
 	const frame = document.body.createEl("iframe");
 	frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
-	frame.style.cssText = "position:fixed;left:-9999px;top:0;width:900px;height:700px;";
+	frame.setCssProps({ position: "fixed", left: "-9999px", top: "0", width: "900px", height: "700px" });
 	frame.srcdoc = html;
 	await new Promise<void>((r) => frame.addEventListener("load", () => r(), { once: true }));
 	await sleep(150);
 	const doc = frame.contentDocument!;
-	const win = frame.contentWindow! as Window & typeof globalThis;
+	const win = frame.contentWindow! as Window & typeof window;
 	const pos = () => doc.getElementById("pos")?.textContent ?? "";
 	const width = () => parseFloat(doc.querySelector("#sheet svg")?.getAttribute("width") ?? "0");
 	const out: Record<string, boolean> = {};
@@ -115,7 +115,7 @@ export async function checkHtmlExport(api: HtmlExportCheckApi): Promise<{ ok: bo
 
 	root = openDialog(api, picked);
 	await sleep(60);
-	const scopeRow = [...root.querySelectorAll<HTMLElement>(".setting-item")].find((r) => [...r.querySelectorAll("option")].some((o) => (o as HTMLOptionElement).value === "range")) ?? null;
+	const scopeRow = [...root.querySelectorAll<HTMLElement>(".setting-item")].find((r) => [...r.querySelectorAll("option")].some((o) => o.value === "range")) ?? null;
 	setSelect(scopeRow, "range");
 	await sleep(40);
 	const rangeInput = [...root.querySelectorAll<HTMLInputElement>("input[type=text]")].find((i) => i.placeholder.startsWith("1-3"));

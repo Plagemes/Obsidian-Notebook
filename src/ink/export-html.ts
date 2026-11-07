@@ -4,7 +4,7 @@
 
 import { escapeAttr } from "./export-svg";
 import { linkRects } from "./link-text";
-import type { Page, TextElement } from "../model/types";
+import type { Page } from "../model/types";
 
 /** Text of the viewer (English by default; the plugin passes its translation). */
 export interface HtmlViewerLabels {
@@ -76,8 +76,8 @@ export function pageHtmlLinks(page: Page, notebookName: string, fileIndexOf: (no
 	const out: HtmlLink[] = [];
 	const wanted = notebookName.trim().toLowerCase();
 	for (const el of page.elements ?? []) {
-		if (el.type !== "text" || typeof (el as TextElement).text !== "string" || !(el as TextElement).text.includes("[[")) continue;
-		for (const r of linkRects(el as TextElement)) {
+		if (el.type !== "text" || typeof el.text !== "string" || !el.text.includes("[[")) continue;
+		for (const r of linkRects(el)) {
 			const m = /^p(\d+)$/i.exec(r.link.subpath);
 			const target = r.link.target.trim();
 			const rect = { x: r.x, y: r.y, width: r.width, height: r.height };

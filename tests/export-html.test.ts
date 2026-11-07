@@ -1,3 +1,4 @@
+import { transformSync } from "esbuild";
 import { describe, expect, it } from "vitest";
 import { buildHtml, escapeHtml, htmlPage, ImageBudget, pageHtmlLinks, safeUrl, scopeSvgIds } from "../src/ink/export-html";
 import { pageToSvg } from "../src/ink/export-svg";
@@ -107,7 +108,7 @@ describe("the viewer on large notebooks and on paper", () => {
 	});
 
 	it("prints every page: all sections shown one per sheet, the viewer chrome hidden", () => {
-		const css = /@media print\{([^`]*?)\}\}/.exec(html)![0]!;
+		const css = /@media print\{([^`]*?)\}\}/.exec(html)![0];
 		expect(css).toContain("div[hidden]{display:block}");
 		expect(css).toContain("header,nav,#stage{display:none}");
 		expect(css).toContain(".pg{break-after:page");
@@ -126,6 +127,7 @@ describe("the inline viewer script", () => {
 		const html = buildHtml({ title: "N" }, [{ svg: "<svg></svg>", label: "1" }]);
 		const m = /<script>([\s\S]*?)<\/script>/.exec(html);
 		expect(m).not.toBeNull();
-		expect(() => new Function(m![1]!)).not.toThrow();
+		// esbuild parses it (and throws on a syntax error) without running it.
+		expect(() => transformSync(m![1]!, { loader: "js", logLevel: "silent" })).not.toThrow();
 	});
 });
