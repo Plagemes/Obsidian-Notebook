@@ -171,6 +171,7 @@ import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
 import { SignDialog } from "./sign-dialog";
 import { planSignature, signDateText } from "../ink/signature";
+import { SymbolStrip } from "./symbol-strip";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
@@ -494,6 +495,7 @@ export class NotebookView extends FileView {
 	/** One page at a time (#14); its gestures and animation live in page-mode.ts. */
 	private pageMode: PageMode | null = null;
 	private stamps: StampPalette | null = null;
+	private symbols: SymbolStrip | null = null;
 	/** ui redesign: quick slots, contextual bar and sheets built from the action registry (view-ui.ts). */
 	private ui: ViewUi | null = null;
 	private readonly objectInk = new ObjectInk();
@@ -759,6 +761,7 @@ export class NotebookView extends FileView {
 		});
 		this.mountSelectionActions();
 		this.mountStamps();
+		this.mountSymbols();
 		this.messageEl = this.contentEl.createDiv({ cls: "notebook-message" });
 		this.syncSafety = new ViewSyncSafety({
 			app: this.app, component: this, container: this.contentEl, before: this.body, service: this.host.syncSafety ?? null,
@@ -766,6 +769,7 @@ export class NotebookView extends FileView {
 			editingChanged: () => {
 				this.applyInput();
 				this.toolbar.setEditable(this.editable());
+				this.symbols?.sync();
 				this.updateHistoryButtons();
 				this.refreshUi();
 			},
@@ -776,6 +780,7 @@ export class NotebookView extends FileView {
 		});
 		this.messageEl.hide();
 		this.toolbar.setEditable(false);
+		this.symbols?.sync();
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
@@ -1101,6 +1106,8 @@ export class NotebookView extends FileView {
 		this.ui = null;
 		this.stamps?.destroy();
 		this.stamps = null;
+		this.symbols?.destroy();
+		this.symbols = null;
 		this.objectInk.destroy();
 		this.math?.destroy();
 		this.excerpts?.destroy();
@@ -1529,6 +1536,7 @@ export class NotebookView extends FileView {
 		this.pens?.refresh();
 		this.scrollbar?.update();
 		this.minimap?.update();
+		this.symbols?.sync();
 		this.filter.params = stabilizationParams(settings.stabilization);
 		// wave 0.7: resilience (#346): safe mode turns low-latency ink and prediction off for this view.
 		const fast = this.resilience?.lowLatencyAllowed() !== false;
@@ -3389,6 +3397,7 @@ export class NotebookView extends FileView {
 			editingChanged: () => {
 				this.applyInput();
 				this.toolbar.setEditable(this.editable());
+				this.symbols?.sync();
 				this.updateHistoryButtons();
 				this.refreshUi();
 			},
@@ -3826,6 +3835,7 @@ export class NotebookView extends FileView {
 		this.messageEl.hide();
 		this.body.show();
 		this.toolbar.setEditable(false);
+		this.symbols?.sync();
 		this.setStatus(t("status.loading"), "pending");
 		if (!this.media) {
 			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged(), (page) => this.statesTools?.viewPages([page])[0] ?? page);
@@ -3911,6 +3921,7 @@ export class NotebookView extends FileView {
 			this.messageEl.hide();
 			this.body.show();
 			this.toolbar.setEditable(true);
+			this.symbols?.sync();
 			if (!this.media) {
 				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged(), (page) => this.statesTools?.viewPages([page])[0] ?? page);
 				// wave 0.7: resilience (#346): in safe mode the backgrounds come after the first paint.
@@ -3929,6 +3940,7 @@ export class NotebookView extends FileView {
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
+			this.symbols?.sync();
 			this.layout = null;
 			this.renderer?.setDocument(null, null);
 			this.showProblem(problem);
@@ -4388,6 +4400,7 @@ export class NotebookView extends FileView {
 		this.scrollbar?.update();
 		this.minimap?.update();
 		this.slideBack?.viewChanged();
+		this.symbols?.sync();
 		this.overlayChanged?.();
 		for (const fn of this.overlayListeners) fn();
 	}
@@ -5907,6 +5920,31 @@ export class NotebookView extends FileView {
 			},
 			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
 		});
+	}
+
+	// --- symbols (roadmap 212) ---
+
+	private mountSymbols(): void {
+		this.symbols = new SymbolStrip(this.body, {
+			app: this.app,
+			folder: () => this.host.settings.folder,
+			editable: () => this.editable(),
+			doc: () => this.session?.doc ?? null,
+			options: () => ({ show: this.host.settings.symbolStrip, count: this.host.settings.symbolCount }),
+			style: () => ({ color: this.tools.penColor, width: this.tools.penWidth, textSize: this.tools.textSize }),
+			pageAtClient: (x, y) => this.pageAtClient(x, y),
+			captureSelection: () => this.captureSelectionClip(),
+			execute: (cmd) => {
+				this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+			},
+			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
+		});
+	}
+
+	get symbolStripView(): SymbolStrip | null {
+		return this.symbols;
 	}
 
 	private captureSelectionClip(): ClipContent | null {

@@ -159,6 +159,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"link-selection": (v) => v.linkSelection(),
 	"selection-open-link": (v) => v.openSelectionLink(),
 	"stamps-save-selection": (v) => v.stampPalette?.saveSelection(),
+	"symbols-save-selection": (v) => v.symbolStripView?.saveSelection(),
 	// v10: anchored excerpts
 	"excerpt-to-page": (v) => v.excerptTools?.excerptToPage(),
 	"excerpt-copy": (v) => v.excerptTools?.copyAsExcerpt(),

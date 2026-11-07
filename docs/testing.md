@@ -3169,3 +3169,25 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
 | Back to the current slide (#225): the place last written during a lecture or beside a linked slide; a pill (and a command) appears when the view is half a screen or more away after the scroll settles, returns there like the notebook map's jump, can be closed, setting to turn it off; nothing is written to the notebook | yes | when to show (threshold, hysteresis, dismissal), return position, which ink counts, slide number from the link or the PDF page: `tests/slide-back.test.ts`; harness `doc=slideback` | | | not tried with a real hand on a tablet; the half-screen threshold is a guess |
+
+### 0.21 — symbols: recent symbols (steps 1960-1979)
+
+Recent symbols (roadmap #212). Settings, Writing: *Recent symbols* (on/off) and *Symbols shown* (3-12). A symbol is a small personal stamp (same `_stamps` store and format, no format change) or a typographic character; use counts are kept on this device only. Implemented, not yet verified on hardware.
+
+1960. **The strip.** Open a notebook: a pill with six buttons (∀ ∃ ∫ → ⇒ ≠) sits at the top centre of the page area. It is hidden in a read-only view and when *Recent symbols* is off.
+1961. **Insert a character.** Tap ≠, then tap the page with the S Pen: a text box with ≠ appears where you tapped, selected, in the current text size and pen colour. The button looks pressed (and says "Tap the page") until you tap the page, tap the button again or press Escape.
+1962. **One undo step.** Undo removes the character; redo brings it back.
+1963. **Ranking.** After using ≠ twice and π once, ≠ is the first button, then π; unused ones keep their order. After about two weeks without using one, newer habits overtake it.
+1964. **Save a symbol.** Draw a small sign (for example a hand-drawn ∑), select it with the lasso, choose *Save selection as symbol* (selection bar "…" or the All actions sheet), name it: it joins the strip as a small drawing. A selection larger than about 200 pt is refused with a message.
+1965. **Place it.** Tap the symbol, tap the page: it is drawn at about one text line high, in the current pen colour and width, selected as ONE group when it has several strokes; one undo removes all of it.
+1966. **Fresh copies.** Place it twice: moving one never moves the other; undo/redo twice leaves the notebook valid and saved.
+1967. **Stamps.** The same file appears in *Stamps*; renaming or deleting it there updates the strip the next time the strip refreshes (on opening the notebook or saving a symbol).
+1968. **Settings.** *Symbols shown* = 3 leaves three buttons; turning *Recent symbols* off removes the strip and any pending placement.
+1969. **Phone.** On a narrow screen the strip scrolls sideways rather than overflowing the page.
+1970. **Palm and pen.** While a symbol is armed, taps with the pen or a finger place it; the page does not scroll or zoom until you place it or cancel.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Recent symbols strip (#212): ranked by decayed use, device-local counts, typographic characters as text boxes | yes | yes (ranking, decay, bounds, scaling, placement ids/group/undo; harness) | | | |
+| Save selection as symbol, pen-sized placement of saved symbols (stamp store, one group, one undo step) | yes | yes | | | |
+| Settings: strip on/off, number of buttons | yes | yes (harness) | | | |
