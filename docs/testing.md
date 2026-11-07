@@ -3069,3 +3069,16 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Heading picture names: 24, then the previous picture stays linked with one notice (R3) | yes | plan logic: yes; notice: no | | | |
 | Reference window keeps its page when the lending pane changes notebook (R4) | yes | index rule: yes; window: no | | | |
 | Heading picture rewrite re-checks size and time right before the write (R5) | yes | fake vault: yes | | | |
+
+### 0.21 — schema: documented format with a JSON Schema (steps 1860-1879)
+
+Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v18.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
+
+1860. **Schema agrees with a real notebook.** Copy a notebook written on the tablet (with ink, a picture, a text box and a comment) to a PC and validate it with any draft 2020-12 validator (see the end of `docs/format.md`): no errors.
+1861. **Old file.** Open a notebook that was last saved by an older plugin version and edit it once, then validate it: it validates after that save (the file is rewritten as version 18 on the first edit).
+1862. **Guide.** Read `docs/format.md`: the file layout, the units, the list of elements and the folders `_assets` and `_meta` match what you see in the vault.
+1863. **Example.** Save the minimal example of `docs/format.md` as `Example.notebook` in the notebooks folder and open it: it opens, shows the text box and one pen stroke, and does not report a problem.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| JSON Schema of the document format v18 (#167) and the guide `docs/format.md` for third-party tools | yes | serializer output (new notebook, generated ink, a document with all nine element types and every optional field, a read and write round trip) validates against the schema; about 90 invalid documents (one broken rule each) are refused; the example of the guide validates and is read by the plugin: `tests/format-schema.test.ts` | | | rules a schema cannot express (unique ids, references, groups of two) are only described in the guide; the schema must be updated by hand when the format changes (the test fails until it is) |

@@ -13,6 +13,9 @@
 - **Reference window keeps its page.** When the lending pane switches to another notebook or closes, the window reads the file and keeps its current page if it still exists, instead of jumping to page 1.
 - **Heading pictures: narrower overwrite window.** A stale picture of ours is rewritten only if the file's size and time are still the ones probed, checked right before the write; otherwise the picture takes a new free name.
 
+### schema
+- **Documented format with a JSON Schema (#167).** New `docs/schema/notebook-v18.schema.json` (JSON Schema draft 2020-12) describes the `.notebook` file exactly as the plugin writes it: document, meta, pages, strokes, all nine element types, comments, states, slides, groups and locks, every optional field, enum and limit. New `docs/format.md` is the guide for third-party tools: file layout, versioning and migration policy, how to read leniently, the `_assets` and `_meta` files, a minimal example. A test validates real serializer output (a document that uses every element type and optional field) against the schema with a small dependency-free validator, and checks that invalid documents are refused. No format change and no runtime change.
+
 ## 0.20.0 — 2026-11-05
 
 Eight features: groups and locked elements, a quick share of a page or a selection, files dragged straight onto a page, ghost guide lines on blank paper, headings found from the size of the handwriting, a floating reference window, a planner generator and a visual version diff. The notebook format moves to version 18 (groups and locks): the migration from version 17 is automatic, and 0.19 and older open a v18 file read-only and never overwrite it.

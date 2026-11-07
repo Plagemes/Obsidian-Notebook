@@ -113,3 +113,13 @@ Date: 2026-10-30. No external code was copied or added as a dependency for this 
 | Own parser (`src/math/expr.ts`) | — (written for this project) | **Used**: tokenizer and Pratt parser into a syntax tree, compiled into closures over variable slots; names only through internal `Map` tables, the graph's variables and its parameters; no `eval`, no `Function`, no property access; length and nesting limits |
 
 Algorithms implemented from their published descriptions (no code taken from any implementation): marching squares with the centre value for saddle cells (implicit curves and outline tracing), Ramer–Douglas–Peucker simplification, Liang–Barsky segment clipping, bisection and golden-section search, adaptive Simpson quadrature, a fourth-order central difference, the Lanczos approximation of the gamma function (g = 7 coefficients, as tabulated in the literature), Zhang–Suen thinning (T. Y. Zhang, C. Y. Suen, "A fast parallel algorithm for thinning digital patterns", CACM 27(3), 1984) and a 3-4 chamfer distance transform (G. Borgefors, 1986) for *Convert to ink*.
+
+## JSON Schema of the document format (#167; wave 0.21)
+
+Date: 2026-11-05. No external code was copied and no dependency was added.
+
+| Option | License | Decision |
+|---|---|---|
+| JSON Schema draft 2020-12 (the specification) | Specification, free to implement | **Used** as the language of `docs/schema/notebook-v18.schema.json`. |
+| Ajv (validator library) | MIT | **Not used.** It would be a new devDependency for one test; a validator for the few keywords the schema needs is about 150 lines. |
+| `tests/json-schema-lite.ts` | — (written for this project) | **Used** by `tests/format-schema.test.ts` only (never bundled). It supports only the keywords the schema uses and throws on any other keyword, so a schema edit that adds an unsupported keyword fails instead of being silently ignored. |
