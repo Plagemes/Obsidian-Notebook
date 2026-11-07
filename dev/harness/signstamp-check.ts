@@ -5,6 +5,8 @@
  * every item with the same fresh group; a second placement gets another group; undo and redo restore it; a locked page refuses.
  * `signstampShot` leaves one state on screen for the screenshots.
  */
+import type { App } from "obsidian";
+import { findSignatureFile } from "../../src/storage/signature";
 import type { HarnessView } from "./harness-types";
 import type { CheckResult } from "./reading-check";
 
@@ -127,16 +129,39 @@ export async function checkSignstamp(api: SignstampCheckApi): Promise<{ ok: bool
 export async function signstampShot(api: SignstampCheckApi, state: SignstampState): Promise<void> {
 	const v = api.view as SignView;
 	const { frames } = api;
+	// The states run in order: empty (no signature saved), pad, ready (the signature is saved and the dialog shows it), placed.
+	if (state === "empty") await dropSignature(v);
+	await openDialog(v, frames);
+	if (!q(".nb-sign")) throw new Error(`the ${state} state: the dialog did not open`);
 	if (state === "placed") {
-		await openDialog(v, frames);
+		if (!q(".nb-sign .nb-sign-preview svg path")) throw new Error("the placed state: no saved signature to place");
 		btn(/^Place$/)?.click();
 		await frames(8);
 		return;
 	}
-	await openDialog(v, frames);
-	if (state === "empty") return;
-	await drawSignature(v, frames);
+	showModal();
+	if (state === "empty") {
+		if (!q(".nb-sign .nb-sign-empty")) throw new Error("the empty state: a signature is still saved");
+		return;
+	}
+	if (!(await drawSignature(v, frames))) throw new Error(`the ${state} state: the pad did not take the strokes`);
+	showModal();
 	if (state === "pad") return;
 	btn(/Save signature/)?.click();
 	await frames(12);
+	if (!q(".nb-sign .nb-sign-preview svg path")) throw new Error("the ready state: the dialog does not show the saved signature");
+	showModal();
+}
+
+/** The stand-in app puts a modal at the end of the page, below the screen: move it into the harness layer (see bookindex-check.ts). */
+function showModal(): void {
+	const box = q<HTMLElement>(".nb-sign");
+	if (box && !box.closest(".harness-modal-container")) document.body.createDiv({ cls: "harness-modal-container" }).appendChild(box);
+}
+
+/** Removes the saved signature so the first state really is "no signature yet". */
+async function dropSignature(v: SignView): Promise<void> {
+	const app = (v as unknown as { app: App }).app;
+	const folder = (v.host.settings as unknown as { folder: string }).folder;
+	for (let f = findSignatureFile(app, folder); f; f = findSignatureFile(app, folder)) await app.fileManager.trashFile(f);
 }
