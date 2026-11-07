@@ -90,7 +90,7 @@ export async function checkPagetime(api: PagetimeCheckApi): Promise<{ ok: boolea
 	await frames(2);
 	const card = cards()[0];
 	const when = card?.querySelector(".nb-map-when")?.textContent ?? "";
-	add("the map card shows when the page was written", /\d{1,2}:\d{2}\s–\s\d{1,2}:\d{2}/.test(when), when);
+	add("the map card shows when the page was written", /\d{1,2}:\d{2}\s–\s(\d{1,2}\s\w+\s)?\d{1,2}:\d{2}/.test(when), when);
 	add("its tooltip and label carry it", (card?.title ?? "").includes(when) && (card?.getAttribute("aria-label") ?? "").includes(when), card?.title ?? "");
 	add("the line stays inside the card", !!card && (() => { const r = card.getBoundingClientRect(); const w = card.querySelector(".nb-map-when")!.getBoundingClientRect(); return w.left >= r.left - 1 && w.right <= r.right + 1; })());
 

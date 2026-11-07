@@ -17490,6 +17490,10 @@ body.notebook-style-obsidian {
 /* #217: when a page was written, a quiet line under the thumbnail of a notebook map card (tooltip and label carry it too). */
 .nb-ui .nb-map-when {
 	display: block;
+	align-self: stretch;
+	width: 100%;
+	box-sizing: border-box;
+	text-align: left;
 	min-width: 0;
 	overflow: hidden;
 	color: var(--nb-text-muted);
