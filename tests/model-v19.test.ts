@@ -158,7 +158,7 @@ describe("format v19: write and read", () => {
 	});
 
 	it("reads leniently: a lone, inverted, fractional, negative or non-numeric time is dropped (both) and counted; the ink stays", () => {
-		const bad: Array<[unknown, unknown]> = [[T0, undefined], [undefined, T0], [T0 + 5, T0], [1.5, 2.5], [-1, 4], ["a", "b"], [T0, null], [T0, 9_007_199_254_740_993], [T0, 8_640_000_000_000_001]];
+		const bad: Array<[unknown, unknown]> = [[T0, undefined], [undefined, T0], [T0 + 5, T0], [1.5, 2.5], [-1, 4], ["a", "b"], [T0, null], [T0, Number.MAX_SAFE_INTEGER + 2], [T0, 8_640_000_000_000_001]];
 		for (const [start, end] of bad) {
 			const raw = JSON.parse(serialize(timedDoc())) as Raw;
 			setAt(raw, ["pages", 0, "startAt"], start);
@@ -359,8 +359,8 @@ describe("stamping: the history marks the page when ink or an element is added",
 		const page = doc.pages[0]!;
 		page.elements = [box("e1")];
 		const { history } = historyWith(doc, () => T0 + 10_000_000);
-		history.execute(new ReplaceElement("p1", page.elements![0]!, box("y")));
-		history.execute(new RemoveElement("p1", page.elements![0]!));
+		history.execute(new ReplaceElement("p1", page.elements[0]!, box("y")));
+		history.execute(new RemoveElement("p1", page.elements[0]!));
 		history.execute(new EraseStrokes("p1", [{ stroke: page.strokes[0]!, index: 0 }]));
 		expect(pageTimes(page)).toEqual({ startAt: T0, endAt: T0 + 90_000 });
 	});
