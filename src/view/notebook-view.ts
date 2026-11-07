@@ -152,6 +152,7 @@ import { SetPageLocked } from "../model/page-lock";
 import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
+import { SlideBack } from "./slide-back";
 import { SmartAddStrip } from "./smart-add";
 import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
 import { createMarker, isRegion, visibleStrokes } from "../model/markers";
@@ -502,6 +503,8 @@ export class NotebookView extends FileView {
 	private excerpts: ExcerptTools | null = null;
 	/** wave 0.9 (389): the chip that offers a page after a page in the middle of the notebook (view/page-offer.ts). */
 	private pageOffer: PageOffer | null = null;
+	/** 0.21 (#225): the pill back to the place last written during a lecture (view/slide-back.ts). */
+	slideBack: SlideBack | null = null;
 	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
 	lectureMode: LectureModeController | null = null;
 	/** wave 0.14 (410): the Smart "+" strip (view/smart-add.ts). */
@@ -798,6 +801,22 @@ export class NotebookView extends FileView {
 			parent: () => this.body,
 			insertAfter: (pageId) => this.insertPageAfterId(pageId),
 		});
+		this.slideBack = new SlideBack({
+			parent: () => this.body,
+			enabled: () => this.host.settings.slideBack && this.layout !== null,
+			lectureOn: () => this.lectureMode?.on ?? false,
+			doc: () => this.session?.doc ?? null,
+			indexOf: (pageId) => this.session?.doc?.pages.findIndex((p) => p.id === pageId) ?? -1,
+			box: (index) => this.layout?.boxes[index] ?? null,
+			view: () => {
+				const r = this.visibleRect();
+				return this.viewSize.height > 0 ? { top: r.minY, bottom: r.maxY } : null;
+			},
+			goTo: (index, y) => {
+				this.recordJump(index);
+				this.scrollToPage(index, y);
+			},
+		});
 		this.smartAdd = new SmartAddStrip({
 			app: this.app,
 			parent: () => this.body,
@@ -1074,6 +1093,8 @@ export class NotebookView extends FileView {
 		this.penLinks = null;
 		this.pageOffer?.destroy();
 		this.pageOffer = null;
+		this.slideBack?.destroy();
+		this.slideBack = null;
 		this.smartAdd?.destroy();
 		this.smartAdd = null;
 		this.ui?.destroy();
@@ -1522,6 +1543,7 @@ export class NotebookView extends FileView {
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 		this.reading?.settingsChanged();
 		this.lectureMode?.settingsChanged();
+		this.slideBack?.settingsChanged();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
 		this.display?.settingsChanged();
@@ -3870,6 +3892,7 @@ export class NotebookView extends FileView {
 		this.penLinks?.reset();
 		this.checklist?.reset();
 		this.pageOffer?.reset();
+		this.slideBack?.documentChanged();
 		this.multiTap.reset();
 		this.stopHold();
 		this.textEditor?.close();
@@ -4364,6 +4387,7 @@ export class NotebookView extends FileView {
 		this.updatePageIndicator();
 		this.scrollbar?.update();
 		this.minimap?.update();
+		this.slideBack?.viewChanged();
 		this.overlayChanged?.();
 		for (const fn of this.overlayListeners) fn();
 	}
@@ -4942,7 +4966,37 @@ export class NotebookView extends FileView {
 		this.session?.gestureEnded();
 		// 0.14: the first stroke written during an automatic lecture is what adds its page (view/lecture-mode.ts). Deferred past the
 		// pointer handler so the contact is over; the document is only touched through the usual edit context.
-		if (!cancelled && badgeTap === null && boxTap === null && this.justCommitted) window.setTimeout(() => this.lectureMode?.wrote(), 0);
+		const committed = this.committedIds();
+		if (!cancelled && badgeTap === null && boxTap === null && committed) {
+			window.setTimeout(() => {
+				this.lectureMode?.wrote();
+				this.noteWrittenForSlideBack(committed);
+			}, 0);
+		}
+	}
+
+	/** Ids of the ink the last contact committed, or null (a method, so the callers' narrowing of the field does not apply). */
+	private committedIds(): ReadonlySet<string> | null {
+		return this.justCommitted?.ids ?? null;
+	}
+
+	/** 0.21 (#225): the ink just written (on the page in view or a neighbour) is the place the pill leads back to. */
+	private noteWrittenForSlideBack(ids: ReadonlySet<string>): void {
+		const pages = this.session?.doc?.pages;
+		if (!pages || !this.slideBack) return;
+		const at = this.currentPageIndex();
+		for (const i of [at, at - 1, at + 1]) {
+			const page = pages[i];
+			if (page && page.strokes.some((s) => ids.has(s.id))) {
+				this.slideBack.wrote(page, ids);
+				return;
+			}
+		}
+	}
+
+	/** 0.21 (#225): the command; true when there was a place to go back to. */
+	backToSlide(): boolean {
+		return this.slideBack?.goBack() ?? false;
 	}
 
 	private endGesture(cancelled: boolean): void {

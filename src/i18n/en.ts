@@ -3894,6 +3894,13 @@ export const en = {
 	"settings.signDateMode.custom": "Custom pattern",
 	"settings.signDateCustom": "Custom signature date pattern",
 	"settings.signDateCustom.desc": "Used when the format is Custom: YYYY MM DD MMMM dddd, [text] as written.",
+	// 0.21 slideback
+	"settings.slideBack": "Back to the current slide",
+	"settings.slideBack.desc": "In a lecture, a button takes you back to where you last wrote.",
+	"command.slideBack": "Back to the current slide or page",
+	"slideBack.slide": "Back to slide {n}",
+	"slideBack.page": "Back to current page",
+	"slideBack.dismiss": "Dismiss",
 } as const;
 
 export type MessageKey = keyof typeof en;

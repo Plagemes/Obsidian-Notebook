@@ -3896,4 +3896,11 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.signDateMode.custom": "Formato personalizzato",
 	"settings.signDateCustom": "Formato personalizzato della data",
 	"settings.signDateCustom.desc": "Per il formato Personalizzato: YYYY MM DD MMMM dddd, [testo] invariato.",
+	// 0.21 slideback
+	"settings.slideBack": "Torna alla diapositiva corrente",
+	"settings.slideBack.desc": "A lezione, un pulsante ti riporta dove hai scritto per ultimo.",
+	"command.slideBack": "Torna alla diapositiva o pagina corrente",
+	"slideBack.slide": "Torna alla diapositiva {n}",
+	"slideBack.page": "Torna alla pagina corrente",
+	"slideBack.dismiss": "Chiudi",
 };

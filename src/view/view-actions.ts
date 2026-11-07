@@ -56,6 +56,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id === "selection-copy-devices") return !!view.uiContext().selection;
 	// 0.20 (#39): there has to be a locked element on the page in view.
 	if (id === "locked-elements") return (view.uiContext().page?.lockedElements ?? 0) > 0;
+	// 0.21 (#225): there has to be a place written during a lecture to go back to.
+	if (id === "slide-back") return view.slideBack?.available ?? false;
 	// 0.18 (#86): there has to be an open comment to go to.
 	if (id === "comment-next") return (view.uiContext().comments?.open ?? 0) > 0;
 	// wave 0.10 (81): there is no print dialog on a phone or tablet.
@@ -348,6 +350,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// lecture
 	"new-lecture": (v) => void v.newLecture(),
 	"lecture-mode": (v) => v.lectureMode?.toggle(),
+	"slide-back": (v) => void v.backToSlide(),
 	"exercise-paper": (v) => v.chooseExercisePaper(),
 
 	// markers, boxes, invisible ink (wave 0.8)
