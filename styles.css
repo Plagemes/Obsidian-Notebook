@@ -17487,7 +17487,7 @@ body.notebook-style-obsidian {
 }
 
 /* ===== 0.21 symbols ===== */
-.notebook-view .notebook-symbol-strip {
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip {
 	position: absolute;
 	top: 8px;
 	left: 50%;
@@ -17508,12 +17508,12 @@ body.notebook-style-obsidian {
 	scrollbar-width: none;
 }
 
-.notebook-view .notebook-symbol-strip.notebook-hidden,
-.notebook-view .notebook-symbol-catcher.notebook-hidden {
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip.notebook-hidden,
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-catcher.notebook-hidden {
 	display: none;
 }
 
-.notebook-view .notebook-symbol-btn {
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-btn {
 	display: inline-flex;
 	flex: 0 0 auto;
 	align-items: center;
@@ -17531,34 +17531,34 @@ body.notebook-style-obsidian {
 	cursor: pointer;
 }
 
-.notebook-view .notebook-symbol-btn:hover {
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-btn:hover {
 	background: var(--nb-hover);
 }
 
-.notebook-view .notebook-symbol-btn.is-armed {
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-btn.is-armed {
 	background: var(--nb-accent-soft);
 	color: var(--nb-accent);
 }
 
-.notebook-view .notebook-symbol-glyph {
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-glyph {
 	font-family: var(--font-text);
 	font-size: 22px;
 	line-height: 1;
 }
 
-.notebook-view .notebook-symbol-art {
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-art {
 	display: block;
 	width: 24px;
 	height: 24px;
 }
 
-.notebook-view .notebook-symbol-art svg {
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-art svg {
 	display: block;
 	width: 100%;
 	height: 100%;
 }
 
-.notebook-view .notebook-symbol-hint {
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-hint {
 	flex: 0 0 auto;
 	padding: 0 10px 0 6px;
 	color: var(--nb-text-muted);
@@ -17566,7 +17566,7 @@ body.notebook-style-obsidian {
 	white-space: nowrap;
 }
 
-.notebook-view .notebook-symbol-catcher {
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-catcher {
 	position: absolute;
 	inset: 0;
 	z-index: 4;
