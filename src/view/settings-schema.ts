@@ -61,6 +61,8 @@ export const SECTIONS: readonly SectionSpec[] = [
 export interface SettingsContext {
 	/** The sync safety service is running (device name, sync check). */
 	sync: boolean;
+	/** The backup service is running (the "Back up now" row). */
+	backups?: boolean;
 	/** The timetable service is running. */
 	timetable: boolean;
 	/** The timetable has at least one class. */
@@ -102,7 +104,7 @@ export const GROUPS: readonly GroupSpec[] = [
 /** Runs of the action rows; the tab maps each id to what it does. */
 export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open";
 /** Rows drawn by the tab itself (no stored setting of their own). */
-export type SettingCustomId = "device-name" | "pen-key" | "device-info";
+export type SettingCustomId = "device-name" | "pen-key" | "device-info" | "backup-now";
 
 export type ControlSpec =
 	| { type: "toggle" }
@@ -394,6 +396,16 @@ const LIBRARY: SettingSpec[] = [
 const SYNC: SettingSpec[] = [
 	{ id: "deviceName", section: "sync", order: 10, name: "settings.deviceName", desc: "settings.deviceName.desc", control: { type: "custom", render: "device-name" }, visible: (_s, ctx) => ctx.sync },
 	{ id: "syncCheck", section: "sync", order: 20, name: "settings.syncCheck", desc: "settings.syncCheck.desc", control: { type: "action", run: "sync-check", button: "sync.check.button" }, visible: (_s, ctx) => ctx.sync },
+	// 0.21 backups (#127): scheduled zip backups into a vault folder; the "Back up now" row shows the last time and result.
+	{
+		id: "zipBackupSchedule", section: "sync", order: 30, name: "settings.backupSchedule", desc: "settings.backupSchedule.desc",
+		control: { type: "dropdown", options: options([["off", "settings.backupSchedule.off"], ["daily", "settings.backupSchedule.daily"], ["weekly", "settings.backupSchedule.weekly"]]) },
+		keywords: "backup zip schedule automatic copy safety archive copia di sicurezza pianificata automatica giornaliera settimanale",
+		visible: (_s, ctx) => ctx.backups === true,
+	},
+	{ id: "zipBackupFolder", section: "sync", order: 31, name: "settings.backupFolder", desc: "settings.backupFolder.desc", control: { type: "folder", placeholder: DEFAULT_SETTINGS.zipBackupFolder }, parent: "zipBackupSchedule", visible: (s, ctx) => ctx.backups === true && s.zipBackupSchedule !== "off" },
+	{ id: "zipBackupKeep", section: "sync", order: 32, name: "settings.backupKeep", desc: "settings.backupKeep.desc", control: { type: "slider", min: 1, max: 30, step: 1 }, parent: "zipBackupSchedule", visible: (s, ctx) => ctx.backups === true && s.zipBackupSchedule !== "off" },
+	{ id: "backupNow", section: "sync", order: 40, name: "settings.backupNow", control: { type: "custom", render: "backup-now" }, keywords: "backup zip now copy safety archive copia di sicurezza adesso", visible: (_s, ctx) => ctx.backups === true },
 ];
 
 const companionOn: Predicate = (s) => s.companionNotes;

@@ -70,8 +70,11 @@ export function pageTrashEntryPath(root: string, notebookId: string, entryId: st
 /**
  * True for a notebook path the library does not list (same rule as storage `listNotebooks`): inside a reserved folder
  * of the notebooks folder, inside the plugin trash wherever it is, or inside the templates folder.
+ * 0.21 (#127): `backupFolder` (the zip backups folder setting, optional) is not part of the library either, wherever it is: a
+ * notebook someone unzipped into it is a copy, not a second notebook.
  */
-export function isHiddenNotebookPath(path: string, notebooksFolder: string, templatesSetting: string, notebookTemplatesSetting = ""): boolean {
+export function isHiddenNotebookPath(path: string, notebooksFolder: string, templatesSetting: string, notebookTemplatesSetting = "", backupFolder = ""): boolean {
+	if (backupFolder !== "" && isWithin(path, cleanFolder(backupFolder))) return true;
 	if (isInTrash(path)) return true;
 	const root = notebooksFolder.replace(/^\/+|\/+$/g, "");
 	if (isReservedPath(path, root)) return true;

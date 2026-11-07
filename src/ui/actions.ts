@@ -477,6 +477,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	global("library-check", "command.libraryCheck", "hard-drive", "app", ["sheet", "notebook", "library", "palette"], 15),
 	// 0.15 storage (128): size of each notebook, unused / duplicate / heavy files, old backups.
 	global("storage-manager", "command.storage", "database", "app", ["notebook", "library", "palette"], 15),
+	// 0.21 backups (#127): a zip of every notebook, its assets and sidecars in the backup folder.
+	global("backup-now", "command.backupNow", "archive", "app", ["palette"], 15),
 
 	// --- diagnostics: settings tab and palette.
 	global("pen-button-test", "command.penTest", "pen-tool", "dev", ["palette"], 5),
