@@ -3104,3 +3104,27 @@ Interactive HTML export (roadmap #164). *Export…*, format *Interactive HTML*. 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Interactive HTML export (#164): one self-contained file with the inline SVG of each page, a vanilla-JS viewer (page strip, wheel/pinch zoom, pan, keyboard, fit width, light/dark), page links inside the file, web links, image size cap, no network (CSP), chunked build, never overwrites | yes | builder (escaping, clip ids, links, URL whitelist, image budget, valid script): `tests/export-html.test.ts`; harness `doc=htmlexport` drives the real viewer in an iframe | | | not opened on Android/Safari; the strip clones every page SVG when the file opens (slow to open for 500+ pages) |
+
+### 0.21 — bookindex: back-of-book index (steps 1900-1919)
+
+Back-of-book index (roadmap #187). Select a word or region with the lasso, choose *Add to index…* (selection bar or sheet), type a term. Internally this is an ordinary star marker whose label is `#idx <term>` (Settings, Reading: *Index term prefix*; no format change). *Back-of-book index…* (page sheet, notebook menu, command palette) lists the terms A-Z with a page chip each. Implemented, not verified on hardware.
+
+1900. **Add a term.** Circle a word with the lasso, choose *Add to index…*, type `Photosynthesis`, press Enter. A star marker appears over the selection; its label reads `#idx Photosynthesis`. Undo removes it in one step.
+1901. **Suggestions.** Select another word and open *Add to index…*: the terms already in use are listed; typing narrows them; a tap fills the field.
+1902. **Open the index.** *Back-of-book index…*: letters A-Z with the terms under them, `#` first for numbers and symbols, accents and case ignored when sorting (Élan sits with E). One chip per page.
+1903. **Sub-terms.** Add `Cell`, `Cell / Nucleus` and `Cell / Membrane`: Nucleus and Membrane are indented under Cell. A term used on several pages shows one chip per page; the same term typed with different case or accent is one line.
+1904. **Jump.** Tap a page chip: the dialog closes and the notebook shows that page, near the marked spot.
+1905. **Filter.** Type part of a word in the filter: only matching terms (with their parents) remain; clearing it shows everything.
+1906. **Write to note.** *Write to note*: the note `<Notebook> — Index.md` appears next to the notebook with the list and page links. Tap a link in Obsidian: the page opens.
+1907. **Only the region is rewritten.** Add text above and below the generated region in that note, add a term in the notebook, write again: the new term appears, your text is unchanged.
+1908. **Never touch a foreign note.** Replace the note with text of your own without the markers, write again: a notice says the note was left untouched.
+1909. **Custom prefix.** Change *Index term prefix* to `ix`: markers labelled `ix Foo` become terms; existing `#idx` markers stop being listed (nothing is deleted).
+1910. **Editing.** Tap an index marker, change its label: the index follows. Delete the marker: the term disappears.
+1911. **Locked page.** On a locked page *Add to index…* is refused like any other edit.
+1912. **Phone width.** The dialog fits the screen, chips are easy to hit with a finger.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Back-of-book index (#187): *Add to index…* creates a labelled star marker (no format change); dialog with A-Z sections, sub-terms, page chips that jump, filter | yes | prefix and label parsing, sorting with locale and accents, merging, sub-terms, filter: `tests/book-index.test.ts`; dialog: harness `doc=bookindex` | | | |
+| Index written to `<Notebook> — Index.md`: only the generated region rewritten, foreign or unpaired notes untouched | yes | section building, escaping and replacement: `tests/book-index.test.ts`; vault write: harness | | | |
+| Index as a page at the end of the notebook | no | | | | not done: would need text boxes with page links in one undoable step; the note covers the use case |

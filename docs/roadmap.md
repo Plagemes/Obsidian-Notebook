@@ -388,7 +388,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 184. **P2** Paint bucket: fill closed areas with colour (diagrams, maps).
 185. **P1** 🧪 Erase area: draw an outline and everything inside disappears, in one gesture.
 186. **P2** 🧪 Copy a page into another notebook, with a link back to the source page.
-187. **P2** Back-of-book index: mark terms or regions and an index page with references is generated.
+187. **P2** 🧪 Back-of-book index: mark terms or regions and an index page with references is generated.
 188. **P1** 🧪 Show/hide all annotations, to reread a clean PDF.
 189. **P2** Attachments on the page: Word files, zips and others as icons that open on tap.
 190. **P2** 🧪 Page QR code: scan it with the phone and the page opens on the other device.

@@ -79,6 +79,8 @@ import { runInsertIntoNote } from "./selection-insert";
 import { taskCropRect } from "../model/selection-task";
 import { Mentions } from "./mentions";
 import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
+import { AddToIndexModal, BookIndexModal, currentIndex, termSpellings } from "./book-index";
+import { normalizeIndexPrefix } from "../model/book-index";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -152,7 +154,7 @@ import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
 import { SmartAddStrip } from "./smart-add";
 import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
-import { visibleStrokes } from "../model/markers";
+import { createMarker, isRegion, visibleStrokes } from "../model/markers";
 import type { PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
 import { BLANK_THUMBNAIL, ViewResilience, type ResilienceServices, type ResilienceViewHost } from "./resilience";
@@ -2143,6 +2145,41 @@ export class NotebookView extends FileView {
 		const doc = this.shownDoc();
 		if (!file || !doc) return;
 		new LookUpSheet({ app: this.app, file, settings: this.host.settings, pages: () => this.shownDoc()?.pages ?? [], goTo: (index) => this.goToPage(index) }).open();	}
+
+	/** 0.21 (#187): "Add to index…" from the selection: a star marker over the selected region, labelled `<prefix> <term>` (one undoable step). */
+	addToIndexFromSelection(): void {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		if (!sel || !doc || !this.editable() || this.statesTools?.ownsSelection(sel)) return;
+		const page = doc.pages[sel.pageIndex];
+		const bounds = itemsBounds(withoutPinnedInk(sel.strokes, sel.elements), sel.elements, measureText);
+		if (!page || !bounds) return;
+		const prefix = normalizeIndexPrefix(this.host.settings.indexPrefix);
+		const pageId = page.id;
+		const x0 = Math.max(0, bounds.minX);
+		const y0 = Math.max(0, bounds.minY);
+		const rect = { x: x0, y: y0, width: Math.min(page.width, bounds.maxX) - x0, height: Math.min(page.height, bounds.maxY) - y0 };
+		new AddToIndexModal(this.app, prefix, termSpellings(currentIndex(doc.pages, prefix)), (label) => {
+			const live = this.session?.doc?.pages.find((p) => p.id === pageId);
+			if (!live || !this.editable()) return;
+			const region = isRegion(rect) ? rect : null;
+			const marker = createMarker("star", rect.x + rect.width / 2, rect.y + rect.height / 2, { region, at: new Date().toISOString(), text: label });
+			this.history.execute(new AddElement(pageId, marker, live.elements?.length ?? 0));
+			this.afterHistoryChange();
+			this.renderer?.invalidate();
+			showNotice(t("bookindex.added"), 3000);
+		}).open();
+	}
+
+	/** 0.21 (#187): the back-of-book index: terms A-Z with their pages, a jump on a tap, and a note written next to the notebook. */
+	openBookIndex(): void {
+		const file = this.file;
+		if (!this.shownDoc() || !file) return;
+		new BookIndexModal({
+			app: this.app, file, prefix: normalizeIndexPrefix(this.host.settings.indexPrefix),
+			pages: () => this.shownDoc()?.pages ?? [], goTo: (index, y) => this.scrollToPage(index, y),
+		}).open();
+	}
 
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */
 	openMentions(): void {

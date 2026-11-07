@@ -329,6 +329,8 @@ const READING: SettingSpec[] = [
 		id: "digestGroup", section: "reading", order: 60, name: "settings.digestGroup", desc: "settings.digestGroup.desc",
 		control: { type: "dropdown", options: options([["page", "settings.digestGroup.page"], ["colour", "settings.digestGroup.colour"]]) }, keywords: "highlights digest summary evidenziazioni riepilogo colour colore",
 	},
+	// 0.21 (#187): back-of-book index.
+	{ id: "indexPrefix", section: "reading", order: 61, name: "settings.indexPrefix", desc: "settings.indexPrefix.desc", control: { type: "text", placeholder: "#idx" }, keywords: "index back of book term prefix marker indice analitico prefisso" },
 
 	// 0.18 (#86): margin comments.
 	{ id: "commentMarkers", section: "reading", order: 70, name: "settings.commentMarkers", desc: "settings.commentMarkers.desc", control: { type: "toggle" }, keywords: "comments markers margin review commenti margine revisione" },
