@@ -9,7 +9,7 @@ import { listStampFiles, loadStamp, saveStamp } from "./stamps";
  * name is "My signature" (or "My signature 2", …) is the one in use.
  */
 
-const NAME = new RegExp(`^${SIGNATURE_STAMP_NAME}( \d+)?$`, "i");
+const NAME = new RegExp(`^${SIGNATURE_STAMP_NAME}( [0-9]+)?$`, "i");
 
 /** The signature file in use, or null. */
 export function findSignatureFile(app: App, notebooksFolder: string): TFile | null {
