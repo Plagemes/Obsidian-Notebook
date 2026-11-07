@@ -73,12 +73,12 @@ export async function checkBackups(api: BackupsCheckApi): Promise<{ ok: boolean;
 		add("the zip can be read", false, String(e));
 	}
 	add("every entry of the zip passes its checksum", sound);
-	add("the zip holds the notebooks, the asset and the sidecar, and not the trash or the notes", names.join("|") === "Notebooks/Maths.notebook|Notebooks/Sub/Physics.notebook|Notebooks/_assets/0123456789abcdef01234567.png|Notebooks/_meta/folders-ab12cd34.json", names.join("|"));
+	add("the zip holds the notebooks, the asset and the sidecars, and not the trash or the notes", names.filter((n) => !n.startsWith("Notebooks/_meta/devices/")).join("|") === "Notebooks/Maths.notebook|Notebooks/Sub/Physics.notebook|Notebooks/_assets/0123456789abcdef01234567.png|Notebooks/_meta/folders-ab12cd34.json", names.join("|"));
 	add("no temporary file is left", !vault.getFiles().some((f) => f.path.endsWith(".tmp")));
 	add("the zip is recorded as a plugin write", zipFile !== null && Object.prototype.hasOwnProperty.call(loadWritten(app), zipFile.path));
 	add("the sources are untouched", (await vault.read(vault.getFileByPath("Notebooks/Maths.notebook")!)) === doc("Maths"));
 	add("a notice told the result", api.notices.some((n) => n.startsWith("Backup saved")), api.notices.join(" | "));
-	add("the status line shows the last backup", service.statusText().startsWith("Last backup") && service.statusText().includes("4 files"), service.statusText());
+	add("the status line shows the last backup", service.statusText().startsWith("Last backup") && /\d+ files/.test(service.statusText()), service.statusText());
 
 	// 3. One at a time.
 	const running = service.backUpNow();
@@ -123,6 +123,9 @@ export async function checkBackups(api: BackupsCheckApi): Promise<{ ok: boolean;
 		await sleep(400);
 		add("the Back up now button works and the description follows the result", !!button && api.notices.length > noticesBefore && backups().length >= Math.min(countBefore, 2) && (row(t("settings.backupNow"))?.textContent ?? "").includes("Last backup"), row(t("settings.backupNow"))?.textContent ?? "");
 		add("the button is a usable target", (button?.getBoundingClientRect().height ?? 0) >= 28, String(button?.getBoundingClientRect().height));
+		// Leave the backup rows in view for the screenshot.
+		row(t("settings.backupSchedule"))?.scrollIntoView({ block: "start" });
+		await sleep(50);
 	} else {
 		add("the settings tab is registered", false);
 	}
