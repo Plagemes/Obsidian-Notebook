@@ -14,6 +14,8 @@ import { CustomGesturesModal, GestureCheatSheet, setGestureEnabled, type PenGest
 import { deviceNameRow, type SyncSafetyService } from "./sync-safety";
 import { renderDeviceInfo } from "./device-info";
 import { BoardColumnsModal } from "./board-columns-modal";
+import { renderBackupRow } from "./backup-settings";
+import type { BackupService } from "../storage/backup-service";
 import { resetHints } from "../ui/hints";
 import { resetToolbarAdaptation } from "../ui/toolbar-reset";
 import {
@@ -26,6 +28,8 @@ export interface SettingsHost extends Plugin {
 	saveSettings(): Promise<void>;
 	timetable?: TimetableService;
 	syncSafety?: SyncSafetyService;
+	/** 0.21 (#127): the scheduled zip backups. */
+	backups?: BackupService;
 	/** Runs a plugin-level action of the registry (the benchmark of the Diagnostics section). */
 	runGlobal(id: string): void;
 }
@@ -79,6 +83,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 	private readonly updaters = new Map<string, () => void>();
 	/** Stops a pen key capture that is still waiting for a key (the tab was closed or redrawn). */
 	private stopPenKey: () => void = () => {};
+	/** Stops following the backup status (the "Back up now" row). */
+	private stopBackupRow: () => void = () => {};
 
 	constructor(app: App, private readonly host: SettingsHost) {
 		super(app, host);
@@ -99,6 +105,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 		const timetable = this.host.timetable;
 		return {
 			sync: !!this.host.syncSafety,
+			backups: !!this.host.backups,
 			timetable: !!timetable,
 			timetableInUse: timetable?.hasClasses() ?? false,
 			timetablePath: timetable?.path(),
@@ -216,6 +223,10 @@ export class NotebookSettingTab extends PluginSettingTab {
 	private renderCustom(id: SettingCustomId, setting: Setting): void {
 		if (id === "device-name" && this.host.syncSafety) deviceNameRow(setting, this.host.syncSafety);
 		if (id === "device-info") renderDeviceInfo(setting);
+		if (id === "backup-now" && this.host.backups) {
+			this.stopBackupRow();
+			this.stopBackupRow = renderBackupRow(setting, this.host.backups);
+		}
 		if (id === "pen-key") {
 			this.stopPenKey();
 			const host = { get: () => this.host.settings, set: (key: string, value: unknown) => this.setControlValue(key, value) };
@@ -227,6 +238,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 	hide(): void {
 		this.stopPenKey();
 		this.stopPenKey = () => {};
+		this.stopBackupRow();
+		this.stopBackupRow = () => {};
 		super.hide();
 	}
 

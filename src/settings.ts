@@ -30,6 +30,7 @@ import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from ".
 import { DEFAULT_SNAP_SETTINGS, readSnapSettings, type SnapSettings } from "./view/snap-settings";
 import { DEFAULT_GHOST_SETTINGS, readGhostSettings, type GhostSettings } from "./view/ghost-settings";
 import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
+import { DEFAULT_BACKUP_SETTINGS, readBackupSettings, type BackupSettings } from "./storage/backup-logic";
 import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
@@ -37,7 +38,7 @@ import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, GhostSettings, PdfCopySettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, GhostSettings, PdfCopySettings, BackupSettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -382,6 +383,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	// 0.17 pdfcopy
 	...DEFAULT_PDF_COPY_SETTINGS,
 	pdfCopyNotebooks: {},
+	// 0.21 backups
+	...DEFAULT_BACKUP_SETTINGS,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -509,6 +512,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readGhostSettings(d));
 	Object.assign(s, readBoardSettings(d));
 	Object.assign(s, readPdfCopySettings(d));
+	Object.assign(s, readBackupSettings(d)); // 0.21 backups
 	return s;
 }
 

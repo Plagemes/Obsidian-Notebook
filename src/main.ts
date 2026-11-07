@@ -60,6 +60,7 @@ import { NotebookStatusBar } from "./view/status-bar";
 import { registerResilience, type ResilienceServices } from "./view/resilience";
 import { PdfCopyService } from "./storage/pdf-copy-service";
 import { PdfCopyStore } from "./storage/pdf-copy-store";
+import { BackupService } from "./storage/backup-service";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -92,6 +93,8 @@ export default class NotebookPlugin extends Plugin {
 	private history: HistoryService | null = null;
 	/** 0.17 (#23): the optional PDF copy next to each notebook (storage/pdf-copy-service.ts). */
 	pdfCopy?: PdfCopyService;
+	/** 0.21 (#127): scheduled zip backups into a vault folder (storage/backup-service.ts). */
+	backups?: BackupService;
 	/** wave 0.10 (362): the clipboard shared between devices; one store (one write queue) for every view. */
 	private sharedClipStore: SharedClipStore | null = null;
 
@@ -171,6 +174,11 @@ export default class NotebookPlugin extends Plugin {
 		});
 		// wave 0.12: folder colours and icons follow renames and other devices' changes (library/folder-meta-events.ts).
 		this.step("folder metadata", () => registerFolderMeta(this, this.host.folderMeta));
+		// 0.21 (#127): scheduled zip backups; the settings tab and the "backup-now" command reach the service through `backups`.
+		this.step("backups", () => {
+			this.backups = new BackupService({ app: this.app, settings: () => this.settings, flush: () => this.flushAll() });
+			this.backups.register(this);
+		});
 		// 0.17 (#23): the PDF copy of a notebook, kept up to date in the background when the reader asks for it.
 		this.step("pdf copy", () => {
 			const store = new PdfCopyStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
@@ -242,6 +250,7 @@ export default class NotebookPlugin extends Plugin {
 			"check-integrity": () => void this.resilience?.check(),
 			"library-check": () => this.host.checkLibrary(),
 			"storage-manager": () => this.host.openStorage(),
+			"backup-now": () => void this.backups?.backUpNow(),
 			"zettel-inbox": () => void openInbox(this.app),
 			"zettel-inbox-process": () => void processNextInbox(this.app),
 			"benchmark": () => this.openBenchmark(),
