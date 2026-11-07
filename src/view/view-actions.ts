@@ -224,6 +224,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-lock": (v) => v.groupTools?.lockSelected(),
 	"locked-elements": onPage((v, _p, index) => v.groupTools?.openList(index)),
 	"insert-date-stamp": (v) => v.insertDateStamp(),
+	"sign-and-date": (v) => v.openSignDialog(),
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),
 	"add-page": (v) => v.addPage(),

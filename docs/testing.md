@@ -3128,3 +3128,23 @@ Back-of-book index (roadmap #187). Select a word or region with the lasso, choos
 | Back-of-book index (#187): *Add to index…* creates a labelled star marker (no format change); dialog with A-Z sections, sub-terms, page chips that jump, filter | yes | prefix and label parsing, sorting with locale and accents, merging, sub-terms, filter: `tests/book-index.test.ts`; dialog: harness `doc=bookindex` | | | |
 | Index written to `<Notebook> — Index.md`: only the generated region rewritten, foreign or unpaired notes untouched | yes | section building, escaping and replacement: `tests/book-index.test.ts`; vault write: harness | | | |
 | Index as a page at the end of the notebook | no | | | | not done: would need text boxes with page links in one undoable step; the note covers the use case |
+
+### 0.21 — signstamp: reusable signature and date stamp (steps 1920-1939)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`doc=signstamp`): `dev/harness/shots/design/signstamp-*`. No format change: the signature is an ordinary personal stamp called "My signature" (`<notebooks folder>/_stamps`).
+
+1920. **Open.** In the page sheet (Insert) choose *Sign and date* (also in the command palette). A dialog shows your signature, or says there is none yet.
+1921. **Draw.** *Draw signature* opens the pad. Sign on the line with the S Pen, a finger and a mouse: ink follows with no visible lag, *Undo* removes the last stroke, *Clear* all of them; *Save signature* is disabled until something is drawn.
+1922. **Saved as a stamp.** After saving, the dialog shows the signature and the stamp palette lists "My signature". Redrawing and saving again keeps the old file and uses the newest one.
+1923. **Place with the date.** With *Add today's date* on, *Place* puts the signature and the date text under it where the pen last touched (or the middle of the page in view). It is selected, so drag it: signature and date move together (one group).
+1924. **Place without the date.** Turn the date off: only the ink is placed. Turn the signature off by never drawing one: only the date text is placed.
+1925. **One undo step.** Undo removes signature and date together; redo puts them back. Placing twice gives two independent groups.
+1926. **Date format.** Settings, Writing, Advanced: *Signature date format* (your language, ISO, custom) and *Custom signature date pattern*. Check the date in the dialog follows them and the Italian UI writes Italian month names.
+1927. **Locked page.** On a locked page *Place* is refused with the "Page locked" notice and nothing is added.
+1928. **PDF notebook.** On a page that annotates a PDF, sign on the signature line and export to PDF: the ink and the date appear where they were placed.
+1929. **Look.** Light, dark, *Follow Obsidian theme*, phone and tablet width: the pad is light paper in every theme, every control has a label and works.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Signature pad and "My signature" stamp (#154): draw on a pad, saved as a personal stamp (vector strokes, no format change) | yes | pure logic: yes (`tests/signature.test.ts`); dialogs: harness (`doc=signstamp`) | | yes | |
+| Sign and date (#154): signature plus date text placed as one undo step with a fresh group; date format locale / ISO / custom (settings) | yes | `tests/signature.test.ts` (date text, fresh ids, group, undo, lock, page edge); view: harness | | yes | placing is at the last pen position or page centre, not by a tap target |

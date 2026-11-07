@@ -330,7 +330,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### B. PDF
 153. **P2** Fill PDF forms (fields) by hand or keyboard; export them filled.
-154. **P2** Reusable signature and date stamp for documents.
+154. **P2** 🧪 Reusable signature and date stamp for documents.
 155. **P1** 🧪 Export PDF annotations to a Markdown note: highlights, excerpts and comments, each with a page link.
 156. **P2** Import existing annotations from PDFs annotated in other apps, as editable items.
 157. **P3** Export ink as native PDF annotations, editable in other PDF readers.

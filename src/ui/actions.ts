@@ -511,6 +511,8 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// wave 0.10: clipboard and stamps (356 date and time stamp, 362 clipboard shared between devices)
 	{ id: "insert-date-stamp", label: "datestamp.action", icon: "calendar-clock", group: "insert", surfaces: ["sheet"], priority: 48, scope: "view", command: "datestamp.command", keywords: "date time stamp timestamp clock now data ora" },
+	// 0.21 (154): reusable signature and date
+	{ id: "sign-and-date", label: "sign.action", icon: "signature", group: "insert", surfaces: ["sheet", "palette"], priority: 49, scope: "view", command: "sign.command", keywords: "signature sign date stamp firma firmare data pdf document" },
 	{ id: "selection-copy-devices", label: "clipshare.copy", icon: "monitor-smartphone", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 48, scope: "view", command: true, when: hasSelection, keywords: "clipboard tablet phone sync share vault appunti" },
 	// 0.16 (78): move the selection to another page (one undo step), or copy it there.
 	{ id: "selection-move-page", label: "movePage.move", icon: "arrow-right-to-line", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 43, scope: "view", command: true, when: hasSelection, keywords: "move send page another sposta pagina selezione" },
