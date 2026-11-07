@@ -4,6 +4,7 @@ import { freezeStroke } from "../model/serialize";
 import type { NotebookDocument, Page, PageElement, Stroke, TextElement } from "../model/types";
 import { instantiateClip, pasteCommand, pasteOffset, type ClipContent } from "./clipboard";
 import { stampElement } from "./date-stamp";
+import type { InputPolicy } from "./input-policy";
 import { estimateMeasure, type MeasureText } from "./text-layout";
 
 /**
@@ -96,4 +97,32 @@ export function planGlyphPlacement(
 	const probe = stampElement(glyph, page, 0, 0, size, style.color, measure);
 	const el = stampElement(glyph, page, centre[0] - probe.width / 2, centre[1] - size * 0.7, size, style.color, measure);
 	return { command: new AddElement(page.id, el, page.elements?.length ?? 0), element: el };
+}
+
+/** A press on the catcher that is armed with a symbol: what the palm rejection needs to know about it. */
+export interface SymbolTap {
+	pointerType: string;
+	/** `PointerEvent.timeStamp`, the clock the policy was told the pen's events with. */
+	timeStamp: number;
+	button: number;
+	buttons: number;
+	pressure: number;
+	/** Contact size in CSS px (the larger of width and height). */
+	contact: number;
+	/** Position inside the catcher and its size, CSS px (for the edge zones). */
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/**
+ * May this press start a tap that places the armed symbol? The same rules as a press on the page, from the input policy
+ * (read only): a pen or a mouse places; a finger places only when the pen is not down and was not seen within the palm
+ * rejection time, the contact is not palm-sized, it is not in an edge zone, and "write with finger" is on (a finger in
+ * pen-only mode pans on the page, so it places nothing here either); the pen's side button never places.
+ */
+export function symbolTapPlaces(policy: InputPolicy, tap: SymbolTap): boolean {
+	if (tap.pointerType === "touch" && policy.edgeRejects("touch", tap.x, tap.y, tap.width, tap.height)) return false;
+	return policy.route(tap.pointerType, tap.timeStamp, tap.button, tap.contact, tap.buttons, tap.pressure) === "draw";
 }

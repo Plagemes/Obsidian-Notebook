@@ -17799,3 +17799,10 @@ body.notebook-style-obsidian {
 	cursor: crosshair;
 	touch-action: none;
 }
+
+/* ===== 0.21 integration ===== */
+/* The "Back to slide N" pill and the recent-symbols strip are both centred at the top: while the strip is shown, the pill sits just
+   below it (strip: 8px + about 50px high). The pill is created after the strip, so the sibling combinator reaches it. */
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-slide-back {
+	top: 66px;
+}

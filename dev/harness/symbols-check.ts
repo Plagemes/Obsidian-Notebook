@@ -83,6 +83,24 @@ export async function checkSymbols(api: SymbolsCheckApi): Promise<{ ok: boolean;
 	// --- the used symbol moves to the front ---
 	add("the used symbol is first", labels()[0] === "≠", labels().join(" "));
 
+	// --- palm rejection: a finger does not place while the pen is active ---
+	buttons().find((x) => x.textContent === "≠")!.click();
+	await frames(2);
+	const textsBefore = texts().length;
+	const cr = v.stage.getBoundingClientRect();
+	const tapTouch = (): void => {
+		const c = catcher()!;
+		const init = { pointerId: 72, pointerType: "touch", isPrimary: true, clientX: cr.left + cr.width / 3, clientY: cr.top + cr.height / 2, button: 0, buttons: 1, bubbles: true, cancelable: true };
+		c.dispatchEvent(new PointerEvent("pointerdown", init));
+		c.dispatchEvent(new PointerEvent("pointerup", { ...init, buttons: 0 }));
+	};
+	catcher()!.dispatchEvent(new PointerEvent("pointermove", { pointerId: 71, pointerType: "pen", isPrimary: true, clientX: cr.left + 10, clientY: cr.top + 10, bubbles: true }));
+	tapTouch();
+	await frames(2);
+	add("a finger tap right after the pen was seen places nothing", texts().length === textsBefore && strip.isArmed, texts().join(","));
+	strip.disarm();
+	await frames(2);
+
 	// --- a symbol of the user ---
 	const strokesBefore = page().strokes.length;
 	const a = freezeStroke(createStroke("#222222", 2, pts([0, 0], [30, 0], [15, 30], [30, 30]), "pen"));

@@ -5933,6 +5933,7 @@ export class NotebookView extends FileView {
 			options: () => ({ show: this.host.settings.symbolStrip, count: this.host.settings.symbolCount }),
 			style: () => ({ color: this.tools.penColor, width: this.tools.penWidth, textSize: this.tools.textSize }),
 			pageAtClient: (x, y) => this.pageAtClient(x, y),
+			policy: () => this.policy,
 			captureSelection: () => this.captureSelectionClip(),
 			execute: (cmd) => {
 				this.history.execute(cmd);

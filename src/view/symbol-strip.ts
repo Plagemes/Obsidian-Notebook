@@ -3,7 +3,8 @@ import { t } from "../i18n";
 import type { ClipContent } from "../ink/clipboard";
 import { measureText } from "../ink/renderer";
 import { stampPreview, type StampPreview } from "../ink/stamps";
-import { isSymbolSized, planGlyphPlacement, planSymbolPlacement, type SymbolStyle } from "../ink/symbols";
+import type { InputPolicy } from "../ink/input-policy";
+import { isSymbolSized, planGlyphPlacement, planSymbolPlacement, symbolTapPlaces, type SymbolStyle } from "../ink/symbols";
 import type { Command } from "../model/history";
 import type { NotebookDocument, PageElement, Stroke } from "../model/types";
 import { listStampFiles, loadStamp, saveStamp } from "../storage/stamps";
@@ -25,6 +26,8 @@ export interface SymbolHost {
 	/** Colour and width of the pen and the text size: a placed symbol is drawn at their scale. */
 	style(): SymbolStyle;
 	pageAtClient(clientX: number, clientY: number): StampTarget | null;
+	/** The view's input policy (palm rejection): the catcher asks it before a tap places a symbol and tells it about the pen. */
+	policy(): InputPolicy;
 	/** Copy of the lasso selection, or null when nothing is selected. */
 	captureSelection(): ClipContent | null;
 	execute(cmd: Command): void;
@@ -58,13 +61,28 @@ export class SymbolStrip {
 	constructor(parent: HTMLElement, private readonly host: SymbolHost) {
 		this.el = parent.createDiv({ cls: "notebook-symbol-strip notebook-hidden", attr: { role: "toolbar", "aria-label": t("symbols.title") } });
 		this.catcher = parent.createDiv({ cls: "notebook-symbol-catcher notebook-hidden" });
+		// The pen hovering over the catcher never reaches the page's own pointer handlers: tell the palm rejection about it, so a
+		// hand resting beside the pen does not place a symbol.
+		this.catcher.addEventListener("pointermove", (e) => {
+			if (e.pointerType === "pen") this.host.policy().notePen(e.timeStamp);
+		});
 		this.catcher.addEventListener("pointerdown", (e) => {
+			const policy = this.host.policy();
+			if (e.pointerType === "pen") policy.setPenDown(true, e.timeStamp);
 			if (!e.isPrimary || this.down) return;
 			e.preventDefault();
 			e.stopPropagation();
+			// Palm rejection: a touch while the pen is active (or was, within the rejection time), a palm-sized or edge touch, and a
+			// finger in pen-only mode do not place anything; the pen's side button does not either (it opens the radial menu).
+			const rect = this.catcher.getBoundingClientRect();
+			if (!symbolTapPlaces(policy, {
+				pointerType: e.pointerType, timeStamp: e.timeStamp, button: e.button, buttons: e.buttons, pressure: e.pressure,
+				contact: Math.max(e.width, e.height), x: e.clientX - rect.left, y: e.clientY - rect.top, width: rect.width, height: rect.height,
+			})) return;
 			this.down = { id: e.pointerId, x: e.clientX, y: e.clientY };
 		});
 		this.catcher.addEventListener("pointerup", (e) => {
+			if (e.pointerType === "pen") this.host.policy().setPenDown(false, e.timeStamp);
 			const d = this.down;
 			if (!d || e.pointerId !== d.id) return;
 			this.down = null;
@@ -72,7 +90,10 @@ export class SymbolStrip {
 			e.stopPropagation();
 			if (Math.hypot(e.clientX - d.x, e.clientY - d.y) <= TAP_SLOP) this.placeAt(e.clientX, e.clientY);
 		});
-		this.catcher.addEventListener("pointercancel", () => (this.down = null));
+		this.catcher.addEventListener("pointercancel", (e) => {
+			if (e.pointerType === "pen") this.host.policy().setPenDown(false, e.timeStamp);
+			this.down = null;
+		});
 		this.sync();
 		void this.refresh();
 	}
