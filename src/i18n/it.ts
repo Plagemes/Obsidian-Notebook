@@ -3848,5 +3848,5 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"bookindex.add.button": "Aggiungi",
 	"bookindex.added": "Aggiunto all'indice.",
 	"settings.indexPrefix": "Prefisso dei termini d'indice",
-	"settings.indexPrefix.desc": "Un segnaposto la cui etichetta inizia con questa parola è un termine d'indice (per esempio «#idx Fotosintesi»). «Aggiungi all'indice…» lo scrive per te.",
+	"settings.indexPrefix.desc": "Un segnaposto con questa parola è un termine d'indice, es. «#idx Atomo».",
 };

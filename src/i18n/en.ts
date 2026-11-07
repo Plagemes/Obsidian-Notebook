@@ -3846,7 +3846,7 @@ export const en = {
 	"bookindex.add.button": "Add",
 	"bookindex.added": "Added to the index.",
 	"settings.indexPrefix": "Index term prefix",
-	"settings.indexPrefix.desc": "A marker whose label starts with this word is an index term (for example “#idx Photosynthesis”). “Add to index…” writes it for you.",
+	"settings.indexPrefix.desc": "A marker labelled with this word is an index term, e.g. “#idx Atom”.",
 } as const;
 
 export type MessageKey = keyof typeof en;
