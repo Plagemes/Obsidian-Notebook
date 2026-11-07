@@ -17485,3 +17485,96 @@ body.notebook-style-obsidian {
 	background: var(--nb-accent);
 	color: var(--nb-on-accent, #fff);
 }
+
+/* ===== 0.21 bookindex ===== */
+.nb-ui.notebook-bookindex-modal .nb-bookindex-list {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.nb-ui .nb-bookindex-letter {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 4px 0;
+	background: var(--nb-bg-elevated);
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	border-bottom: 1px solid var(--nb-border);
+}
+
+.nb-ui .nb-bookindex-term {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px 12px;
+	min-height: 44px;
+	padding: 4px 0 4px calc(var(--nb-index-depth, 0) * 18px);
+}
+
+.nb-ui .nb-bookindex-name {
+	color: var(--nb-text);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-bookindex-refs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.nb-ui .nb-bookindex-ref {
+	min-width: 44px;
+	min-height: 36px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	border: 0;
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui .nb-bookindex-ref:hover,
+.nb-ui .nb-bookindex-ref:focus-visible {
+	background: var(--nb-accent);
+	color: var(--nb-on-accent, #fff);
+}
+
+.nb-ui .nb-bookindex-suggest {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.nb-ui .nb-bookindex-suggestion {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 44px;
+	padding: 4px 8px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--nb-text);
+	text-align: left;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui .nb-bookindex-suggestion:hover,
+.nb-ui .nb-bookindex-suggestion:focus-visible {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-bookindex-suggestion-icon {
+	display: inline-flex;
+	color: var(--nb-text-muted);
+}

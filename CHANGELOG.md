@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### bookindex
+- **Back-of-book index (#187).** *Add to index…* (selection bar and sheet) turns the lasso selection into an ordinary star marker labelled `#idx <term>`; *Back-of-book index…* (page sheet, notebook menu, command palette) lists the terms A-Z with a page chip each (a tap goes to the page), sub-terms written `Term / Subterm` nest, equal terms merge whatever the case or accents, and *Write to note* writes the list to `<Notebook> — Index.md` next to the notebook (only the generated region is rewritten; a note of yours without the markers is left untouched). Settings, Reading: *Index term prefix*. No format change. Pure logic in `src/model/book-index.ts`, dialogs in `src/view/book-index.ts`. Tests: `tests/book-index.test.ts`. Harness: `dev/harness/bookindex-check.ts` (`doc=bookindex`).
+
+
 ## 0.20.0 — 2026-11-05
 
 Eight features: groups and locked elements, a quick share of a page or a selection, files dragged straight onto a page, ghost guide lines on blank paper, headings found from the size of the handwriting, a floating reference window, a planner generator and a visual version diff. The notebook format moves to version 18 (groups and locks): the migration from version 17 is automatic, and 0.19 and older open a v18 file read-only and never overwrite it.

@@ -31,6 +31,7 @@ import { DEFAULT_SNAP_SETTINGS, readSnapSettings, type SnapSettings } from "./vi
 import { DEFAULT_GHOST_SETTINGS, readGhostSettings, type GhostSettings } from "./view/ghost-settings";
 import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
 import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
+import { normalizeIndexPrefix } from "./model/book-index";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
 /** DESIGN.md §2.2: *Notebook* (its own tokens, the default) or *Follow Obsidian theme*. */
@@ -220,6 +221,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// 0.16 (#90): highlights digest
 	/** How the digest note of the highlights is grouped: by page or by colour. */
 	digestGroup: "page" | "colour";
+	/** 0.21 (#187): the label prefix that makes a marker an index term (one word). */
+	indexPrefix: string;
 	// 0.18 (#86): margin comments
 	/** Show the numbered markers of the comments in the page margin (a comment whose card is open is always shown). */
 	commentMarkers: boolean;
@@ -343,6 +346,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	notebookTabs: false,
 	autoLineBreak: false,
 	digestGroup: "page",
+	indexPrefix: "#idx",
 	commentMarkers: true,
 	commentsInPdf: false,
 	headerMode: "off",
@@ -477,6 +481,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
 	if (d.digestGroup === "page" || d.digestGroup === "colour") s.digestGroup = d.digestGroup;
+	if (typeof d.indexPrefix === "string") s.indexPrefix = normalizeIndexPrefix(d.indexPrefix);
 	if (typeof d.commentMarkers === "boolean") s.commentMarkers = d.commentMarkers;
 	if (typeof d.commentsInPdf === "boolean") s.commentsInPdf = d.commentsInPdf;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
