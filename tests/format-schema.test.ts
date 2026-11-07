@@ -1,7 +1,8 @@
-// docs/schema/notebook-v18.schema.json against what the serializer really writes (roadmap #167).
+// docs/schema/notebook-v19.schema.json against what the serializer really writes (roadmap #167).
 // The schema is a published contract for other tools: a document the plugin writes must always satisfy it, and a document that
 // breaks one of the writer's rules must not. The validator is a small dependency-free one (tests/json-schema-lite.ts).
-import { readFileSync } from "node:fs";
+import schemaText from "../docs/schema/notebook-v19.schema.json?raw";
+import guide from "../docs/format.md?raw";
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
 import { formatOutline } from "../src/math/outline";
@@ -14,7 +15,6 @@ import { sampleDocument } from "./helpers";
 import { delAt, getAt, parseRaw, setAt, type Raw, type RawPath } from "./raw-json";
 import { SchemaValidator, type Json } from "./json-schema-lite";
 
-const schemaText = readFileSync(new URL("../docs/schema/notebook-v18.schema.json", import.meta.url), "utf8");
 const schema = JSON.parse(schemaText) as { [key: string]: Json };
 const validator = new SchemaValidator(schema);
 
@@ -123,14 +123,19 @@ function fullDocument(): NotebookDocument {
 	const page3: Page = {
 		id: "p-img", width: 419.53, height: 595.28, paper: { kind: "millimetre", spacing: 2.83 },
 		background: { kind: "image", asset: hex2 }, strokes: [stroke("st-img")],
+		startAt: 1_700_000_000_000, endAt: 1_700_000_900_000,
 	};
-	const papers = PAPER_KINDS.map((kind, i): Page => ({ id: `p-paper-${i}`, width: 612, height: 792, paper: { kind, spacing: 14 }, strokes: [] }));
+	const papers = PAPER_KINDS.map((kind, i): Page => ({
+		id: `p-paper-${i}`, width: 612, height: 792, paper: { kind, spacing: 14 }, strokes: [],
+		// v19: a page written in one instant has the same start and end.
+		...(i === 0 ? { startAt: 1_700_001_000_000, endAt: 1_700_001_000_000 } : {}),
+	}));
 	doc.pages = [page1, page2, page3, ...papers];
 	doc.position = { page: "p-ink", y: 250.5, at: "2026-10-29T12:00:00.000Z" };
 	return doc;
 }
 
-describe("notebook-v18.schema.json: what the serializer writes validates", () => {
+describe("notebook-v19.schema.json: what the serializer writes validates", () => {
 	it("is a well-formed draft 2020-12 schema for the current format version", () => {
 		expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
 		expect((getAt(schema as Raw, ["properties", "version", "const"]))).toBe(CURRENT_VERSION);
@@ -160,7 +165,7 @@ describe("notebook-v18.schema.json: what the serializer writes validates", () =>
 		for (const key of [
 			'"bookmarkInfo"', '"description"', '"coverArt"', '"position"', '"slides"', '"tags"', '"background"', '"margins"', '"infinite"', '"locked"',
 			'"states"', '"comments"', '"hidden"', '"slide"', '"group"', '"lockAt"', '"outline"', '"taskAt"', '"sketch"', '"resolved"', '"inline"', '"numbered"',
-			'"collapsed"', '"ink"', '"table"', '"params"', '"axes"', '"degrees"',
+			'"startAt"', '"endAt"', '"collapsed"', '"ink"', '"table"', '"params"', '"axes"', '"degrees"',
 		]) expect(text, key).toContain(key);
 		// ... and the writer keeps it (round trip), so the schema describes what is read back too.
 		const back = parse(text);
@@ -175,7 +180,7 @@ describe("notebook-v18.schema.json: what the serializer writes validates", () =>
 	});
 });
 
-describe("notebook-v18.schema.json: invalid documents are refused", () => {
+describe("notebook-v19.schema.json: invalid documents are refused", () => {
 	const base = (): Raw => parseRaw(written(fullDocument()));
 	const bad = (name: string, edit: (raw: Raw) => void): void => {
 		it(name, () => {
@@ -198,6 +203,7 @@ describe("notebook-v18.schema.json: invalid documents are refused", () => {
 	// Header.
 	bad("wrong format id", set(["format"], "excalidraw"));
 	bad("another version", set(["version"], 17));
+	bad("the previous version", set(["version"], 18));
 	bad("version as a string", set(["version"], "18"));
 	bad("no pages", set(["pages"], []));
 	bad("missing id", del(["id"]));
@@ -220,6 +226,12 @@ describe("notebook-v18.schema.json: invalid documents are refused", () => {
 	bad("unknown paper kind", set(["pages", 0, "paper", "kind"], "tartan"));
 	bad("paper spacing too small", set(["pages", 0, "paper", "spacing"], 0.1));
 	bad("page locked false", set(["pages", 1, "locked"], false));
+	bad("page startAt without endAt", del(["pages", 2, "endAt"]));
+	bad("page endAt without startAt", del(["pages", 2, "startAt"]));
+	bad("page startAt as a string", set(["pages", 2, "startAt"], "1700000000000"));
+	bad("page startAt fractional", set(["pages", 2, "startAt"], 1_700_000_000_000.5));
+	bad("page startAt negative", set(["pages", 2, "startAt"], -1));
+	bad("page endAt beyond the date range", set(["pages", 2, "endAt"], 8_640_000_000_000_001));
 	bad("margins missing a side", del(["pages", 1, "margins", "bottom"]));
 	bad("margin negative", set(["pages", 1, "margins", "left"], -1));
 	bad("pdf background without a page number", del(["pages", 1, "background", "page"]));
@@ -255,7 +267,7 @@ describe("notebook-v18.schema.json: invalid documents are refused", () => {
 	bad("equation without colour", del(["pages", 0, "elements", 5, "color"]));
 	bad("graph without view", del(["pages", 0, "elements", 7, "view"]));
 	bad("graph with 13 functions", (raw) => {
-		const fns = getAt(raw, ["pages", 0, "elements", 7, "functions"]) as unknown[];
+		const fns = getAt<unknown[]>(raw, ["pages", 0, "elements", 7, "functions"]);
 		for (let i = 0; i < 8; i++) fns.push({ id: `x${i}`, kind: "cartesian", color: "#000000", expr: "x" });
 	});
 	bad("graph function of an unknown kind", set(["pages", 0, "elements", 7, "functions", 0, "kind"], "spline"));
@@ -312,8 +324,6 @@ describe("json-schema-lite", () => {
 });
 
 describe("docs/format.md", () => {
-	const guide = readFileSync(new URL("../docs/format.md", import.meta.url), "utf8");
-
 	it("has a minimal example that satisfies the schema and that the plugin reads", () => {
 		const block = /```json\n([\s\S]*?)\n```/.exec(guide);
 		expect(block).not.toBeNull();
@@ -325,7 +335,7 @@ describe("docs/format.md", () => {
 	});
 
 	it("names the schema file and the version it describes", () => {
-		expect(guide).toContain("schema/notebook-v18.schema.json");
+		expect(guide).toContain("schema/notebook-v19.schema.json");
 		expect(guide).toContain(`version ${CURRENT_VERSION}`);
 	});
 });

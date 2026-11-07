@@ -120,7 +120,7 @@ Date: 2026-11-05. No external code was copied and no dependency was added.
 
 | Option | License | Decision |
 |---|---|---|
-| JSON Schema draft 2020-12 (the specification) | Specification, free to implement | **Used** as the language of `docs/schema/notebook-v18.schema.json`. |
+| JSON Schema draft 2020-12 (the specification) | Specification, free to implement | **Used** as the language of `docs/schema/notebook-v19.schema.json`. |
 | Ajv (validator library) | MIT | **Not used.** It would be a new devDependency for one test; a validator for the few keywords the schema needs is about 150 lines. |
 | `tests/json-schema-lite.ts` | — (written for this project) | **Used** by `tests/format-schema.test.ts` only (never bundled). It supports only the keywords the schema uses and throws on any other keyword, so a schema edit that adds an unsupported keyword fails instead of being silently ignored. |
 

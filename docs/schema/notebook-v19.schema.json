@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v18.schema.json",
-  "title": "Notebook document, format version 18",
-  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 18). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
+  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v19.schema.json",
+  "title": "Notebook document, format version 19",
+  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 19). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
   "type": "object",
   "required": ["format", "version", "id", "createdAt", "modifiedAt", "meta", "assets", "pages"],
   "properties": {
     "format": { "const": "obsidian-notebook", "description": "Always this string. Distinguishes the file from any other JSON." },
-    "version": { "const": 18, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
+    "version": { "const": 19, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
     "id": { "type": "string", "minLength": 1, "description": "Document id (a UUID when available). Survives renames and copies made with 'Make a copy'." },
     "createdAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time the notebook was created." },
     "modifiedAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time of the last content save." },
@@ -135,6 +135,7 @@
     "page": {
       "type": "object",
       "required": ["id", "width", "height", "paper", "strokes"],
+      "dependentRequired": { "startAt": ["endAt"], "endAt": ["startAt"] },
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "width": { "$ref": "#/$defs/positive", "description": "Page width, pt (A4 = 595.28)." },
@@ -167,6 +168,8 @@
         },
         "infinite": { "type": "boolean", "description": "v4: the page grows downwards while writing near its bottom edge." },
         "locked": { "$ref": "#/$defs/true", "description": "v14: a finished page that refuses every edit until unlocked." },
+        "startAt": { "type": "integer", "minimum": 0, "maximum": 8640000000000000, "description": "v19: when the first ink or element was added to the page, ms since 1970. Written together with `endAt`, never alone; `endAt` is not before `startAt` (a rule a schema cannot express, see docs/format.md)." },
+        "endAt": { "type": "integer", "minimum": 0, "maximum": 8640000000000000, "description": "v19: when the last ink or element was added to the page, ms since 1970. Written together with `startAt`." },
         "states": { "$ref": "#/$defs/pageStates" },
         "comments": {
           "type": "array",

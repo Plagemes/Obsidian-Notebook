@@ -1,6 +1,6 @@
-# The `.notebook` file format (version 18)
+# The `.notebook` file format (version 19)
 
-This guide is for people who write tools that read (or carefully write) Notebook files: converters, search indexes, viewers, backup scripts. The machine-readable contract is the JSON Schema [`docs/schema/notebook-v18.schema.json`](schema/notebook-v18.schema.json) (draft 2020-12). The reasoning behind the format and the full history of every field is in [architecture.md](architecture.md), section 2.
+This guide is for people who write tools that read (or carefully write) Notebook files: converters, search indexes, viewers, backup scripts. The machine-readable contract is the JSON Schema [`docs/schema/notebook-v19.schema.json`](schema/notebook-v19.schema.json) (draft 2020-12). The reasoning behind the format and the full history of every field is in [architecture.md](architecture.md), section 2.
 
 A schema file is also kept in the test suite: `tests/format-schema.test.ts` validates real serializer output (a document that uses every element type and every optional field) against it, and checks that invalid documents are refused. If the plugin changes the format, that test fails until the schema is updated.
 
@@ -9,7 +9,7 @@ A schema file is also kept in the test suite: `tests/format-schema.test.ts` vali
 - A notebook is **one UTF-8 JSON file** with the extension `.notebook`, anywhere under the notebooks folder of the vault (the folders are real folders; a folder is a subject).
 - The file is written by the plugin with a fixed key order and **one stroke, one element, one comment and one asset per line**, tab-indented. It is ordinary JSON: parse it with any JSON parser, do not rely on the line layout.
 - Units are **typographic points** (1/72 inch), origin at the **top left** of the page, y grows downwards. A4 is 595.28 x 841.89. Strokes and elements use **page coordinates**, never screen coordinates. Pages are stacked vertically by the viewer; their coordinates are not related to each other.
-- Colours are `#rrggbb`. Times are ISO 8601 strings (`createdAt`, `modifiedAt`, `position.at`, `marker.at`) or integers in milliseconds since 1970 (comments, `lockAt`, checkbox `at`/`taskAt`). Booleans that mean "on" are written **only when true** (`hidden`, `locked`, `done`, `checked`, ...): absent means false.
+- Colours are `#rrggbb`. Times are ISO 8601 strings (`createdAt`, `modifiedAt`, `position.at`, `marker.at`) or integers in milliseconds since 1970 (comments, `lockAt`, checkbox `at`/`taskAt`, page `startAt`/`endAt`). Booleans that mean "on" are written **only when true** (`hidden`, `locked`, `done`, `checked`, ...): absent means false.
 
 Top level:
 
@@ -25,7 +25,7 @@ Top level:
 | `assets` | `{ [id]: { id, kind: "pdf" or "image", path, name, bytes } }`, the files in `_assets/` |
 | `pages` | at least one page |
 
-A page has `id`, `width`, `height`, `paper` (`kind`, `spacing`), `strokes`, and optionally `background` (a PDF page or an image), `margins`, `infinite`, `tags`, `locked`, `states`, `comments`, `elements`.
+A page has `id`, `width`, `height`, `paper` (`kind`, `spacing`), `strokes`, and optionally `background` (a PDF page or an image), `margins`, `infinite`, `tags`, `locked`, `startAt` and `endAt` (v19: when the first and the last ink or element were added to the page, written together), `states`, `comments`, `elements`.
 
 A **stroke** is vector ink: `id`, `tool` (`pen`, `highlighter`, `shape`), `color`, `width` (pt), `render` (`1` or `2`: which geometry draws it), and `points`, a list of `[x, y, pressure]` with pressure in 0..1. Optional: `hidden`, `slide`, `group`. The plugin draws the outline of a stroke with the perfect-freehand algorithm (for `render: 1` with the frozen parameters in architecture.md); a tool that only needs the ink can draw a polyline through the points with a width scaled by pressure. Highlighter strokes are translucent (alpha 0.35, multiply) and constant width.
 
@@ -53,13 +53,14 @@ Rules a JSON Schema cannot say (the plugin enforces them when it writes and chec
 - `states.parts[].items`, `states.list[].poses[].part`, `states.active`, a collapsed sticky note's `ink` and `Stroke.slide` refer to ids that must exist (strokes of the same page, parts, states, entries of `slides`).
 - `margins.left + margins.right < width` and `margins.bottom < height`.
 - Graph function ids and parameter names are unique within the graph; `table.fn` names one of its functions.
+- A page has `startAt` and `endAt` both or neither, and `endAt` is not before `startAt`.
 - A comment is either a note (`region`, optional `sketch`/`resolved`) or a reply (`parent` names a note, never another reply); replies have text.
 
 ## Versioning and migrations
 
 - `version` is an integer that grows with every schema change. Every change adds a tested migration (`src/model/migrations.ts`), and every older valid document stays valid after migration (most steps are "the identity plus the new version number").
-- Newer fields are always **optional** and written only when used; the version of a file is the version of the plugin that last saved it. v18 added groups and locks; v17 checkboxes; v16 margin comments; v15 sticky notes; v14 page lock; v13 states; v12 slides; v11 description and cover art; v10 excerpts; v9 equations and graphs; v8 markers, boxes and hidden ink; v7 bookmark details, page tags, reading position and more paper kinds; v6 margins; v5 the per-stroke `render`; v4 metadata, assets, backgrounds and elements. The table of what each version added is in architecture.md.
-- **This schema describes version 18 only.** A file with another `version` is not valid against it. The schema file name carries the version (`notebook-v18.schema.json`); a future format version ships its own schema next to this one, and older schemas stay available in the repository history.
+- Newer fields are always **optional** and written only when used; the version of a file is the version of the plugin that last saved it. v19 added the start and end time of a page; v18 groups and locks; v17 checkboxes; v16 margin comments; v15 sticky notes; v14 page lock; v13 states; v12 slides; v11 description and cover art; v10 excerpts; v9 equations and graphs; v8 markers, boxes and hidden ink; v7 bookmark details, page tags, reading position and more paper kinds; v6 margins; v5 the per-stroke `render`; v4 metadata, assets, backgrounds and elements. The table of what each version added is in architecture.md.
+- **This schema describes version 19 only.** A file with another `version` is not valid against it. The schema file name carries the version (`notebook-v19.schema.json`); a future format version ships its own schema next to this one, and older schemas stay available in the repository history.
 - A plugin never rewrites a file of a **newer** version than it understands: it opens it read-only and keeps a backup copy in `<notebooks folder>/_backup/`. A tool that writes notebooks should follow the same rule: never save a file whose `version` it does not know.
 
 ## Reading leniently
@@ -91,7 +92,7 @@ All of these live under the notebooks folder (a setting, `Notebooks` by default)
 ```json
 {
 	"format": "obsidian-notebook",
-	"version": 18,
+	"version": 19,
 	"id": "6f1c2d3e-0000-4000-8000-000000000001",
 	"createdAt": "2026-11-05T09:00:00.000Z",
 	"modifiedAt": "2026-11-05T09:05:00.000Z",
@@ -122,7 +123,7 @@ Any draft 2020-12 validator works, for example with Python:
 
 ```python
 import json, jsonschema
-schema = json.load(open("docs/schema/notebook-v18.schema.json"))
+schema = json.load(open("docs/schema/notebook-v19.schema.json"))
 doc = json.load(open("Physics.notebook"))
 jsonschema.Draft202012Validator(schema).validate(doc)
 ```
