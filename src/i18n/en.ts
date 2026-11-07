@@ -3819,7 +3819,7 @@ export const en = {
 	"settings.ghostSpacing.auto": "Auto (from your writing)",
 	// 0.21 slideback
 	"settings.slideBack": "Back to the current slide",
-	"settings.slideBack.desc": "While you are in a lecture, a small button takes you back to the page where you last wrote after you scroll away.",
+	"settings.slideBack.desc": "In a lecture, a button takes you back to where you last wrote.",
 	"command.slideBack": "Back to the current slide or page",
 	"slideBack.slide": "Back to slide {n}",
 	"slideBack.page": "Back to current page",

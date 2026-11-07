@@ -17506,7 +17506,6 @@ body.notebook-style-obsidian {
 	color: var(--nb-text);
 	font-size: var(--nb-fs-chip);
 	transform: translateX(-50%);
-	animation: notebook-slide-back-in var(--nb-motion) var(--nb-ease);
 }
 
 .workspace-leaf-content .view-content.notebook-view .notebook-slide-back-go {
@@ -17545,22 +17544,4 @@ body.notebook-style-obsidian {
 	width: 36px;
 	min-height: 40px;
 	color: var(--nb-text-muted);
-}
-
-@keyframes notebook-slide-back-in {
-	from {
-		opacity: 0;
-		transform: translate(-50%, -6px);
-	}
-
-	to {
-		opacity: 1;
-		transform: translate(-50%, 0);
-	}
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.workspace-leaf-content .view-content.notebook-view .notebook-slide-back {
-		animation: none;
-	}
 }

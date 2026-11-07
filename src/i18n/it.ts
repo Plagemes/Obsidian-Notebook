@@ -3821,7 +3821,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.ghostSpacing.auto": "Auto (dalla tua scrittura)",
 	// 0.21 slideback
 	"settings.slideBack": "Torna alla diapositiva corrente",
-	"settings.slideBack.desc": "Durante una lezione, un piccolo pulsante ti riporta alla pagina dove hai scritto per ultimo dopo che ti sei spostato.",
+	"settings.slideBack.desc": "A lezione, un pulsante ti riporta dove hai scritto per ultimo.",
 	"command.slideBack": "Torna alla diapositiva o pagina corrente",
 	"slideBack.slide": "Torna alla diapositiva {n}",
 	"slideBack.page": "Torna alla pagina corrente",
