@@ -3831,7 +3831,7 @@ export const en = {
 	"symbols.saveFailed": "Could not save the symbol: {error}",
 	"symbols.placeFailed": "Could not place the symbol: {error}",
 	"settings.symbolStrip": "Recent symbols",
-	"settings.symbolStrip.desc": "A strip with the symbols you use most (∀, ∫, →, or signs you saved). Tap one, then tap the page to place it.",
+	"settings.symbolStrip.desc": "A strip of the symbols you use most. Tap one, then the page.",
 	"settings.symbolCount": "Symbols shown",
 	"settings.symbolCount.desc": "How many buttons the strip has.",
 } as const;

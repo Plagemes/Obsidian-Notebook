@@ -3833,7 +3833,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"symbols.saveFailed": "Impossibile salvare il simbolo: {error}",
 	"symbols.placeFailed": "Impossibile mettere il simbolo: {error}",
 	"settings.symbolStrip": "Simboli recenti",
-	"settings.symbolStrip.desc": "Una barra con i simboli che usi di più (∀, ∫, →, o segni salvati da te). Toccane uno, poi tocca la pagina per metterlo.",
+	"settings.symbolStrip.desc": "Una barra dei simboli che usi di più. Toccane uno, poi la pagina.",
 	"settings.symbolCount": "Simboli mostrati",
 	"settings.symbolCount.desc": "Quanti pulsanti ha la barra.",
 };
