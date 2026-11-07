@@ -3,19 +3,24 @@ import { HeadingIndex, pageFingerprint } from "../model/heading-index";
 import {
 	COMPANION_HEADING_PIXELS, COMPANION_HEADING_WIDTH, headingPictureName, pickCompanionHeadings,
 } from "../model/companion-headings";
-import { choosePicturePath, NotebookLru, PICTURE_MARK, type PictureProbe } from "../model/companion-pictures";
-import { addPngText, PIXEL_SUM_KEYWORD, pngPixelSum, readPngText } from "../model/png-text";
+import { choosePicturePath, NotebookLru, PICTURE_MARK, rewriteIfUnchanged, type PictureProbe } from "../model/companion-pictures";
+import { addPngText, pictureIntact, PIXEL_SUM_V2_KEYWORD, pngPixelSum, readPngText } from "../model/png-text";
 import { embedWithWidth } from "../model/selection-task";
 import type { NotebookDocument } from "../model/types";
+import { t } from "../i18n";
 import { whenIdle } from "../storage/idle";
 import { ensureFolder } from "../storage/vault-io";
 import { siblingFolder } from "../view/export-markdown";
+import { showNotice } from "../view/notice";
 import { headingPngBytes } from "../view/outline-thumbs";
 import { viewsOf } from "./open";
 import { withEmbedMarker } from "./page-links";
 
 /** Longest slice of heading analysis between two checks of the pen, ms. */
 const ANALYSE_SLICE_MS = 8;
+
+/** How many times a picture is planned again when its file changed between the check and the write. */
+const MAX_PLAN_ATTEMPTS = 3;
 
 /**
  * 0.20 (#102): the pictures of the handwritten headings of a notebook for its companion note. The headings come from the
@@ -32,6 +37,9 @@ export class CompanionHeadings {
 	private readonly indexes = new NotebookLru<HeadingIndex>();
 	/** Wanted path of a picture made or checked in this session -> where it is and the ink it shows. */
 	private readonly made = new Map<string, { path: string; key: string }>();
+
+	/** The "names ran out" notice was shown in this session. */
+	private toldFull = false;
 
 	constructor(private readonly app: App) {}
 
@@ -82,24 +90,41 @@ export class CompanionHeadings {
 			const known = this.made.get(wanted);
 			let target = known && known.key === key ? app.vault.getFileByPath(known.path) : null;
 			if (!target) {
-				const plan = await choosePicturePath(wanted, key, (path) => this.probe(path));
-				if (!plan) return null; // every name is taken by the user's own files
-				if (plan.action === "keep") {
-					target = app.vault.getFileByPath(plan.path);
-				} else {
+				// Drawn only when something is to be written; the checksum of the written chunks goes in a second text chunk, so
+				// a later run rewrites only a picture that still has them.
+				let data: ArrayBuffer | null | undefined;
+				const render = (): ArrayBuffer | null => {
+					if (data !== undefined) return data;
 					const bytes = headingPngBytes(page, strokes, r, COMPANION_HEADING_PIXELS);
-					if (!bytes) return null;
-					// The checksum of the pixels written goes in a second chunk: a later run rewrites only a picture that still has them.
-					const sum = pngPixelSum(bytes);
-					const keyed = addPngText(bytes, PICTURE_MARK, key);
-					const marked = sum ? addPngText(keyed, PIXEL_SUM_KEYWORD, sum) : keyed;
-					const data = marked.buffer.slice(marked.byteOffset, marked.byteOffset + marked.byteLength) as ArrayBuffer;
-					if (plan.action === "rewrite") {
+					const sum = bytes ? pngPixelSum(bytes) : null;
+					const keyed = bytes ? addPngText(bytes, PICTURE_MARK, key) : null;
+					const marked = keyed && sum ? addPngText(keyed, PIXEL_SUM_V2_KEYWORD, sum) : keyed;
+					data = marked ? (marked.buffer.slice(marked.byteOffset, marked.byteOffset + marked.byteLength) as ArrayBuffer) : null;
+					return data;
+				};
+				// A file that changed between the check and the write is the user's (or a sync's): the plan is made again, bounded.
+				for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS && !target; attempt++) {
+					const plan = await choosePicturePath(wanted, key, (path) => this.probe(path));
+					if (!plan) return null; // every name is taken by files that are not ours
+					if (plan.action === "keep") {
 						target = app.vault.getFileByPath(plan.path);
-						if (target) await app.vault.modifyBinary(target, data);
+						break;
+					}
+					if (plan.action === "full") {
+						// No free name left: the previous picture stays linked (it shows older ink) and the user is told once.
+						this.tellFull();
+						const previous = app.vault.getFileByPath(plan.path);
+						return previous ? embedWithWidth(withEmbedMarker(app.fileManager.generateMarkdownLink(previous, notePath), true), COMPANION_HEADING_WIDTH) : null;
+					}
+					const bytes = render();
+					if (!bytes) return null;
+					if (plan.action === "rewrite") {
+						const done = await rewriteIfUnchanged(app.vault, plan, bytes);
+						if (done.changed) continue;
+						target = done.file;
 					} else {
 						await ensureFolder(app, folder);
-						target = await app.vault.createBinary(plan.path, data);
+						target = await app.vault.createBinary(plan.path, bytes);
 					}
 				}
 				if (!target) return null;
@@ -112,12 +137,20 @@ export class CompanionHeadings {
 		}
 	}
 
-	/** What is at `path`: nothing, or a file with the mark of the ink it shows (null when it has none: not ours). */
+	/** One notice per session when the names of a picture ran out (see `choosePicturePath`). */
+	private tellFull(): void {
+		if (this.toldFull) return;
+		this.toldFull = true;
+		showNotice(t("notice.companionPicturesFull"), 10000);
+	}
+
+	/** What is at `path`: nothing, or a file with the mark of the ink it shows (null when it has none: not ours) and its stamp. */
 	private async probe(path: string): Promise<PictureProbe> {
 		const found = this.app.vault.getFileByPath(path);
 		if (!found) return { kind: "free" };
+		// The stamp is taken before the read: a change during the read shows when the stamp is checked again before a write.
+		const stamp = { mtime: found.stat.mtime, size: found.stat.size };
 		const bytes = new Uint8Array(await this.app.vault.readBinary(found));
-		const sum = readPngText(bytes, PIXEL_SUM_KEYWORD);
-		return { kind: "file", mark: readPngText(bytes, PICTURE_MARK), intact: sum !== null && sum === pngPixelSum(bytes) };
+		return { kind: "file", mark: readPngText(bytes, PICTURE_MARK), intact: pictureIntact(bytes), stamp };
 	}
 }

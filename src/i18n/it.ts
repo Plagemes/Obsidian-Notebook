@@ -3826,4 +3826,6 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"info.started": "Pagina iniziata",
 	"info.lastWritten": "Ultima scrittura della pagina",
 	"info.times.none": "Non ancora registrata",
+	// 0.21 carry
+	"notice.companionPicturesFull": "Nota compagna: l'immagine di un titolo non è stata aggiornata perché tutti i suoi nomi di file sono occupati da file modificati. Resta collegata l'immagine precedente; sposta o elimina le copie modificate nella cartella (Headings).",
 };

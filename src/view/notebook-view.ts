@@ -122,7 +122,7 @@ import { HeadingWarmer } from "./heading-warm";
 import { askPdfRange } from "./pdf-range-modal";
 import { attachDropFiles } from "./drop-files";
 import { runBoardShot } from "./board-shot";
-import type { EditContext } from "./edit-context";
+import { executeThenSettle, type EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
 import { pickSlideRef } from "./lecture-logic";
 import { LectureModeController, routeLectureEnd, type LectureEnd } from "./lecture-mode";
@@ -3630,10 +3630,13 @@ export class NotebookView extends FileView {
 			execute: (cmd, scrollTo) => {
 				this.commitText();
 				this.clearSelection();
-				const done = this.history.execute(cmd);
-				this.afterHistoryChange();
-				if (done && scrollTo !== undefined) this.scrollToPage(scrollTo);
-				return done;
+				// The History step is recorded first; what follows can never turn it into a failure (see executeThenSettle).
+				return executeThenSettle(() => this.history.execute(cmd), [
+					() => this.afterHistoryChange(),
+					(done) => {
+						if (done && scrollTo !== undefined) this.scrollToPage(scrollTo);
+					},
+				]);
 			},
 			flush: async () => (await this.flushNow()) && this.session === session && session.isSaved(),
 		};

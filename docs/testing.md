@@ -3050,3 +3050,22 @@ Implemented, not verified on hardware. Reference screenshots after `npm run harn
 |---|---|---|---|---|---|
 | Page start and end time (#217, format v19): `startAt` / `endAt` on pages, stamped by the history after an added stroke or element (no undo step), v18 to v19 migration, lenient read and strict write, staged loading, repair, copies (duplicate and template clear, move and trash keep), merge (earliest start, latest end), closed-notebook edit | yes | `tests/model-v19.test.ts`; harness `doc=pagetime` | | | not tried on a tablet; audio (M5) does not use the times yet |
 | Showing the times: header line, notebook map card (tooltip, label, line), page information, setting *Show when a page was written* | yes | `tests/model-v19.test.ts` (text, header, info); harness `doc=pagetime` (tablet and phone, light and dark) | | | |
+
+### 0.21 — carry: 0.20 review carry-over fixes (steps 2020-2039)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+2020. **Drop survives a late failure.** Drop a picture onto a page: the picture is placed, selected and one undo removes it; the file stays in `_assets` after save (nothing is trashed).
+2021. **Edited heading picture.** With *Headings as pictures* on, open a heading picture of the `(Headings)` folder in an image editor and change only its gamma or colour profile, save, then change that heading's ink and update the companion note: the edited file is left as it is and the new picture takes the next free name (`p3-h1 2.png`).
+2022. **Picture from 0.20.** A `(Headings)` picture written by 0.20 and not edited is rewritten in place when its heading changes (no extra numbered copy).
+2023. **Names run out.** Put 24 edited copies (`p3-h1.png`, `p3-h1 2.png`, ...) in the folder, change the heading and update: the companion note keeps linking to the previous picture and one notice explains why (once per session).
+2024. **Reference window keeps its page.** Open a reference window on page 6 of notebook B, then open notebook C in the pane that lent B: the window stays on page 6 of B (page 1 only if B has fewer pages), also after resizing it.
+2025. **File replaced under a rewrite.** (Hard to time by hand.) Sync or replace a heading picture just as the companion note updates: the replaced file is not overwritten.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Drop: steps after the recorded History step cannot fail the edit (R1) | yes | `executeThenSettle` with a throwing step: yes (`tests/carry-review-w20.test.ts`) | | | |
+| Heading picture checksum over every chunk but text/time, 0.20 pictures still recognised (R2) | yes | yes | | | |
+| Heading picture names: 24, then the previous picture stays linked with one notice (R3) | yes | plan logic: yes; notice: no | | | |
+| Reference window keeps its page when the lending pane changes notebook (R4) | yes | index rule: yes; window: no | | | |
+| Heading picture rewrite re-checks size and time right before the write (R5) | yes | fake vault: yes | | | |

@@ -3824,6 +3824,8 @@ export const en = {
 	"info.started": "Page started",
 	"info.lastWritten": "Page last written",
 	"info.times.none": "Not recorded yet",
+	// 0.21 carry
+	"notice.companionPicturesFull": "Companion note: a heading picture could not be updated because all its file names are taken by files that were edited. The previous picture stays linked; move or delete the edited copies in the (Headings) folder.",
 } as const;
 
 export type MessageKey = keyof typeof en;
