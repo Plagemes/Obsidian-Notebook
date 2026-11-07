@@ -4,6 +4,7 @@ import { layerFlags, planExport, type ExportFormat, type ExportLayers, type Expo
 import { pagesToPdf, pagesToPdfYielding, type PdfCommentLabels, type PdfOptions, type PdfPlacedImage } from "../ink/export-pdf";
 import { planSplit, type SplitSettings } from "../ink/export-tiles";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
+import { htmlHead, htmlPage, htmlTail, ImageBudget, pageHtmlLinks, type HtmlViewerLabels } from "../ink/export-html";
 import type { BoxLabel } from "../ink/marker-render";
 import type { HeaderLayout } from "../ink/page-header";
 import { DEFAULT_PNG_SCALE } from "../model/export-pages";
@@ -190,6 +191,69 @@ export async function exportSvg(app: App, notebook: TFile, page: Page, suffix: s
 	}
 }
 
+/** 0.21 (#164): the viewer's own text, in the language of the interface. */
+function htmlLabels(): HtmlViewerLabels {
+	return {
+		page: t("export.html.page"), of: t("export.html.of"), fit: t("export.html.fit"), zoomIn: t("export.html.zoomIn"),
+		zoomOut: t("export.html.zoomOut"), prev: t("export.html.prev"), next: t("export.html.next"), pages: t("export.html.pages"),
+	};
+}
+
+/** Lets the interface breathe between two pages of a long export. */
+const breathe = (): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, 0));
+
+/**
+ * 0.21 (#164): writes ONE self-contained .html file next to the notebook with the pages (the SVG of each page, so the drawing is the
+ * one of the SVG export, a viewer in a few lines of script, no network). Pictures are embedded up to a size cap; the rest are left out
+ * with a notice. The file is built one page at a time (the interface breathes between pages) and never replaces an existing file.
+ */
+export async function exportHtml(app: App, notebook: TFile, pages: readonly Page[], indices: readonly number[], suffix: string, media: NotebookMedia | null, options: ExportOptions = {}): Promise<void> {
+	const working = showNotice(t("export.working"), 0);
+	try {
+		const budget = new ImageBudget();
+		const labels = htmlLabels();
+		const parts: string[] = [htmlHead({ title: notebook.basename, labels, lang: activeDocument.documentElement.lang || "en" })];
+		let skipped = 0;
+		for (let i = 0; i < pages.length; i++) {
+			const page = pages[i]!;
+			// One page at a time: its pictures are collected, drawn into its SVG and let go (the same asset shares one array).
+			const collected = await collectPageImages(media, [page], options.layers);
+			skipped += collected.skipped;
+			await options.prepare?.([page]);
+			const svgImages = (p: Page): SvgPlacedImage[] => (collected.images.get(p) ?? []).flatMap((img) => {
+				const href = jpegDataUrl(img.jpeg);
+				if (!budget.take(href)) return [];
+				return [{
+					href, x: img.x, y: img.y, width: img.width, height: img.height,
+					...(img.rotation !== undefined ? { rotation: img.rotation } : {}),
+					...(img.layer !== undefined ? { layer: img.layer } : {}),
+				}];
+			});
+			const svg = pageToSvg(page, {
+				paper: true, images: svgImages, hiddenInk: options.hiddenInk?.(page) ?? false, ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.header ? { header: options.header(page) } : {}),
+				...(options.layers ? { layers: options.layers } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
+			});
+			const label = `${labels.page} ${i + 1}`;
+			parts.push(htmlPage(i, pages.length, svg, label, pageHtmlLinks(page, notebook.basename, (n) => { const at = indices.indexOf(n - 1); return at < 0 ? null : at; })));
+			working.setMessage(t("export.progress", { done: String(i + 1), total: String(pages.length) }));
+			await breathe();
+		}
+		parts.push(htmlTail(labels));
+		const path = freePath(app, notebook, suffix, "html");
+		recordPluginWrite(app, [path]); // before the write: the inbox must not offer the file the plugin is creating
+		await app.vault.create(path, parts.join(""));
+		showNotice(t("export.done", { path }));
+		reportSkipped(skipped);
+		if (budget.omitted > 0) showNotice(t("export.html.imagesOmitted", { n: String(budget.omitted) }), 8000);
+	} catch (e) {
+		showNotice(t("export.failed", { error: (e as Error).message }));
+	} finally {
+		working.hide();
+	}
+}
+
 /** What the export dialog asks for (wave 0.9, 381). */
 export interface ExportRequest {
 	format: ExportFormat;
@@ -229,6 +293,11 @@ export async function runExport(app: App, notebook: TFile, allPages: readonly Pa
 	}
 	if (request.format === "print") {
 		await printPages(pages, jobs[0]!.pages, media, opts);
+		return;
+	}
+	if (request.format === "html") {
+		const job = jobs[0]!;
+		await exportHtml(app, notebook, job.pages.map((i) => pages[i]!), job.pages, job.suffix, media, opts);
 		return;
 	}
 	if (request.format === "pdf") {

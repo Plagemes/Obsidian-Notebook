@@ -344,7 +344,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 163. **P2** Per-notebook settings: stabilization, palm rejection, default paper, sync.
 
 ### D. Sharing and open formats
-164. **P2** Interactive HTML export: zoomable vector pages that open anywhere, without Obsidian.
+164. **P2** 🧪 Interactive HTML export: zoomable vector pages that open anywhere, without Obsidian.
 165. **P2** Collaboration, also with people who do not use Obsidian:
     - Guests join from any browser through a lightweight web viewer/editor; nothing to install.
     - Direct peer-to-peer connection (WebRTC) set up by scanning a QR code; works on the same network even without internet; no mandatory cloud.
