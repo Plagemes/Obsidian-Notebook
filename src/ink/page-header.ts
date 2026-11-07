@@ -4,6 +4,7 @@
 // redrawn only when that layer is, never per frame. Exports (PNG, PDF) get the same layout from `headerLayout`.
 import type { Page, PageElement } from "../model/types";
 import { formatStamp } from "./date-stamp";
+import { pageTimes, type PageTimes } from "../model/page-times";
 import { estimateMeasure, layoutText } from "./text-layout";
 
 export const HEADER_MODES = ["off", "header", "footer"] as const;
@@ -37,6 +38,22 @@ export interface HeaderSettings {
 	headerTitle: boolean;
 	headerAlign: HeaderAlign;
 	headerInExport: boolean;
+	/** v19 (#217): also show when the page was written (its start and end time), for the pages that have them. Absent: shown. */
+	headerPageTimes?: boolean;
+}
+
+/** Date and time of the start and end of a page: `3 Jun 14:05`, `3 Jun 14:05 – 15:20`, `3 Jun 14:05 – 4 Jun 09:10`. */
+export const PAGE_TIME_FORMAT = "D MMM HH:mm";
+
+/** The start and end time of a page as one short text (the end only when it is a different minute); `locale` picks the month names. */
+export function pageTimesText(times: PageTimes, locale: string): string {
+	const start = new Date(times.startAt);
+	const end = new Date(times.endAt);
+	if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return "";
+	const from = formatStamp(start, PAGE_TIME_FORMAT, locale);
+	if (formatStamp(end, PAGE_TIME_FORMAT, locale) === from) return from;
+	const sameDay = start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth() && start.getDate() === end.getDate();
+	return `${from} – ${formatStamp(end, sameDay ? "HH:mm" : PAGE_TIME_FORMAT, locale)}`;
 }
 
 /** What the notebook contributes to the line. */
@@ -62,7 +79,7 @@ export interface HeaderLayout {
 }
 
 /** The text of the line: `Title · 3 Jun 2026 · 3 / 12`; empty when no field is on or none has a value. */
-export function headerText(s: HeaderSettings, nb: HeaderNotebook, index: number, count: number): string {
+export function headerText(s: HeaderSettings, nb: HeaderNotebook, index: number, count: number, times: PageTimes | null = null): string {
 	const parts: string[] = [];
 	const title = nb.title.replace(/\s+/g, " ").trim();
 	if (s.headerTitle && title) parts.push(title);
@@ -71,6 +88,11 @@ export function headerText(s: HeaderSettings, nb: HeaderNotebook, index: number,
 		if (Number.isFinite(d.getTime())) parts.push(formatStamp(d, HEADER_DATE_FORMAT, nb.locale));
 	}
 	if (s.headerPageNumber) parts.push(s.headerPageTotal && count > 0 ? `${index + 1} / ${count}` : String(index + 1));
+	// v19: when the page was written; only a page that has times (none are invented for the others).
+	if (times && s.headerPageTimes !== false) {
+		const written = pageTimesText(times, nb.locale);
+		if (written) parts.push(written);
+	}
 	return parts.join(HEADER_SEPARATOR);
 }
 
@@ -103,7 +125,7 @@ export function bandTaken(page: Page, footer: boolean): boolean {
 export function headerLayout(page: Page, index: number, count: number, s: HeaderSettings, nb: HeaderNotebook): HeaderLayout | null {
 	if (s.headerMode === "off") return null;
 	if (page.background && !page.margins) return null;
-	const text = headerText(s, nb, index, count);
+	const text = headerText(s, nb, index, count, pageTimes(page));
 	if (text === "") return null;
 	const wantFooter = s.headerMode === "footer";
 	const usable = (footer: boolean) => !(footer && page.infinite) && !bandTaken(page, footer);

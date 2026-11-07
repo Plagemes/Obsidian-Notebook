@@ -1942,7 +1942,7 @@ export const en = {
 	"info.saved": "Notebook last saved",
 	"info.edited": "Page last edited on this device",
 	"info.edited.unknown": "Not recorded on this device",
-	"info.dates.note": "A page does not store its own dates, so the first two are the notebook's.",
+	"info.dates.note": "The notebook dates are the whole notebook's. Started and Last written are this page's own: the first and the latest time ink or an object was added.",
 	"autopage.offer": "Add a page after this one",
 	"autopage.dismiss": "Not now",
 	// wave 0.9: export and view
@@ -3817,6 +3817,13 @@ export const en = {
 	"settings.ghostSpacing": "Guide spacing",
 	"settings.ghostSpacing.desc": "Follow your handwriting, or use a fixed ruled spacing.",
 	"settings.ghostSpacing.auto": "Auto (from your writing)",
+	// 0.21 pagetime
+	"settings.headerPageTimes": "Show when a page was written",
+	"settings.headerPageTimes.desc": "In the header line and on the notebook map.",
+	"map.written": "Written {when}",
+	"info.started": "Page started",
+	"info.lastWritten": "Page last written",
+	"info.times.none": "Not recorded yet",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -232,6 +232,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	headerTitle: boolean;
 	headerAlign: HeaderAlign;
 	headerInExport: boolean;
+	/** 0.21 (#217): show when a page was written (its start and end time) in the header line and on the notebook map. */
+	headerPageTimes: boolean;
 	// wave 0.10: clipboard and stamps
 	/** Format of the quick date and time stamp (356): tokens YYYY MM DD HH mm ss and so on, text in [brackets]. */
 	dateStampFormat: string;
@@ -352,6 +354,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	headerTitle: false,
 	headerAlign: "centre",
 	headerInExport: true,
+	headerPageTimes: true,
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
 	recentColours: [],
 	fastScrollbar: true,
@@ -481,7 +484,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.commentsInPdf === "boolean") s.commentsInPdf = d.commentsInPdf;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
-	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport"] as const) if (typeof d[k] === "boolean") s[k] = d[k];
+	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport", "headerPageTimes"] as const) if (typeof d[k] === "boolean") s[k] = d[k];
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;

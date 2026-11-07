@@ -3022,3 +3022,31 @@ Ghost guide lines (roadmap #94). Settings, Writing: *Ghost guide lines* (off / w
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Ghost guide lines on blank paper (#94): baseline and next line inferred from the newest strokes, faint dashed overlay on the live layer, off / while writing / always, auto or fixed spacing, never saved or exported | yes | inference (baseline, line height, tilt tolerance, descenders, drawings as outliers, fallback to the last complete line, fixed spacing), segments, fade, settings: `tests/ghost-lines.test.ts`; harness `doc=ghostlines` | | | not tried with a real hand on a tablet; the thresholds (tilt 12 degrees, spacing from stroke height) are a guess |
+
+### 0.21 — pagetime (start and end time of a page, format v19; steps 2000-2019)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=pagetime`): `dev/harness/dist/shots/pagetime-*.png` (tablet and phone, light and dark). Notebooks saved by this version are format v19: 0.20 and older open them read-only.
+
+2000. **A fresh page has no times.** Open a notebook made with an older version (or a new blank page), tap the page number > *Page information*: *Page started* says *Not recorded yet*.
+2001. **The first stroke starts the page.** Write one word. Open *Page information*: *Page started* and *Page last written* show the time you wrote it (the same minute).
+2002. **Later writing moves only the end.** Wait a few minutes, write another word, add a text box or a picture: *Page started* is unchanged, *Page last written* moves to now.
+2003. **Undo leaves the times.** Undo the last stroke twice: the ink goes (two steps, no extra step for the times) and the times in the information are unchanged. Redo: still unchanged.
+2004. **Erasing does not stamp.** Erase a word, move an object, change the paper: *Page last written* does not move.
+2005. **The header line.** Settings > Pages > Header: choose *Header*. Pages that have times show them after the page number (`3 / 12 · 3 Jun 14:05 – 15:20`); a page without times shows only the number. Turn *Show when a page was written* off: the times go from the line.
+2006. **The notebook map.** Open the notebook map: a card of a written page shows the times under its thumbnail; a long press or hover shows them in the tooltip (with the question or homework line if any). With the setting off the card shows nothing extra. A page without times has no line.
+2007. **Duplicate and template.** Duplicate a written page: the copy has no times (*Not recorded yet*) until you write on it. Save the notebook as a template and make a notebook from it: no page has times.
+2008. **Move keeps them.** Move a written page to another notebook (*Move pages*): in the other notebook its information shows the same times. *Copy* instead of move: the copy has none. Delete a page, restore it from the page trash: the times are back.
+2009. **Restore a version.** Restore an older version of a written page over it: the times still cover the whole span (earliest start, latest end).
+2010. **Two devices.** On two devices write on the same page without syncing, then *Merge conflicted copies*: the page's start is the earlier of the two and its end the later; the merge does not stamp the time of the merge. Undo the merge: the times are back to what they were.
+2011. **An older plugin.** Copy a notebook written with this version to a device with 0.20: it opens read-only with the "newer version" message and is not rewritten.
+2012. **An older notebook.** Open a notebook written with 0.20 (format v18): it opens, nothing is reported as repaired, no page has times; write on one page and only that page gets times.
+2013. **A large notebook.** Open a notebook of several thousand strokes: it opens page by page as before; the times of written pages are there.
+2014. **Read-only and locked pages.** In read-only mode nothing is stamped. On a locked page nothing can be added, so the times do not move; the information still shows them.
+2015. **Italian, dark, phone.** The labels (*Pagina iniziata*, *Ultima scrittura della pagina*, *Scritta …*) read in Italian; the line on the map card is readable in light and dark and does not overflow a narrow card.
+2016. **API.** Add an element to a page of a closed notebook through the API (`docs/api.md`): that page gets times from the time of the call.
+2017. **Recovery.** Damage a notebook file (cut it) and run *Repair*: the times of the salvaged pages are kept.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Page start and end time (#217, format v19): `startAt` / `endAt` on pages, stamped by the history after an added stroke or element (no undo step), v18 to v19 migration, lenient read and strict write, staged loading, repair, copies (duplicate and template clear, move and trash keep), merge (earliest start, latest end), closed-notebook edit | yes | `tests/model-v19.test.ts`; harness `doc=pagetime` | | | not tried on a tablet; audio (M5) does not use the times yet |
+| Showing the times: header line, notebook map card (tooltip, label, line), page information, setting *Show when a page was written* | yes | `tests/model-v19.test.ts` (text, header, info); harness `doc=pagetime` (tablet and phone, light and dark) | | | |

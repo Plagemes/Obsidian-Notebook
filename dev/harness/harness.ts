@@ -47,6 +47,7 @@ import { checkChecklists } from "./checklists-check";
 import { checkGroups } from "./groups-check";
 import { checkSnap } from "./snap-check";
 import { checkGhostlines } from "./ghostlines-check";
+import { checkPagetime } from "./pagetime-check";
 import { checkMinimap } from "./minimap-check";
 import { checkHeader } from "./header-check";
 import { checkChrome, chromeState, type ChromeState } from "./ds-notebook-check";
@@ -301,7 +302,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "snap" || doc === "minimap" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "snap" || doc === "minimap" ? "Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2148,6 +2149,8 @@ harnessApi.checkInbox = async () => {
 harnessApi.checkSnap = () => checkSnap({ view, stage, penStroke, setTool, frames, errors, notices });
 // 0.20 ghostlines (#94): its own check (dev/harness/ghostlines-check.ts).
 harnessApi.checkGhostlines = () => checkGhostlines({ view, stage, penStroke, setTool, frames, errors, notices });
+// 0.21 pagetime (#217): its own check (dev/harness/pagetime-check.ts).
+harnessApi.checkPagetime = () => checkPagetime({ view, stage, penStroke, setTool, frames, errors, notices });
 harnessApi.inboxShot = (state: "list" | "close") => inboxShot(state);
 harnessApi.checkLayout = checkLayout; // 0.14 layout
 harnessApi.home2State = (state: string) => (libraryHarness ? home2State(libraryHarness, state) : false);
