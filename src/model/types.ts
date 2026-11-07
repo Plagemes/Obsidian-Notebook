@@ -2,6 +2,7 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v19: start and end time of a page (#217): the optional `Page.startAt` / `Page.endAt` (ms since 1970).
  * v18: groups and locked elements (#39): the optional `group` of strokes and elements, and the `locked` flag (with `lockAt`) of elements.
  * v17: handwritten checklists (#103): the page element "checkbox" (a drawn square that is tapped to tick it; optional link to an Obsidian task).
  * v16: margin comments (#86): `Page.comments` anchors comments, with their replies, to regions of a page.
@@ -15,7 +16,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 18;
+export const CURRENT_VERSION = 19;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -518,6 +519,14 @@ export interface Page {
 	 * (`SetPageComments`), so a locked page refuses comment edits like every other edit.
 	 */
 	comments?: PageComment[];
+	/**
+	 * v19 (#217): when the first ink or element was added to this page (ms since 1970), and `endAt`, when the last one was. Both are
+	 * written together or not at all (`endAt >= startAt`, see model/page-times.ts). They are upkeep, not edits: they are stamped by the
+	 * history when a command adds ink or an element, never undone, and a duplicated page or a template page starts without them. They
+	 * are the time base that audio recorded with a page will be laid against (M5).
+	 */
+	startAt?: number;
+	endAt?: number;
 }
 
 /** A region of a page, in page coordinates (pt): the box whose top-left corner is (`x`, `y`). */

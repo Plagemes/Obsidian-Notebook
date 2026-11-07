@@ -306,6 +306,7 @@ const PAGES: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["left", "settings.headerAlign.left"], ["centre", "settings.headerAlign.centre"], ["right", "settings.headerAlign.right"]]) }, parent: "headerMode", visible: (s) => s.headerMode !== "off",
 	},
 	{ id: "headerInExport", section: "pages", group: "pageHeader", order: 60, name: "settings.headerInExport", desc: "settings.headerInExport.desc", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" },
+	{ id: "headerPageTimes", section: "pages", group: "pageHeader", order: 70, name: "settings.headerPageTimes", desc: "settings.headerPageTimes.desc", control: { type: "toggle" } },
 ];
 
 const READING: SettingSpec[] = [

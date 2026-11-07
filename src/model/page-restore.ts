@@ -13,6 +13,7 @@ import { elementAssetId } from "./excerpts";
 import { createId } from "./document";
 import { AddAsset, AddPage, Batch, remapPage, type Command, type ElementSwap } from "./history";
 import { unionPageTags } from "./page-tags";
+import { mergedTimes, pageTimes, putPageTimes } from "./page-times";
 import { copyStroke, duplicatePage } from "./pages";
 import { freezeElement } from "./serialize";
 import { remapStates } from "./states";
@@ -143,6 +144,9 @@ export function planPageRestore(
 	const current = target.comments && dx !== 0 ? shiftComments(target.comments, dx) : target.comments;
 	const comments = copyComments(mergeComments(current, source.comments, { conflicts: false }).list, source);
 	if (comments) page.comments = comments;
+	// v19: the page keeps the time it was started and last written (the earliest start and the latest end of the page in view and of the
+	// version): restoring an old version is not a new page and never shortens the time the page spans.
+	putPageTimes(page, mergedTimes(pageTimes(target), pageTimes(source)));
 	if (source.elements && source.elements.length > 0) page.elements = source.elements.map((e) => freezeElement({ ...e, id: idFor(e.id) }));
 	commands.push(new ReplacePage(target, page));
 	return { command: new Batch("Restore page", commands), pageIndex: targetIndex, assetsAdded };

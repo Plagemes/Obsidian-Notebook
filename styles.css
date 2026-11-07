@@ -17485,3 +17485,21 @@ body.notebook-style-obsidian {
 	background: var(--nb-accent);
 	color: var(--nb-on-accent, #fff);
 }
+
+/* ===== 0.21 pagetime ===== */
+/* #217: when a page was written, a quiet line under the thumbnail of a notebook map card (tooltip and label carry it too). */
+.nb-ui .nb-map-when {
+	display: block;
+	align-self: stretch;
+	width: 100%;
+	box-sizing: border-box;
+	text-align: left;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-label);
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}

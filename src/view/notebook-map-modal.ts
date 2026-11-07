@@ -25,6 +25,8 @@ export interface NotebookMapHost {
 	goToAt?(index: number, y: number): void;
 	/** 0.16 (#87): starts the presentation from the page in view (the button is not offered when absent). */
 	present?: () => void;
+	/** 0.21 (#217): when the page was written, as a short text (start and end time); empty: none to show. Absent: no times on the cards. */
+	written?: (page: Page) => string;
 
 	/** 0.16 (#124): locks or unlocks a page; true when it was done. Absent: no lock buttons. */
 	setLocked?(pageId: string, value: boolean): boolean;
@@ -171,9 +173,12 @@ export class NotebookMapModal extends Modal {
 			const card = grid.createEl("button", { cls: "nb-map-card", attr: { type: "button", "data-index": String(mp.index), "data-states": mp.states.join(" ") } });
 			card.toggleClass("is-current", mp.index === current);
 			card.toggleClass("is-lecture", mp.lectureStart);
-			const label = [t("nav.page", { n: String(mp.index + 1) }), ...mp.states.map((s) => t(STATE_LABEL[s])), mp.hint ?? ""].filter(Boolean).join(", ");
+			// 0.21 (#217): when the page was written, in the label, the tooltip and a quiet line under the thumbnail.
+			const written = this.mapHost.written?.(page) ?? "";
+			const label = [t("nav.page", { n: String(mp.index + 1) }), ...mp.states.map((s) => t(STATE_LABEL[s])), mp.hint ?? "", written ? t("map.written", { when: written }) : ""].filter(Boolean).join(", ");
 			card.setAttribute("aria-label", label);
-			if (mp.hint) card.title = mp.hint;
+			const tip = [mp.hint ?? "", written ? t("map.written", { when: written }) : ""].filter(Boolean).join("\n");
+			if (tip) card.title = tip;
 			const frame = card.createDiv({ cls: "nb-map-thumb" });
 			const img = frame.createEl("img", { attr: { alt: "", draggable: "false" } });
 			img.setCssProps({ "--nb-map-ratio": String(Math.min(page.height / page.width, MAX_ASPECT)) });
@@ -235,6 +240,7 @@ export class NotebookMapModal extends Modal {
 				});
 			}
 			if (mp.due) foot.createSpan({ cls: "nb-map-due", text: mp.due });
+			if (written) card.createSpan({ cls: "nb-map-when", text: written, attr: { "aria-hidden": "true" } });
 			if (this.selecting) {
 				card.setAttribute("aria-pressed", String(this.picked.has(mp.pageId)));
 				card.toggleClass("is-picked", this.picked.has(mp.pageId));

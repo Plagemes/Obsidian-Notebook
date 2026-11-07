@@ -3,6 +3,7 @@ import { createId, createPage } from "./document";
 import { freezeElement, freezeStroke } from "./serialize";
 import { copyComments } from "./comments";
 import { groupRenamer } from "./groups";
+import { pageTimes, putPageTimes } from "./page-times";
 import { remapStates } from "./states";
 import { PAPER_SPACING, type Asset, type Page, type PageElement, type Stroke } from "./types";
 
@@ -17,7 +18,8 @@ function copyElement(el: PageElement, keepTasks: boolean, regroup: (group: strin
 export interface DuplicateOptions {
 	/**
 	 * The copy replaces the page (pages moved to another notebook, a page restored from the page trash): its checkboxes are the same
-	 * checkboxes and keep the link to their task lines. A real copy (the default) never ticks the tasks of the original.
+	 * checkboxes and keep the link to their task lines. A real copy (the default) never ticks the tasks of the original. v19: the same
+	 * decides the start and end times of the page: kept when the copy replaces the page, absent on a real copy.
 	 */
 	keepTasks?: boolean;
 }
@@ -71,6 +73,9 @@ export function duplicatePage(page: Page, opts: DuplicateOptions = {}): Page {
 	// v16: the comments are about the page, so a copy of the page keeps them (same ids: they are scoped to the page).
 	const comments = copyComments(page.comments, page);
 	if (comments) copy.comments = comments;
+	// v19: a real copy is a new page and starts without start and end times (its ink has none of its own); a page that is only moved
+	// or comes back from the trash (`keepTasks`: the copy replaces the page) is the same page and keeps them.
+	if (opts.keepTasks === true) putPageTimes(copy, pageTimes(page));
 	return copy;
 }
 

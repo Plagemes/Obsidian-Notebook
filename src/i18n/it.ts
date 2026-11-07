@@ -1944,7 +1944,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"info.saved": "Quaderno salvato l'ultima volta",
 	"info.edited": "Ultima modifica della pagina su questo dispositivo",
 	"info.edited.unknown": "Non registrata su questo dispositivo",
-	"info.dates.note": "Una pagina non conserva date proprie, quindi le prime due sono quelle del quaderno.",
+	"info.dates.note": "Le date del quaderno sono quelle dell'intero quaderno. Iniziata e Ultima scrittura sono della pagina: la prima e l'ultima volta che è stato aggiunto inchiostro o un oggetto.",
 	"autopage.offer": "Aggiungi una pagina dopo questa",
 	"autopage.dismiss": "Non ora",
 	// wave 0.9: export and view
@@ -3819,4 +3819,11 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.ghostSpacing": "Distanza delle righe guida",
 	"settings.ghostSpacing.desc": "Segui la tua scrittura oppure una spaziatura fissa.",
 	"settings.ghostSpacing.auto": "Auto (dalla tua scrittura)",
+	// 0.21 pagetime
+	"settings.headerPageTimes": "Mostra quando è stata scritta una pagina",
+	"settings.headerPageTimes.desc": "Nella intestazione e nella mappa del quaderno.",
+	"map.written": "Scritta {when}",
+	"info.started": "Pagina iniziata",
+	"info.lastWritten": "Ultima scrittura della pagina",
+	"info.times.none": "Non ancora registrata",
 };

@@ -71,7 +71,7 @@ function v17Raw(): Raw {
 
 describe("format v18: migration", () => {
 	it("has the v17 step (the current format is v18 since groups and locked elements)", () => {
-		expect(CURRENT_VERSION).toBe(18);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(18);
 		expect(typeof MIGRATIONS[17]).toBe("function");
 	});
 

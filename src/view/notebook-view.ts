@@ -47,7 +47,8 @@ import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { heavyReasons, pageLoad, planPageSplit } from "../ink/heavy-page";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
-import { drawHeader, exportHeaderFor, headerLayout, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
+import { drawHeader, exportHeaderFor, headerLayout, pageTimesText, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
+import { pageTimes } from "../model/page-times";
 import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
 import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
 import { PageMode } from "./page-mode";
@@ -386,7 +387,7 @@ export class NotebookView extends FileView {
 		// 0.19: an undo or a redo that would leave a notebook the writer refuses is not done and leaves the history (the document is as before).
 		showNotice(step ? t("history.stepRefused", { message }) : t("history.refused", { message }), 10000);
 		if (step) this.updateHistoryButtons();
-	},() => this.userReadOnly, (ids) => this.pagesLocked(ids));
+	},() => this.userReadOnly, (ids) => this.pagesLocked(ids), () => Date.now());
 	/**
 	 * wave 0.10 (51): the user switched this view to read-only mode. Nothing changes the document while it is on: `editable()`
 	 * is false (tools, selection, insert, page operations and every registry action that needs editing), a finger only pans
@@ -2191,7 +2192,7 @@ export class NotebookView extends FileView {
 	private applyPageHeader(s: HeaderSettings): void {
 		const r = this.renderer;
 		if (!r) return;
-		const snap: HeaderSettings = { headerMode: s.headerMode, headerPageNumber: s.headerPageNumber, headerPageTotal: s.headerPageTotal, headerDate: s.headerDate, headerTitle: s.headerTitle, headerAlign: s.headerAlign, headerInExport: s.headerInExport };
+		const snap: HeaderSettings = { headerMode: s.headerMode, headerPageNumber: s.headerPageNumber, headerPageTotal: s.headerPageTotal, headerDate: s.headerDate, headerTitle: s.headerTitle, headerAlign: s.headerAlign, headerInExport: s.headerInExport, headerPageTimes: s.headerPageTimes };
 		const key = JSON.stringify(snap);
 		if (r === this.headerRenderer && key === this.headerKey) return;
 		this.headerRenderer = r;
@@ -4117,6 +4118,11 @@ export class NotebookView extends FileView {
 			},
 			goToAt: (index, y) => this.goToPageAt(index, y),
 			present: () => this.startPresentation(),
+			// 0.21 (#217): when each page was written (empty: the page has no times, or the setting hides them).
+			written: (page) => {
+				const times = this.host.settings.headerPageTimes ? pageTimes(page) : null;
+				return times ? pageTimesText(times, getLanguage()) : "";
+			},
 
 			setLocked: (pageId, value) => this.setLockedById(pageId, value),
 			canLock: () => !!this.editableDocument(),
