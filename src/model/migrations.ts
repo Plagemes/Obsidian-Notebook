@@ -424,6 +424,19 @@ function v17ToV18(raw: RawObject): RawObject {
 	return out;
 }
 
+/**
+ * v19 adds the optional page fields `startAt` and `endAt` (start and end time of a page, #217). Every valid v18 document is a valid v19
+ * document without them. A v18 reader ignored unknown page fields, so such a key in a v18 file was never ours and never meant anything:
+ * it is dropped, not interpreted (like `comments` in v15 -> v16 and the item flags in v17 -> v18). Nothing else changes, so a large v18
+ * file can still be read page by page (StagedParse), which ignores these keys of each page.
+ */
+function v18ToV19(raw: RawObject): RawObject {
+	const out: RawObject = { ...raw, version: 19 };
+	if (!Array.isArray(raw.pages)) return out;
+	out.pages = (raw.pages as unknown[]).map((page) => withoutKeys(page, ["startAt", "endAt"]));
+	return out;
+}
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -456,6 +469,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	15: v15ToV16,
 	16: v16ToV17,
 	17: v17ToV18,
+	18: v18ToV19,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

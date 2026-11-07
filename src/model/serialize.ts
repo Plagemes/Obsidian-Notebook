@@ -13,6 +13,7 @@ import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format
 import { normalizePageTags } from "./page-tags";
 import { STICKY_INK_MAX, STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STICKY_MIN_SIZE, STICKY_TEXT_MAX } from "./sticky";
 import { normalizePosition } from "./position";
+import { pageTimesProblem } from "./page-times";
 import {
 	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, GROUP_ID_MAX, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
 	SLIDE_ID_MAX, SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type SlideRef,
@@ -374,6 +375,10 @@ function assemble(
 		if (page.infinite !== undefined) out.push(`\t\t\t"infinite": ${j(page.infinite)},`);
 		// v14: a locked page (false is never written: absent = unlocked).
 		if (page.locked === true) out.push(`\t\t\t"locked": true,`);
+		// v19: the start and end time, together or not at all (a lone or inverted value is written as it is, so the strict check refuses
+		// it rather than the writer inventing the other one: the history's guard keeps such a page from ever being saved).
+		if (page.startAt !== undefined) out.push(`\t\t\t"startAt": ${j(page.startAt)},`);
+		if (page.endAt !== undefined) out.push(`\t\t\t"endAt": ${j(page.endAt)},`);
 		const states = statesOf(page);
 		if (states) out.push(`\t\t\t"states": ${statesLine(states)},`);
 		// v16: the comments, one per line, as the writer keeps them (see comments-format.ts); nothing is written when none is left.
@@ -1337,7 +1342,7 @@ function dissolveSmallGroups(page: Page, path: string, drop: Dropped | null): vo
 	});
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true): Page {
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true, withTimes = true): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -1405,6 +1410,19 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 	if (withComments && v.comments !== undefined) {
 		const comments = readPageComments(v.comments, `${path}.comments`, page, drop);
 		if (comments) page.comments = comments;
+	}
+	// v19: the start and end time. A file of an older format has none of ours (an odd key is ignored, as the migration drops it). It is a
+	// detail: read leniently, an invalid or lone value, or an end before the start, is dropped (both) and counted; strictly it fails.
+	if (withTimes && (v.startAt !== undefined || v.endAt !== undefined)) {
+		const times = orDrop(drop, () => {
+			const problem = pageTimesProblem(v.startAt, v.endAt);
+			if (problem) fail(`${path}.startAt`, problem);
+			return { startAt: v.startAt as number, endAt: v.endAt as number };
+		});
+		if (times) {
+			page.startAt = times.startAt;
+			page.endAt = times.endAt;
+		}
 	}
 	return page;
 }
@@ -1643,7 +1661,7 @@ export class StagedParse {
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18);
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18, this.from >= 19);
 	}
 
 	get pending(): number {
@@ -1706,7 +1724,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v15 → v16 only drops the pages' `comments` keys (ignored page by page), so large v15 files are staged too.
 	// v16 → v17 only refuses checkboxes (checked page by page as they are read), so large v16 files are staged too.
 	// v17 → v18 only drops the `group`, `locked` and `lockAt` keys of strokes and elements (ignored page by page), so large v17 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17) return StagedParse.create(pre.raw, first, pre.version);
+	// v18 → v19 only drops the pages' `startAt` and `endAt` keys (ignored page by page), so large v18 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }
@@ -1789,6 +1808,9 @@ export function checkContent(doc: NotebookDocument): string | null {
 		// 0.19: ids are unique across strokes and elements, as `serializeChecked` requires (two copies of one element would fail every save).
 		const ids = new Set<string>();
 		for (const page of doc.pages) {
+			// v19: a start and an end time that go together (the writer writes what it has, the strict reader refuses anything else).
+			const times = pageTimesProblem(page.startAt, page.endAt);
+			if (times) return `page ${page.id}: ${times}`;
 			checkStates(page, `page ${page.id} states`);
 			checkComments(page, `page ${page.id} comments`);
 			for (const s of page.strokes) {
