@@ -435,7 +435,9 @@ describe("tidy up in the action registry", () => {
 		expect(forThisPage(ACTIONS, sel(4), {}, NOW, new Set(), 100).map((x) => x.id)).toContain("selection-tidy");
 		const p = find("page-tidy");
 		expect(contextBoost(p, page("ruled"))).toBeGreaterThanOrEqual(20);
-		expect(contextBoost(p, page("plain"))).toBeGreaterThanOrEqual(20);
+		// Plain paper leans forward in the page group but stays out of "For this page" (an ordinary page shows no such section).
+		expect(contextBoost(p, page("plain"))).toBeGreaterThan(contextBoost(p, page("pdf")));
+		expect(contextBoost(p, page("plain"))).toBeLessThan(20);
 		expect(contextBoost(p, page("pdf"))).toBeLessThan(20);
 		expect(contextBoost(p, baseContext({ open: false, editable: false }))).toBe(0);
 		expect(forThisPage(ACTIONS, page("ruled"), {}, NOW, new Set(), 100).map((x) => x.id)).toContain("page-tidy");

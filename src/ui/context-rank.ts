@@ -74,9 +74,10 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.26 (#358): the opacity fits a selection of ink, pictures or areas best, then the highlighter or a shape in hand (both enough for "For this page");
 	// with the plain pen in hand (always, nearly) it only leans forward in the list, so it does not crowd "For this page".
 	if (a.id === "opacity" && canOpacity(c)) boost += hasSelection ? HERE_MIN_BOOST + 8 : c.tool === "highlighter" || c.tool === "shape" ? HERE_MIN_BOOST : 10;
-	// 0.26 (#238): the tidy-up fits writing: a good many strokes selected, and a page of handwriting (ruled, grid or plain paper) when nothing is.
+	// 0.26 (#238): the tidy-up fits writing: a good many strokes selected, and a ruled page when nothing is (the words go onto the rules).
+	// On grid or plain paper it only leans forward in the page group: an ordinary page with the pen in hand shows no "For this page" section.
 	if (a.id === "selection-tidy" && (c.selection?.strokes ?? 0) >= 12) boost += 8;
-	if (a.id === "page-tidy" && !hasSelection && (c.page?.kind === "ruled" || c.page?.kind === "grid" || c.page?.kind === "plain")) boost += c.page.kind === "ruled" ? 16 : 14;
+	if (a.id === "page-tidy" && !hasSelection && (c.page?.kind === "ruled" || c.page?.kind === "grid" || c.page?.kind === "plain")) boost += c.page.kind === "ruled" ? 16 : 10;
 	// 0.26 (#66): reshaping handwriting fits a selection of strokes; a long wobbly line (underline, ruler line) on grid or plain paper is likelier meant straight.
 	if (a.id === "selection-smooth" && hasSelection) boost += 4;
 	if (a.id === "selection-straighten" && hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 6;
