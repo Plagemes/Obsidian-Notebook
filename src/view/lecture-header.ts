@@ -89,14 +89,16 @@ export class LectureHeaderService {
 		const ctx = this.host.editContext();
 		const doc = ctx?.doc;
 		if (!doc) return;
-		const ids = new Set(doc.pages.map((p) => p.id));
 		if (this.known === null || this.knownDoc !== doc) {
-			this.known = ids;
+			this.known = new Set(doc.pages.map((p) => p.id));
 			this.knownDoc = doc;
 			return;
 		}
-		const fresh = doc.pages.filter((p) => !this.known!.has(p.id));
-		this.known = ids;
+		// Review fix (D1): `known` only grows. A page that comes back (undo of a delete, redo of an add) was seen before, so it is
+		// never new: only a page created by a forward edit is, and undo/redo never runs an automatic step (the redo stack stays).
+		const seen = this.known;
+		const fresh = doc.pages.filter((p) => !seen.has(p.id));
+		for (const p of doc.pages) seen.add(p.id);
 		const mode = this.host.settings().lectureHeader;
 		const path = this.host.path();
 		if (mode === "off" || !path || fresh.length !== 1) return;

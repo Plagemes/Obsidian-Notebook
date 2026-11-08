@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createPage, createStroke } from "../src/model/document";
 import {
 	MATCH_TOLERANCE, MEANING_END, MEANING_MAX, MEANING_START, TOLERANCES, buildMeaningSection, colourDistance, effectiveLegend, groupByMeaning,
-	matchMeaning, meaningCounts, meaningRegions, nearDuplicates, nextFreeColour, parseLegend, replaceMeaningSection, strokeDimmer, withMeaning, withoutMeaning,
+	matchMeaning, meaningCounts, meaningRegions, nearDuplicates, nextFreeColour, parseLegend, replaceMeaningSection, replaceMeaningSectionChecked, strokeDimmer, withMeaning, withoutMeaning,
 	type Meaning, type MeaningItem,
 } from "../src/model/colour-meaning";
 import { MEANINGS_PREFIX, applyMeaningOps, emptyMeanings, mergeMeaningFiles, overrideOf, parseMeanings, serializeMeanings, type MeaningsFile } from "../src/library/meanings";
@@ -257,6 +257,29 @@ describe("per-notebook meanings sidecar", () => {
 		expect(parseMeanings(out, "0a000000").ok).toBe(true);
 	});
 
+	// Review fix (D9): fields of a legend entry this version does not know, and entries it rejects, survive a rewrite.
+	it("keeps unknown fields inside legend entries and entries it cannot read, until the legend is edited", () => {
+		const rawLegend = [{ colour: RED, label: "Definition", icon: "star" }, { colour: "not a colour", label: "Future kind", extra: [1, 2] }, { colour: BLUE, label: "Example" }];
+		const text = JSON.stringify({
+			format: "obsidian-notebook-meanings", version: 1, device: "0a000000",
+			items: [{ scope: "nb1", legend: rawLegend, at: 5 }, { scope: "nb2", legend: [{ colour: RED, label: "Old" }], at: 6 }],
+		});
+		const parsed = parseMeanings(text, "0a000000");
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		// The usable legend is what this version understands; the file keeps all of it.
+		expect(parsed.data.items.find((i) => i.scope === "nb1")!.legend).toEqual([{ colour: RED, label: "Definition" }, { colour: BLUE, label: "Example" }]);
+		const out = serializeMeanings(parsed.data);
+		expect(out).toContain(JSON.stringify(rawLegend));
+		// Rewriting after adopting a winner from another device leaves the entries alone too.
+		const merged = mergeMeaningFiles([parsed.data]);
+		const rewritten = applyMeaningOps(parsed.data, merged, [{ kind: "set", scope: "nb2", legend: [{ colour: BLUE, label: "New" }] }], 100);
+		const out2 = serializeMeanings(rewritten);
+		expect(out2).toContain(JSON.stringify(rawLegend));
+		expect(out2).toContain('"label":"New"');
+		expect(out2).not.toContain('"label":"Old"');
+	});
+
 	it("rejects a file that is empty, not ours, damaged or from the future without 'fixing' it", () => {
 		expect(parseMeanings("  ", "0a000000")).toMatchObject({ ok: false, reason: "empty" });
 		expect(parseMeanings("{", "0a000000")).toMatchObject({ ok: false, reason: "json" });
@@ -316,5 +339,28 @@ describe("per-notebook meanings sidecar", () => {
 		expect(store.blocked).toContain("meanings-0b000000.json");
 		expect(store.get("nb1")).toEqual(legend);
 		expect(adapter.files.get("Notebooks/_meta/meanings-0b000000.json")).toBe("garbage");
+	});
+});
+
+// Review fix (D8): the digest decides again inside the write.
+describe("meaning digest: the write checks again", () => {
+	const section = `${MEANING_START}\nbody\n${MEANING_END}`;
+
+	it("never appends to a note of the user's without the answer, even if it had markers a moment ago", () => {
+		const gone = "my own notes\n";
+		expect(replaceMeaningSectionChecked(gone, section, false)).toEqual({ text: gone, outcome: "ask" });
+		const appended = replaceMeaningSectionChecked(gone, section, true);
+		expect(appended.outcome).toBe("appended");
+		expect(appended.text).toContain("my own notes");
+	});
+
+	it("replaces between the markers and creates in an empty note with no question", () => {
+		expect(replaceMeaningSectionChecked(`a\n${section}\nb`, section, false).outcome).toBe("replaced");
+		expect(replaceMeaningSectionChecked("  \n", section, false).outcome).toBe("created");
+	});
+
+	it("an unpaired marker is still unsafe, answer or not", () => {
+		const bad = `x ${MEANING_END}`;
+		expect(replaceMeaningSectionChecked(bad, section, true)).toEqual({ text: bad, outcome: "unsafe" });
 	});
 });

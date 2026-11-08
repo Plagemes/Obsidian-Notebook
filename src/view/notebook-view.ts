@@ -1695,6 +1695,11 @@ export class NotebookView extends FileView {
 		return true;
 	}
 
+	/** True when the open document lists this asset (a cover picture that another change already uses must not be trashed). */
+	hasAsset(id: string): boolean {
+		return !!this.session?.doc?.assets?.[id];
+	}
+
 	/**
 	 * 0.22 (#53): a new cover for the library's "Change cover": registers the cover picture `asset` (when there is one) and sets the
 	 * metadata in one undo step. Same refusal rules as `applyMetaPatch`; false also when the history refuses the step.
@@ -4526,7 +4531,7 @@ export class NotebookView extends FileView {
 		this.renderer?.setViewport(this.viewport, interactive);
 		this.penLinks?.viewChanged();
 		this.checklist?.viewChanged();
-		this.axes?.viewChanged();
+		this.axes?.viewChanged(interactive);
 		this.reading?.viewportChanged();
 		this.pdfText?.viewportChanged();
 		if (this.selection) this.pushSelection();
@@ -4857,6 +4862,7 @@ export class NotebookView extends FileView {
 		// A selection made with the side button's lasso is not carried into new ink.
 		this.clearSelection();
 		this.penLinks?.strokeStarted();
+		this.axes?.strokeStarted();
 		this.checklist?.strokeStarted();
 		this.pageOffer?.penDown();
 		this.smartAdd?.hide();

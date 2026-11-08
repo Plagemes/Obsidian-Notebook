@@ -325,3 +325,14 @@ export function replaceMeaningSection(existing: string, section: string): Meanin
 export function meaningImageName(notebook: string, pageNumber: number, n: number): string {
 	return `${notebook} meaning p${pageNumber}-${n}.png`;
 }
+
+/**
+ * The write-time version of `replaceMeaningSection` (review fix D8). It runs on the text read again inside the write, so a note
+ * whose markers were removed since the first look is not appended to without asking: "ask" = the section would be added to a note of
+ * the user's and the person has not agreed to that. A note that has its markers, or is empty, never needs the question.
+ */
+export function replaceMeaningSectionChecked(current: string, section: string, appendConfirmed: boolean): { text: string; outcome: MeaningReplace["outcome"] | "ask" } {
+	const r = replaceMeaningSection(current, section);
+	if (r.outcome === "appended" && !appendConfirmed) return { text: current, outcome: "ask" };
+	return r;
+}

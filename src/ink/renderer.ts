@@ -20,6 +20,7 @@ import { rulerEdge, rulerTicks, type Ruler } from "./ruler";
 import { inkPath, type InkBuilder } from "./ink-geometry";
 import { HIGHLIGHTER_ALPHA, MARKER_ALPHA, strokePath } from "./stroke-shape";
 import { addLodNodesPath, lodLevel, lodNodes, lodPolygon } from "./lod";
+import { LazyWet } from "./lazy-wet";
 import { WetInk, type PageTransform } from "./wet-ink";
 import { ErrorOnce } from "./errors";
 import type { SpacePreviewEntry } from "./space";
@@ -341,8 +342,22 @@ export class Renderer {
 	private readonly faulted = new Set<CanvasRenderingContext2D>();
 	/** Wet ink of the highlighter (created on first use): a regular canvas, see releaseWet(). */
 	private wetHl: WetInk | null = null;
-	/** Wet ink of the marker (format v20), created on first use: 85% opaque like the committed stroke, see markerWet(). */
-	private wetMk: WetInk | null = null;
+	/**
+	 * Wet ink of the marker (format v20): 85% opaque like the committed stroke, see markerWet(). Review fix (D4): created when a marker
+	 * stroke starts and released a few seconds after the last one, so no full-viewport bitmap stays for the life of the view.
+	 */
+	private readonly wetMkLazy = new LazyWet<WetInk>({
+		create: () => this.createMarkerWet(),
+		dispose: (w) => {
+			w.canvas.remove();
+			w.canvas.width = 0;
+			w.canvas.height = 0;
+		},
+		busy: (w) => this.wet === w || this.wetRelease.some((r) => r.wet === w),
+	});
+	private get wetMk(): WetInk | null {
+		return this.wetMkLazy.peek();
+	}
 	/** The canvas showing the stroke in progress. */
 	private wet: WetInk | null = null;
 	private wetPage = -1;
@@ -393,6 +408,7 @@ export class Renderer {
 		this.desynchronized = desynchronized;
 		return new WetInk(canvas, ctx);
 	}
+
 
 	/** Turns the low-latency wet canvas on or off (the canvas is replaced; a stroke in progress is dropped from it). */
 	setLowLatency(on: boolean): void {
@@ -659,6 +675,7 @@ export class Renderer {
 		this.wet = null;
 		this.wetDone = null;
 		if (wet) this.errors.run("wet clear", () => wet.clear());
+		if (wet && wet === this.wetMk) this.wetMkLazy.idle();
 	}
 
 	/** Wet ink threw: drop it, and show later strokes on the live layer (always works, one frame later). */
@@ -684,6 +701,7 @@ export class Renderer {
 	 * twice at the same place.
 	 */
 	private releaseWet(wet: WetInk, staticHasIt: boolean): void {
+		if (wet === this.wetMk) this.wetMkLazy.idle();
 		const sync = wet !== this.wetPen;
 		if (sync && staticHasIt) {
 			wet.clear();
@@ -708,15 +726,20 @@ export class Renderer {
 
 	/** Like highlighterWet(): the marker's wet canvas holds opaque ink and gets its 85% from CSS (`.is-marker`), so overlaps never darken twice. */
 	private markerWet(): WetInk {
-		if (this.wetMk) return this.wetMk;
+		return this.wetMkLazy.acquire();
+	}
+
+	private createMarkerWet(): WetInk {
 		const canvas = this.container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-live notebook-canvas-wet is-marker" });
 		this.wetCanvas.after(canvas);
 		canvas.width = this.wetCanvas.width;
 		canvas.height = this.wetCanvas.height;
 		const ctx = canvas.getContext("2d");
-		if (!ctx) throw new Error("Canvas 2D is not available");
-		this.wetMk = new WetInk(canvas, ctx);
-		return this.wetMk;
+		if (!ctx) {
+			canvas.remove();
+			throw new Error("Canvas 2D is not available");
+		}
+		return new WetInk(canvas, ctx);
 	}
 
 	/** Page to device pixel transform of a page in the current view. */
@@ -855,6 +878,7 @@ export class Renderer {
 		if (this.settleTimer !== null) window.clearTimeout(this.settleTimer);
 		this.cancelWet();
 		this.wetRelease.length = 0;
+		this.wetMkLazy.destroy();
 		this.frame = null;
 		this.settleTimer = null;
 		if (this.ghostTimer !== null) window.clearTimeout(this.ghostTimer);

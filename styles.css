@@ -17657,7 +17657,7 @@ body.notebook-style-obsidian {
    bottom) while the view is scrolled away from where you last wrote during a lecture. A real button plus a close button. */
 .workspace-leaf-content .view-content.notebook-view .notebook-slide-back {
 	position: absolute;
-	top: 10px;
+	top: calc(10px + var(--nb-top-shift, 0px));
 	left: 50%;
 	z-index: 6;
 	display: flex;
@@ -17715,7 +17715,7 @@ body.notebook-style-obsidian {
 /* ===== 0.21 symbols ===== */
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip {
 	position: absolute;
-	top: 8px;
+	top: calc(8px + var(--nb-top-shift, 0px));
 	left: 50%;
 	transform: translateX(-50%);
 	z-index: 5;
@@ -17804,7 +17804,7 @@ body.notebook-style-obsidian {
 /* The "Back to slide N" pill and the recent-symbols strip are both centred at the top: while the strip is shown, the pill sits just
    below it (strip: 8px + about 50px high). The pill is created after the strip, so the sibling combinator reaches it. */
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-slide-back {
-	top: 66px;
+	top: calc(66px + var(--nb-top-shift, 0px));
 }
 
 /* ===== 0.22 pens ===== */
@@ -18406,7 +18406,7 @@ body.notebook-style-obsidian {
    notebook. A real button; the list it opens sits under it. Neither takes pen input. */
 .workspace-leaf-content .view-content.notebook-view .notebook-page-refs {
 	position: absolute;
-	top: 10px;
+	top: calc(10px + var(--nb-top-shift, 0px));
 	right: 56px;
 	z-index: 5;
 	display: inline-flex;
@@ -18450,7 +18450,7 @@ body.notebook-style-obsidian {
 
 .workspace-leaf-content .view-content.notebook-view .notebook-page-refs-list {
 	position: absolute;
-	top: 48px;
+	top: calc(48px + var(--nb-top-shift, 0px));
 	right: 56px;
 	z-index: 7;
 	display: flex;
@@ -18507,11 +18507,11 @@ body.notebook-style-obsidian {
 
 /* The recent-symbols strip is centred at the top and, on a narrow screen, reaches the chip: while it is shown, the chip and its list sit below it. */
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-page-refs {
-	top: 66px;
+	top: calc(66px + var(--nb-top-shift, 0px));
 }
 
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-page-refs-list {
-	top: 104px;
+	top: calc(104px + var(--nb-top-shift, 0px));
 }
 
 /* ===== 0.22 axes ===== */
@@ -18597,29 +18597,50 @@ body.notebook-style-obsidian {
 /* The "Back to slide" pill (about 42px high) takes the top centre and, on a narrow screen, the width of the "Referenced on" chip:
    the chip and its list go below it (and below the symbols strip when that is shown too). */
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-slide-back) > .notebook-page-refs {
-	top: 58px;
+	top: calc(58px + var(--nb-top-shift, 0px));
 }
 
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-slide-back) > .notebook-page-refs-list {
-	top: 96px;
+	top: calc(96px + var(--nb-top-shift, 0px));
 }
 
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-slide-back):has(> .notebook-symbol-strip:not(.notebook-hidden)) > .notebook-page-refs {
-	top: 114px;
+	top: calc(114px + var(--nb-top-shift, 0px));
 }
 
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-slide-back):has(> .notebook-symbol-strip:not(.notebook-hidden)) > .notebook-page-refs-list {
-	top: 152px;
+	top: calc(152px + var(--nb-top-shift, 0px));
 }
 
-/* The lecture-header chip and the colour-filter pill share the bottom-left corner: the chip sits above the pill (36px + 12px). */
+/* Top: on a narrow screen the "Lecture mode" chip (top left, about 52px high) reaches the strip, the "Back to current page" pill and the
+   "Referenced on" chip, which are all centred or right-aligned: while it is shown they all start below it (`--nb-top-shift`). */
+@media (max-width: 600px) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-lecture-chip) {
+		--nb-top-shift: 58px;
+	}
+}
+
+/* Bottom left: the contextual bar is centred at the bottom and can be as wide as the screen, so the minimap parked at a bottom corner,
+   the colour-filter pill and the lecture-header chip all sit above it: the bar publishes its height as `--nb-ctx-lift` (ui/context-bar.ts).
+   A minimap parked at the bottom left publishes its width as `--nb-map-bl` (view/minimap.ts): the pill and the chip start to its right. */
+.nb-ui.nb-minimap[data-corner="bl"],
+.nb-ui.nb-minimap[data-corner="br"] {
+	bottom: calc(12px + var(--nb-ctx-lift, 0px));
+}
+
+.nb-ui.nb-meaning-pill {
+	bottom: calc(12px + var(--nb-ctx-lift, 0px));
+	left: calc(12px + var(--nb-map-bl, 0px));
+	max-width: calc(100% - 96px - var(--nb-map-bl, 0px));
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-header-offer {
+	bottom: calc(16px + var(--nb-ctx-lift, 0px));
+	left: calc(8px + var(--nb-map-bl, 0px));
+	max-width: calc(100% - 16px - var(--nb-map-bl, 0px));
+}
+
+/* The chip sits above the pill (36px + 12px). */
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-meaning-pill) > .notebook-lecture-header-offer {
-	bottom: 60px;
-}
-
-/* A minimap parked at the bottom left (the map is at most 168px wide) keeps the corner: the pill and the chip move to its right. */
-.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-minimap[data-corner="bl"]:not(.notebook-hidden)) > .nb-meaning-pill,
-.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-minimap[data-corner="bl"]:not(.notebook-hidden)) > .notebook-lecture-header-offer {
-	left: 204px;
-	max-width: calc(100% - 216px);
+	bottom: calc(60px + var(--nb-ctx-lift, 0px));
 }

@@ -9,7 +9,7 @@ import { MARKDOWN_DPI, DEFAULT_MARKDOWN_DPI, isMarkdownDpi, type MarkdownDpi } f
 import { cropRect } from "../model/highlight-digest";
 import { escapeSearchText } from "../model/companion-search";
 import {
-	buildMeaningSection, meaningImageName, meaningRegions, replaceMeaningSection, MEANING_START, MEANING_END,
+	buildMeaningSection, meaningImageName, meaningRegions, replaceMeaningSection, replaceMeaningSectionChecked, MEANING_START, MEANING_END,
 	type Meaning, type MeaningItem, type MeaningRegion,
 } from "../model/colour-meaning";
 import { backgroundRect } from "../model/margins";
@@ -88,6 +88,8 @@ export async function runMeaningDigest(host: MeaningDigestHost, request: Meaning
 		return null;
 	}
 	let before = "";
+	// Review fix (D8): the answer to "add the section to this note?" counts only for what was asked; the write checks again.
+	let appendConfirmed = false;
 	if (existing instanceof TFile) {
 		try {
 			before = await app.vault.read(existing);
@@ -101,7 +103,10 @@ export async function runMeaningDigest(host: MeaningDigestHost, request: Meaning
 			return null;
 		}
 		// A note of the user's with this name and no markers: the section would be added to it with no backup. Ask first.
-		if (verdict === "appended" && !(await askAppend(app, existing.name))) return null;
+		if (verdict === "appended") {
+			if (!(await askAppend(app, existing.name))) return null;
+			appendConfirmed = true;
+		}
 	}
 	const working = showNotice(t("meaning.digest.working", { done: "0", total: String(regions.length) }), 0);
 	const renderer = new PageImageRenderer(host.media, host.render);
@@ -161,18 +166,21 @@ export async function runMeaningDigest(host: MeaningDigestHost, request: Meaning
 		});
 		recordPluginWrite(app, [notePath]);
 		if (existing instanceof TFile) {
-			let unsafe = false;
-			await app.vault.process(existing, (current) => {
-				const r = replaceMeaningSection(current, section);
-				if (r.outcome === "unsafe") {
-					unsafe = true;
-					return current;
+			// The note is read again inside the write: if its markers vanished meanwhile, the section is not appended without asking.
+			for (let attempt = 0; attempt < 2; attempt++) {
+				let outcome = "";
+				await app.vault.process(existing, (current) => {
+					const r = replaceMeaningSectionChecked(current, section, appendConfirmed);
+					outcome = r.outcome;
+					return r.outcome === "unsafe" || r.outcome === "ask" ? current : r.text;
+				});
+				if (outcome === "unsafe") {
+					showNotice(t("meaning.digest.unsafe", { path: notePath }), 12000);
+					return null;
 				}
-				return r.text;
-			});
-			if (unsafe) {
-				showNotice(t("meaning.digest.unsafe", { path: notePath }), 12000);
-				return null;
+				if (outcome !== "ask") break;
+				if (!(await askAppend(app, existing.name))) return null;
+				appendConfirmed = true;
 			}
 		} else {
 			await app.vault.create(notePath, `# ${file.basename} — ${t("meaning.digest.title")}\n\n${section}\n`);
