@@ -184,7 +184,7 @@ export class TagEditorModal extends Modal {
 				this.renderChips();
 			}
 		});
-		this.suggestEl = this.contentEl.createDiv({ cls: "notebook-tags-suggest" });
+		this.suggestEl = this.contentEl.createDiv({ cls: "notebook-tags-suggest nb-ui" });
 		this.renderSuggestions();
 		this.errorEl = this.contentEl.createDiv({ cls: "notebook-tags-error" });
 		this.contentEl.createDiv({ cls: "notebook-tags-desc", text: t("tags.editor.desc") });

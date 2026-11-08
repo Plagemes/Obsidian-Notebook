@@ -19094,7 +19094,7 @@ body.notebook-style-obsidian {
 }
 
 /* ===== 0.24 tagsuggest ===== */
-.notebook-tags-suggest {
+.nb-ui.notebook-tags-suggest {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
@@ -19102,27 +19102,34 @@ body.notebook-style-obsidian {
 	margin-top: 10px;
 }
 
-.notebook-tags-suggest:empty {
+.nb-ui.notebook-tags-suggest:empty {
 	display: none;
 }
 
-.notebook-tags-suggest-title {
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
+.nb-ui .notebook-tags-suggest-title {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
 	margin-right: 2px;
 }
 
-.notebook-tags-chip.notebook-tags-chip-suggest {
+.nb-ui .notebook-tags-chip.notebook-tags-chip-suggest {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 32px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: var(--nb-fs-meta);
 	background: transparent;
-	border: 1px dashed var(--background-modifier-border-hover);
-	color: var(--text-normal);
+	border: 1px dashed var(--nb-border-strong);
+	color: inherit;
 }
 
-.notebook-tags-chip.notebook-tags-chip-suggest:hover {
+.nb-ui .notebook-tags-chip.notebook-tags-chip-suggest:hover {
 	border-style: solid;
-	border-color: var(--interactive-accent);
+	border-color: var(--nb-accent);
 }
 
-.notebook-tags-chip-suggest .notebook-tags-x {
-	color: var(--interactive-accent);
+.nb-ui .notebook-tags-chip-suggest .notebook-tags-x {
+	color: var(--nb-accent);
 }
