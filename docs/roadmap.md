@@ -352,7 +352,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - Conflict-free by design: every stroke has a unique id, so concurrent edits never clash; at the end everything lands in the host's notebook with the author of each stroke.
     - Asynchronous too: people without Obsidian annotate in the web viewer (#164) and send back an annotation package that is imported with one tap; or the notebook is shared on Drive with conflict merging (#122).
 166. **P3** InkML export (open standard for digital ink).
-167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20.)
+167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20; 0.23: `notebook-v21.schema.json` for format 21.)
 
 ### E. Automation
 168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.
@@ -501,7 +501,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 261. **P2** Sketch inside a Markdown note: a small handwriting block inside the note.
 262. **P2** Turn a region into an atomic note (Zettelkasten style), with the ink image and a link back. — superseded by the Zettelkasten system (Z1–Z12) below.
 263. **P2** Links to a precise region of a page, not only to the page.
-264. **P2** Saved views: a named region + zoom, recalled instantly.
+264. **P2** 🧪 Saved views: a named region + zoom, recalled instantly. (0.23, format v21: the optional notebook-level `views` list; *Save current view…* and *Go to saved view…* from the sheet, the notebook menu and the palette; rename, reorder, update, remove, all undoable; a view of a deleted page is shown as missing.)
 265. **P2** Global bookmarks: pages from different notebooks in one list.
 266. **P2** Planner pages showing Obsidian tasks and due dates on top.
 267. **P2** Linked images: if the file in the vault changes (e.g. a plot exported from Python), the image on the page updates.

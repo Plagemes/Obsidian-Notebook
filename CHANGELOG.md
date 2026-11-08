@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### savedviews
+- **Saved views (#264) and document format 21.** *Save current view…* keeps what is on screen (the page, the part of it that is in view and the zoom) under a name; *Go to saved view…* lists them and one tap brings you back. Rename, update to the current view, move up or down and remove from the menu of a row; each change is one undo step. A view of a page that was deleted is shown as *Page missing* and can be removed (Undo of the page deletion makes it work again). The views are kept in the notebook, so they travel with the file; recalling puts the middle of the saved region in the middle of the screen at the same zoom relative to the page width, so it works on another screen size. Copies of pages and pages moved to another notebook take no views along; merging a conflicted copy adds the views it has that the notebook lacks. In the sheet, the notebook menu and the palette; English and Italian.
+- **Document format v21.** One optional notebook-level key, `views` (`{ id, name, page, x, y, width, height, zoom }`, at most 100, page coordinates only). The v20 to v21 migration is the identity plus the version, the reader drops invalid views and counts them, the writer refuses malformed ones, large v20 files are still read page by page, repair keeps the views; a notebook saved as v21 opens read-only in 0.22. The schema is now `docs/schema/notebook-v21.schema.json` (`docs/format.md` and the format test follow). Tests: `tests/model-v21.test.ts`; harness `savedviews`.
+
 ## 0.22.0 — 2026-11-08
 
 Seven features: three new pens, optional cloud sync with Google Drive or OneDrive, two-way page references, colours with meaning, instant axes, custom covers and an automatic lecture header. The notebook format moves to version 20 (the new pen tools and the nib angle): the migration from version 19 is automatic, and 0.21 and older open a v20 notebook read-only and never overwrite it. Cloud sync is off by default and uses your own OAuth client; the plugin ships no client ID or secret.
