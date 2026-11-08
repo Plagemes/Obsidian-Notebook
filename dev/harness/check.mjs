@@ -165,6 +165,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "lecthead", theme, device, lowLatency: false });
 // 0.23 dimcheck (#293): the units hint of the equation editor (dev/harness/dimcheck-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "dimcheck", theme, device, lowLatency: false });
+// 0.24 palettectx (#424): the context-ordered All actions sheet (dev/harness/palettectx-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "palettectx", theme, device, lowLatency: false });
 // 0.23 termorder (#416): the Library sorted by the active term (dev/harness/termorder-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "termorder", surface: "library", theme, device, lowLatency: false });
 // 0.23 hookclean (#314): clean-up of hooks and stray dots (dev/harness/hookclean-check.ts).
@@ -380,6 +382,7 @@ async function main() {
 				else if (s.doc === "pagerefs") report = await cdp.evaluate("window.harness.checkPagerefs()", 60000);
 				else if (s.doc === "lecthead") report = await cdp.evaluate("window.harness.checkLecthead()", 90000);
 				else if (s.doc === "dimcheck") report = await cdp.evaluate("window.harness.checkDimcheck()", 90000); // 0.23 dimcheck
+				else if (s.doc === "palettectx") report = await cdp.evaluate("window.harness.checkPalettectx()", 90000); // 0.24 palettectx
 				else if (s.doc === "termorder") report = await cdp.evaluate("window.harness.checkTermOrder()", 90000);
 				else if (s.doc === "hookclean") report = await cdp.evaluate("window.harness.checkHookclean()", 90000); // 0.23 hookclean
 				else if (s.doc === "shapefill") report = await cdp.evaluate("window.harness.checkShapefill()", 90000); // 0.24 shapefill
@@ -600,6 +603,17 @@ async function main() {
 					} catch (e) {
 						problems.push(`pagerefs screenshot ${state}: ${e.message}`);
 					}
+				}
+			}
+			// 0.24 palettectx: the sheet with the eraser in hand.
+			if (s.doc === "palettectx") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				try {
+					await cdp.evaluate("window.harness.palettectxShot().then(() => true)", 60000);
+					writeFileSync(join(designDir, `palettectx-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`palettectx screenshot: ${e.message}`);
 				}
 			}
 			// 0.23 dimcheck: the units hint under the equation preview, three formulas.

@@ -3677,3 +3677,22 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 | Dropout detection between neighbouring strokes: same style and group, small gap relative to pen width, point spacing and piece length, continuous direction, no pressure jump; dots, words, corners, dashes untouched | yes | `tests/stroke-join.test.ts` (synthetic strokes, jittery wavy lines, negatives) | | yes | thresholds (`JOIN_RULES`) are tuned on synthetic strokes only |
 | Join broken strokes: one undo step, keeps the first id, style, group, nib and position; chains; refuses a locked page; page times unmoved; hidden sticky ink and locked groups skipped | yes | `tests/stroke-join.test.ts` (History: execute, undo, redo, locked page, page times); harness `doc=strokejoin` | | | |
 | Selection action, command and sheet entry (`selection-join`, from two strokes on) | yes | `tests/selection-arrange.test.ts`; harness `doc=strokejoin` | | | |
+
+### 0.24 — palettectx: actions ordered by context (roadmap #424; steps 2480-2499)
+
+Implemented, not verified on hardware. Obsidian's own command palette keeps its order (a plugin cannot change it); the plugin's *All actions* sheet (the grid button at the end of the toolbar) is what is ordered.
+
+2480. **Plain page.** Open a notebook on a plain page with the pen: the sheet opens with *Recent* (if any) and the groups; there is no *For this page* section.
+2481. **Eraser.** Pick the lasso and open the sheet: it starts with *For this page*, listing selection actions such as *Select by style* and *Select same tool*.
+2482. **Selection.** Select some ink with the lasso: the section lists selection actions (those already in the selection bar are not repeated).
+2483. **PDF.** On a PDF page the section offers reading actions (select text, dimming, crop); on an ordinary page it does not.
+2484. **Lecture and side pane.** During a lecture the lecture actions come first; with the PDF side pane open the side-by-side actions do.
+2485. **Presentation.** While presenting, navigation actions and *Present* come first.
+2486. **Search.** Type a word that matches several actions: the ones that fit the current context come first, then recently used ones; the same word on another page type orders differently.
+2487. **Rows work.** Every row in *For this page* runs its action; a toggle that is already on, a disabled action and a locked-page action are not listed.
+2488. **Obsidian palette.** With no notebook open, the notebook commands (draw tools, page actions) are absent from Obsidian's command palette; with one open they appear.
+2489. **Italian, light, dark, phone.** The section reads *Per questa pagina* in Italian and fits a phone's bottom sheet.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Context ordering of the *All actions* sheet (#424): *For this page* section and context-aware search ranking (selection, PDF page, tool in hand, lecture, side pane, presentation) on top of priority and recent use | yes | boosts per context, section content, search order, no repeats, disabled/visible left out, labels: `tests/context-rank.test.ts`; sheet at tablet and phone widths: harness `doc=palettectx` | | | Obsidian's own palette order cannot be changed by a plugin |

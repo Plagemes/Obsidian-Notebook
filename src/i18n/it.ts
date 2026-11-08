@@ -1380,6 +1380,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"ui.group.zettel": "Zettelkasten",
 	"ui.group.integration": "Obsidian",
 	"ui.group.dev": "Diagnostica",
+	// 0.24 palettectx
+	"ui.group.here": "Per questa pagina",
 	"ui.group.recent": "Recenti",
 	"ui.group.results": "Risultati",
 	"ui.sheet.title": "Tutte le azioni",
