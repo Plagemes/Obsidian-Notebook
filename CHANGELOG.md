@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### iconhelp
+- **Explanation on long press of an icon (#429).** Hold a finger on a toolbar tool, the undo and redo buttons, the pen chip, a button of the selection or contextual bar, or a Home header icon: after about half a second a small bubble anchored to the icon says its name and, in one line, what it does (the tools also say that a second tap opens their options). The button is not pressed, and the bubble goes a moment after you lift, or at once when you tap elsewhere. A swipe, a quick tap, the mouse (it keeps its hover tooltip) and the pen (S Pen button rules and writing are untouched) never show it, and buttons with their own long press (the quick actions that pin, the page indicator quick tab) keep it. *Settings > Appearance > Explain icons on long press* turns it off. English and Italian; one shared helper (`src/ui/long-press-help.ts`) with pure timing and placement logic (`src/ui/long-press-logic.ts`).
+
 ## 0.23.0 — 2026-11-08
 
 Eight features: saved views, export of the written area or the selection, dimensional analysis of formulas, balancing of chemical reactions, an automatic formula sheet, a welcome-back card, notebooks ordered by the active term and clean-up of pen hooks and stray dots. The notebook format moves to version 21 (saved views): the migration from version 20 is automatic, and 0.22 and older open a v21 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

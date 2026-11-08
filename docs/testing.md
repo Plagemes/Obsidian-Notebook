@@ -3629,3 +3629,23 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 | Clean up strokes: one undo step, keeps ids, order, groups, nib; refuses a locked page; selection follows | yes | `tests/hook-clean.test.ts` (History: execute, undo, redo, locked page); harness `doc=hookclean` | | | |
 | Selection action, palette command and sheet entry (`selection-cleanup`) | yes | registry tests (`tests/ui-registry.test.ts`); harness `doc=hookclean` | | | |
 | Setting *Trim hooks as you write* (off by default): the stroke is committed as written and the trim is its own undo step (Undo gives the written stroke back, a second Undo removes it); stricter limits than the manual clean-up (near reversal, very short hook), so letter tails stay; live input and rendering untouched | yes | `tests/hook-clean.test.ts` (review V2: raw stroke kept in the history, page times, locked page, limits), `tests/commit-trim.test.ts` (the pen-up wiring the view calls: trim step after the commit, locked page, late side-button take-back of both steps, partial take-back), the first-Undo notice and the real pen path: harness `doc=hookclean`; settings read: `tests/hook-clean-settings.test.ts`; golden hashes unchanged: `tests/pens-golden.test.ts`; harness `doc=hookclean` | | yes | needs real pen data to judge |
+
+### 0.24 — iconhelp: explanation on long press of an icon (roadmap #429; steps 2500-2519)
+
+Implemented, not verified on hardware. No format change. Manual steps (real Obsidian on an Android tablet or phone, finger):
+
+2500. **Toolbar.** Hold a finger on the Eraser button for about half a second without moving: a small bubble appears under it with the name, one line on what it does and "Tap it again for its options". The eraser is not selected. Lift: the bubble stays a moment and goes.
+2501. **Tap elsewhere.** Hold again, and with the bubble showing tap the page: the bubble goes at once and the tap does what it normally does.
+2502. **Quick tap.** A normal tap on a tool still selects it; no bubble.
+2503. **Swipe.** Put a finger on a button and slide away before half a second: no bubble, nothing pressed.
+2504. **Undo, redo, pages panel, pen chip.** Each shows a bubble with its own sentence. Undo does not undo.
+2505. **Quick actions.** A long press on a pinnable quick action still opens the pin menu (no bubble); same for the page indicator when quick tabs are on.
+2506. **Selection bar.** Select some ink with the lasso; hold a finger on Copy, Group, Align: each explains itself and is not pressed. The bubble does not cover the icon and stays on screen on a phone.
+2507. **Home.** On Home and in the library, hold the menu, filter, sort, view and bell icons: a bubble each.
+2508. **Pen and mouse.** With the S Pen held on a toolbar button: no bubble, and the pen button rules (tap with the button held: radial menu; drag with the button held: eraser) behave as before. With a mouse: only the hover tooltip.
+2509. **Setting.** *Settings > Appearance > Explain icons on long press* off: no bubble anywhere. On again: it works. Switch to Italian: bubbles are in Italian.
+2510. **Looks.** Light and dark, tablet and phone: a quiet card with a small arrow, readable, never off screen.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Long-press explanation bubble on toolbar, selection/contextual bar and Home icons (finger only; mouse hover and pen untouched), setting to turn it off | yes | timing, slop, who may start it, placement, texts in en + it, setting: `tests/long-press-help.test.ts`; real view with synthetic touch/pen/mouse events: harness `doc=iconhelp` | | yes | the real long press on a WebView is not simulated; the system context menu on some devices is suppressed while the bubble shows |

@@ -19092,3 +19092,59 @@ body.notebook-style-obsidian {
 	color: var(--nb-text-muted);
 	font-size: var(--nb-fs-meta);
 }
+
+/* ===== 0.24 iconhelp ===== */
+/* Long-press explanation bubble (#429): name, one line, a hint. It never takes touches (the finger is still down). */
+.nb-ui.nb-help-bubble {
+	position: fixed;
+	z-index: 10000;
+	box-sizing: border-box;
+	max-width: min(260px, calc(100vw - 16px));
+	padding: var(--nb-space-3) var(--nb-space-4);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-m);
+	box-shadow: var(--nb-shadow-float);
+	pointer-events: none;
+}
+
+.nb-ui.nb-help-bubble .nb-help-name {
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	line-height: 1.25;
+}
+
+.nb-ui.nb-help-bubble .nb-help-desc {
+	margin-top: 2px;
+	font-size: var(--nb-fs-meta);
+	line-height: 1.35;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-help-bubble .nb-help-hint {
+	margin-top: 6px;
+	font-size: var(--nb-fs-label);
+	line-height: 1.3;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-help-bubble .nb-help-arrow {
+	position: absolute;
+	left: var(--nb-help-arrow-x, 50%);
+	top: -6px;
+	width: 10px;
+	height: 10px;
+	margin-left: -5px;
+	background: var(--nb-panel);
+	border-left: 1px solid var(--nb-border-strong);
+	border-top: 1px solid var(--nb-border-strong);
+	transform: rotate(45deg);
+}
+
+.nb-ui.nb-help-bubble.is-above .nb-help-arrow {
+	top: auto;
+	bottom: -6px;
+	transform: rotate(225deg);
+}
+

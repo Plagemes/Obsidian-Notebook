@@ -762,7 +762,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 426. **P3** Shortcuts proposed from habits (a gesture or quick slot for what you repeat).
 427. **P3** Friction detection proposing a setting change (for example repeated accidental touches → palm rejection).
 428. **P3** Favourites suggested from the pen, colour and width combinations you really use.
-429. **P2** Explanation on long-press of an icon.
+429. **P2** 🧪 Explanation on long-press of an icon: a finger held ~0.5 s on a toolbar, selection or contextual bar, or Home icon shows a small bubble (name, one line, a hint) without pressing it; mouse and pen untouched; Settings > Appearance > Explain icons on long press (0.24).
 
 ### Layout and devices
 430. **P1** 🧪 Layout by orientation and size (`src/ui/viewport-class.ts`, `nb-vp-*` classes; 0.14).

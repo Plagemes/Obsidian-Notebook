@@ -598,6 +598,7 @@ const APPEARANCE: SettingSpec[] = [
 	// 0.13: just-in-time tips.
 	{ id: "hintsEnabled", section: "appearance", order: 50, name: "settings.hints", desc: "settings.hints.desc", control: { type: "toggle" }, keywords: "tips hints suggerimenti consigli" },
 	{ id: "hintsReset", section: "appearance", order: 60, name: "settings.hintsReset", desc: "settings.hintsReset.desc", control: { type: "action", run: "hints-reset", button: "settings.hintsReset.button" }, parent: "hintsEnabled", keywords: "tips hints suggerimenti consigli" },
+	{ id: "iconHelp", section: "appearance", order: 65, name: "settings.iconHelp", desc: "settings.iconHelp.desc", control: { type: "toggle" }, keywords: "icons help tooltip long press explain icone aiuto spiega pressione" },
 ];
 
 const DIAGNOSTICS: SettingSpec[] = [
