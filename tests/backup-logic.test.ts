@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	backupFileName, backupFolderConflict, backupFolderOf, DAY_MS, DEFAULT_BACKUP_FOLDER, DEFAULT_BACKUP_SETTINGS, EMPTY_MEMORY, INTERVAL_MS, isDue, isTempName, MIN_GAP_MS, newestBackupAt,
+	acceptBackupFolder, backupFileName, backupFolderConflict, backupFolderOf, DAY_MS, DEFAULT_BACKUP_FOLDER, DEFAULT_BACKUP_SETTINGS, EMPTY_MEMORY, INTERVAL_MS, isDue, isTempName, MIN_GAP_MS, newestBackupAt,
 	looksNotDownloaded, nextDueAt, normaliseMemory, parseBackupName, planBackupFiles, planRetention, readBackupSettings, remember, RETRY_AFTER_FAILURE_MS, STALE_TEMP_MS, tempName,
 	type BackupMemory, type BackupResult, type FolderChild,
 } from "../src/storage/backup-logic";
@@ -316,5 +316,17 @@ describe("review W21 D2: readSettings falls back from an overlapping backup fold
 		expect(readSettings({ folder: "Notebooks", zipBackupFolder: "Notebooks" }).zipBackupFolder).toBe(DEFAULT_BACKUP_FOLDER);
 		expect(readSettings({ folder: "Notebooks", zipBackupFolder: "Notebooks/_assets" }).zipBackupFolder).toBe(DEFAULT_BACKUP_FOLDER);
 		expect(readSettings({ folder: "Notebooks", zipBackupFolder: "Elsewhere/Backups" }).zipBackupFolder).toBe("Elsewhere/Backups");
+	});
+});
+
+describe("review W21 N3: a typed backup folder is accepted whole or not at all", () => {
+	const layout = { notebooksFolder: "Notebooks", templatesFolder: "_templates", notebookTemplatesFolder: "_templates/notebooks" };
+
+	it("accepts a valid folder and refuses one that overlaps, keeping the previous value", () => {
+		expect(acceptBackupFolder("Notebook backups", "Old", layout)).toEqual({ ok: true, folder: backupFolderOf("Notebook backups") });
+		expect(acceptBackupFolder("Notebooks", "Old", layout)).toEqual({ ok: false, conflict: "notebooks", keep: "Old" });
+		expect(acceptBackupFolder("Notebooks/Sub", "Old", layout)).toMatchObject({ ok: false, keep: "Old" });
+		// the whole word is what counts: the prefixes typed on the way are never judged or saved
+		expect(acceptBackupFolder("Notebooks backups", "Old", layout).ok).toBe(true);
 	});
 });

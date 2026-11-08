@@ -15,7 +15,7 @@ import { deviceNameRow, type SyncSafetyService } from "./sync-safety";
 import { renderDeviceInfo } from "./device-info";
 import { BoardColumnsModal } from "./board-columns-modal";
 import { renderBackupRow } from "./backup-settings";
-import { backupFolderConflict, backupFolderOf } from "../storage/backup-logic";
+import { acceptBackupFolder } from "../storage/backup-logic";
 import { showErrorNotice } from "./notice";
 import type { BackupService } from "../storage/backup-service";
 import { resetHints } from "../ui/hints";
@@ -186,10 +186,10 @@ export class NotebookSettingTab extends PluginSettingTab {
 			// the previous folder stays.
 			if (key === "zipBackupFolder" && typeof value === "string") {
 				const s = this.host.settings;
-				const conflict = backupFolderConflict(backupFolderOf(value), { notebooksFolder: s.folder, templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder }, this.app.vault.getFiles().map((f) => f.path));
-				if (conflict !== null) {
+				const verdict = acceptBackupFolder(value, s.zipBackupFolder, { notebooksFolder: s.folder, templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder }, this.app.vault.getFiles().map((f) => f.path));
+				if (!verdict.ok) {
 					const now = Date.now();
-					if (now - this.lastBackupFolderNotice > 3000) showErrorNotice(t(BACKUP_FOLDER_MESSAGES[conflict]), 8000);
+					if (now - this.lastBackupFolderNotice > 3000) showErrorNotice(t(BACKUP_FOLDER_MESSAGES[verdict.conflict]), 8000);
 					this.lastBackupFolderNotice = now;
 					return;
 				}
@@ -530,6 +530,17 @@ export class NotebookSettingTab extends PluginSettingTab {
 				break;
 			case "text":
 			case "folder":
+				if (key === "zipBackupFolder") {
+					// Checked and saved when the entry is final (change/blur), not per keystroke: a prefix of the name must never be saved
+					// (review W21 N3). A refused value goes back to the saved folder.
+					setting.addText((text) => {
+						text.setPlaceholder(c.placeholder ?? "").setValue(str(value));
+						text.inputEl.addEventListener("change", () => {
+							void this.setControlValue(key, text.inputEl.value).then(() => text.setValue(str(this.host.settings.zipBackupFolder)));
+						});
+					});
+					break;
+				}
 				setting.addText((text) => text.setPlaceholder(c.placeholder ?? "").setValue(str(value)).onChange(save));
 				break;
 			case "action":

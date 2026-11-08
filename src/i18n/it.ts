@@ -3932,7 +3932,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.backupFolder": "Cartella dei backup",
 	"settings.backupFolder.desc": "Una cartella del vault. Punta il tuo strumento di sync per copiarli altrove.",
 	"settings.backupKeep": "Backup da tenere",
-	"settings.backupKeep.desc": "I backup più vecchi fatti dal plugin vanno nel cestino. Nient'altro è toccato.",
+	"settings.backupKeep.desc": "I vecchi backup del plugin in questa cartella vanno nel cestino. Spostane uno per tenerlo.",
 	"settings.backupFolder.overlapNotebooks": "La cartella dei backup non può essere la cartella dei quaderni, contenerla o stare al suo interno. Resta la cartella precedente.",
 	"settings.backupFolder.overlapTemplates": "La cartella dei backup non può sovrapporsi a una cartella dei modelli. Resta la cartella precedente.",
 	"settings.backupFolder.holdsNotebooks": "Quella cartella contiene quaderni, quindi non può essere la cartella dei backup. Resta la cartella precedente.",
