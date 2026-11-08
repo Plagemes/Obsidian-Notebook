@@ -356,7 +356,7 @@ describe("format v21: the model rules", () => {
 	});
 
 	it("adds, renames, moves, replaces and removes, always as new arrays and never in place", () => {
-		const list = Object.freeze([view("a"), view("b"), view("c")]) as readonly SavedView[];
+		const list = Object.freeze([view("a"), view("b"), view("c")]);
 		expect(withViewAdded(list, view("d")).map((v) => v.id)).toEqual(["a", "b", "c", "d"]);
 		expect(withViewAdded(Array.from({ length: VIEWS_MAX }, (_, i) => view(`v${i}`)), view("z"))).toHaveLength(VIEWS_MAX);
 		expect(withViewRenamed(list, "b", "  Better  name ").map((v) => v.name)).toEqual(["View a", "Better name", "View c"]);
@@ -438,7 +438,7 @@ describe("format v21: history", () => {
 		expect("views" in doc).toBe(false);
 		expect(serialize(doc)).not.toContain('"views"');
 		history.undo();
-		expect(doc.views!.map((v) => v.id)).toEqual(["a"]);
+		expect(doc.views.map((v) => v.id)).toEqual(["a"]);
 	});
 
 	it("makes no command for a change that changes nothing", () => {
@@ -500,7 +500,7 @@ describe("format v21: history", () => {
 		cmd.apply(doc);
 		doc.views = [view("q")];
 		cmd.revert(doc);
-		expect(doc.views!.map((v) => v.id)).toEqual(["a", "b", "c"]);
+		expect(doc.views.map((v) => v.id)).toEqual(["a", "b", "c"]);
 	});
 });
 
