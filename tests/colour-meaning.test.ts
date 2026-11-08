@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createPage, createStroke } from "../src/model/document";
 import {
 	MATCH_TOLERANCE, MEANING_END, MEANING_MAX, MEANING_START, TOLERANCES, buildMeaningSection, colourDistance, effectiveLegend, groupByMeaning,
-	matchMeaning, meaningCounts, meaningRegions, nearDuplicates, nextFreeColour, parseLegend, replaceMeaningSection, strokeDimmer, withMeaning, withoutMeaning,
+	matchMeaning, meaningCounts, meaningRegions, nearDuplicates, nextFreeColour, parseLegend, replaceMeaningSection, replaceMeaningSectionChecked, strokeDimmer, withMeaning, withoutMeaning,
 	type Meaning, type MeaningItem,
 } from "../src/model/colour-meaning";
 import { MEANINGS_PREFIX, applyMeaningOps, emptyMeanings, mergeMeaningFiles, overrideOf, parseMeanings, serializeMeanings, type MeaningsFile } from "../src/library/meanings";
@@ -316,5 +316,28 @@ describe("per-notebook meanings sidecar", () => {
 		expect(store.blocked).toContain("meanings-0b000000.json");
 		expect(store.get("nb1")).toEqual(legend);
 		expect(adapter.files.get("Notebooks/_meta/meanings-0b000000.json")).toBe("garbage");
+	});
+});
+
+// Review fix (D8): the digest decides again inside the write.
+describe("meaning digest: the write checks again", () => {
+	const section = `${MEANING_START}\nbody\n${MEANING_END}`;
+
+	it("never appends to a note of the user's without the answer, even if it had markers a moment ago", () => {
+		const gone = "my own notes\n";
+		expect(replaceMeaningSectionChecked(gone, section, false)).toEqual({ text: gone, outcome: "ask" });
+		const appended = replaceMeaningSectionChecked(gone, section, true);
+		expect(appended.outcome).toBe("appended");
+		expect(appended.text).toContain("my own notes");
+	});
+
+	it("replaces between the markers and creates in an empty note with no question", () => {
+		expect(replaceMeaningSectionChecked(`a\n${section}\nb`, section, false).outcome).toBe("replaced");
+		expect(replaceMeaningSectionChecked("  \n", section, false).outcome).toBe("created");
+	});
+
+	it("an unpaired marker is still unsafe, answer or not", () => {
+		const bad = `x ${MEANING_END}`;
+		expect(replaceMeaningSectionChecked(bad, section, true)).toEqual({ text: bad, outcome: "unsafe" });
 	});
 });
