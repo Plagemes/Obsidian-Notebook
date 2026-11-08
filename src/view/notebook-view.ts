@@ -211,7 +211,7 @@ import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites"
 import { PenControls, type PenStore } from "./pen-controls";
 import { PenSetControls, setForOpen, type PenSetHost } from "./pen-set-controls";
 import { ProfileControls, type ProfileHost } from "./profile-controls";
-import { activeProfile, addProfile, profilePaperCandidate, applyPatch, deleteProfile, ensureProfileSet, findProfile, nextProfileId, profileName, profileSetId, switchOnLecture, updateProfile, type CurrentState } from "./writing-profiles";
+import { activeProfile, addProfile, profilePaperCandidate, applyPatch, deleteProfile, dropProfileSet, ensureProfileSet, findProfile, nextProfileId, profileName, profileSetId, switchNoticeKey, switchOnLecture, updateProfile, type CurrentState } from "./writing-profiles";
 import { favouritePatch } from "./favourites";
 import { MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, slotsOf, withSetPens, type PenSet } from "./pen-sets";
 import { PdfReading, type ReadingHost } from "./pdf-reading";
@@ -2161,7 +2161,7 @@ export class NotebookView extends FileView {
 			active: () => activeProfile(s().writingProfiles, s()),
 			apply: (id) => this.applyWritingProfile(id),
 			saveAs: (name) => {
-				const next = addProfile(s().writingProfiles, name, this.profileState());
+				const next = addProfile(s().writingProfiles, name, this.profileState(), s().penSets.map((x) => x.id));
 				if (!next) return false;
 				s().writingProfiles = next.profiles;
 				s().writingProfileActive = next.id;
@@ -2178,9 +2178,22 @@ export class NotebookView extends FileView {
 				persist();
 			},
 			remove: (id) => {
+				const gone = s().writingProfiles.find((p) => p.id === id);
 				s().writingProfiles = deleteProfile(s().writingProfiles, id);
 				if (s().writingProfileActive === id) s().writingProfileActive = "";
+				// Its own pen set goes with it, unless a notebook, a folder or another profile still uses it (then the set stays and the user is told).
+				let kept = false;
+				if (gone) {
+					const dropped = dropProfileSet(gone, s().writingProfiles, s().penSets, s().penSetFolders, s().penSetNotebooks);
+					kept = dropped.kept;
+					if (dropped.sets.length !== s().penSets.length) {
+						s().penSets = dropped.sets;
+						if (this.activePenSetId && !this.activePenSet()) this.activePenSetId = null;
+						this.pens?.refresh();
+					}
+				}
 				persist();
+				return kept;
 			},
 			available: () => this.file !== null,
 		};
@@ -2218,7 +2231,9 @@ export class NotebookView extends FileView {
 		this.profileUi?.refresh();
 		this.refreshUi();
 		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
-		if (!quiet) showNotice(t("profiles.switched", { name }), 2500);
+		// A full pen set list means the strip did not change: say so, also for a quiet switch (a control must not claim what it did not do).
+		const key = switchNoticeKey(made);
+		if (!quiet || key !== "profiles.switched") showNotice(t(key, { name }), key === "profiles.switched" ? 2500 : 7000);
 	}
 
 	/** Switches to the next profile (Lecture, Study, then the user's own, round again). */

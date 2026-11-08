@@ -73,9 +73,10 @@ export async function checkProfiles(api: ProfilesCheckApi): Promise<{ ok: boolea
 	s.defaultPaper = "dotted";
 	const saved = v.profileHost().saveAs("My class");
 	await frames(2);
-	add("the current setup is saved as a custom profile", saved && s.writingProfiles.length === 1 && s.writingProfiles[0]!.name === "My class" && s.writingProfileActive === "profile-1");
+	add("the current setup is saved as a custom profile", saved && s.writingProfiles.length === 1 && s.writingProfiles[0]!.name === "My class" && /^profile-[0-9a-z]{8}$/.test(s.writingProfileActive));
+	const mineId = s.writingProfileActive;
 	v.applyWritingProfile("lecture", true);
-	v.applyWritingProfile("profile-1", true);
+	v.applyWritingProfile(mineId, true);
 	await frames(3);
 	add("one tap brings the custom profile back", s.stabilization === 3 && s.defaultPaper === "dotted" && chipText() === "My class", chipText());
 
@@ -89,8 +90,10 @@ export async function checkProfiles(api: ProfilesCheckApi): Promise<{ ok: boolea
 	add("lecture start switches to Lecture when the setting is on", s.writingProfileActive === "lecture");
 	s.writingProfileOnLecture = false;
 
-	v.profileHost().remove("profile-1");
-	add("a custom profile can be deleted", s.writingProfiles.length === 0);
+	const setCount = s.penSets.length;
+	add("the profile made its own pen set when it was applied", s.penSets.some((x) => x.id === `wp-${mineId}`));
+	v.profileHost().remove(mineId);
+	add("a custom profile can be deleted, and its own pen set goes with it", s.writingProfiles.length === 0 && !s.penSets.some((x) => x.id === `wp-${mineId}`) && s.penSets.length === setCount - 1);
 
 	add("the notebook document was never touched", docJson() === before);
 

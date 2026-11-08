@@ -15,7 +15,8 @@ export interface ProfileHost {
 	/** Saves the current pens, smoothing and paper as a new profile and makes it the active one; false when the limit is reached. */
 	saveAs(name: string): boolean;
 	update(id: string): void;
-	remove(id: string): void;
+	/** Deletes a profile and the pen set it made; true when that set was kept because a notebook, a folder or another profile still uses it. */
+	remove(id: string): boolean;
 	/** The chip is disabled while nothing is open. */
 	available(): boolean;
 }
@@ -69,9 +70,9 @@ export class ProfileControls {
 				new Notice(t("profiles.updated", { name: active.name }));
 			}));
 			menu.addItem((i) => i.setTitle(t("profiles.delete", { name: active.name })).setIcon("trash").onClick(() => {
-				this.host.remove(active.id);
+				const kept = this.host.remove(active.id);
 				this.refresh();
-				new Notice(t("profiles.deleted", { name: active.name }));
+				new Notice(t(kept ? "profiles.deletedSetKept" : "profiles.deleted", { name: active.name }), kept ? 7000 : undefined);
 			}));
 		}
 		const r = this.button.getBoundingClientRect();

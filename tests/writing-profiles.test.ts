@@ -8,8 +8,8 @@ import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
 import { FAVOURITE_SLOTS } from "../src/view/favourites";
 import { defaultPenSets, MAX_PEN_SETS, type PenSet } from "../src/view/pen-sets";
 import {
-	activeProfile, addProfile, allProfiles, applyPatch, BUILTIN_PROFILES, deleteProfile, ensureProfileSet, findProfile, isCurrent, MAX_PROFILES,
-	nextProfileId, normaliseActive, normaliseProfiles, profilePens, profileSetId, switchOnLecture, updateProfile, type CurrentState, type WritingProfile,
+	activeProfile, addProfile, allProfiles, applyPatch, BUILTIN_PROFILES, deleteProfile, dropProfileSet, ensureProfileSet, findProfile, isCurrent, MAX_PROFILES,
+	nextProfileId, newProfileId, normaliseActive, normaliseProfiles, profilePens, profileSetId, switchNoticeKey, switchOnLecture, updateProfile, type CurrentState, type WritingProfile,
 } from "../src/view/writing-profiles";
 
 const state = (over: Partial<CurrentState> = {}): CurrentState => ({
@@ -32,7 +32,7 @@ describe("built-in profiles", () => {
 
 	it("always come first and are never stored", () => {
 		const custom = addProfile([], "Mine", state())!.profiles;
-		expect(allProfiles(custom).map((p) => p.id)).toEqual(["lecture", "study", "profile-1"]);
+		expect(allProfiles(custom).map((p) => p.id)).toEqual(["lecture", "study", custom[0]!.id]);
 		expect(normaliseProfiles(BUILTIN_PROFILES)).toEqual([]);
 	});
 });
@@ -94,9 +94,10 @@ describe("apply", () => {
 describe("custom profiles (save, update, delete)", () => {
 	it("saves the current state under a fresh id", () => {
 		const r = addProfile([], "  My   class  ", state())!;
-		expect(r.id).toBe("profile-1");
+		expect(r.id).toMatch(/^profile-[0-9a-z]{8}$/);
+		expect(normaliseProfiles(r.profiles).map((p) => p.id)).toEqual([r.id]); // the lenient reader keeps it
 		expect(r.profiles[0]).toMatchObject({ name: "My class", stabilization: 4, paper: "dotted" });
-		expect(addProfile(r.profiles, "Second", state())!.id).toBe("profile-2");
+		expect(addProfile(r.profiles, "Second", state())!.id).not.toBe(r.id);
 	});
 
 	it("keeps a pen set reference", () => {
@@ -112,25 +113,152 @@ describe("custom profiles (save, update, delete)", () => {
 	});
 
 	it("updates only the chosen profile, and the built-in ones are not in the stored list to change", () => {
-		let custom = addProfile([], "A", state())!.profiles;
-		custom = addProfile(custom, "B", state())!.profiles;
-		const next = updateProfile(custom, "profile-2", state({ stabilization: 9, paper: "grid" }));
+		const a = addProfile([], "A", state())!;
+		const b = addProfile(a.profiles, "B", state())!;
+		const custom = b.profiles;
+		const next = updateProfile(custom, b.id, state({ stabilization: 9, paper: "grid" }));
 		expect(next[0]).toEqual(custom[0]);
 		expect(next[1]).toMatchObject({ name: "B", stabilization: 9, paper: "grid" });
 		expect(updateProfile(custom, "lecture", state({ stabilization: 9 }))).toEqual(custom);
 	});
 
 	it("deletes one profile", () => {
-		const custom = addProfile(addProfile([], "A", state())!.profiles, "B", state())!.profiles;
-		expect(deleteProfile(custom, "profile-1").map((p) => p.id)).toEqual(["profile-2"]);
-		expect(deleteProfile(custom, "nope")).toHaveLength(2);
+		const a = addProfile([], "A", state())!;
+		const b = addProfile(a.profiles, "B", state())!;
+		expect(deleteProfile(b.profiles, a.id).map((p) => p.id)).toEqual([b.id]);
+		expect(deleteProfile(b.profiles, "nope")).toHaveLength(2);
+	});
+});
+
+describe("profile ids are never reused (review fix)", () => {
+	const seq = (...values: number[]): (() => number) => {
+		let i = 0;
+		return () => values[Math.min(i++, values.length - 1)]!;
+	};
+	const zeros = [0, 0, 0, 0, 0, 0, 0, 0];
+	const halves = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+
+	it("a profile saved after another was deleted gets its own id", () => {
+		let custom: WritingProfile[] = [];
+		const ids: string[] = [];
+		for (const name of ["A", "B", "C"]) {
+			const r = addProfile(custom, name, state())!;
+			custom = r.profiles;
+			ids.push(r.id);
+		}
+		custom = deleteProfile(custom, ids[1]!);
+		const d = addProfile(custom, "D", state())!;
+		expect(ids).not.toContain(d.id);
+		expect(new Set([...ids, d.id]).size).toBe(4);
 	});
 
-	it("reuses a freed id only when nothing uses it", () => {
-		let custom = addProfile([], "A", state())!.profiles;
-		custom = addProfile(custom, "B", state())!.profiles;
-		custom = deleteProfile(custom, "profile-1");
-		expect(addProfile(custom, "C", state())!.id).toBe("profile-3");
+	it("skips an id that is taken, and one whose wp- pen set is still there", () => {
+		const first = newProfileId([], [], seq(...zeros));
+		expect(first).toBe("profile-00000000");
+		const taken: WritingProfile = { id: first, name: "x", pens: [{ tool: "pen", color: "#000000", width: 1 }], stabilization: 1, paper: "grid" };
+		// The random source repeats itself for the first id, then moves on.
+		expect(newProfileId([taken], [], seq(...zeros, ...halves))).toBe("profile-iiiiiiii");
+		expect(newProfileId([], [profileSetId({ id: first })], seq(...zeros, ...halves))).toBe("profile-iiiiiiii");
+	});
+
+	it("still finds a free id when the random source is stuck", () => {
+		const stuck = () => 0;
+		const a = newProfileId([], [], stuck);
+		const custom: WritingProfile[] = [{ id: a, name: "x", pens: [{ tool: "pen", color: "#000000", width: 1 }], stabilization: 1, paper: "grid" }];
+		const b = newProfileId(custom, [], stuck);
+		expect(b).not.toBe(a);
+		expect(normaliseProfiles([{ ...custom[0]!, id: b }])).toHaveLength(1);
+	});
+
+	it("delete a profile, save a new one while no set is active: the new one shows its own pens", () => {
+		const sets = defaultPenSets();
+		const a = addProfile([], "A", state({ pens: [{ tool: "pen", color: "#111111", width: 1 }] }), sets.map((s) => s.id))!;
+		const madeA = ensureProfileSet(sets, a.profiles[0]!, "A")!;
+		// Delete A: its set goes with it.
+		const dropped = dropProfileSet(a.profiles[0]!, [], madeA.sets, {}, {});
+		expect(dropped.sets.some((s) => s.id === madeA.id)).toBe(false);
+		const b = addProfile([], "B", state({ pens: [{ tool: "pen", color: "#222222", width: 1 }] }), dropped.sets.map((s) => s.id))!;
+		const madeB = ensureProfileSet(dropped.sets, b.profiles[0]!, "B")!;
+		expect(profilePens(b.profiles[0]!, madeB.sets)).toEqual([{ tool: "pen", color: "#222222", width: 1 }]);
+		// Settings left behind by an older version: the orphan set is still there, and a new id does not meet it.
+		const c = addProfile(a.profiles, "C", state({ pens: [{ tool: "pen", color: "#333333", width: 1 }] }), madeA.sets.map((s) => s.id))!;
+		expect(profileSetId({ id: c.id })).not.toBe(madeA.id);
+	});
+});
+
+describe("deleting a profile and its pen set (review fix)", () => {
+	const mine = (): WritingProfile => ({ id: "profile-aaaaaaaa", name: "Mine", pens: [{ tool: "pen", color: "#112233", width: 1.5 }], stabilization: 3, paper: "grid" });
+	const withSet = (p: WritingProfile) => ensureProfileSet(defaultPenSets(), p, "Mine")!.sets;
+
+	it("removes the set the profile made", () => {
+		const p = mine();
+		const sets = withSet(p);
+		const r = dropProfileSet(p, [], sets, {}, {});
+		expect(r.kept).toBe(false);
+		expect(r.sets.map((s) => s.id)).toEqual(defaultPenSets().map((s) => s.id));
+	});
+
+	it("keeps it, and says so, while a notebook or a folder is assigned to it or another profile points at it", () => {
+		const p = mine();
+		const sets = withSet(p);
+		const id = profileSetId(p);
+		const other: WritingProfile = { ...mine(), id: "profile-bbbbbbbb", penSetId: id };
+		const cases: Array<[Record<string, string>, Record<string, string>, WritingProfile[]]> = [
+			[{ Maths: id }, {}, []],
+			[{}, { abc: id }, []],
+			[{}, {}, [other]],
+		];
+		for (const [folders, notebooks, remaining] of cases) {
+			const r = dropProfileSet(p, remaining, sets, folders, notebooks);
+			expect(r.kept).toBe(true);
+			expect(r.sets.map((s) => s.id)).toContain(id);
+		}
+	});
+
+	it("never touches a set the user made, nor any other set, and does nothing when the profile never made one", () => {
+		const own = defaultPenSets()[0]!;
+		const p = { ...mine(), penSetId: own.id };
+		const sets = withSet(p);
+		const r = dropProfileSet(p, [], sets, {}, {});
+		expect(r.sets.some((s) => s.id === own.id)).toBe(true);
+		expect(dropProfileSet(mine(), [], defaultPenSets(), {}, {})).toEqual({ sets: defaultPenSets(), kept: false });
+	});
+
+	it("frees a place for the limit: a full list that held profile sets can take a switch again", () => {
+		let sets = defaultPenSets();
+		const made: WritingProfile[] = [];
+		for (let i = 0; sets.length < MAX_PEN_SETS; i++) {
+			const p = { ...mine(), id: `profile-n${i}` };
+			made.push(p);
+			sets = ensureProfileSet(sets, p, `P${i}`)!.sets;
+		}
+		expect(sets.length).toBe(MAX_PEN_SETS);
+		const fresh = { ...mine(), id: "profile-fresh000" };
+		expect(ensureProfileSet(sets, fresh, "Fresh")).toBeNull();
+		const dropped = dropProfileSet(made[0]!, made.slice(1), sets, {}, {});
+		expect(ensureProfileSet(dropped.sets, fresh, "Fresh")).not.toBeNull();
+	});
+});
+
+describe("the switch tells the truth (review fix)", () => {
+	it("says the pens did not change when the list of pen sets is full", () => {
+		let sets: PenSet[] = [];
+		for (let i = 0; i < MAX_PEN_SETS; i++) sets.push({ id: `s${i}`, name: `S${i}`, pens: [{ tool: "pen", color: "#000000", width: 1 }] });
+		const p = BUILTIN_PROFILES[0]!;
+		const full = ensureProfileSet(sets, p, "Lecture");
+		expect(full).toBeNull();
+		expect(switchNoticeKey(full)).toBe("profiles.switchedNoPens");
+		sets = sets.slice(1);
+		const room = ensureProfileSet(sets, p, "Lecture");
+		expect(switchNoticeKey(room)).toBe("profiles.switched");
+		expect(profilePens(p, room!.sets)).toEqual(p.pens);
+	});
+
+	it("has both texts for the new notices", () => {
+		for (const key of ["profiles.switchedNoPens", "profiles.deletedSetKept"] as const) {
+			expect(en[key], key).toContain("{name}");
+			expect(itMessages[key], key).toContain("{name}");
+		}
 	});
 });
 
@@ -151,17 +279,19 @@ describe("reading saved data", () => {
 
 	it("keeps an active id only if it names a profile", () => {
 		const custom = addProfile([], "A", state())!.profiles;
+		const id = custom[0]!.id;
 		expect(normaliseActive("study", custom)).toBe("study");
-		expect(normaliseActive("profile-1", custom)).toBe("profile-1");
+		expect(normaliseActive(id, custom)).toBe(id);
 		expect(normaliseActive("profile-9", custom)).toBe("");
 		expect(normaliseActive(7, custom)).toBe("");
 	});
 
 	it("goes through the plugin settings reader and back", () => {
 		const custom = addProfile([], "A", state())!.profiles;
-		const s = readSettings({ writingProfiles: custom, writingProfileActive: "profile-1", writingProfileOnLecture: true });
+		const id = custom[0]!.id;
+		const s = readSettings({ writingProfiles: custom, writingProfileActive: id, writingProfileOnLecture: true });
 		expect(s.writingProfiles).toEqual(custom);
-		expect(s.writingProfileActive).toBe("profile-1");
+		expect(s.writingProfileActive).toBe(id);
 		expect(s.writingProfileOnLecture).toBe(true);
 		const d = readSettings({});
 		expect(d.writingProfiles).toEqual([]);
@@ -174,10 +304,11 @@ describe("reading saved data", () => {
 describe("cycling and lecture mode", () => {
 	it("cycles Lecture, Study, custom, round", () => {
 		const custom = addProfile([], "A", state())!.profiles;
+		const id = custom[0]!.id;
 		expect(nextProfileId(custom, "")).toBe("lecture");
 		expect(nextProfileId(custom, "lecture")).toBe("study");
-		expect(nextProfileId(custom, "study")).toBe("profile-1");
-		expect(nextProfileId(custom, "profile-1")).toBe("lecture");
+		expect(nextProfileId(custom, "study")).toBe(id);
+		expect(nextProfileId(custom, id)).toBe("lecture");
 	});
 
 	it("switches to Lecture on lecture start only when the setting is on and it is not in use already", () => {

@@ -9,7 +9,7 @@ import { FAVOURITE_SLOTS, validPen, type FavouritePen } from "./favourites";
 import { MAX_PEN_SETS, MAX_SET_NAME, type PenSet } from "./pen-sets";
 
 export interface WritingProfile {
-	/** `lecture` and `study` for the built-in ones, `profile-<n>` otherwise. */
+	/** `lecture` and `study` for the built-in ones, `profile-<random>` for a saved one (older settings have `profile-<n>`). */
 	id: string;
 	name: string;
 	/** One to FAVOURITE_SLOTS pens for the strip. Used when `penSetId` is absent or the set no longer exists. */
@@ -132,10 +132,25 @@ export function profilePens(p: WritingProfile, sets: readonly PenSet[]): Favouri
 	return (set ? set.pens : p.pens).map((x) => ({ ...x }));
 }
 
-export function newProfileId(custom: readonly WritingProfile[]): string {
-	let n = custom.length + 1;
-	while (custom.some((p) => p.id === `profile-${n}`)) n++;
-	return `profile-${n}`;
+const ID_LETTERS = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+/**
+ * A fresh id for a saved profile: `profile-` and eight random letters or digits. An id is never reused (a profile deleted earlier left
+ * its `wp-<id>` pen set behind in old settings, and an id taken again would show that set's pens instead of the ones just saved), so it
+ * is not derived from the list. `penSetIds`: the ids of the pen sets that exist; an id whose `wp-` set is among them is not given out.
+ */
+export function newProfileId(custom: readonly WritingProfile[], penSetIds: readonly string[] = [], random: () => number = Math.random): string {
+	const taken = new Set<string>([...BUILTIN_IDS, ...custom.map((p) => p.id)]);
+	for (let attempt = 0; attempt < 1000; attempt++) {
+		let tail = "";
+		for (let i = 0; i < 8; i++) tail += ID_LETTERS[Math.min(ID_LETTERS.length - 1, Math.floor(random() * ID_LETTERS.length))]!;
+		const id = `profile-${tail}`;
+		if (!taken.has(id) && !penSetIds.includes(profileSetId({ id }))) return id;
+	}
+	// A random source that only repeats itself: count up until a free id turns up.
+	let n = 1;
+	while (taken.has(`profile-x${n}`) || penSetIds.includes(profileSetId({ id: `profile-x${n}` }))) n++;
+	return `profile-x${n}`;
 }
 
 export interface CurrentState {
@@ -152,10 +167,10 @@ function fromState(id: string, name: string, s: CurrentState): WritingProfile {
 }
 
 /** "Custom": a new profile saved from the current state, or null (empty name, or the limit is reached). */
-export function addProfile(custom: readonly WritingProfile[], rawName: string, s: CurrentState): { profiles: WritingProfile[]; id: string } | null {
+export function addProfile(custom: readonly WritingProfile[], rawName: string, s: CurrentState, penSetIds: readonly string[] = []): { profiles: WritingProfile[]; id: string } | null {
 	const name = cleanProfileName(rawName);
 	if (!name || custom.length >= MAX_PROFILES || s.pens.length === 0) return null;
-	const id = newProfileId(custom);
+	const id = newProfileId(custom, penSetIds);
 	return { profiles: [...custom.map(cloneProfile), fromState(id, name, s)], id };
 }
 
@@ -181,7 +196,7 @@ export function switchOnLecture(enabled: boolean, s: ProfileSettings): boolean {
 }
 
 /** Id of the pen set that holds the pens of a profile that has no pen set of its own. */
-export function profileSetId(p: WritingProfile): string {
+export function profileSetId(p: Pick<WritingProfile, "id">): string {
 	return `wp-${p.id}`.slice(0, 40);
 }
 
@@ -197,4 +212,24 @@ export function ensureProfileSet(sets: readonly PenSet[], p: WritingProfile, dis
 	if (copy.length >= MAX_PEN_SETS) return null;
 	copy.push({ id, name: displayName.slice(0, MAX_SET_NAME), pens: p.pens.slice(0, FAVOURITE_SLOTS).map((x) => ({ ...x })) });
 	return { sets: copy, id };
+}
+
+/**
+ * What deleting a profile does to its pen set. The set the profile made for itself (`wp-<id>`) goes with it, so it does not pile up
+ * against the limit or come back under a new profile; but it stays while a notebook or a folder is assigned to it or another profile
+ * points at it (`kept`). A pen set the user made, and any other set, is never touched. `remaining`: the profiles after the deletion.
+ */
+export function dropProfileSet(
+	deleted: WritingProfile, remaining: readonly WritingProfile[], sets: readonly PenSet[], folders: Readonly<Record<string, string>>, notebooks: Readonly<Record<string, string>>,
+): { sets: PenSet[]; kept: boolean } {
+	const copy = sets.map((s) => ({ id: s.id, name: s.name, pens: s.pens.map((x) => ({ ...x })) }));
+	const id = profileSetId(deleted);
+	if (!copy.some((s) => s.id === id)) return { sets: copy, kept: false };
+	const used = Object.values(folders).includes(id) || Object.values(notebooks).includes(id) || remaining.some((p) => p.penSetId === id);
+	return used ? { sets: copy, kept: true } : { sets: copy.filter((s) => s.id !== id), kept: false };
+}
+
+/** The notice for a switch: the profile is in force, but when the pen set list was full the pens on the strip are what they were. */
+export function switchNoticeKey(made: { id: string } | null): "profiles.switched" | "profiles.switchedNoPens" {
+	return made ? "profiles.switched" : "profiles.switchedNoPens";
 }
