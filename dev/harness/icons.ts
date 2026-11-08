@@ -3,6 +3,8 @@
  * for the harness (24 × 24, 2 px strokes); not Lucide's artwork. Unknown names fall back to two letters.
  */
 const P: Record<string, string> = {
+	// 0.22 syncprov: the cloud sign-in dialog
+	"cloud": "M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.1 4.5 4.5 0 0 0 7 18z",
 	// 0.16 merge: move to page, exact position, add to notebook (inbox menu)
 	"arrow-right-to-line": "M17 12H3 M11 6l6 6-6 6 M21 3v18",
 	"crosshair": "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M22 12h-4 M6 12H2 M12 6V2 M12 22v-4",

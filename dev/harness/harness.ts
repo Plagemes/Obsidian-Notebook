@@ -73,6 +73,7 @@ import { checkVdiff } from "./vdiff-check";
 import { dropApi } from "./dropfiles-check";
 import { checkTask } from "./task-check";
 import { checkQr } from "./qr-check";
+import { checkSyncprov } from "./syncprov-check";
 import { checkAnnotate } from "./annotate-check";
 import { checkInbox, inboxShot } from "./inbox-check";
 import { checkHints } from "./hints-check";
@@ -2162,6 +2163,8 @@ harnessApi.checkPagetime = () => checkPagetime({ view, stage, penStroke, setTool
 // 0.22 pens (#35): its own check (dev/harness/pens-check.ts).
 harnessApi.checkPens = () => checkPens({ view, stage, penStroke, setTool, openOptions, frames, errors, notices });
 harnessApi.inboxShot = (state: "list" | "close") => inboxShot(state);
+// 0.22 syncprov (#126): the cloud sign-in dialog (dev/harness/syncprov-check.ts).
+harnessApi.checkSyncprov = () => checkSyncprov({ errors, notices });
 harnessApi.checkLayout = checkLayout; // 0.14 layout
 harnessApi.home2State = (state: string) => (libraryHarness ? home2State(libraryHarness, state) : false);
 // 0.14 sections: the dynamic sections (sections-check.ts).
@@ -2198,6 +2201,7 @@ async function main(): Promise<void> {
 	// 0.12.1: doc=plugin starts the whole plugin on its own stub app (plugin-check.ts); no notebook is opened.
 	if (params.get("doc") === "inbox") return;
 	if (params.get("doc") === "plugin" || params.get("doc") === "hints" || params.get("doc") === "daily" || params.get("doc") === "backups" || params.get("doc") === "synccore" ||params.get("doc") === "task" || params.get("doc") === "lookup" || params.get("doc") === "bookindex" || params.get("doc") === "qr"|| params.get("doc") === "annotate" || params.get("doc") === "tplnote" || params.get("doc") === "snapshot" || params.get("doc") === "vdiff") return;
+	if (params.get("doc") === "syncprov") return; // 0.22 syncprov: a dialog only, no notebook
 	await seed();
 	await open();
 	if (params.get("check") === "1") {
