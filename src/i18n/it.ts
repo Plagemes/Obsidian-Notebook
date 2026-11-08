@@ -3955,9 +3955,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"backup.status.dueNow": "Il prossimo backup è dovuto.",
 	// 0.22 colormeaning
 	"settings.meanings": "Significato dei colori",
-	"settings.meanings.desc": "Dì cosa significa ogni colore dell'inchiostro (rosso = definizione, blu = esempio). Serve a filtrare una pagina per significato e a raccogliere in una nota l'inchiostro di ogni significato.",
+	"settings.meanings.desc": "Cosa significa ogni colore: per filtrare la pagina e fare una raccolta.",
 	"settings.meaningTolerance": "Riconoscimento dei colori",
-	"settings.meaningTolerance.desc": "Quanto il colore di un tratto deve essere vicino a un colore della legenda per valere come quel significato.",
+	"settings.meaningTolerance.desc": "Quanto un colore deve essere vicino a quello della legenda.",
 	"settings.meaningTolerance.strict": "Rigido",
 	"settings.meaningTolerance.normal": "Normale",
 	"settings.meaningTolerance.loose": "Largo",

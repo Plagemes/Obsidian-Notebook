@@ -3953,9 +3953,9 @@ export const en = {
 	"backup.status.dueNow": "The next backup is due.",
 	// 0.22 colormeaning
 	"settings.meanings": "Colour meanings",
-	"settings.meanings.desc": "Say what each ink colour means (red = definition, blue = example). Used to filter a page by meaning and to collect the ink of each meaning in a note.",
+	"settings.meanings.desc": "What each ink colour means: used to filter a page and to make a digest.",
 	"settings.meaningTolerance": "Colour matching",
-	"settings.meaningTolerance.desc": "How close a stroke's colour must be to a legend colour to count as that meaning.",
+	"settings.meaningTolerance.desc": "How close a colour must be to a legend colour.",
 	"settings.meaningTolerance.strict": "Strict",
 	"settings.meaningTolerance.normal": "Normal",
 	"settings.meaningTolerance.loose": "Loose",

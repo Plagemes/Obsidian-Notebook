@@ -108,7 +108,7 @@ export class MeaningTools {
 		} else this.pill.hide();
 	}
 
-	openLegend(): void {
+	openLegend(globalOnly = false): void {
 		const h = this.host;
 		const id = h.docId();
 		const store = h.store();
@@ -117,7 +117,7 @@ export class MeaningTools {
 			tolerance: () => this.tolerance(),
 			globalLegend: () => h.settings().colourMeanings,
 			setGlobal: (legend) => h.setGlobal(legend),
-			...(id && store ? { notebook: { title: h.file()?.basename ?? "", get: () => store.get(id), set: (legend: Meaning[] | null) => store.set(id, legend) } } : {}),
+			...(id && store && !globalOnly ? { notebook: { title: h.file()?.basename ?? "", get: () => store.get(id), set: (legend: Meaning[] | null) => store.set(id, legend) } } : {}),
 			changed: () => this.refresh(),
 		}).open();
 	}
@@ -127,7 +127,7 @@ export class MeaningTools {
 		new MeaningFilterModal({
 			app: this.host.app, legend, counts: meaningCounts(this.host.pages(), legend, this.tolerance()), shown: this.shown,
 			choose: (index) => this.choose(index),
-			define: () => this.openLegend(),
+			define: () => this.openLegend(true),
 		}).open();
 	}
 

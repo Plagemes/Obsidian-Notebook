@@ -93,11 +93,24 @@ interface ColoursView extends HarnessView {
 	openMeaningDigest(): void;
 }
 
-export async function checkColours(api: ColoursCheckApi, editorLast = false): Promise<{ ok: boolean; results: CheckResult[]; errors: string[]; notices: string[]; env: Record<string, unknown> }> {
+type CheckOutcome = { ok: boolean; results: CheckResult[]; errors: string[]; notices: string[]; env: Record<string, unknown> };
+
+/** The check; a crash in the middle is reported as a failed result after the results so far (not as a bare console error). */
+export async function checkColours(api: ColoursCheckApi, editorLast = false): Promise<CheckOutcome> {
+	const results: CheckResult[] = [];
+	try {
+		return await runColours(api, editorLast, results);
+	} catch (e) {
+		results.push({ name: "the check ran to the end", ok: false, detail: (e as Error).stack ?? String(e) });
+		return { ok: false, results, errors: api.errors, notices: api.notices, env: {} };
+	}
+}
+
+async function runColours(api: ColoursCheckApi, editorLast: boolean, results: CheckResult[]): Promise<CheckOutcome> {
 	const { frames } = api;
 	const v = api.view as ColoursView;
 	const app = v.app;
-	const results: CheckResult[] = [];
+
 	const add = (name: string, ok: boolean, detail = "") => results.push({ name, ok, detail });
 	const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
 	const NOTE = "Notebooks/Colours — Colours.md";
@@ -112,6 +125,7 @@ export async function checkColours(api: ColoursCheckApi, editorLast = false): Pr
 	};
 	const closeModals = async (): Promise<void> => {
 		for (const m of document.querySelectorAll<HTMLElement>(".modal")) m.querySelector<HTMLButtonElement>(".nb-modal-foot button:last-child")?.click();
+		document.querySelectorAll(".harness-modal-container").forEach((c) => { if (!c.querySelector(".modal")) c.remove(); });
 		await frames(2);
 	};
 	const pill = (): HTMLElement | null => document.querySelector<HTMLElement>(".nb-meaning-pill");
@@ -163,11 +177,11 @@ export async function checkColours(api: ColoursCheckApi, editorLast = false): Pr
 	await frames(3);
 	const editor = modal(/Colour meanings/);
 	lift(editor);
-	add("it opens the legend editor", !!editor, "");
-	add("the editor offers the usual meanings", /Add the usual meanings/.test(editor?.textContent ?? ""), "");
+	add("it opens the legend editor (the global one)", !!editor && !editor.querySelector(".nb-modal-check"), "");
+	add("the editor offers the usual meanings", /Add the usual meanings/.test(editor?.textContent ?? ""), `${document.querySelectorAll(".modal").length} modals: ${(editor?.textContent ?? "").slice(0, 200)}`);
 	[...(editor?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => /Add the usual meanings/.test(b.textContent ?? ""))?.click();
 	await frames(3);
-	add("they are saved at once", v.host.settings.colourMeanings.length === 3 && v.host.settings.colourMeanings[0]!.label === "Definition", JSON.stringify(v.host.settings.colourMeanings));
+	add("they are saved at once", v.host.settings.colourMeanings.length === 3 && v.host.settings.colourMeanings[0]?.label === "Definition", JSON.stringify(v.host.settings.colourMeanings));
 	add("the editor lists a row per meaning", (editor?.querySelectorAll(".nb-colrow").length ?? 0) === 3, "");
 	// Rename the first meaning in the field.
 	const first = editor?.querySelector<HTMLInputElement>('[data-key="meaning-label:0"]');
@@ -226,7 +240,7 @@ export async function checkColours(api: ColoursCheckApi, editorLast = false): Pr
 	await frames(2);
 	const file = [...adapter.files.keys()].find((k) => k.includes("_meta/meanings-"));
 	add("it is stored beside the notebooks, in this device's file", !!file && (adapter.files.get(file) ?? "").includes("Theorem"), file ?? "no file");
-	add("the global legend is unchanged", v.host.settings.colourMeanings[0]!.label === "Definition", "");
+	add("the global legend is unchanged", v.host.settings.colourMeanings[0]?.label === "Definition", "");
 	await closeModals();
 	await chooseMeaning(0);
 	add("the filter uses the notebook's legend", /Showing only: Theorem/.test(pill()?.textContent ?? ""), pill()?.textContent ?? "");
@@ -280,6 +294,7 @@ export async function checkColours(api: ColoursCheckApi, editorLast = false): Pr
 		lift(modal(/Colour meanings/));
 	} else {
 		await chooseMeaning(0);
+		document.querySelectorAll(".harness-modal-container").forEach((c) => c.remove());
 	}
 	await frames(3);
 	return { ok: results.every((r) => r.ok), results, errors: api.errors, notices: api.notices, env: { pictures: pictures().length } };
