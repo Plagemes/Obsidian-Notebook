@@ -120,7 +120,10 @@ export async function checkBookmarks(api: BookmarksCheckApi): Promise<{ ok: bool
 	add("two pages of this notebook", svc.count() === 2);
 
 	// --- pages of other notebooks, a page that is gone, a notebook that is missing, a notebook that moved ---
-	await store.add({ docId: "doc-new", path: "Notebooks/New.notebook", pageId: "formulas-1", num: 1, label: "Formulas" });
+	// A bookmark names the notebook by its real id: the file at a path is trusted only when it has that id.
+	const newText = await appRef!.vault.read(appRef!.vault.getFileByPath("Notebooks/New.notebook")!);
+	const newParsed = parse(readNotebookText("notebook", newText));
+	await store.add({ docId: newParsed.ok ? newParsed.doc.id : "", path: "Notebooks/New.notebook", pageId: "formulas-1", num: 1, label: "Formulas" });
 	await store.add({ docId: docId, path: "Notebooks/Outline.notebook", pageId: "gone-page", num: 2, label: "" });
 	await store.add({ docId: "doc-nowhere", path: "Notebooks/Lost/Gone.notebook", pageId: "x", num: 4, label: "Lab report" });
 	await store.add({ docId, path: "Notebooks/Moved/Outline.notebook", pageId: (v.document as unknown as { pages: Array<{ id: string }> }).pages[4]!.id, num: 5, label: "Moved copy" });

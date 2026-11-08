@@ -31,7 +31,7 @@ const button = (): HTMLButtonElement | null => document.querySelector<HTMLButton
 async function written(api: NavadaptCheckApi, pages = 6): Promise<NavView> {
 	await api.open("navadapt");
 	const v = api.view as NavView;
-	v.app.saveLocalStorage(NAV_MODE_KEY, {});
+	v.app.saveLocalStorage(NAV_MODE_KEY, []);
 	while (v.document.pages.length < pages) v.addPage();
 	await api.frames(3);
 	v.document.pages.forEach((p, i) => {
@@ -67,14 +67,14 @@ export async function checkNavadapt(api: NavadaptCheckApi): Promise<{ ok: boolea
 		b?.click();
 		await api.frames(3);
 		add("first tap: Thumbnails (usual layout for a written notebook)", !panel()?.classList.contains("is-list") && !panel()?.classList.contains("is-large"));
-		const stored = v.app.loadLocalStorage(NAV_MODE_KEY) as Record<string, string> | null;
-		add("the choice is remembered for this notebook", stored?.[v.document.id] === "thumbs", JSON.stringify(stored));
+		const stored = v.app.loadLocalStorage(NAV_MODE_KEY) as Array<[string, string]> | null;
+		add("the choice is remembered for this notebook", (stored ?? []).some((r) => r[0] === v.document.id && r[1] === "thumbs"), JSON.stringify(stored));
 		b?.click();
 		await api.frames(3);
 		add("second tap: List", !!panel()?.classList.contains("is-list"));
 		b?.click();
 		await api.frames(3);
-		add("third tap: back to Auto (nothing stored)", !(v.app.loadLocalStorage(NAV_MODE_KEY) as Record<string, string>)[v.document.id] && !!panel()?.classList.contains("is-list"));
+		add("third tap: back to Auto (nothing stored)", !((v.app.loadLocalStorage(NAV_MODE_KEY) as Array<[string, string]> | null) ?? []).some((r) => r[0] === v.document.id) && !!panel()?.classList.contains("is-list"));
 		add("tapping a row goes to its page", (() => { items()[2]?.click(); return true; })());
 
 		// On a phone the drawer closes after a jump: open it again.

@@ -31,6 +31,7 @@
 
 ### handin
 - **Hand in… (#334).** A dialog (notebook menu, Export & share sheet, command palette) that exports chosen pages as one PDF with a generated cover page first: your name (remembered on this device only), the course (prefilled from the timetable class linked to the notebook), the assignment title and the date. A grid of page pictures with checkboxes chooses the pages (the page in view at first; All / None). Below it a live pre-flight lists blank pages among the chosen ones and what is still open: gaps, questions and homework not done, unticked checkboxes, notes that say TODO and empty template boxes. Each row jumps to its page; *Leave out the blank pages* unticks them; the main button turns into *Export anyway* while anything is open. The PDF is the ordinary export, saved next to the notebook as `<notebook> hand-in.pdf` (never over an existing file), recorded as plugin-written, and offered to the share sheet when the device has one. No format change.
+
 ### Review fixes
 - **Long-press help never presses the button.** The click that ends a long press is swallowed by a one-shot guard armed when the bubble shows, not by a clock from that moment: a finger held for two seconds on Delete, Cut or Clear page no longer runs it when lifted, and a quick tap on the same button right after is never swallowed.
 - **Join broken strokes.** Ink bound to a graph is never joined with ink bound to another graph or with free ink (the joined stroke would be clipped to, or leave, the graph frame).
