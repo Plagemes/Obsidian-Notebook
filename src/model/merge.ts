@@ -141,6 +141,9 @@ export function strokeContentKey(s: Stroke): string {
 	if (s.hidden) key.push(true);
 	// v20: a nib angle differs (a stroke without one is the same as one at the default angle only when the angle is absent on both).
 	if (s.nib !== undefined) key.push(`nib${s.nib}`);
+	// v22: a fill or a line style makes a different shape.
+	if (s.fill !== undefined) key.push(`fill${s.fill}${s.fillTint ? "t" : ""}`);
+	if (s.dash !== undefined) key.push(`dash${s.dash}`);
 	return JSON.stringify(key);
 }
 

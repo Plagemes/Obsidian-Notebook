@@ -56,6 +56,7 @@ import { capturePosition, positionFromState, restoreViewport, type SavedPosition
 import { captureRegion, restoreRegion, type ViewRegion } from "../ink/view-region";
 import { PageMode } from "./page-mode";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
+import { newShapeStyle } from "../ink/shape-style";
 import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
 import { backgroundRect } from "../model/margins";
 import {
@@ -80,6 +81,8 @@ import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-m
 import { MakeTaskModal, runMakeTask, type TaskRequest } from "./selection-task";
 import { runInsertIntoNote } from "./selection-insert";
 import { AreaExportModal } from "./export-area";
+import { HandInModal } from "./hand-in";
+import { suggestedCourse } from "../timetable/current";
 import { taskCropRect } from "../model/selection-task";
 import { Mentions } from "./mentions";
 import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
@@ -103,6 +106,7 @@ import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { QuickTabsStrip } from "./quick-tabs";
 import type { QuickTabsService, QuickTabsViewApi } from "./quick-tabs-service";
+import type { BookmarksService } from "./bookmarks-service";
 import { PageNavigator } from "./navigator";
 import { NotebookMapCache } from "../model/notebook-map";
 import { NotebookMapModal } from "./notebook-map-modal";
@@ -208,6 +212,7 @@ import { ColourTools, type PageInk } from "./colour-tools";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
 import { pageKindOf } from "../ui/page-kind";
+import { loadNavModes, modeOf, saveNavMode } from "../ui/nav-adapt";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { kindTool, strokeNib } from "../ink/pen-kinds";
@@ -247,8 +252,8 @@ const WORD_TAP_PX = 12;
 const NARROW_PX = 720;
 /** PDF pages are rendered at this scale (device px per pt) for thumbnails of pages not in view. */
 const THUMB_PDF_SCALE = 0.75;
-/** Page thumbnails are this many CSS px wide. */
-const THUMB_CSS_WIDTH = 120;
+/** Page thumbnails are at most this many CSS px wide (the panel asks for 60, 120 or, in the large layout, 240). */
+const THUMB_CSS_WIDTH = 240;
 
 export interface NotebookHost {
 	settings: NotebookSettings;
@@ -262,6 +267,8 @@ export interface NotebookHost {
 	nav?: NavController;
 	/** 0.18 (#227): quick tabs, pages pinned in a notebook (view/quick-tabs-service.ts). Optional: absent in tests. */
 	quickTabs?: QuickTabsService;
+	/** 0.24 (#265): global bookmarks, pages of different notebooks in one list (view/bookmarks-service.ts). Optional: absent in tests. */
+	bookmarks?: BookmarksService;
 	/** 0.22 (#101): per-notebook colour meanings (library/meanings-store.ts). Optional: absent in tests. */
 	meanings?: MeaningsStore;
 	/** Roadmap O15: the page in view or the save state of `view` changed (the status bar item follows the active view). Optional. */
@@ -708,6 +715,12 @@ export class NotebookView extends FileView {
 			selectionMenu: (ids, evt) => openPageOpsMenu(this.pageOpsHost(), ids, evt),
 			openMap: () => this.openNotebookMap(),
 			setLocked: (pageId, value) => this.setLockedById(pageId, value),
+			// 0.24 (#414): the layout chosen for this notebook, kept on this device only.
+			layoutMode: () => modeOf(loadNavModes(this.app), this.session?.doc?.id ?? null),
+			setLayoutMode: (mode) => {
+				const id = this.session?.doc?.id;
+				if (id) saveNavMode(this.app, id, mode);
+			},
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
@@ -2181,6 +2194,19 @@ export class NotebookView extends FileView {
 		}, { scope: scope === "selection" && useSel ? "selection" : "page" }).open();
 	}
 
+	/** 0.24 (#334): "Hand in…": pages as a PDF with a cover, after a check for blank pages and open placeholders. */
+	openHandIn(): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file || doc.pages.length === 0) return;
+		new HandInModal({
+			app: this.app, file, media: this.media, options: () => this.exportOptions(),
+			pages: () => this.renderPagesOf(doc), picked: [], current: this.currentPageIndex(),
+			course: suggestedCourse(file.path) ?? "",
+			goToPage: (index) => this.goToPage(index),
+		}).open();
+	}
+
 	/** wave 0.9 (382): the dialog of the Markdown export (folder, resolution). */
 	openMarkdownExport(): void {
 		const doc = this.session?.doc;
@@ -3004,6 +3030,7 @@ export class NotebookView extends FileView {
 				headings: this.host.settings.outlineHeadings, markers: this.host.settings.outlineMarkers, pdf: this.host.settings.outlinePdf === "merged",
 			}),
 			pdfOutlineMode: () => this.host.settings.outlinePdf,
+			path: () => this.file?.path ?? null,
 			// 0.16 (#46): the outlines already known; the others are read in the background and the panel refreshed.
 			pdfOutlines: () => {
 				const assets = this.session?.doc?.assets;
@@ -3432,6 +3459,11 @@ export class NotebookView extends FileView {
 		void this.host.quickTabs?.togglePin(this.quickApi());
 	}
 
+	/** 0.24 (#265): adds the page in view to the global bookmarks, or removes it when it is there (the page sheet and the command). */
+	toggleGlobalBookmark(): void {
+		void this.host.bookmarks?.toggle(this.quickApi());
+	}
+
 	/** "Pin a page from another notebook…" */
 	pinQuickTabFromOther(): void {
 		this.host.quickTabs?.pinFromOther(this.quickApi());
@@ -3704,10 +3736,12 @@ export class NotebookView extends FileView {
 				lockedElements: lockedElementsOf(page).length,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
 				...(this.host.quickTabs ? { quickTab: this.host.quickTabs.isPinnedAt(this.quickApi(), index) } : {}),
+				...(this.host.bookmarks ? { globalBookmark: this.host.bookmarks.isBookmarkedAt(this.quickApi(), index) } : {}),
 				kind: pageKindOf({ background: page.background?.kind ?? "none", paper: page.paper.kind, width: page.width, height: page.height }),
 			} : null,
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
 			lecture: this.lectureMode?.on ?? false,
+			presenting: this.presenting,
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false, selectText: this.pdfText?.active ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
@@ -5528,7 +5562,7 @@ export class NotebookView extends FileView {
 		if (!page) return;
 		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.tools.penWidth, this.shiftDown);
 		if (points.length < 2) return;
-		const stroke = freezeStroke(createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"));
+		const stroke = freezeStroke({ ...createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"), ...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine) });
 		this.addStrokes(shape.pageIndex, page, [stroke], false);
 	}
 
@@ -5544,9 +5578,10 @@ export class NotebookView extends FileView {
 	private pushShapeLive(): void {
 		const s = this.shapeDrag;
 		if (!s) return;
+		const points = shapePoints(this.tools.shapeKind, s.a, s.b, this.tools.penWidth, this.shiftDown);
 		this.renderer?.setLive({
-			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.tools.penWidth,
-			points: shapePoints(this.tools.shapeKind, s.a, s.b, this.tools.penWidth, this.shiftDown), predicted: [],
+			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.tools.penWidth, points, predicted: [],
+			...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine),
 		});
 	}
 

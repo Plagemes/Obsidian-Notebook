@@ -25,6 +25,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // that closes numbered items is picked up from the CHANGELOG ("roadmap N") without a change here.
 export const RELEASE_SETS = [
 	["0.23.0", "264 280 293 294 249 420 416 314"],
+	["0.24.0", "37 313 424 429 411 414 265 334"],
 	["0.22.0", "35 126 179 101 206 53 210"],
 	["0.21.0", "217 127 167 164 187 154 225 212"],
 	["0.20.0", "39 30 79 94 102 107 118 121"],

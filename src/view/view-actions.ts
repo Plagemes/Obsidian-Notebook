@@ -176,6 +176,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"select-by-style": (v) => v.arrangeTools?.pickStyle(),
 	"selection-similar": (v) => v.arrangeTools?.menu("similar"),
 	"selection-cleanup": (v) => v.selectionTools?.cleanUp(),
+	"selection-join": (v) => v.selectionTools?.joinBroken(),
 	// 0.15 (241): drawings with states
 	"selection-part": (v) => v.stateTools?.makePartFromSelection(),
 	"states-toggle": (v) => v.stateTools?.toggle(),
@@ -301,6 +302,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.16 (#124): lock a finished page. The history refuses every edit of a locked page; these only flip the flag (one undo step).
 	"page-quick-tab": (v) => v.togglePageQuickTab(),
 	"page-quick-tab-other": (v) => v.pinQuickTabFromOther(),
+	"page-global-bookmark": (v) => v.toggleGlobalBookmark(),
 	"page-lock": onPage((v, p) => void v.setPageLocked(p, true)),
 	"page-unlock": onPage((v, p) => void v.setPageLocked(p, false)),
 	"page-lock-toggle": onPage((v, p) => void v.setPageLocked(p, !p.locked)),
@@ -425,6 +427,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"export-png": (v) => v.openExportDialog(undefined, "png"),
 	// 0.23 (#280): written area and selection as transparent pictures
 	"export-area": (v) => v.openAreaExport("page"),
+	"hand-in": (v) => v.openHandIn(),
 	"selection-export-area": (v) => v.openAreaExport("selection"),
 	"print": (v) => {
 		if (canPrint()) v.openExportDialog(undefined, "print");

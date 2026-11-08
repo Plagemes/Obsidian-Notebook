@@ -449,11 +449,11 @@ describe("registry and bar placement (wave 0.10)", () => {
 	const idsOf = (c: UiContext, kind: "all" | "page" = "all") =>
 		buildSheet(c, { kind, usage: {}, now: 0, label: (a) => a.id }).flatMap((s) => s.actions.map((a) => a.id));
 
-	it("puts select similar, align, clean up (0.23) and transform on the second row of a selection bar, within the width", () => {
+	it("puts select similar, align, clean up (0.23), join broken strokes (0.24) and transform on the second row of a selection bar, within the width", () => {
 		for (const width of [360, 800, 1280]) {
 			const bar = contextBar(sel(3, 1), width, {}, 0)!;
 			expect(bar.kind).toBe("selection");
-			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-transform-menu"]);
+			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu"]);
 			// The first row keeps its basics (the layer moves stay where wave 0.9 put them).
 			expect(bar.actions).toContain("selection-copy");
 		}
@@ -472,13 +472,27 @@ describe("registry and bar placement (wave 0.10)", () => {
 		const withReaction = baseContext({ tool: "lasso", selection: { strokes: 3, elements: 1, images: 0, reactions: 1 } });
 		for (const width of [360, 800, 1280]) {
 			const bar = contextBar(withReaction, width, {}, 0)!;
-			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-transform-menu"]);
+			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu"]);
 			// On a narrow bar the chem action overflows into the sheet (priority 57); from tablet width it sits on the first row.
 			if (width >= 800) expect(bar.actions, String(width)).toContain("chem-balance");
 			expect(bar.second).not.toContain("chem-balance");
 		}
 		expect(contextBar(sel(3, 1), 800, {}, 0)!.actions).not.toContain("chem-balance");
 		expect(contextBar(sel(0, 1, 1), 800, {}, 0)!.second).not.toContain("selection-cleanup");
+	});
+
+	it("offers Join broken strokes (0.24) from two strokes on, on the second row, in the sheet, with a command and both texts", () => {
+		expect(contextBar(sel(1), 800, {}, 0)!.second).not.toContain("selection-join");
+		expect(contextBar(sel(0, 3, 0), 800, {}, 0)!.second).not.toContain("selection-join");
+		for (const width of [360, 800, 1280]) expect(contextBar(sel(2), width, {}, 0)!.second, String(width)).toContain("selection-join");
+		expect(idsOf(sel(2))).toContain("selection-join");
+		expect(idsOf(sel(1))).not.toContain("selection-join");
+		const def = ACTIONS.find((a) => a.id === "selection-join")!;
+		expect(def.command).toBe("command.joinStrokes");
+		for (const key of [def.label, String(def.command), "joinstrokes.done", "joinstrokes.nothing"]) {
+			expect(enSrc, key).toContain(`"${key}"`);
+			expect(itSrc, key).toContain(`"${key}"`);
+		}
 	});
 
 	it("lists every operation in the All actions sheet with a selection, and none of them without one", () => {

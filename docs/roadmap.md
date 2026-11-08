@@ -136,7 +136,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 ### Advanced writing
 35. **P1** 🧪 New pen types: fountain pen (angle-dependent width), brush, marker. (0.22: pen type row and nib angle in the pen options, format v20; marker is 85% opaque, in stroke order.)
 36. **P1** 🧪 Auto-scroll while writing near the bottom of the screen.
-37. **P2** Filled shapes and dashed or dotted lines.
+37. **P2** 🧪 Filled shapes and dashed or dotted lines.
 38. **P2** 🧪 Align and distribute the selection.
 39. **P2** 🧪 Group elements and lock elements (for example a background image that must not move). (0.20, format v18: an optional `group` on strokes and elements and `locked` on elements. *Group* / *Ungroup* / *Lock* in the selection bar; a tap or the lasso on one member picks the whole group; the lasso, a tap and the area eraser skip a locked element; a *Locked · Unlock* chip on a tap and *Locked elements…* in the page menu unlock.)
 40. **P2** Layers: annotations on a layer separate from the PDF, which can be hidden or locked.
@@ -352,7 +352,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - Conflict-free by design: every stroke has a unique id, so concurrent edits never clash; at the end everything lands in the host's notebook with the author of each stroke.
     - Asynchronous too: people without Obsidian annotate in the web viewer (#164) and send back an annotation package that is imported with one tap; or the notebook is shared on Drive with conflict merging (#122).
 166. **P3** InkML export (open standard for digital ink).
-167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20; 0.23: `notebook-v21.schema.json` for format 21.)
+167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20; 0.23: `notebook-v21.schema.json` for format 21; 0.24: `notebook-v22.schema.json` for format 22.)
 
 ### E. Automation
 168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.
@@ -502,7 +502,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 262. **P2** Turn a region into an atomic note (Zettelkasten style), with the ink image and a link back. — superseded by the Zettelkasten system (Z1–Z12) below.
 263. **P2** Links to a precise region of a page, not only to the page.
 264. **P2** 🧪 Saved views: a named region + zoom, recalled instantly. (0.23, format v21: the optional notebook-level `views` list; *Save current view…* and *Go to saved view…* from the sheet, the notebook menu and the palette; rename, reorder, update, remove, all undoable; a view of a deleted page is shown as missing.)
-265. **P2** Global bookmarks: pages from different notebooks in one list.
+265. **P2** 🧪 Global bookmarks: pages from different notebooks in one list.
 266. **P2** Planner pages showing Obsidian tasks and due dates on top.
 267. **P2** Linked images: if the file in the vault changes (e.g. a plot exported from Python), the image on the page updates.
 268. **P3** Table linked to a CSV in the vault, updating itself.
@@ -600,7 +600,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 312. **P2** Virtual notebook: gathers pages from several notebooks by tag or rule without copying them; browse and export it like a real notebook.
 
 ### Writing and pen
-313. **P2** Automatic joining of broken strokes caused by tiny pen dropouts.
+313. **P2** 🧪 Automatic joining of broken strokes caused by tiny pen dropouts (an explicit selection action, *Join broken strokes*; nothing is joined while writing).
 314. **P2** 🧪 Cleanup of hooks and stray dots at the start and end of strokes.
 315. **P2** Thumb bar: a finger of the free hand switches tools while the pen keeps writing.
 316. **P2** Editable Bézier curves with handles, for precise drawings.
@@ -627,7 +627,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### Thesis, assignments, sharing
 332. **P3** Thesis mode: chapters, numbered figures, bibliography, single export.
 333. **P3** Export numbered figures as separate high-resolution files.
-334. **P2** Assignment hand-in: export chosen pages as a PDF with a cover (name, course, date) after checking blank pages and open placeholders.
+334. **P2** 🧪 Assignment hand-in: export chosen pages as a PDF with a cover (name, course, date) after checking blank pages and open placeholders.
 335. **P3** "For correction" export: wide margins and line numbers for the teacher.
 336. **P3** Export pages as 16:9 slides.
 337. **P3** Timelapse video or GIF of the writing, from the replay feature.
@@ -736,10 +736,10 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 408. **P1** 🧪 Notebook map with states: open questions, gaps and homework per page (extends #223 from one lecture to the whole notebook).
 409. **P2** Suggested paper for a new page, from the previous pages and the course.
 410. **P1** 🧪 Smart "+": the 2–3 most likely new pages (same paper, exercise page, slide page) in one tap.
-411. **P2** Tags suggested from context (course, content, markers).
+411. **P2** 🧪 Tags suggested from context (course, content, markers).
 412. **P3** Page panel that shows only what that page has (hides empty sections and actions that do not apply).
 413. **P3** Generated cover for a notebook (title, course, colour, first page).
-414. **P2** Adaptive navigator: large thumbnails for PDFs, a compact list for text pages.
+414. **P2** 🧪 Adaptive navigator: large thumbnails for PDFs, a compact list for text pages.
 
 ### Library
 415. **P1** 🧪 Dynamic sections: Now, To complete, Changed on another device, Recent. (0.14: the first three are library dashboard panels, places, sidebar items with counts and Home chips; Recent is Home's Recent notes and the Recent filter; waiting for hardware verification)
@@ -755,14 +755,14 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 421. **P2** Dynamic gallery block in notes: pages selected by tag, bookmark or course.
 422. **P2** Related handwritten pages panel for the open Markdown note.
 423. ~~**P2** Rich hover preview of page links with actions.~~ — already covered by O5
-424. **P2** Command palette ordered by context (commands relevant to the open view first).
+424. **P2** 🧪 Command palette ordered by context (commands relevant to the open view first).
 
 ### Help and habits
 425. 🧪 **P1** Just-in-time hints: a short tip the first time a situation occurs, shown once. (0.13: seven situations, rate limit, Tips setting; waiting for hardware verification)
 426. **P3** Shortcuts proposed from habits (a gesture or quick slot for what you repeat).
 427. **P3** Friction detection proposing a setting change (for example repeated accidental touches → palm rejection).
 428. **P3** Favourites suggested from the pen, colour and width combinations you really use.
-429. **P2** Explanation on long-press of an icon.
+429. **P2** 🧪 Explanation on long-press of an icon: a finger held ~0.5 s on a toolbar, selection or contextual bar, or Home icon shows a small bubble (name, one line, a hint) without pressing it; mouse and pen untouched; Settings > Appearance > Explain icons on long press (0.24).
 
 ### Layout and devices
 430. **P1** 🧪 Layout by orientation and size (`src/ui/viewport-class.ts`, `nb-vp-*` classes; 0.14).

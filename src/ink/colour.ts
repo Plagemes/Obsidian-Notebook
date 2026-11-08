@@ -4,6 +4,7 @@ import { isNewPen, NIB_DEFAULT, type Stroke } from "../model/types";
 import type { PenKind } from "./pen-kinds";
 import { pointSegmentDistance } from "./hit-test";
 import { inkReach } from "./ink-geometry";
+import { insideShape, isFilled } from "./shape-style";
 
 export interface Rgb {
 	r: number;
@@ -134,7 +135,8 @@ export function pickStrokeAt(strokes: readonly Stroke[], x: number, y: number, t
 	let bestCovered = false;
 	let bestGap = Infinity;
 	for (const s of strokes) {
-		const d = strokeDistance(s, x, y);
+		// v22 (#37): the inside of a filled shape counts as its ink (it is painted there).
+		const d = isFilled(s) && insideShape(s.points, x, y) ? 0 : strokeDistance(s, x, y);
 		const half = inkReach(s.tool, s.width);
 		if (!(d <= half + Math.max(0, tolerance))) continue;
 		const covered = d <= half;

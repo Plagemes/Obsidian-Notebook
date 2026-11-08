@@ -64,6 +64,8 @@ export interface UiContext {
 		locked?: boolean;
 		/** 0.18 (#227): the page is a quick tab of this notebook. Optional (false when absent). */
 		quickTab?: boolean;
+		/** 0.24 (#265): the page is in the global bookmarks list. Optional (false when absent). */
+		globalBookmark?: boolean;
 		/** 0.20 (#39): how many locked elements the page has. Optional (0 when absent). */
 		lockedElements?: number;
 	} | null;
@@ -88,6 +90,8 @@ export interface UiContext {
 	states?: { open: boolean };
 	/** 0.18 (#86): the comments panel is open, how many comments the notebook has (open ones apart), and a rectangle is being drawn for a new one. Optional (absent: none). */
 	comments?: { panel: boolean; total: number; open: number; drawing?: boolean };
+	/** 0.24 (#424): presentation mode is on. Optional (off when absent). */
+	presenting?: boolean;
 	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
 	openNotebooks?: number;
 	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */
@@ -234,6 +238,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-similar", label: "select.similar", icon: "check-check", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 62, scope: "view", when: hasInk },
 	// 0.23 (#314): hooks at the ends of strokes and stray dots, cleaned in one undo step.
 	{ id: "selection-cleanup", label: "cleanup.action", icon: "sparkles", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 58, scope: "view", command: "command.cleanUp", when: hasInk, keywords: "clean tidy hook tick dot bounce stray trim pulisci uncino puntino" },
+	// 0.24 (#313): strokes that a tiny pen dropout split in two are joined, in one undo step (needs two strokes).
+	{ id: "selection-join", label: "joinstrokes.action", icon: "merge", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 58, scope: "view", command: "command.joinStrokes", when: (c) => (c.selection?.strokes ?? 0) >= 2, keywords: "join merge broken split dropout gap line connect unisci spezzato tratto interruzione" },
 	// 0.15 states (#241): the selected ink becomes a part of the drawing, which the states of the page move together (view/states-tools.ts).
 	{ id: "selection-part", label: "states.makePart", icon: "group", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.makePart", when: hasInk, keywords: "states part group figure physics stati parte gruppo" },
 	{ id: "select-same-colour", label: "select.sameColour", icon: "palette", group: "selection", surfaces: ["sheet"], priority: 48, scope: "view", command: "command.selectSameColour", when: hasInk, keywords: "similar color all" },
@@ -266,6 +272,7 @@ export const ACTIONS: readonly ActionDef[] = [
 	// width allows), part of the Go to section of the page sheet, commands (hotkeys) and the mouse side buttons on desktop.
 	{ id: "nav-back", label: "nav.back", icon: "arrow-left", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 64, scope: "view", command: "command.navBack", readOnly: true, when: hasNav, enabled: (c) => !!c.nav?.back, keywords: "previous history visited return indietro" },
 	{ id: "nav-forward", label: "nav.forward", icon: "arrow-right", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 63, scope: "view", command: "command.navForward", readOnly: true, when: hasNav, enabled: (c) => !!c.nav?.forward, keywords: "next history visited avanti" },
+	{ id: "bookmarks-open", label: "gbm.open", icon: "bookmark", group: "navigate", surfaces: ["page", "sheet", "library"], priority: 54, scope: "global", command: true, readOnly: true, keywords: "bookmarks list pages notebooks segnalibri elenco pagine" },
 	{ id: "go-to-page", label: "command.goToPage", icon: "file-search", group: "navigate", surfaces: ["sheet", "library"], priority: 55, scope: "global", command: true, readOnly: true, keywords: "switcher find notebook" },
 	{ id: "toggle-page-mode", label: "toolbar.pageMode", icon: "book-open", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 46, scope: "view", command: "command.pageMode", readOnly: true, checked: (c) => !!c.toggles.pageMode, keywords: "swipe paged continuous scroll" },
 	// wave 0.9 (361): find and replace in the text boxes of the notebook (a panel; the results jump to the page).
@@ -336,6 +343,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.18 (#227): quick tabs. Pinning does not edit the notebook (the pins are in _meta), so it works on a read-only or locked page too.
 	{ id: "page-quick-tab", label: "quicktabs.pin", icon: "pin", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: true, checked: (c) => !!c.page?.quickTab, keywords: "quick tab pin pinned formula sheet fissa scheda rapida" },
 	{ id: "page-quick-tab-other", label: "quicktabs.pinOther", icon: "book-open", group: "page", surfaces: ["page", "sheet"], priority: 46, scope: "view", command: true, keywords: "quick tab pin other notebook formula sheet fissa altro quaderno" },
+	// 0.24 (#265): global bookmarks. The list is in _meta, never in a notebook, so toggling works on a read-only or locked page too.
+	{ id: "page-global-bookmark", label: "gbm.toggle", icon: "bookmark-plus", group: "page", surfaces: ["page", "sheet"], priority: 45, scope: "view", command: true, checked: (c) => !!c.page?.globalBookmark, keywords: "global bookmark list all notebooks segnalibro globale elenco" },
 	{ id: "page-save-template", label: "page.saveTemplate", icon: "layout-template", group: "page", surfaces: ["page"], priority: 25, scope: "view" },
 	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view", enabled: pageOpen },
 	{ id: "page-compare-version", label: "page.compareVersion", icon: "git-compare", group: "page", surfaces: ["page"], priority: 21, scope: "view", enabled: pageOpen },
@@ -466,6 +475,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "export-png", label: "export.png.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 27, scope: "view", command: "command.exportPng", readOnly: true, keywords: "png images pictures pages folder scale range esporta immagini" },
 	// 0.23 (#280): the written area of the page, or the selection, as a transparent PNG or SVG
 	{ id: "export-area", label: "exportArea.menu", icon: "crop", group: "share", surfaces: ["sheet", "notebook"], priority: 26.5, scope: "view", command: "command.exportArea", readOnly: true, keywords: "export written area crop transparent png svg esporta area scritta ritaglia trasparente" },
+	// 0.24 handin (#334): hand in chosen pages as a PDF with a cover, after a pre-flight check.
+	{ id: "hand-in", label: "handIn.menu", icon: "graduation-cap", group: "share", surfaces: ["sheet", "notebook"], priority: 26.2, scope: "view", command: "command.handIn", readOnly: true, keywords: "hand in assignment submit cover pdf homework consegna compito copertina" },
 	{ id: "selection-export-area", label: "exportArea.selection", icon: "crop", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40.3, scope: "view", command: true, readOnly: true, when: hasSelection, keywords: "export selection transparent png svg esporta selezione trasparente" },
 	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
 

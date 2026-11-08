@@ -1,5 +1,6 @@
 // Shared helpers of the design-system components (DESIGN.md §3).
 import { setIcon } from "obsidian";
+import type { MessageKey } from "../../i18n/en";
 
 let decorationWarned = false;
 
@@ -58,9 +59,10 @@ export function pressable(el: HTMLElement, activate: () => void, label?: string)
 }
 
 /** A round icon button (header tools, kebab menus). */
-export function iconButton(parent: HTMLElement, icon: string, label: string, onClick: (button: HTMLButtonElement, e: MouseEvent) => void, cls = ""): HTMLButtonElement {
+export function iconButton(parent: HTMLElement, icon: string, label: string, onClick: (button: HTMLButtonElement, e: MouseEvent) => void, cls = "", help?: MessageKey): HTMLButtonElement {
 	const b = parent.createEl("button", { cls: `nb-icon-btn ${cls}`.trim(), attr: { type: "button", "aria-label": label, title: label } });
 	setIconSafe(b, icon);
+	if (help) b.dataset.help = help; // 0.24 iconhelp (#429): long-press explanation
 	b.addEventListener("click", (e) => {
 		e.stopPropagation();
 		onClick(b, e);

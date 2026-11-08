@@ -14,6 +14,7 @@ import { layerFlags, type ExportLayers } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { HIGHLIGHTER_ALPHA, MARKER_ALPHA, strokeSvgPath } from "./stroke-shape";
+import { fillAlpha, fillPathD, isFilled } from "./shape-style";
 import { LINK_COLOR, lineRuns, shownText } from "./link-text";
 
 /** Line widths of the paper pattern, pt. Shared with the PDF exporter. */
@@ -161,6 +162,11 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 		// v9: ink bound to a graph is clipped to its frame (the graph's own clip path), as on screen.
 		const graph = boundGraphId(stroke);
 		const clipped = graph !== null && clipIds.has(graph) ? ` clip-path="url(#${clipIds.get(graph)!})"` : "";
+		// v22 (#37): the fill of a closed shape lies under its line (a tint is the same colour at a lower opacity).
+		if (isFilled(stroke)) {
+			const alpha = fillAlpha(stroke);
+			out.push(`<path d="${fillPathD(stroke.points)}" fill="${escapeAttr(stroke.fill!)}"${alpha < 1 ? ` fill-opacity="${alpha}"` : ""}${clipped}/>`);
+		}
 		out.push(
 			stroke.tool === "highlighter"
 				? `<path d="${d}" fill="${fill}" fill-opacity="${HIGHLIGHTER_ALPHA}" style="mix-blend-mode:multiply"${clipped}/>`

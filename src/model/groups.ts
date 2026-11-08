@@ -101,7 +101,11 @@ export function hasGroupMate(page: Pick<Page, "strokes" | "elements">, item: Pag
 /** The pieces a cut leaves of `stroke` (one per run of points, fresh ids, frozen): they stay in its group only while the page has another member of it. */
 export function strokePieces(page: Pick<Page, "strokes" | "elements">, stroke: Stroke, runs: readonly Point[][], newId: () => string = createId): Stroke[] {
 	const base = stroke.group === undefined || hasGroupMate(page, stroke) ? stroke : ungroupedItem(stroke);
-	return runs.map((points) => freezeStroke({ ...base, id: newId(), points }));
+	// v22: a piece of a cut shape is an open line: it has no fill (the line style stays).
+	const { fill: _fill, fillTint: _tint, ...plain } = base;
+	void _fill;
+	void _tint;
+	return runs.map((points) => freezeStroke({ ...plain, id: newId(), points }));
 }
 
 /** What a selection says about groups: how many different groups its items belong to and how many items are in one. */

@@ -19092,3 +19092,455 @@ body.notebook-style-obsidian {
 	color: var(--nb-text-muted);
 	font-size: var(--nb-fs-meta);
 }
+
+/* ===== 0.24 shapefill ===== */
+/* Fill and line style of shapes (#37): the shape tool's options and the selection bar share these rows. */
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-style {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--nb-space-2, 8px) var(--nb-space-3, 12px);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-options > .notebook-shape-style {
+	padding: 0 4px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-style.notebook-hidden {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-group {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-label {
+	flex: 0 0 auto;
+	font-size: var(--nb-text-s, 12px);
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-seg {
+	display: flex;
+	gap: 2px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-seg > .notebook-text-tool {
+	padding: 0 10px;
+	white-space: nowrap;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-colours {
+	gap: 2px;
+}
+
+/* "Same as the line": a ring in the colour of the text, so it reads as "follow the line" and not as a colour. */
+.workspace-leaf-content .view-content.notebook-view .notebook-swatch.is-line .notebook-swatch-dot {
+	background: transparent;
+	box-shadow: inset 0 0 0 2px var(--nb-text-muted);
+}
+
+/* Compact: the swatches and the buttons of these rows are smaller than the pen's, so a phone keeps most of the page in view. */
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-style .notebook-swatch {
+	width: 30px;
+	min-width: 0;
+	height: 30px;
+	padding: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-style .notebook-swatch-dot {
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-style .notebook-shape-seg > .notebook-text-tool {
+	height: 30px;
+	min-height: 0;
+	font-size: var(--nb-text-s, 12px);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-selection-styles > .notebook-shape-style {
+	justify-content: center;
+	max-width: 100%;
+	padding: 6px 10px;
+	border-radius: var(--nb-radius-panel, 20px);
+	gap: 4px 12px;
+}
+/* ===== 0.24 iconhelp ===== */
+/* Long-press explanation bubble (#429): name, one line, a hint. It never takes touches (the finger is still down). */
+.nb-ui.nb-help-bubble {
+	position: fixed;
+	z-index: 10000;
+	box-sizing: border-box;
+	max-width: min(260px, calc(100vw - 16px));
+	padding: var(--nb-space-3) var(--nb-space-4);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-m);
+	box-shadow: var(--nb-shadow-float);
+	pointer-events: none;
+}
+
+.nb-ui.nb-help-bubble .nb-help-name {
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	line-height: 1.25;
+}
+
+.nb-ui.nb-help-bubble .nb-help-desc {
+	margin-top: 2px;
+	font-size: var(--nb-fs-meta);
+	line-height: 1.35;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-help-bubble .nb-help-hint {
+	margin-top: 6px;
+	font-size: var(--nb-fs-label);
+	line-height: 1.3;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-help-bubble .nb-help-arrow {
+	position: absolute;
+	left: var(--nb-help-arrow-x, 50%);
+	top: -6px;
+	width: 10px;
+	height: 10px;
+	margin-left: -5px;
+	background: var(--nb-panel);
+	border-left: 1px solid var(--nb-border-strong);
+	border-top: 1px solid var(--nb-border-strong);
+	transform: rotate(45deg);
+}
+
+.nb-ui.nb-help-bubble.is-above .nb-help-arrow {
+	top: auto;
+	bottom: -6px;
+	transform: rotate(225deg);
+}
+
+/* ===== 0.24 tagsuggest ===== */
+.nb-ui.notebook-tags-suggest {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+	margin-top: 10px;
+}
+
+.nb-ui.notebook-tags-suggest:empty {
+	display: none;
+}
+
+.nb-ui .notebook-tags-suggest-title {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	margin-right: 2px;
+}
+
+.nb-ui .notebook-tags-chip.notebook-tags-chip-suggest {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 32px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: var(--nb-fs-meta);
+	background: transparent;
+	border: 1px dashed var(--nb-border-strong);
+	color: inherit;
+}
+
+.nb-ui .notebook-tags-chip.notebook-tags-chip-suggest:hover {
+	border-style: solid;
+	border-color: var(--nb-accent);
+}
+
+.nb-ui .notebook-tags-chip-suggest .notebook-tags-x {
+	color: var(--nb-accent);
+}
+
+/* ===== 0.24 navadapt ===== */
+/* Large thumbnails (PDF and picture notebooks): a wider panel. */
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-large {
+	flex-basis: 240px;
+	width: 240px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body.is-narrow > .notebook-navigator.is-large {
+	width: min(260px, 80%);
+}
+
+/* Compact list (written notebooks): a wider panel too, one row per page, rows drawn only when near the screen. */
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list {
+	flex-basis: 260px;
+	width: 260px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body.is-narrow > .notebook-navigator.is-list {
+	width: min(260px, 85%);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-item {
+	display: grid;
+	grid-template-columns: 40px minmax(0, 1fr);
+	align-items: center;
+	column-gap: 8px;
+	margin-bottom: 2px;
+	padding: 4px 6px;
+	content-visibility: auto;
+	contain-intrinsic-size: auto 52px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-thumb {
+	grid-column: 1;
+	grid-row: 1 / span 2;
+	align-self: start;
+	width: 40px;
+	border-radius: 4px;
+	box-shadow: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowtext {
+	grid-column: 2;
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-number {
+	flex: 0 0 auto;
+	min-width: 1.6em;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-variant-numeric: tabular-nums;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowbody {
+	flex: 1 1 auto;
+	text-align: left;
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowtitle,
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowmeta {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowtitle {
+	color: var(--nb-text);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowtitle.is-untitled {
+	color: var(--nb-text-muted);
+	font-weight: var(--font-normal);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowmeta {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-footer {
+	grid-column: 2;
+	justify-content: flex-end;
+	margin-top: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-check {
+	top: 4px;
+	left: 4px;
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-layout.is-active {
+	color: var(--nb-accent);
+}
+
+/* ===== 0.24 bookmarks ===== */
+.nb-ui .nb-gbm-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui .nb-gbm-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding-right: 6px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui .nb-gbm-row.is-missing {
+	border-style: dashed;
+}
+
+.nb-ui .nb-gbm-main {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: center;
+	gap: 2px;
+	min-width: 0;
+	min-height: 56px;
+	margin: 0;
+	padding: 8px 14px;
+	border: 0;
+	border-radius: var(--nb-radius-tile);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.nb-ui .nb-gbm-main:hover {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-gbm-title {
+	max-width: 100%;
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-gbm-detail {
+	max-width: 100%;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-gbm-badge {
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: var(--nb-accent-bg);
+	color: var(--nb-danger);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+}
+
+.nb-ui .nb-gbm-actions {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: 2px;
+}
+
+.nb-ui .nb-gbm-actions .nb-icon-btn:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+.nb-ui .nb-gbm-remove:hover {
+	color: var(--nb-danger);
+}
+
+.nb-ui .nb-gbm-checking,
+.nb-ui .nb-gbm-empty {
+	text-align: center;
+}
+
+.nb-vp-phone .nb-ui .nb-gbm-actions,
+.nb-ui.nb-vp-phone .nb-gbm-actions {
+	flex-wrap: wrap;
+	max-width: 96px;
+	justify-content: flex-end;
+}
+
+/* ===== 0.24 handin ===== */
+.nb-ui.notebook-handin-modal .nb-handin-tools {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	flex-wrap: wrap;
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-count {
+	flex: 1 1 auto;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+	gap: var(--nb-space-2);
+	max-height: 232px;
+	overflow-y: auto;
+	padding: var(--nb-space-1);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-cell {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 6px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	cursor: pointer;
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-cell:has(input:checked) {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-cell input {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 1;
+	margin: 0;
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-thumb {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	min-height: 96px;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-bg);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-thumb img {
+	display: block;
+	max-width: 100%;
+	max-height: 112px;
+	border-radius: 2px;
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-num {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-finding.is-blank .nb-modal-row-label {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-leave {
+	display: flex;
+	justify-content: flex-start;
+}

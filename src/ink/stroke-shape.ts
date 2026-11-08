@@ -1,6 +1,7 @@
 import { getStroke, type StrokeOptions } from "perfect-freehand";
-import { RENDER_INK, type Point, type Stroke, type Tool } from "../model/types";
+import { RENDER_INK, type Point, type ShapeDash, type Stroke, type Tool } from "../model/types";
 import { inkPath, SvgPathSink } from "./ink-geometry";
+import { dashRuns } from "./shape-style";
 
 /** Pen v1 parameters (see docs/architecture.md §2). Changing them changes how existing files look. */
 export const PEN_V1: Readonly<StrokeOptions> = {
@@ -72,7 +73,11 @@ export function strokePath(points: readonly Point[], width: number, complete = t
 }
 
 /** SVG path of a committed stroke with the geometry its render version names (nonzero fill). */
-export function strokeSvgPath(stroke: Pick<Stroke, "points" | "width" | "tool" | "render"> & { nib?: number }): string {
+export function strokeSvgPath(stroke: Pick<Stroke, "width" | "tool" | "render"> & { points: readonly Point[]; nib?: number; dash?: ShapeDash }): string {
+	// v22 (#37): a dashed or dotted shape is its runs, each drawn as an outline of its own (one path, nonzero fill).
+	if (stroke.dash !== undefined && stroke.tool === "shape") {
+		return dashRuns(stroke.points, stroke.dash, stroke.width).map((run) => strokeSvgPath({ points: run, width: stroke.width, tool: stroke.tool, render: stroke.render })).join("");
+	}
 	if (stroke.render !== RENDER_INK) return strokePath(stroke.points, stroke.width, true, stroke.tool);
 	const sink = new SvgPathSink();
 	inkPath(sink, stroke.points, stroke.width, stroke.tool, stroke.nib);

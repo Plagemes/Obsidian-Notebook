@@ -6,6 +6,8 @@ import { rangeIds } from "../model/page-ops";
 import { pageHasTag, pageTagCounts } from "../model/page-tags";
 import type { Page } from "../model/types";
 import { writing } from "../ink/writing-guard";
+import { classifyPages, nextMode, pageRowTime, pageRowTitle, resolveLayout, ThumbCache, type NavLayout, type NavMode } from "../ui/nav-adapt";
+import { attachLongPressHelp, resolveHelp } from "../ui/long-press-help";
 import { renderOutline, type OutlineHost } from "./outline";
 import { pageSignature } from "./view-helpers";
 
@@ -27,9 +29,17 @@ export interface NavigatorHost {
 	openMap?(): void;
 	/** 0.16 (#124): locks or unlocks a page (the lock mark of a locked page unlocks it). Absent: the mark is not a button. */
 	setLocked?(pageId: string, value: boolean): void;
+	/** 0.24 (#414): the layout chosen for this notebook on this device (auto when none), and remembering a new choice. Absent: auto. */
+	layoutMode?(): NavMode;
+	setLayoutMode?(mode: NavMode): void;
 }
 
 const THUMB_WIDTH = 120;
+/** 0.24 (#414): thumbnail widths (CSS px) of the large layout and of the compact list. */
+const LARGE_WIDTH = 240;
+const LIST_WIDTH = 60;
+/** Rows built before the browser gets a turn; the rest follow in the next frames (a 500-page list opens at once). */
+const CHUNK = 80;
 /** Hold time before a touch drag starts reordering (a quick swipe scrolls the list). */
 const LONG_PRESS_MS = 350;
 
@@ -52,7 +62,13 @@ export class PageNavigator {
 	private outlineMode = false;
 	private tagFilter: string | null = null;
 	private outlineCategory: string | null = null;
-	private readonly thumbs = new Map<string, { key: string; url: string }>();
+	/** Cached thumbnails: bounded, one width per page, released when the panel closes. */
+	private readonly thumbs = new ThumbCache();
+	private layoutButton: HTMLButtonElement | null = null;
+	private layout: NavLayout = "normal";
+	/** Bumped on every rebuild: a chunked build that finds another number stops. */
+	private buildToken = 0;
+	private buildFrame: number | null = null;
 	private readonly observer: IntersectionObserver;
 	private drag: { from: number; pointerId: number; ghost: HTMLElement; target: number } | null = null;
 	/** wave 0.8 (378): multi-selection by page id, the page a range starts from, and the ids shown (after the filters). */
@@ -67,9 +83,12 @@ export class PageNavigator {
 	private readonly selectBar: HTMLElement;
 	private readonly selectCount: HTMLElement;
 	private readonly rangeButton: HTMLButtonElement;
+	/** Stops the long-press explanation of the header buttons that have one. */
+	private stopHelp: (() => void) | null = null;
 
 	constructor(parent: HTMLElement, private readonly host: NavigatorHost) {
 		this.el = parent.createDiv({ cls: "notebook-navigator notebook-hidden" });
+		this.stopHelp = attachLongPressHelp(this.el, (b) => (b.dataset.help ? resolveHelp(b) : null));
 		const header = this.el.createDiv({ cls: "notebook-navigator-header" });
 		this.titleEl = header.createSpan({ text: t("nav.title"), cls: "notebook-navigator-title" });
 		this.selectButton = header.createEl("button", {
@@ -93,6 +112,16 @@ export class PageNavigator {
 			this.updateHeader();
 			this.refresh();
 		});
+		if (host.setLayoutMode) {
+			this.layoutButton = header.createEl("button", { cls: "notebook-tool clickable-icon notebook-navigator-layout", attr: { type: "button" } });
+			this.layoutButton.dataset.help = "help.navLayout"; // 0.24 iconhelp (#429): the long-press explanation
+			this.layoutButton.addEventListener("click", () => {
+				host.setLayoutMode?.(nextMode(host.layoutMode?.() ?? "auto"));
+				this.updateLayoutButton();
+				this.refresh();
+			});
+			this.updateLayoutButton();
+		}
 		this.tagButton = header.createEl("button", {
 			cls: "notebook-tool clickable-icon", attr: { "aria-label": t("nav.filterTag"), type: "button" },
 		});
@@ -154,22 +183,39 @@ export class PageNavigator {
 	setOpen(open: boolean): void {
 		this.el.toggleClass("notebook-hidden", !open);
 		if (open) {
+			this.centerCurrent = true;
 			this.refresh();
-			this.scrollToCurrent();
 		}
 	}
 
 	/** Forgets cached thumbnails (all, or those of `pageIds`) and redraws the list. */
 	invalidate(pageIds?: Iterable<string>): void {
-		if (pageIds) for (const id of pageIds) this.thumbs.delete(id);
+		if (pageIds) for (const id of pageIds) this.thumbs.drop(id);
 		else this.thumbs.clear();
 		this.refresh();
+	}
+
+	/** The icon and label of the layout button follow the chosen mode (Auto, Thumbnails, List). */
+	private updateLayoutButton(): void {
+		const button = this.layoutButton;
+		if (!button) return;
+		const mode = this.host.layoutMode?.() ?? "auto";
+		setIcon(button, mode === "auto" ? "sparkles" : mode === "thumbs" ? "image" : "list");
+		button.setAttribute("aria-label", t("navAdapt.toggle", { mode: t(mode === "auto" ? "navAdapt.auto" : mode === "thumbs" ? "navAdapt.thumbs" : "navAdapt.list") }));
+		button.toggleClass("is-active", mode !== "auto");
+	}
+
+	private widthOf(layout: NavLayout): number {
+		return layout === "large" ? LARGE_WIDTH : layout === "list" ? LIST_WIDTH : THUMB_WIDTH;
 	}
 
 	/** Rebuilds the list (cheap: thumbnails are cached and loaded lazily). */
 	refresh(): void {
 		if (!this.open) return;
 		this.observer.disconnect();
+		const token = ++this.buildToken;
+		if (this.buildFrame !== null) window.cancelAnimationFrame(this.buildFrame);
+		this.buildFrame = null;
 		const scrollTop = this.listEl.scrollTop;
 		this.listEl.empty();
 		const pages = this.host.pages();
@@ -185,33 +231,88 @@ export class PageNavigator {
 			return;
 		}
 		const info = this.host.outline.meta()?.bookmarkInfo;
-		let shown = 0;
 		this.shownIds = [];
 		// A page that is gone (deleted, moved out, undo) leaves the selection.
 		for (const id of [...this.selected]) if (!pages.some((p) => p.id === id)) this.selected.delete(id);
 		this.listEl.toggleClass("is-selecting", this.selecting);
+		// 0.24 (#414): large thumbnails for a PDF notebook, the compact list for a written one (or what the reader chose).
+		this.layout = resolveLayout(this.host.layoutMode?.() ?? "auto", classifyPages(pages));
+		this.el.toggleClass("is-large", this.layout === "large");
+		this.el.toggleClass("is-list", this.layout === "list");
+		const entries: Array<{ page: Page; index: number }> = [];
 		pages.forEach((page, index) => {
 			if (this.onlyBookmarks && !marks.has(page.id)) return;
 			if (this.tagFilter !== null && !pageHasTag(page, this.tagFilter)) return;
-			shown++;
+			entries.push({ page, index });
 			this.shownIds.push(page.id);
+		});
+		if (entries.length === 0) this.listEl.createDiv({ cls: "notebook-navigator-empty", text: t("nav.empty") });
+		// The rows come in chunks, so 500 pages never hold the screen: the first chunk now, the rest in the next frames.
+		// The scroll position (or the current page, when the panel was just opened) is restored as soon as the rows reach it.
+		let from = 0;
+		const wantCenter = this.centerCurrent;
+		this.centerCurrent = false;
+		const step = () => {
+			if (token !== this.buildToken) return;
+			const to = Math.min(entries.length, from + CHUNK);
+			for (let i = from; i < to; i++) this.buildItem(entries[i]!.page, entries[i]!.index, current, marks, info);
+			from = to;
+			if (wantCenter) {
+				const cur = this.listEl.querySelector(".is-current");
+				if (cur) {
+					cur.scrollIntoView({ block: "center" });
+					return finish();
+				}
+			} else if (this.listEl.scrollHeight - this.listEl.clientHeight >= scrollTop || from >= entries.length) {
+				this.listEl.scrollTop = scrollTop;
+				return finish();
+			}
+			finish();
+		};
+		const finish = () => {
+			this.syncSelection();
+			if (from < entries.length) this.buildFrame = window.requestAnimationFrame(step);
+			else this.buildFrame = null;
+		};
+		step();
+	}
+
+	/** Set when the panel was just opened: the first build brings the current page into the middle. */
+	private centerCurrent = false;
+
+	/** One page of the list: a thumbnail card (large or usual layout) or a compact row. */
+	private buildItem(page: Page, index: number, current: number, marks: ReadonlySet<string>, info: NonNullable<ReturnType<OutlineHost["meta"]>>["bookmarkInfo"]): void {
+		{
+			const list = this.layout === "list";
 			const item = this.listEl.createDiv({ cls: "notebook-navigator-item", attr: { tabindex: "0", "data-index": String(index), "data-id": page.id } });
 			item.toggleClass("is-current", index === current);
 			item.toggleClass("is-selected", this.selected.has(page.id));
 			setIcon(item.createDiv({ cls: "notebook-navigator-check" }), "check");
 			const img = item.createEl("img", { cls: "notebook-navigator-thumb", attr: { alt: t("nav.page", { n: String(index + 1) }), draggable: "false" } });
 			img.setCssProps({ "--notebook-thumb-ratio": String(Math.min(page.height / page.width, MAX_ASPECT)) });
-			const cached = this.thumbs.get(page.id);
-			if (cached && cached.key === this.thumbKey(page)) img.src = cached.url;
+			const cached = this.thumbs.get(page.id, this.widthOf(this.layout), this.thumbKey(page));
+			if (cached) img.src = cached;
 			// v7: the bookmark title and the page tags under the thumbnail.
 			const details = marks.has(page.id) ? info?.[page.id] : undefined;
-			if (details?.title || (page.tags?.length ?? 0) > 0) {
+			if (list) {
+				// 0.24 (#414): number, title (bookmark or first typed line) and the time the page was written, tags after it.
+				const text = item.createDiv({ cls: "notebook-navigator-rowtext" });
+				text.createSpan({ text: String(index + 1), cls: "notebook-navigator-number" });
+				const body = text.createDiv({ cls: "notebook-navigator-rowbody" });
+				const title = pageRowTitle(page, details?.title);
+				body.createDiv({ cls: title ? "notebook-navigator-rowtitle" : "notebook-navigator-rowtitle is-untitled", text: title || t("nav.page", { n: String(index + 1) }) });
+				const meta: string[] = [];
+				const at = pageRowTime(page);
+				if (at !== null) meta.push(new Date(at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }));
+				if (page.tags?.length) meta.push(page.tags.map((x) => `#${x}`).join(" "));
+				if (meta.length > 0) body.createDiv({ cls: "notebook-navigator-rowmeta", text: meta.join(" · ") });
+			} else if (details?.title || (page.tags?.length ?? 0) > 0) {
 				const caption = item.createDiv({ cls: "notebook-navigator-caption" });
 				if (details?.title) caption.createDiv({ cls: "notebook-navigator-caption-title", text: details.title });
 				if (page.tags?.length) caption.createDiv({ cls: "notebook-navigator-caption-tags", text: page.tags.map((x) => `#${x}`).join(" ") });
 			}
 			const footer = item.createDiv({ cls: "notebook-navigator-footer" });
-			footer.createSpan({ text: String(index + 1), cls: "notebook-navigator-number" });
+			if (!list) footer.createSpan({ text: String(index + 1), cls: "notebook-navigator-number" });
 			// 0.16 (#124): a locked page shows a lock in the footer; a tap unlocks it.
 			if (page.locked) {
 				const lock = footer.createEl("button", { cls: "nb-ui notebook-tool clickable-icon notebook-navigator-lock", attr: { "aria-label": t("lock.mark.aria"), type: "button" } });
@@ -259,10 +360,7 @@ export class PageNavigator {
 			});
 			this.enableDrag(item, index, page.id);
 			this.observer.observe(item);
-		});
-		if (shown === 0) this.listEl.createDiv({ cls: "notebook-navigator-empty", text: t("nav.empty") });
-		this.listEl.scrollTop = scrollTop;
-		this.syncSelection();
+		}
 	}
 
 	// ------------------------------------------------------------- multi-selection (wave 0.8, 378)
@@ -338,6 +436,7 @@ export class PageNavigator {
 		this.tagButton.toggleClass("notebook-hidden", this.outlineMode);
 		this.selectButton.toggleClass("notebook-hidden", this.outlineMode);
 		this.mapButton?.toggleClass("notebook-hidden", this.outlineMode);
+		this.layoutButton?.toggleClass("notebook-hidden", this.outlineMode);
 		this.syncSelection();
 	}
 
@@ -402,14 +501,16 @@ export class PageNavigator {
 		}
 	}
 
-	private scrollToCurrent(): void {
-		this.listEl.querySelector(".is-current")?.scrollIntoView({ block: "center" });
-	}
-
 	destroy(): void {
+		this.buildToken++;
+		if (this.buildFrame !== null) window.cancelAnimationFrame(this.buildFrame);
+		this.buildFrame = null;
 		this.observer.disconnect();
 		this.drag?.ghost.remove();
 		this.drag = null;
+		this.stopHelp?.();
+		this.stopHelp = null;
+		this.thumbs.clear(); // the data URLs go with the panel
 		this.el.remove();
 	}
 
@@ -423,25 +524,23 @@ export class PageNavigator {
 		const page = this.host.pages()[index];
 		const img = item.querySelector("img");
 		if (!page || !img) return;
-		const url = this.thumbnailOf(page);
+		const url = this.thumbnailOf(page, this.widthOf(this.layout));
 		if (img.src !== url) img.src = url;
 	}
 
 	/** The thumbnail of `page` if it is already drawn and still current (roadmap 50: the fast scrollbar's preview reuses this cache). */
 	cachedThumbnail(page: Page): string | null {
-		const cached = this.thumbs.get(page.id);
-		return cached && cached.key === this.thumbKey(page) ? cached.url : null;
+		return this.thumbs.peek(page.id, this.thumbKey(page));
 	}
 
 	/** The thumbnail of `page`: the cached one, or drawn now and cached (the same cache as the panel's list). */
-	thumbnailOf(page: Page): string {
+	thumbnailOf(page: Page, width: number = THUMB_WIDTH): string {
 		const key = this.thumbKey(page);
-		let cached = this.thumbs.get(page.id);
-		if (!cached || cached.key !== key) {
-			cached = { key, url: this.host.thumbnail(page, THUMB_WIDTH) };
-			this.thumbs.set(page.id, cached);
-		}
-		return cached.url;
+		const cached = this.thumbs.get(page.id, width, key);
+		if (cached !== null) return cached;
+		const url = this.host.thumbnail(page, width);
+		this.thumbs.set(page.id, width, key, url);
+		return url;
 	}
 
 	/** Mouse/pen: drag immediately. Touch: long-press, then drag; a quick swipe scrolls the list. */

@@ -530,6 +530,7 @@ const INTEGRATION: SettingSpec[] = [
 	{ id: "noteInsertLinkBack", section: "integration", order: 37, name: "settings.noteInsertLinkBack", desc: "settings.noteInsertLinkBack.desc", control: { type: "toggle" }, keywords: "insert note link back page collegamento pagina" },
 	// 0.18 (#186): "Copy to notebook…" can leave a chip on the original page too.
 	{ id: "copyLinkReverse", section: "integration", order: 38, name: "settings.copyLinkReverse", desc: "settings.copyLinkReverse.desc", control: { type: "toggle" }, keywords: "copy page notebook link back chip copia pagina collegamento" },
+	{ id: "tagSuggestions", section: "integration", order: 39, name: "settings.tagSuggestions", desc: "settings.tagSuggestions.desc", control: { type: "toggle" }, keywords: "tags suggestions suggested course context chips suggerimenti" },
 	// 0.19 (#213): "Look up later" from a selection.
 	{ id: "lookUpNote", section: "integration", order: 43, name: "settings.lookUpNote", desc: "settings.lookUpNote.desc", control: { type: "text", placeholder: "Look up later.md" }, keywords: "look up later words list dictionary cerca dopo parole elenco" },
 	{ id: "lookUpWidth", section: "integration", order: 44, name: "settings.lookUpWidth", desc: "settings.lookUpWidth.desc", control: { type: "slider", min: LOOKUP_WIDTH_MIN, max: LOOKUP_WIDTH_MAX, step: LOOKUP_WIDTH_STEP, format: suffix("px") }, keywords: "look up later picture crop width larghezza immagine" },
@@ -598,6 +599,7 @@ const APPEARANCE: SettingSpec[] = [
 	// 0.13: just-in-time tips.
 	{ id: "hintsEnabled", section: "appearance", order: 50, name: "settings.hints", desc: "settings.hints.desc", control: { type: "toggle" }, keywords: "tips hints suggerimenti consigli" },
 	{ id: "hintsReset", section: "appearance", order: 60, name: "settings.hintsReset", desc: "settings.hintsReset.desc", control: { type: "action", run: "hints-reset", button: "settings.hintsReset.button" }, parent: "hintsEnabled", keywords: "tips hints suggerimenti consigli" },
+	{ id: "iconHelp", section: "appearance", order: 65, name: "settings.iconHelp", desc: "settings.iconHelp.desc", control: { type: "toggle" }, keywords: "icons help tooltip long press explain icone aiuto spiega pressione" },
 ];
 
 const DIAGNOSTICS: SettingSpec[] = [

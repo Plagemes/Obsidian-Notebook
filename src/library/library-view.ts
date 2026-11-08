@@ -10,6 +10,7 @@ import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNo
 import { relativeTime, uniquePath } from "./format";
 import { folderOf, isInside, LibraryIndex, normalizeText, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
 import { openTagEditor } from "../integration/tags";
+import { siblingTagLists } from "../model/tag-context";
 import { openNotebookAtPage } from "../integration/open";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
 import type { Timetable } from "../timetable/schedule";
@@ -38,6 +39,7 @@ import { emptyState, type EmptyStateAction, type EmptyStateOptions } from "../ui
 import { newButton } from "../ui/components/new-button";
 import { listRow, type ListRowOptions, type Pill } from "../ui/components/list-row";
 import { railBrand, railItem, railLabel } from "../ui/components/nav-rail";
+import { attachLongPressHelp, resolveHelp } from "../ui/long-press-help";
 import { searchPill } from "../ui/components/search-pill";
 import { sectionHeader } from "../ui/components/section-header";
 import { subjectCard, type SubjectCardOptions } from "../ui/components/subject-card";
@@ -161,6 +163,10 @@ export interface LibraryHost {
 	sharedInbox?(): SharedInboxPort | null;
 	/** 0.13: the "Your name" setting (Home's greeting). */
 	userName?(): string;
+	/** 0.24 (#265): global bookmarks (pages of different notebooks in one list): how many there are, the dialog, and a way to follow changes (Home's Bookmarks chip). */
+	bookmarksCount?(): number;
+	openBookmarks?(): void;
+	onBookmarksChange?(fn: () => void): () => void;
 	/** 0.13: pages and minutes written per day on this device (Home's greeting and statistics; view/recent-pages.ts). */
 	activity?(): { records: ActivityRecord[]; minutes: Record<string, number> };
 	/** 0.13: the class in progress and the notebook it opens, or where one is made (Continue card). */
@@ -350,6 +356,7 @@ export class LibraryView extends ItemView {
 	private thumbRunning = false;
 	/** 0.12: the inbox bell of the header (null without the Zettelkasten Inbox). */
 	private bell: InboxBell | null = null;
+	private stopHelp: () => void = () => undefined;
 
 	constructor(leaf: WorkspaceLeaf, private readonly host: LibraryHost, private readonly startPlace: LibraryPlace = "all") {
 		super(leaf);
@@ -458,6 +465,8 @@ export class LibraryView extends ItemView {
 		// 0.16 (#177): a file was shared to the vault, or one was dealt with.
 		const offShared = this.host.sharedInbox?.()?.onChange(() => this.requestRender());
 		if (offShared) this.register(offShared);
+		const offBookmarks = this.host.onBookmarksChange?.(() => this.requestRender());
+		if (offBookmarks) this.register(offBookmarks);
 		// 0.15 views: the Board's columns were edited (its dialog, the settings).
 		this.register(onBoardColumnsChanged(() => this.requestRender()));
 
@@ -470,6 +479,7 @@ export class LibraryView extends ItemView {
 	async onClose(): Promise<void> {
 		this.closed = true;
 		this.bell?.dispose();
+		this.stopHelp();
 		this.boardSub?.off();
 		this.boardSub = null;
 		window.clearTimeout(this.saveTimer);
@@ -505,6 +515,7 @@ export class LibraryView extends ItemView {
 		el.empty();
 		// nb-ui: the scope of the design-system styles (styles.css, 0.12 section), above Obsidian's own button and input rules.
 		this.rootEl = el.createDiv({ cls: "notebook-lib-root nb-app nb-ui nb-no-anim" });
+		this.stopHelp = attachLongPressHelp(this.rootEl, (b) => (b.dataset.help ? resolveHelp(b) : null)); // 0.24 iconhelp (#429)
 		this.railEl = this.rootEl.createEl("aside", { cls: "nb-rail", attr: { "aria-label": t("nav.label") } });
 		this.rootEl.createDiv({ cls: "nb-rail-backdrop" }).addEventListener("click", () => this.setRailOpen(false));
 
@@ -513,7 +524,7 @@ export class LibraryView extends ItemView {
 		const header = this.scrollEl.createEl("header", { cls: "nb-page-header" });
 		this.headerArtEl = header.createDiv({ cls: "nb-header-art", attr: { "aria-hidden": "true" } });
 		const lead = header.createDiv({ cls: "nb-header-lead" });
-		iconButton(lead, "menu", t("nav.open"), () => this.setRailOpen(!this.railOpen), "nb-rail-toggle");
+		iconButton(lead, "menu", t("nav.open"), () => this.setRailOpen(!this.railOpen), "nb-rail-toggle", "help.home.menu");
 		const titles = lead.createDiv({ cls: "nb-header-titles" });
 		this.pageTitleEl = titles.createEl("h1", { cls: "nb-page-title" });
 		this.subtitleEl = titles.createDiv({ cls: "nb-page-subtitle" });
@@ -1404,13 +1415,13 @@ export class LibraryView extends ItemView {
 		const top = el.createDiv({ cls: "nb-rail-top" });
 		railBrand(top, t("nav.brand"), t("nav.brandSub"));
 		// 0.12.3: no + in the rail: creation is the header's + New and Home's quick actions (DESIGN.md §3, §5, home.png).
-		if (this.mode === "phone") iconButton(top, "x", t("library.sidebar.close"), () => this.setRailOpen(false), "nb-rail-close");
+		if (this.mode === "phone") iconButton(top, "x", t("library.sidebar.close"), () => this.setRailOpen(false), "nb-rail-close", "help.home.closeRail");
 		else if (this.mode === "wide") {
 			iconButton(top, this.railFolded ? "panel-left-open" : "panel-left-close", t("library.sidebar.toggle"), () => {
 				this.railFolded = !this.railFolded;
 				this.applyLayout();
 				this.renderRail(this.tree());
-			}, "nb-rail-fold");
+			}, "nb-rail-fold", "help.home.foldRail");
 		}
 
 		const visible = this.visible();
@@ -1660,15 +1671,15 @@ export class LibraryView extends ItemView {
 			console.error("[notebook] the inbox bell could not be shown", e);
 		}
 		if (isCollectionPlace(p) && p.collection === "changed" && this.dynamicSections().changed.length > 0) {
-			iconButton(tools, "check-check", t("dyn.markSeen"), () => this.markChangedSeen(), "nb-mark-seen");
+			iconButton(tools, "check-check", t("dyn.markSeen"), () => this.markChangedSeen(), "nb-mark-seen", "help.home.markSeen");
 		}
 		if (isSavedPlace(p)) {
 			const c = this.host.collections?.get(p.saved);
 			if (c) iconButton(tools, "pencil", t("coll.editMenu"), () => this.editCollection(c), "nb-coll-edit");
 		}
 		if (p !== "home") {
-			iconButton(tools, "filter", t("lib.filter"), (b) => this.filterMenu(b), isTagPlace(p) ? "is-active" : "");
-			iconButton(tools, "arrow-up-down", t("library.sort.label"), (b) => this.sortMenu(b));
+			iconButton(tools, "filter", t("lib.filter"), (b) => this.filterMenu(b), isTagPlace(p) ? "is-active" : "", "help.home.filter");
+			iconButton(tools, "arrow-up-down", t("library.sort.label"), (b) => this.sortMenu(b), "", "help.home.sort");
 			const cards = this.layoutMode === "grid" || this.layoutMode === "list";
 			if (cards) {
 				const list = this.layoutMode === "list";
@@ -1677,12 +1688,12 @@ export class LibraryView extends ItemView {
 					this.cardsLayout = this.layoutMode;
 					this.app.workspace.requestSaveLayout();
 					this.render();
-				}, "is-active");
+				}, "is-active", list ? "help.home.viewGrid" : "help.home.viewList");
 				view.setAttribute("aria-pressed", String(list));
 			}
 			// 0.15 views: the Board (statuses) and the Calendar (what was written on each day) are other ways to see the library.
 			if (this.viewsAvailable()) {
-				const views = iconButton(tools, this.layoutMode === "calendar" ? "calendar" : "kanban", t("views.menu"), (b) => this.viewsMenu(b), cards ? "nb-views-btn" : "nb-views-btn is-active");
+				const views = iconButton(tools, this.layoutMode === "calendar" ? "calendar" : "kanban", t("views.menu"), (b) => this.viewsMenu(b), cards ? "nb-views-btn" : "nb-views-btn is-active", "help.home.views");
 				views.setAttribute("aria-haspopup", "menu");
 			}
 		}
@@ -2218,10 +2229,16 @@ export class LibraryView extends ItemView {
 		const fit = this.mode === "wide" ? DASH_SUBJECTS_WIDE : this.mode === "medium" ? DASH_SUBJECTS_MEDIUM : DASH_SUBJECTS_PHONE;
 		const sharedPort = this.host.sharedInbox?.() ?? null;
 		renderHome(el, {
-			dynamic: DYNAMIC_IDS.filter((id) => this.dynamicSections()[id].length > 0).map((id) => ({
-				id, icon: COLLECTION_LOOK[id].icon, label: this.dynamicLabel(id, true), count: this.dynamicSections()[id].length,
-				onClick: () => this.navigate({ collection: id }),
-			})),
+			dynamic: [
+				...DYNAMIC_IDS.filter((id) => this.dynamicSections()[id].length > 0).map((id) => ({
+					id, icon: COLLECTION_LOOK[id].icon, label: this.dynamicLabel(id, true), count: this.dynamicSections()[id].length,
+					onClick: () => this.navigate({ collection: id }),
+				})),
+				// 0.24 (#265): the global bookmarks list, once there is a bookmark in it.
+				...((this.host.bookmarksCount?.() ?? 0) > 0 && this.host.openBookmarks
+					? [{ id: "bookmarks", icon: "bookmark", label: t("gbm.home"), count: this.host.bookmarksCount?.() ?? 0, onClick: () => this.host.openBookmarks?.(), help: "help.home.bookmarks" as const }]
+					: []),
+			],
 			shared: sharedPort ? (page) => renderSharedInboxCard(page, sharedPort, () => this.openSharedInbox()) : undefined,
 			continue: cont.card,
 			empty: cont.empty,
@@ -3013,7 +3030,9 @@ export class LibraryView extends ItemView {
 		const entry = this.index.get(path);
 		if (!entry) return;
 		// O2: suggestions from Obsidian's tags, Obsidian-style normalisation, hint about companion notes (integration/tags.ts).
-		openTagEditor(this.app, { file: this.app.vault.getFileByPath(path), current: entry.tags, libraryTags: this.index.tags().map((x) => x.tag), onSave: (tags) => this.setMeta(path, { tags }) });
+		// 0.24 (#411): chips from the course, sibling notebooks and the indexed text.
+		const context = { path, siblings: siblingTagLists(this.index.all(), path), signals: { text: entry.text ? [entry.text] : [], headings: (entry.bookmarks ?? []).map((b) => b.title), kinds: [] } };
+		openTagEditor(this.app, { file: this.app.vault.getFileByPath(path), current: entry.tags, libraryTags: this.index.tags().map((x) => x.tag), context, onSave: (tags) => this.setMeta(path, { tags }) });
 	}
 
 	private askCover(path: string): void {

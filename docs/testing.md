@@ -348,7 +348,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 6093 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 6327 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -3074,7 +3074,7 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 
 ### 0.21 — schema: documented format with a JSON Schema (steps 1860-1879)
 
-Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v21.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
+Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v22.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
 
 1860. **Schema agrees with a real notebook.** Copy a notebook written on the tablet (with ink, a picture, a text box and a comment) to a PC and validate it with any draft 2020-12 validator (see the end of `docs/format.md`): no errors.
 1861. **Old file.** Open a notebook that was last saved by an older plugin version and edit it once, then validate it: it validates after that save (the file is rewritten as version 19 on the first edit).
@@ -3629,3 +3629,183 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 | Clean up strokes: one undo step, keeps ids, order, groups, nib; refuses a locked page; selection follows | yes | `tests/hook-clean.test.ts` (History: execute, undo, redo, locked page); harness `doc=hookclean` | | | |
 | Selection action, palette command and sheet entry (`selection-cleanup`) | yes | registry tests (`tests/ui-registry.test.ts`); harness `doc=hookclean` | | | |
 | Setting *Trim hooks as you write* (off by default): the stroke is committed as written and the trim is its own undo step (Undo gives the written stroke back, a second Undo removes it); stricter limits than the manual clean-up (near reversal, very short hook), so letter tails stay; live input and rendering untouched | yes | `tests/hook-clean.test.ts` (review V2: raw stroke kept in the history, page times, locked page, limits), `tests/commit-trim.test.ts` (the pen-up wiring the view calls: trim step after the commit, locked page, late side-button take-back of both steps, partial take-back), the first-Undo notice and the real pen path: harness `doc=hookclean`; settings read: `tests/hook-clean-settings.test.ts`; golden hashes unchanged: `tests/pens-golden.test.ts`; harness `doc=hookclean` | | yes | needs real pen data to judge |
+
+### 0.24 — shapefill: filled shapes and dashed or dotted lines, document format 22 (roadmap #37; steps 2600-2619)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen).
+
+2600. **Options.** Pick the Shape tool and tap it again: the options show *Fill* (No fill, Solid, Tint) and *Line* (Solid, Dashed, Dotted) under the shape kinds. With *Line* or *Arrow* the fill is not offered, only the line style. Choose Tint: the fill colours appear (the first, a ring, is "same as the line").
+2601. **Draw.** Draw a rectangle and an ellipse with Tint and a colour: the inside is a light wash of the colour, the outline stays solid, and the paper pattern shows through. Solid covers the paper. Draw with Dashed and Dotted: the dashes follow the corners and the curve of the ellipse; a thicker line has longer dashes.
+2602. **Live preview.** While dragging, the fill and the dashes show in the preview as they will be saved.
+2603. **Restyle.** Lasso a few shapes and a handwritten word. The bar shows Fill and Line; change them: only the shapes change (the word never does), the selection stays, and one *Undo* puts the previous look back (*Redo* again). Lasso only lines and arrows: only *Line* is offered.
+2604. **Recognised shapes.** Draw a rough rectangle, triangle or circle with the pen and hold the pen still until it snaps: it is a plain shape; select it and give it a fill and a dashed line from the bar.
+2605. **Pick by the inside.** With the colour eyedropper in its style mode, tap the inside of a filled shape: the shape is taken (a plain shape is taken only by its outline).
+2606. **Cut a shape.** With the segment eraser, erase part of a filled dashed rectangle: the pieces that remain are dashed lines without the fill.
+2607. **Moving and scaling.** Move, rotate and scale a filled dashed shape with the selection handles: the fill follows, the dashes keep the length proportional to the (scaled) line width.
+2608. **Groups, locks, locked page.** A filled shape in a group is restyled with its group. On a locked page the bar's change is refused with the lock notice.
+2609. **Exports.** Export the page as PNG, SVG, PDF and as interactive HTML, and the written area or the selection as a transparent picture: fills (translucent tints too) and dashes are there, under the line, in the same places as on screen. Night mode only changes the colours on screen.
+2610. **Thumbnails.** The Library card and the page navigator show the filled and dashed shapes.
+2611. **Old files and other devices.** Open a notebook written by 0.23: it looks exactly the same and is saved as format 22. A copy of the plugin older than this version opens a notebook saved by this one read-only (it never rewrites it).
+2612. **Languages and looks.** Italian (*Riempimento*, *Linea*, *Tratteggiata*, *Punteggiata*), light and dark theme, phone and tablet width: the rows fit, nothing is clipped.
+2613. **Redo and background changes (review).** Restyle a shape (fill or dash), Undo, then Redo while a slide or margin refresh runs: the shape ends with the new fill and is not reverted. A filled shape whose ends are very close (a recognised rectangle) keeps its fill after being scaled up with the lasso. In *Compare with an earlier version*, a shape that only got a fill or a dash is listed as changed.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v22: optional `fill`, `fillTint`, `dash` of a shape stroke, migration v21 → v22 (identity plus version, stray keys dropped), lenient read (bad value dropped and counted), strict write, staged loading of large v21 files, repair, copies, merge, cut shapes | yes | `tests/model-v22.test.ts`, `tests/format-schema.test.ts` (schema `docs/schema/notebook-v22.schema.json`) | | | |
+| Dash geometry (pattern scaled by the width, runs along corners), closed-shape test, fill polygon, picking a filled shape by its inside | yes | `tests/shape-style.test.ts` | | | |
+| Fill and dashes drawn in the static layer, the live preview, PNG, SVG (also HTML and the area export), PDF and thumbnails; golden hashes of old strokes unchanged | yes | `tests/shape-style.test.ts`, `tests/pens-golden.test.ts`; harness `doc=shapefill` | | | the canvas and the PDF were not compared pixel by pixel on a device |
+| Shape tool options (fill none / solid / tint with colours, line solid / dashed / dotted) | yes | harness `doc=shapefill` | | | recognised shapes (hold the pen) are drawn plain and styled afterwards from the bar |
+| Selection restyle of fill and line: one undo step through `UpdateItems`, freehand ink untouched, refuses a locked page | yes | `tests/model-v22.test.ts` (History); harness `doc=shapefill` | | | |
+
+### 0.24 — strokejoin: join broken strokes (#313; steps 2460-2479)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen). The synthetic strokes of the automated tests are perfect; the point of these steps is to see how a real pen dropout looks and whether the rules in `src/ink/stroke-join.ts` (`JOIN_RULES`) match it.
+
+2460. **A real dropout.** Write long lines and words quickly until a line shows a tiny break (the pen skipped). Lasso the area and tap *Join broken strokes* in the second row of the bar: the break is closed, the notice says how many joints were made, the line is otherwise as written. One *Undo* brings the two strokes back.
+2461. **Nothing else joins.** Write two words close together, an L and a V in two strokes, a dashed line, an *i* with its dot, a full stop after a word, and a letter written in two strokes (a *t* with its bar, an *x*): select everything and run the action. None of them is joined, and the notice says there was nothing to join (if one is joined, note the pen, the width and the gap).
+2462. **A chain.** Press harder and faster to get a line cut in three or more pieces: they become one stroke in one step.
+2463. **Pens.** Repeat with the fountain pen (the nib angle is kept) and the brush; strokes of different colours, widths or nibs are never joined; the highlighter and the marker are not touched.
+2464. **Order and layers.** Draw a line, draw something else over it, then draw the continuation of the line: the pieces are not neighbours, so they are not joined. Bring the continuation next to the first piece with *Send to back* / *Bring to front* and they are.
+2465. **Groups and locks.** Group a broken line with another item and select only the line: the whole group is considered and the group stays. Lock the page and run the action: the lock notice appears and nothing changes. Unlock and run it again.
+2466. **Hidden ink.** Collapse a sticky note that holds a broken line, select the note and run the action: the ink the note hides is not changed.
+2467. **Several pages.** Lasso across a page break and run the action: both pages are handled and one *Undo* undoes both.
+2468. **Command, sheet and one stroke.** *Join broken strokes in the selection* in the command palette and *Join broken strokes* in the All actions sheet (Selection) do the same; with fewer than two strokes selected they are not offered.
+2469. **Together with Clean up.** Run *Clean up strokes* and then *Join broken strokes* on the same selection: two separate undo steps. A hook cut by the first never makes the second join something it would not have joined.
+2470. **Languages and looks.** Switch the plugin to Italian: the action, the command and the notices are translated. Light and dark theme, phone and tablet width: the action sits in the second row of the bar with the others and nothing is cut off.
+2471. **Graph ink (review).** Pan a graph so that a line is cut at its frame edge in two strokes, one of them moved with the graph; select both and run *Join broken strokes*: they are not joined (a stroke bound to a graph is never joined with one that is not).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Dropout detection between neighbouring strokes: same style and group, small gap relative to pen width, point spacing and piece length, continuous direction, no pressure jump; dots, words, corners, dashes untouched | yes | `tests/stroke-join.test.ts` (synthetic strokes, jittery wavy lines, negatives) | | yes | thresholds (`JOIN_RULES`) are tuned on synthetic strokes only |
+| Join broken strokes: one undo step, keeps the first id, style, group, nib and position; chains; refuses a locked page; page times unmoved; hidden sticky ink and locked groups skipped | yes | `tests/stroke-join.test.ts` (History: execute, undo, redo, locked page, page times); harness `doc=strokejoin` | | | |
+| Selection action, command and sheet entry (`selection-join`, from two strokes on) | yes | `tests/selection-arrange.test.ts`; harness `doc=strokejoin` | | | |
+
+### 0.24 — palettectx: actions ordered by context (roadmap #424; steps 2480-2499)
+
+Implemented, not verified on hardware. Obsidian's own command palette keeps its order (a plugin cannot change it); the plugin's *All actions* sheet (the grid button at the end of the toolbar) is what is ordered.
+
+2480. **Plain page.** Open a notebook on a plain page with the pen: the sheet opens with *Recent* (if any) and the groups; there is no *For this page* section.
+2481. **Eraser.** Pick the lasso and open the sheet: it starts with *For this page*, listing selection actions such as *Select by style* and *Select same tool*.
+2482. **Selection.** Select some ink with the lasso: the section lists selection actions (those already in the selection bar are not repeated).
+2483. **PDF.** On a PDF page the section offers reading actions (select text, dimming, crop); on an ordinary page it does not.
+2484. **Lecture and side pane.** During a lecture the lecture actions come first; with the PDF side pane open the side-by-side actions do.
+2485. **Presentation.** While presenting, navigation actions and *Present* come first.
+2486. **Search.** Type a word that matches several actions: the ones that fit the current context come first, then recently used ones; the same word on another page type orders differently.
+2487. **Rows work.** Every row in *For this page* runs its action; a toggle that is already on, a disabled action and a locked-page action are not listed.
+2488. **Obsidian palette.** With no notebook open, the notebook commands (draw tools, page actions) are absent from Obsidian's command palette; with one open they appear.
+2489. **Italian, light, dark, phone.** The section reads *Per questa pagina* in Italian and fits a phone's bottom sheet.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Context ordering of the *All actions* sheet (#424): *For this page* section and context-aware search ranking (selection, PDF page, tool in hand, lecture, side pane, presentation) on top of priority and recent use | yes | boosts per context, section content, search order, no repeats, disabled/visible left out, labels: `tests/context-rank.test.ts`; sheet at tablet and phone widths: harness `doc=palettectx` | | | Obsidian's own palette order cannot be changed by a plugin |
+
+### 0.24 — iconhelp: explanation on long press of an icon (roadmap #429; steps 2500-2519)
+
+Implemented, not verified on hardware. No format change. Manual steps (real Obsidian on an Android tablet or phone, finger):
+
+2500. **Toolbar.** Hold a finger on the Eraser button for about half a second without moving: a small bubble appears under it with the name, one line on what it does and "Tap it again for its options". The eraser is not selected. Lift: the bubble stays a moment and goes.
+2501. **Tap elsewhere.** Hold again, and with the bubble showing tap the page: the bubble goes at once and the tap does what it normally does.
+2502. **Quick tap.** A normal tap on a tool still selects it; no bubble.
+2503. **Swipe.** Put a finger on a button and slide away before half a second: no bubble, nothing pressed.
+2504. **Undo, redo, pages panel, pen chip.** Each shows a bubble with its own sentence. Undo does not undo.
+2505. **Quick actions.** A long press on a pinnable quick action still opens the pin menu (no bubble); same for the page indicator when quick tabs are on.
+2506. **Selection bar.** Select some ink with the lasso; hold a finger on Copy, Group, Align: each explains itself and is not pressed. The bubble does not cover the icon and stays on screen on a phone.
+2507. **Home.** On Home and in the library, hold the menu, filter, sort, view and bell icons: a bubble each.
+2508. **Pen and mouse.** With the S Pen held on a toolbar button: no bubble, and the pen button rules (tap with the button held: radial menu; drag with the button held: eraser) behave as before. With a mouse: only the hover tooltip.
+2509. **Setting.** *Settings > Appearance > Explain icons on long press* off: no bubble anywhere. On again: it works. Switch to Italian: bubbles are in Italian.
+2510. **Looks.** Light and dark, tablet and phone: a quiet card with a small arrow, readable, never off screen.
+2511. **Long hold on a button (review).** Hold a finger on Delete (selection bar) or on Undo for two seconds, then lift: the bubble shows and the button is NOT pressed, however long you held. Right after, a quick tap on the same button works at once.
+2512. **New controls.** Hold a finger on: the Bookmarks chip on Home, *Bookmark in the global list* and *Global bookmarks* (page sheet), *Hand in…*, *Join broken strokes*, the layout button in the page panel header, and each Fill / Line button and fill colour swatch in the shape options and in the selection bar: each shows a bubble with its own sentence (Italian too).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Long-press explanation bubble on toolbar, selection/contextual bar and Home icons (finger only; mouse hover and pen untouched), setting to turn it off | yes | timing, slop, who may start it, placement, texts in en + it, setting: `tests/long-press-help.test.ts`; real view with synthetic touch/pen/mouse events: harness `doc=iconhelp` | | yes | the real long press on a WebView is not simulated; the system context menu on some devices is suppressed while the bubble shows |
+
+### 0.24 — tagsuggest (tags suggested from context, #411; steps 2520-2539)
+
+Manual steps (real Obsidian; nothing here is verified on Android). You need a timetable with a class linked to a notebook or its folder, and a folder with a few notebooks that have tags.
+
+2520. **Notebook tags.** Open *Edit tags* (library notebook menu, or the command inside a notebook): under the tag chips a row *Suggested* shows up to six dashed chips, the course of the linked class first.
+2521. **Sibling notebooks.** Tags that other notebooks in the same folder use appear as chips; a tag the notebook already has is not offered.
+2522. **Content.** In a notebook with typed text that repeats a word (or a titled bookmark), that word shows as a chip; common words in English and Italian (*the*, *della*...) never do.
+2523. **Markers.** With a question marker or a definition box in the notebook, *questions* / *definitions* are offered.
+2524. **One tap.** Tapping a chip adds the tag to the list and removes the chip; *Save* writes it. Inside a notebook, *Undo* takes the tags back (same history as before).
+2525. **Page tags.** Page panel, page menu, *Tags*: chips from the course, the notebook tags, that page's text and markers; a tap writes the tag into the field, *Save* is one undo step.
+2526. **Spelling.** A course such as *Fisica 2* is offered as `Fisica-2` for notebook tags and as `Fisica 2` for page tags.
+2527. **Off.** Settings, *Integration*, *Suggest tags* off: no chips in either editor. Italian reads *Suggerisci i tag* / *Suggeriti*.
+2528. **One tap, one tag (review).** Link a class whose course has a comma or semicolon in its name (for example *Analysis I, Part 2*). In the page tag editor tap its chip: exactly one tag *Analysis I Part 2* is added.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Suggested tags in the notebook and page tag editors (course, sibling notebooks, frequent words, marker kinds); setting to turn off; no format change | yes | ranking, stop-words, normalisation, context: `tests/tag-suggest.test.ts`; editors: harness `doc=tagsuggest` | | | |
+
+### 0.24 — navadapt: adaptive page navigator (roadmap #414; steps 2540-2559)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+2540. **Written notebook.** Open a notebook of handwritten pages and open the page panel: it is a compact list (number, title, time, small thumbnail). A page with typed text shows its first line; a bookmarked page shows the bookmark title; a page with neither shows "Page N".
+2541. **PDF notebook.** Open an annotated PDF or slides: the panel is wider and the thumbnails are large and sharp.
+2542. **Mixed notebook.** A notebook with some PDF pages and some written ones keeps the usual thumbnails.
+2543. **Override.** Tap the layout button in the panel header: *Thumbnails*, then *List*, then *Auto* again. Close and reopen the notebook, and restart Obsidian: the choice is still there; another notebook is not affected.
+2544. **Long notebook.** In a notebook of 500 or more pages open the panel in list mode: it opens at once, scrolls smoothly, and the current page is in view.
+2545. **Everything still works in the list.** Tap a row to go to the page; drag a row to reorder (long press on touch); the star, the page menu, the lock mark, the select mode (check button, long press, Ctrl+click), the bookmark filter and the tag filter.
+2546. **Looks.** Light and dark theme, phone width (the panel is a drawer) and tablet width, Italian.
+2547. **Memory (review).** Scroll a 500-page notebook in the page panel from top to bottom and back, switch between List and Thumbnails a few times, and close the notebook: the app stays smooth and the memory does not keep growing; the thumbnails are drawn again on demand.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Classification of a notebook (PDF/picture share: large, written: list, mixed: usual) and the Auto / Thumbnails / List modes | yes | `tests/nav-adapt.test.ts`; harness `doc=navadapt` | | | |
+| Per-notebook choice in bounded device-local storage (corrupt storage falls back to Auto) | yes | `tests/nav-adapt.test.ts`; harness `doc=navadapt` | | | |
+| Compact list rows (number, title, time, small thumbnail), chunked build and offscreen rows skipped | yes | `tests/nav-adapt.test.ts` (title and time); harness `doc=navadapt` (520 pages) | | | the title is typed text or a bookmark title only, there is no handwriting recognition |
+| Large thumbnails layout (wider panel, 240 px thumbnails, cached per page and width) | yes | harness `doc=navadapt` | | | |
+
+### 0.24 — bookmarks: global bookmarks, pages from different notebooks in one list (roadmap #265; steps 2560-2579)
+
+Implemented, not verified on hardware. No format change: the list is the sidecar `_meta/bookmarks-<device>.json`, never part of a notebook file.
+
+2560. **Add.** Open a page, tap the page number to open the page sheet and *All actions*: *Bookmark in the global list* is there, unchecked. Run it: a notice says the page was added and the action is now checked. Run it again: the page is removed and the action is unchecked. The command palette has the same toggle.
+2561. **Other notebooks.** Bookmark a page in each of three notebooks. Run *Global bookmarks* (palette, page sheet): one dialog lists the three, in the order they were added, each with its notebook name and page number.
+2562. **Open.** Tap a row from another notebook: the dialog closes and that notebook opens at that page (in its existing tab if it is open). Tap a row of the notebook you are in: it goes to the page.
+2563. **Home.** Close all notebooks and open Home: a *Bookmarks* chip with the count is in the chip row under the Continue card. Tap it: the same dialog opens. With no bookmarks the chip is not shown.
+2564. **Rename and reorder.** Pencil on a row: type a name, *Rename*: the row shows it. The arrows move a row up or down (the first cannot go up, the last cannot go down); close and reopen the dialog: the order and names are kept.
+2565. **Remove.** The bin on a row takes it off the list; the page and the notebook are untouched. Closing and reopening the app keeps the list.
+2566. **Page deleted.** Delete a bookmarked page in its notebook, then open the dialog: the row is dashed with a *Missing* badge and says the page is gone. Tapping it opens the notebook at the nearest page; the bin removes it.
+2567. **Notebook renamed, moved, deleted.** Rename a bookmarked notebook in the library, and move another into a folder (or rename a folder): the rows keep working and open the notebooks at their new places. Trash a notebook: its row is dashed, *Missing*, tapping it says the notebook was not found, and the bin removes it.
+2568. **Two devices.** With the vault synced between two devices: a bookmark added on one appears on the other after the sync; one removed on one device does not come back from the other.
+2569. **A file that cannot be read.** Damage `_meta/bookmarks-<device>.json` of this device (not valid JSON): adding a bookmark says the file could not be read and nothing was changed; the file is not overwritten (a copy named `bookmarks.unreadable-…` is kept next to it).
+2570. **Read-only and locked pages.** On a locked page and in a read-only view the toggle still works (it does not edit the notebook).
+2571. **Languages and looks.** In Italian the action, the dialog, the Missing badge and the notices are translated. Light and dark theme, phone and tablet width: the rows wrap, the four small buttons of a row stay 44 px targets that do not overlap the title.
+2572. **Copy of a notebook (review).** Copy a bookmarked notebook in the file manager (same notebook id). Open the copy: its pages are not shown as bookmarked and bookmarking one adds a new row; the original keeps its own. Remove one of them: the other stays.
+2573. **Notebook not synced yet (review).** On a second device, open the bookmarks list before the notebook has synced: the row says Missing and is not moved to another file; once the notebook arrives the row works again. Tapping a row whose notebook was moved without a rename event opens it and the bookmark follows it (only when exactly one notebook has that id).
+2574. **Same page on two devices (review).** Bookmark the same page on two devices before they sync: after the sync it is one row, and removing it (from either device) removes it for good.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Global bookmarks (#265): toggle the page in view (page sheet, command), list of pages of all notebooks, tap opens the notebook at the page, rename, reorder, remove | yes | store and merge: `tests/bookmarks.test.ts`; dialog: harness (`doc=bookmarks`) | | | |
+| Sidecar `_meta/bookmarks-<device>.json`: per-device file, latest wins, tombstones (90 days) and adoption, unknown fields and entries kept, unreadable or empty file never overwritten, listed in the library check's non-holders | yes | `tests/bookmarks.test.ts` | | | |
+| Follows renamed and moved notebooks (rename events, one write per burst; found again by the notebook's id); a deleted page or a missing notebook shows as Missing and can be removed | yes | `tests/bookmarks.test.ts` (retarget, resolve); harness `doc=bookmarks` | | | |
+| Home chip (count, opens the list) | yes | harness `doc=bookmarks` (rendered through `renderHome`) | | | not checked inside the real library view |
+
+### 0.24 — handin: assignment hand-in (roadmap #334; steps 2580-2599)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook with a few written pages, one blank page, a page with a gap marker, a page with an unticked checkbox and a page with a text box that says TODO.
+
+2580. **Open.** Notebook menu or the all-actions sheet (Export & share): *Hand in…* opens the dialog. The same entry is in the command palette.
+2581. **Pages.** The grid shows a picture of every page; only the page in view is ticked. *All* and *None* work; tapping a cell ticks or unticks it and the count follows.
+2582. **Cover fields.** Your name is empty the first time; type it, export, reopen: it is remembered on this device (not in the notebook). The course is prefilled when the notebook is linked to a timetable class in progress. Assignment starts as the notebook name; the date as today.
+2583. **Pre-flight.** Tick all pages: blank pages, open gaps, open questions, undone homework, unticked checkboxes, TODO notes and empty template boxes are listed with their page. Resolve one on the page (tick the box, fill the gap): after reopening, it is gone from the list.
+2584. **Fix links.** Tap a row: the dialog closes and the notebook shows that page.
+2585. **Leave out.** *Leave out the blank pages* unticks them and the blank rows disappear; the other rows stay.
+2586. **Export anyway.** While anything is open the main button reads *Export anyway*; with nothing open it reads *Export PDF*. Both write the file.
+2587. **The file.** `<notebook> hand-in.pdf` appears next to the notebook; the first page is the cover (name, course, assignment, date, page count, small rule), then the chosen pages in order. A second export is ` hand-in 2.pdf`, never over the first.
+2588. **Share.** On a device with a share sheet the toggle *Open the share sheet afterwards* shows and opens it; elsewhere it is not shown.
+2589. **Library.** The saved PDF is not offered by the shared-files inbox as an unknown file.
+2590. **Empty choice.** Untick every page: the check says to choose a page and the export button is disabled.
+2591. **Style.** Light and dark, phone and tablet: the dialog is a normal Notebook dialog; the grid scrolls, the buttons fit in one row.
+2592. **Italian.** Switch to Italian: all texts are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Hand in…: page grid with checkboxes, cover fields (name remembered per device, course from the timetable, title, date) | yes | page choice, cover layout and its PDF: `tests/hand-in.test.ts`; harness `doc=handin` (real dialog, remembered name, grid) | | | the page panel's own multi-selection is not read yet: the dialog starts on the page in view |
+| Pre-flight: blank pages, open gaps/questions/homework, unticked checkboxes, TODO notes, empty template boxes, with links to fix and "export anyway" | yes | `tests/hand-in.test.ts`; harness `doc=handin` (rows, leave out, link) | | | |
+| PDF with generated cover first, saved next to the notebook under a free name, recorded as plugin-written, optional share sheet | yes | harness `doc=handin` (written through a stand-in vault, second export `hand-in 2.pdf`, cover plus chosen pages) | | | share sheet depends on the WebView |

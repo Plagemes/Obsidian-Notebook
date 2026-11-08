@@ -156,6 +156,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	lookUpWidth: number;
 	/** 0.18 (#186): copying pages to another notebook also leaves a "Copied to" chip on the original page (the dialog starts with this). */
 	copyLinkReverse: boolean;
+	/** 0.24 (#411): suggest tags from the course, sibling notebooks, text and markers when editing tags. */
+	tagSuggestions: boolean;
 	// wave p1a: input
 	/** Edge rejection: touches that start within `edgeRejectionPx` of a selected edge of the page area are ignored. */
 	edgeRejection: boolean;
@@ -297,6 +299,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	userName: string;
 	/** 0.13: just-in-time tips (roadmap 425): a short tip the first time a situation occurs. */
 	hintsEnabled: boolean;
+	/** 0.24 iconhelp (#429): a finger held on a toolbar, bar or Home icon shows what it does. */
+	iconHelp: boolean;
 	/** The tips already shown (ids), so each appears once. Not shown in the settings tab; "Show tips again" clears it. */
 	hintsSeen: HintId[];
 	// 0.14 slides
@@ -368,6 +372,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	lookUpNote: "",
 	lookUpWidth: LOOKUP_WIDTH_DEFAULT,
 	copyLinkReverse: false,
+	tagSuggestions: true,
 	edgeRejection: false,
 	edgeRejectionPx: 24,
 	edgeLeft: true,
@@ -431,6 +436,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	appearanceStyle: "notebook",
 	userName: "",
 	hintsEnabled: true,
+	iconHelp: true,
 	hintsSeen: [],
 	// 0.14 slides
 	slideInkLink: true,
@@ -526,6 +532,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.lookUpNote === "string") s.lookUpNote = d.lookUpNote.trim();
 	if (typeof d.lookUpWidth === "number") s.lookUpWidth = clampLookUpWidth(d.lookUpWidth);
 	if (typeof d.copyLinkReverse === "boolean") s.copyLinkReverse = d.copyLinkReverse;
+	if (typeof d.tagSuggestions === "boolean") s.tagSuggestions = d.tagSuggestions;
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
 	if (typeof d.edgeRejectionPx === "number" && d.edgeRejectionPx >= EDGE_WIDTH_MIN && d.edgeRejectionPx <= EDGE_WIDTH_MAX) s.edgeRejectionPx = d.edgeRejectionPx;
 	if (typeof d.edgeLeft === "boolean") s.edgeLeft = d.edgeLeft;
@@ -588,6 +595,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
 	if (typeof d.hintsEnabled === "boolean") s.hintsEnabled = d.hintsEnabled;
+	if (typeof d.iconHelp === "boolean") s.iconHelp = d.iconHelp;
 	s.hintsSeen = normaliseSeen(d.hintsSeen);
 	// 0.14 slides
 	if (typeof d.slideInkLink === "boolean") s.slideInkLink = d.slideInkLink;

@@ -16,6 +16,7 @@ import { SetMeta, type Command } from "../model/history";
 import { pageTagCounts, parsePageTagInput, SetPageTags } from "../model/page-tags";
 import { BOOKMARK_CATEGORIES, DEFAULT_META, type Asset, type BookmarkInfo, type NotebookMeta, type Page } from "../model/types";
 import { setDestructive } from "../ui/destructive";
+import { pageTagSuggestions } from "./tag-suggest-provider";
 
 export interface OutlineHost {
 	readonly app: App;
@@ -40,6 +41,8 @@ export interface OutlineHost {
 	pdfOutlines?(): Readonly<Record<string, readonly OutlineEntryLike[]>>;
 	/** 0.16 (#46): where the PDF outline shows: mixed into the list, in its own section, or not at all. Default: merged. */
 	pdfOutlineMode?(): "merged" | "section" | "off";
+	/** 0.24 (#411): vault path of the open notebook (the course for the suggested page tags is looked up from it). */
+	path?(): string | null;
 }
 
 /** Label of a category: the built-in ones are translated, custom ones are shown as typed. */
@@ -86,7 +89,7 @@ export function editPageTags(host: OutlineHost, page: Page): void {
 		const before = current.tags ?? [];
 		if (before.length === tags.length && before.every((x, i) => x === tags[i])) return;
 		host.execute(new SetPageTags(page.id, before, tags));
-	}).open();
+	}, (existing) => pageTagSuggestions({ path: host.path?.() ?? null, page, notebookTags: host.meta()?.tags ?? [], existing })).open();
 }
 
 /** Icon of an outline row: bookmarks use the colour dot, the others a Lucide icon. */
@@ -364,6 +367,8 @@ export class PageTagsModal extends Modal {
 		private readonly current: readonly string[],
 		private readonly existing: readonly string[],
 		private readonly onSave: (tags: string[]) => void,
+		/** 0.24 (#411): suggested tags for what is in the field now (up to six); absent: none. */
+		private readonly suggest?: (existing: string[]) => string[],
 	) {
 		super(app);
 	}
@@ -376,13 +381,30 @@ export class PageTagsModal extends Modal {
 			this.onSave(read());
 		};
 		let chips: HTMLElement | null = null;
+		let suggestEl: HTMLElement | null = null;
+		const renderSuggest = () => {
+			if (!suggestEl || !this.suggest) return;
+			suggestEl.empty();
+			const tags = this.suggest(read());
+			if (tags.length === 0) return;
+			suggestEl.createDiv({ text: t("tagSuggest.title"), cls: "notebook-lib-modal-label" });
+			const row = suggestEl.createDiv({ cls: "notebook-lib-chips nb-tag-suggest" });
+			for (const tag of tags) {
+				const chip = row.createEl("button", { text: `+ ${tag}`, cls: "notebook-lib-chip nb-tag-suggest-chip", attr: { type: "button", "aria-label": t("tagSuggest.add", { tag }) } });
+				chip.addEventListener("click", () => {
+					if (this.input) this.input.value = [...read(), tag].join(", ");
+					sync();
+				});
+			}
+		};
 		const sync = () => {
 			const active = new Set(read().map((x) => x.toLowerCase()));
-			chips?.querySelectorAll<HTMLElement>(".notebook-lib-chip").forEach((el) => {
+			chips?.querySelectorAll<HTMLElement>(".notebook-lib-chip:not(.nb-tag-suggest-chip)").forEach((el) => {
 				const on = active.has((el.dataset.tag ?? "").toLowerCase());
 				el.toggleClass("is-active", on);
 				el.setAttribute("aria-pressed", String(on));
 			});
+			renderSuggest();
 		};
 		new Setting(this.contentEl)
 			.setDesc(t("pageTags.modal.desc"))
@@ -397,6 +419,8 @@ export class PageTagsModal extends Modal {
 				});
 				window.setTimeout(() => text.inputEl.focus(), 0);
 			});
+		suggestEl = this.contentEl.createDiv();
+		renderSuggest();
 		if (this.existing.length > 0) {
 			this.contentEl.createDiv({ text: t("pageTags.modal.suggestions"), cls: "notebook-lib-modal-label" });
 			chips = this.contentEl.createDiv({ cls: "notebook-lib-chips" });

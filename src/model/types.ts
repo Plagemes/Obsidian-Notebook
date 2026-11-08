@@ -2,6 +2,8 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v22: filled shapes and dashed or dotted lines (#37): the optional `Stroke.fill` / `Stroke.fillTint` (a closed shape is filled with a colour, solid or
+ * as a translucent tint) and `Stroke.dash` ("dashed" or "dotted" instead of a solid line); only strokes of the "shape" tool have them, never freehand ink.
  * v21: saved views (#264): the optional notebook-level `views` list (a name, a page and the region of it that was in view, with the zoom).
  * v20: new pens (#35): the tools "fountain", "brush" and "marker" (always written with render 2) and the optional `Stroke.nib` (nib angle in degrees
  * of the fountain pen and the marker; absent = 45).
@@ -19,7 +21,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 21;
+export const CURRENT_VERSION = 22;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -79,6 +81,17 @@ export function isNibAngle(v: unknown): v is number {
 	return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= NIB_MAX;
 }
 
+/** v22 (#37): the line styles of a shape besides solid (solid is the absence of `dash`). */
+export const SHAPE_DASHES = ["dashed", "dotted"] as const;
+export type ShapeDash = (typeof SHAPE_DASHES)[number];
+export function isShapeDash(v: unknown): v is ShapeDash {
+	return v === "dashed" || v === "dotted";
+}
+/** v22: only the shape tool (shapes, lines and arrows, drawn or recognised) can be filled or dashed; freehand ink never is. */
+export function isShapeTool(tool: Tool): boolean {
+	return tool === "shape";
+}
+
 /** Geometry that draws a stroke: perfect-freehand outline with the frozen per-tool parameters (every stroke written before v5). */
 export const RENDER_FREEHAND = 1;
 /** Incremental "wet ink" geometry. */
@@ -120,6 +133,15 @@ export interface Stroke {
 	 * Only those two tools have one.
 	 */
 	nib?: number;
+	/**
+	 * v22 (#37): the colour (`#rrggbb`) a CLOSED shape is filled with. Only strokes of the "shape" tool have one; an open shape (a line, an arrow) that has
+	 * one is simply not filled. Written only when set.
+	 */
+	fill?: string;
+	/** v22: the fill is a translucent tint of `fill` instead of the solid colour. Written only when true, and only with `fill`. */
+	fillTint?: true;
+	/** v22: the line of a shape is drawn dashed or dotted (absent = solid). Only strokes of the "shape" tool have one. */
+	dash?: ShapeDash;
 	points: Point[];
 }
 
