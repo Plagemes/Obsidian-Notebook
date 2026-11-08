@@ -43,7 +43,7 @@ A **stroke** is vector ink: `id`, `tool` (`pen`, `highlighter`, `shape`, and fro
 | `excerpt` | a region of a page of this or another notebook, with an optional PNG snapshot asset |
 | `sticky` | coloured note with text; ink written on it is ordinary page ink |
 | `checkbox` | handwritten checkbox, optionally linked to a task line of a note |
-| `area` | area highlighter (v23): a translucent axis-aligned rectangle `x`, `y`, `width`, `height` in a highlighter `color`, drawn under the ink |
+| `area` | area highlighter (v23): a translucent axis-aligned rectangle `x`, `y`, `width`, `height` in a highlighter `color`, drawn under the ink; a file older than v23 that holds one is refused, like any element type before its version |
 
 Every element may also carry `group`, `locked` and `lockAt` (v18).
 

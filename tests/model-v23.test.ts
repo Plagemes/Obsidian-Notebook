@@ -136,8 +136,9 @@ describe("format v23: migration from v22", () => {
 		if (!r.ok) expect(r.reason).toBe("future-version");
 	});
 
-	it("stages a large v22 file, and a large v23 file with areas, and writes them back", () => {
+	it("stages a large v23 file with areas and a large v22 file without, and writes them back", () => {
 		const doc = stressDocument(6000, 3, 7);
+		const plain = serialize(doc);
 		doc.pages[0]!.elements = [area("zz1"), area("zz2", { color: "#f472b6" })];
 		const text = serialize(doc);
 		expect(text.length).toBeGreaterThan(STAGED_MIN_CHARS);
@@ -146,15 +147,53 @@ describe("format v23: migration from v22", () => {
 		const r = (staged as StagedParse).finish();
 		expect(r.ok).toBe(true);
 		if (r.ok) expect(serialize(r.doc)).toBe(text);
-		const old = text.replace(`"version": ${CURRENT_VERSION}`, '"version": 22');
+		const old = plain.replace(`"version": ${CURRENT_VERSION}`, '"version": 22');
 		const stagedOld = parseStaged(old, 1);
 		expect(stagedOld).toBeInstanceOf(StagedParse);
 		const r22 = (stagedOld as StagedParse).finish();
 		expect(r22.ok).toBe(true);
 		if (r22.ok) {
 			expect(r22.migratedFrom).toBe(22);
-			expect(serialize(r22.doc)).toBe(text);
+			expect(serialize(r22.doc)).toBe(plain);
 		}
+	});
+});
+
+describe("format v23: an area in a file older than v23 is refused, in every version (review fix)", () => {
+	// A v22 reader refused unknown element types, so such a file was not written by this plugin: refused like excerpts before v10, sticky notes
+	// before v15 and checkboxes before v17. Nothing is lost: the file is not opened, so it is never rewritten.
+	const withArea = (version: number) => {
+		const raw = parseRaw(serialize(docWith([area("a")], [line(10, 10, 50, 10)])));
+		setAt(raw, ["version"], version);
+		return JSON.stringify(raw);
+	};
+
+	it.each([5, 9, 10, 14, 16, 17, 20, 21, 22])("v%i: the whole file is refused, with the reason", (version) => {
+		const r = parse(withArea(version));
+		expect(r.ok).toBe(false);
+		if (!r.ok) {
+			expect(r.reason).not.toBe("future-version");
+			expect(r.message).toMatch(/area/);
+		}
+	});
+
+	it("v23 keeps its area, and an older file without areas still opens", () => {
+		const r = parsed(withArea(CURRENT_VERSION));
+		expect(r.doc.pages[0]!.elements!.map((e) => e.id)).toEqual(["a"]);
+		const raw = parseRaw(serialize(docWith([], [line(10, 10, 50, 10)])));
+		setAt(raw, ["version"], 22);
+		expect(parsed(JSON.stringify(raw)).migratedFrom).toBe(22);
+	});
+
+	it("a large v22 file with an area is refused when its page is read, in the staged path too", () => {
+		const doc = stressDocument(6000, 3, 7);
+		doc.pages[1]!.elements = [area("zz1")];
+		const text = serialize(doc).replace(`"version": ${CURRENT_VERSION}`, '"version": 22');
+		expect(text.length).toBeGreaterThan(STAGED_MIN_CHARS);
+		const staged = parseStaged(text, 0);
+		const r = staged instanceof StagedParse ? staged.finish() : staged;
+		expect(r.ok).toBe(false);
+		if (!r.ok) expect(r.message).toMatch(/area/);
 	});
 });
 
