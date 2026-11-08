@@ -17806,3 +17806,70 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-slide-back {
 	top: 66px;
 }
+
+/* ===== 0.22 syncprov ===== */
+/* The cloud sign-in dialog (src/sync/auth/sign-in-modal.ts): the steps, the big device code with its address and Copy button, the
+   waiting line, and a quiet accent dot beside the line shown while a code is requested or the sync folder is prepared. */
+.nb-ui.nb-signin-modal .nb-signin-steps {
+	margin: 0 0 var(--nb-space-3, 12px);
+	padding-left: 1.4em;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-row);
+	line-height: 1.5;
+}
+.nb-ui.nb-signin-modal .nb-signin-codebox {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--nb-space-2, 8px);
+	padding: var(--nb-space-3, 12px);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-accent-bg);
+	box-shadow: 0 0 0 1px var(--nb-border);
+}
+.nb-ui.nb-signin-modal .nb-signin-code {
+	font-family: var(--font-monospace);
+	font-size: clamp(26px, 7vw, 36px);
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	color: var(--nb-text);
+	user-select: all;
+	text-align: center;
+	overflow-wrap: anywhere;
+}
+.nb-ui.nb-signin-modal .nb-signin-url {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	user-select: all;
+	overflow-wrap: anywhere;
+	text-align: center;
+}
+.nb-ui.nb-signin-modal .nb-signin-actions {
+	display: flex;
+	justify-content: center;
+}
+.nb-ui.nb-signin-modal .nb-signin-status {
+	margin-top: var(--nb-space-3, 12px);
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	text-align: center;
+}
+.nb-ui.nb-signin-modal .nb-signin-status.is-slow {
+	color: var(--nb-text-faint);
+}
+.nb-ui.nb-signin-modal .nb-signin-busy {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2, 8px);
+	min-height: var(--nb-target);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-row);
+}
+.nb-ui.nb-signin-modal .nb-signin-dot {
+	flex: none;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--nb-accent);
+	box-shadow: 0 0 0 4px var(--nb-accent-bg);
+}

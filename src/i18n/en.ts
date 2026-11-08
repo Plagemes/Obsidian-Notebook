@@ -3951,6 +3951,31 @@ export const en = {
 	"backup.status.failed": "Last backup failed ({time}): {error}",
 	"backup.status.next": "Next backup after {time}.",
 	"backup.status.dueNow": "The next backup is due.",
+
+	// 0.22 syncprov
+	"syncprov.title.gdrive": "Connect Google Drive",
+	"syncprov.title.onedrive": "Connect OneDrive",
+	"syncprov.subtitle": "Sign in on any device with a browser. Nothing is shared with anyone but your provider.",
+	"syncprov.requesting": "Asking for a sign-in code…",
+	"syncprov.step.open": "Open the sign-in page on this or any other device.",
+	"syncprov.step.code": "Type the code below and sign in to your account.",
+	"syncprov.step.allow": "Allow access. This dialog continues by itself.",
+	"syncprov.codeLabel": "Sign-in code: {code}",
+	"syncprov.copy": "Copy code",
+	"syncprov.copied": "Sign-in code copied",
+	"syncprov.copyFailed": "Could not copy the code. Type it by hand.",
+	"syncprov.open": "Open sign-in page",
+	"syncprov.waiting": "Waiting for you to allow access. The code works for {time} more.",
+	"syncprov.expiredSoon": "The code has expired.",
+	"syncprov.finishing": "Signed in. Setting up the sync folder…",
+	"syncprov.cancel": "Cancel",
+	"syncprov.retry": "Try again",
+	"syncprov.error.denied": "Access was not allowed. Try again and choose Allow.",
+	"syncprov.error.expired": "The code expired before it was used. Try again for a new code.",
+	"syncprov.error.client": "The provider refused the client ID or secret ({detail}).",
+	"syncprov.error.clientHint": "Check the steps in the cloud sync guide: the app type, the public client switch and the copied ID.",
+	"syncprov.error.network": "Could not reach the provider ({detail}). Check the connection and try again.",
+	"syncprov.error.other": "Sign-in did not finish ({detail}).",
 } as const;
 
 export type MessageKey = keyof typeof en;
