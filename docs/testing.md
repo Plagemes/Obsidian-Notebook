@@ -3221,3 +3221,24 @@ Scheduled backups (roadmap #127). Settings, Sync & safety: *Scheduled backups* (
 | Scheduled zip backups (#127): off / daily / weekly into a vault folder, *Back up now*, keep the last N, last time and result in settings | yes | due-time (daily, weekly, other device's backup, clock in the future, failure retry), names, retention never trashing foreign files or the last complete backup, run order (flush, temp name, size check, rename, then trim), partial and failed runs leave old backups alone: `tests/backup-logic.test.ts`, `tests/backup-run.test.ts`, `tests/backup-wiring.test.ts` | | | memory limit of 64 MB on phones and tablets (the zip is built in memory); no Drive and no folder outside the vault (no Node/Electron); not tried on Android |
 | Scheduled backups, review W21 (D1-D5): the zip just written is always kept (names dated more than a day ahead rank oldest); a backup folder that is, holds, or is inside the notebooks folder, overlaps a templates folder or holds notebooks is refused (settings keep the previous folder; a run with one fails; `readSettings` falls back to the default); an old backup is trashed only after its zip comment is read; a notebook that changes during the read is read again once, then skipped and the backup is partial; mobile cap 64 MB | yes | `tests/backup-logic.test.ts` (retention with future-dated names and keep = 1, overlap rules, settings fallback), `tests/backup-run.test.ts` (new backup survives, overlap fails with nothing written or trashed, foreign file with a backup's name left alone, unreadable file never trashed, stale temp needs the record or the mark, racing read re-read once or skipped) | | | the notice in the settings and the check against real vault files are not run inside Obsidian; a backup over 512 MB is never trashed (it is not read to check the mark); an interrupted temporary file from another device stays |
 | Zip writer and reader (STORE, CRC-32, UTF-8 names, strict reader): `src/model/zip.ts` | yes | round trip, CRC, truncated and corrupt archives, name rules, entry limit; checked once against Windows `tar`: `tests/zip.test.ts` | | | no ZIP64 (at most 65 534 files and 4 GB) |
+
+### 0.22 — pagerefs: two-way page references (steps 2100-2119)
+
+Roadmap #179. Settings, Pages, Outline: *Show pages that link here* (on by default). Use a notebook with several pages and text boxes that hold page links (*Copy link to page*, pasted into a text box). Implemented, not verified on hardware. Links to pages of other notebooks are not listed (only the open notebook is read).
+
+2100. **Chip.** Page 3 has a text box with a link to page 7. Scroll to page 7 and stop: a small chip *Referenced on p. 3* appears at the top right after a moment; it never shows on a page nobody links to.
+2101. **List.** Tap the chip: a short list of the referencing pages opens; a page that links twice says *2 links*.
+2102. **Jump.** Tap a row: the view goes to that page and the list closes. Back (the notebook's back button) returns.
+2103. **Close.** Tap outside the list or press Escape: it closes without jumping.
+2104. **Reorder.** Move page 3 after page 7 in the page panel: page 7 still shows the chip, now with the new page number.
+2105. **Deleted page.** Delete the page a link points to: no other page shows a chip because of it.
+2106. **Self link.** A link on a page to itself adds nothing.
+2107. **Edit.** Delete the link text on page 3: page 7's chip goes away; type a new link: it appears.
+2108. **Sticky note.** A link inside a sticky note counts too.
+2109. **Setting.** Turn the setting off: no chip.
+2110. **Pen.** The chip and list never take pen input: writing under them still works around them.
+2111. **Light, dark, phone.** Readable in light and dark and inside a phone's width; below the recent-symbols strip when it is shown.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Two-way page references (#179): a chip "Referenced on p. 3, p. 12" on a page that other pages of the notebook link to (text boxes and sticky notes; by page id, so reordering keeps them), a list with a jump to each, setting to hide it; derived, nothing stored | yes | index by id, reorder, deleted pages, self links, many links, slices: `tests/page-refs.test.ts`; harness `doc=pagerefs` | | | links from other notebooks are not listed; no "Referenced" filter in the notebook map; not tried on a tablet |

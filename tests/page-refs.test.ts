@@ -5,7 +5,7 @@ import type { Page, PageElement } from "../src/model/types";
 const OWNER = "Notebooks/Physics.notebook";
 
 function text(id: string, t: string): PageElement {
-	return { id, type: "text", x: 0, y: 0, width: 200, text: t, fontSize: 16, color: "#000" } as PageElement;
+	return { id, type: "text", x: 0, y: 0, width: 200, text: t, fontSize: 16, color: "#000" };
 }
 
 function page(id: string, ...texts: string[]): Page {

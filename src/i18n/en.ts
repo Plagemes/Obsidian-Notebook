@@ -3903,6 +3903,15 @@ export const en = {
 	"slideBack.slide": "Back to slide {n}",
 	"slideBack.page": "Back to current page",
 	"slideBack.dismiss": "Dismiss",
+	// 0.22 pagerefs
+	"settings.pageRefs": "Show pages that link here",
+	"settings.pageRefs.desc": "A small chip lists the pages of the notebook that link to this one.",
+	"pageRefs.chip": "Referenced on {pages}",
+	"pageRefs.chipMore": "Referenced on {pages} +{n}",
+	"pageRefs.page": "p. {n}",
+	"pageRefs.pageLong": "Page {n}",
+	"pageRefs.links": "{n} links",
+	"pageRefs.title": "Referenced on these pages",
 	// 0.21 symbols
 	"symbols.title": "Recent symbols",
 	"symbols.hint": "Tap the page",

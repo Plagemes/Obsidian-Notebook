@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### pagerefs
+- **Two-way page references (#179).** A page that other pages of the notebook link to (a page link in a text box or a sticky note) shows a quiet chip, *Referenced on p. 3, p. 12*; tapping it lists those pages with a jump to each. Links name pages by id, so reordering pages keeps them; deleted pages, links to itself and links to other notebooks are ignored. The index is derived in small idle slices and cached, nothing is stored (format unchanged). The new setting *Show pages that link here* (Pages > Outline) turns it off. Tests: `tests/page-refs.test.ts`; harness `doc=pagerefs`.
+
 ## 0.21.0 — 2026-11-08
 
 Eight features: a start and end time on every page, scheduled backups, a documented file format with a JSON Schema, an interactive HTML export, a back-of-book index, a reusable signature and date stamp, a way back to the current slide and a strip of recent symbols; plus the review fixes carried over from 0.20. The notebook format moves to version 19 (page start and end times): the migration from version 18 is automatic, and 0.20 and older open a v19 notebook read-only and never overwrite it.

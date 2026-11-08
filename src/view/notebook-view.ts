@@ -153,6 +153,7 @@ import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
 import { SlideBack } from "./slide-back";
+import { PageRefs } from "./page-refs";
 import { SmartAddStrip } from "./smart-add";
 import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
 import { createMarker, isRegion, visibleStrokes } from "../model/markers";
@@ -507,6 +508,7 @@ export class NotebookView extends FileView {
 	private pageOffer: PageOffer | null = null;
 	/** 0.21 (#225): the pill back to the place last written during a lecture (view/slide-back.ts). */
 	slideBack: SlideBack | null = null;
+	pageRefs: PageRefs | null = null;
 	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
 	lectureMode: LectureModeController | null = null;
 	/** wave 0.14 (410): the Smart "+" strip (view/smart-add.ts). */
@@ -822,6 +824,14 @@ export class NotebookView extends FileView {
 				this.scrollToPage(index, y);
 			},
 		});
+		this.pageRefs = new PageRefs({
+			parent: () => this.body,
+			enabled: () => this.host.settings.pageRefs && this.layout !== null,
+			pages: () => this.shownDoc()?.pages ?? [],
+			path: () => this.file?.path ?? null,
+			current: () => this.currentPageIndex(),
+			goTo: (index) => this.goToPage(index),
+		});
 		this.smartAdd = new SmartAddStrip({
 			app: this.app,
 			parent: () => this.body,
@@ -1100,6 +1110,8 @@ export class NotebookView extends FileView {
 		this.pageOffer = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
+		this.pageRefs?.destroy();
+		this.pageRefs = null;
 		this.smartAdd?.destroy();
 		this.smartAdd = null;
 		this.ui?.destroy();
@@ -1552,6 +1564,7 @@ export class NotebookView extends FileView {
 		this.reading?.settingsChanged();
 		this.lectureMode?.settingsChanged();
 		this.slideBack?.settingsChanged();
+		this.pageRefs?.reset();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
 		this.display?.settingsChanged();
@@ -3903,6 +3916,7 @@ export class NotebookView extends FileView {
 		this.checklist?.reset();
 		this.pageOffer?.reset();
 		this.slideBack?.documentChanged();
+		this.pageRefs?.reset();
 		this.multiTap.reset();
 		this.stopHold();
 		this.textEditor?.close();
@@ -4103,6 +4117,7 @@ export class NotebookView extends FileView {
 		this.toolbar.setPage(n ? current + 1 : 0, n, lockedPage);
 		this.syncLockBadge(lockedPage);
 		this.mentions?.sync();
+		this.pageRefs?.sync();
 		this.notifyStatus();
 		if (n) this.practiceHooks?.page(current);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
