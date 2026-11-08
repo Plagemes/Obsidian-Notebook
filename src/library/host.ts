@@ -33,6 +33,7 @@ import { askLectureSetup } from "../view/lecture-pack-modal";
 import { pickFile } from "../view/pick";
 import { libraryIndexPath, parseStoredJson, patchNotebookCover, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
 import { openCoverDialog, type CoverChange } from "./cover-dialog";
+import { SerialQueue, mayTrashCoverAsset } from "./cover-assets";
 import { importPdfAsNotebook } from "./import-pdf";
 import { BulkImportDialog } from "./bulk-import-dialog";
 import { pickManyFiles, fileSource } from "./bulk-drop";
@@ -91,6 +92,8 @@ export class NotebookLibraryHost implements LibraryHost {
 	readonly pdf: PdfStore;
 	/** Assets seen in notebooks the library read, so a PDF is found even if its file was moved. */
 	private readonly assets = new Map<string, Asset>();
+	/** Review fix (D10): "Use this cover" runs one at a time, so two applies of the same picture never meet. */
+	private readonly coverApplies = new SerialQueue();
 	/** Library trash (#160): deleting from the library moves to `_trash/`. */
 	readonly trash: LibraryTrash;
 	/** Roadmap 54: pinned, archived and manual order, one file per device in `_meta` (library/library-state.ts). */
@@ -643,9 +646,18 @@ export class NotebookLibraryHost implements LibraryHost {
 					const bg = await this.thumbnailBackground(d, page, 1000);
 					return renderThumbnail(page, 1000, { drawBackground: bg ?? undefined, mime: "image/jpeg", quality: 0.85 });
 				},
-				apply: (change) => this.applyCover(file, change),
+				apply: (change) => this.coverApplies.run(() => this.applyCover(file, change)),
 			});
+		}).catch((e: unknown) => {
+			console.error("[notebook] change cover", e);
+			showNotice(t("library.unreadable"));
 		});
+	}
+
+	/** Whether something other than the failed apply points at the cover picture: a known notebook, or a notebook that is open. */
+	private coverAssetInUse(id: string): boolean {
+		if (this.assets.has(id)) return true;
+		return this.app.workspace.getLeavesOfType(VIEW_TYPE).some((leaf) => leaf.view instanceof NotebookView && leaf.view.hasAsset(id));
 	}
 
 	private async applyCover(file: TFile, change: CoverChange): Promise<void> {
@@ -663,7 +675,8 @@ export class NotebookLibraryHost implements LibraryHost {
 				if (!view.applyCoverChange(asset, patch)) throw new Error(t("host.metaRejected"));
 			} else await this.rewrite(file, (json) => patchNotebookCover(json, asset, patch));
 		} catch (e) {
-			if (stored?.created) {
+			// Review fix (D10): a picture another notebook (or an open one) already points at is never trashed.
+			if (stored && mayTrashCoverAsset(stored.created, this.coverAssetInUse(stored.asset.id))) {
 				const written = this.app.vault.getFileByPath(stored.asset.path);
 				if (written) await this.app.fileManager.trashFile(written).catch(() => undefined);
 			}
