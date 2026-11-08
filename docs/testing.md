@@ -3629,3 +3629,27 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 | Clean up strokes: one undo step, keeps ids, order, groups, nib; refuses a locked page; selection follows | yes | `tests/hook-clean.test.ts` (History: execute, undo, redo, locked page); harness `doc=hookclean` | | | |
 | Selection action, palette command and sheet entry (`selection-cleanup`) | yes | registry tests (`tests/ui-registry.test.ts`); harness `doc=hookclean` | | | |
 | Setting *Trim hooks as you write* (off by default): the stroke is committed as written and the trim is its own undo step (Undo gives the written stroke back, a second Undo removes it); stricter limits than the manual clean-up (near reversal, very short hook), so letter tails stay; live input and rendering untouched | yes | `tests/hook-clean.test.ts` (review V2: raw stroke kept in the history, page times, locked page, limits), `tests/commit-trim.test.ts` (the pen-up wiring the view calls: trim step after the commit, locked page, late side-button take-back of both steps, partial take-back), the first-Undo notice and the real pen path: harness `doc=hookclean`; settings read: `tests/hook-clean-settings.test.ts`; golden hashes unchanged: `tests/pens-golden.test.ts`; harness `doc=hookclean` | | yes | needs real pen data to judge |
+
+### 0.24 — bookmarks: global bookmarks, pages from different notebooks in one list (roadmap #265; steps 2560-2579)
+
+Implemented, not verified on hardware. No format change: the list is the sidecar `_meta/bookmarks-<device>.json`, never part of a notebook file.
+
+2560. **Add.** Open a page, tap the page number to open the page sheet and *All actions*: *Bookmark in the global list* is there, unchecked. Run it: a notice says the page was added and the action is now checked. Run it again: the page is removed and the action is unchecked. The command palette has the same toggle.
+2561. **Other notebooks.** Bookmark a page in each of three notebooks. Run *Global bookmarks* (palette, page sheet): one dialog lists the three, in the order they were added, each with its notebook name and page number.
+2562. **Open.** Tap a row from another notebook: the dialog closes and that notebook opens at that page (in its existing tab if it is open). Tap a row of the notebook you are in: it goes to the page.
+2563. **Home.** Close all notebooks and open Home: a *Bookmarks* chip with the count is in the chip row under the Continue card. Tap it: the same dialog opens. With no bookmarks the chip is not shown.
+2564. **Rename and reorder.** Pencil on a row: type a name, *Rename*: the row shows it. The arrows move a row up or down (the first cannot go up, the last cannot go down); close and reopen the dialog: the order and names are kept.
+2565. **Remove.** The bin on a row takes it off the list; the page and the notebook are untouched. Closing and reopening the app keeps the list.
+2566. **Page deleted.** Delete a bookmarked page in its notebook, then open the dialog: the row is dashed with a *Missing* badge and says the page is gone. Tapping it opens the notebook at the nearest page; the bin removes it.
+2567. **Notebook renamed, moved, deleted.** Rename a bookmarked notebook in the library, and move another into a folder (or rename a folder): the rows keep working and open the notebooks at their new places. Trash a notebook: its row is dashed, *Missing*, tapping it says the notebook was not found, and the bin removes it.
+2568. **Two devices.** With the vault synced between two devices: a bookmark added on one appears on the other after the sync; one removed on one device does not come back from the other.
+2569. **A file that cannot be read.** Damage `_meta/bookmarks-<device>.json` of this device (not valid JSON): adding a bookmark says the file could not be read and nothing was changed; the file is not overwritten (a copy named `bookmarks.unreadable-…` is kept next to it).
+2570. **Read-only and locked pages.** On a locked page and in a read-only view the toggle still works (it does not edit the notebook).
+2571. **Languages and looks.** In Italian the action, the dialog, the Missing badge and the notices are translated. Light and dark theme, phone and tablet width: the rows wrap, the four small buttons of a row stay 44 px targets that do not overlap the title.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Global bookmarks (#265): toggle the page in view (page sheet, command), list of pages of all notebooks, tap opens the notebook at the page, rename, reorder, remove | yes | store and merge: `tests/bookmarks.test.ts`; dialog: harness (`doc=bookmarks`) | | | |
+| Sidecar `_meta/bookmarks-<device>.json`: per-device file, latest wins, tombstones (90 days) and adoption, unknown fields and entries kept, unreadable or empty file never overwritten, listed in the library check's non-holders | yes | `tests/bookmarks.test.ts` | | | |
+| Follows renamed and moved notebooks (rename events, one write per burst; found again by the notebook's id); a deleted page or a missing notebook shows as Missing and can be removed | yes | `tests/bookmarks.test.ts` (retarget, resolve); harness `doc=bookmarks` | | | |
+| Home chip (count, opens the list) | yes | harness `doc=bookmarks` (rendered through `renderHome`) | | | not checked inside the real library view |
