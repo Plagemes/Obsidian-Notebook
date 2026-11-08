@@ -32,6 +32,11 @@ export interface FiguresHost {
 	insertIntoNote?(entry: FigureEntry): void;
 	/** Opens the stored file of the picture; false when the file cannot be found. */
 	openOriginal(entry: FigureEntry): boolean;
+	/**
+	 * Review fix (0.26 #285): why the picture must not be copied (a redaction box covers it, or the boxes cannot be read), or null. Copy
+	 * puts the whole original picture on the clipboard, so a covered one is refused instead.
+	 */
+	copyRefused?(entry: FigureEntry): string | null;
 }
 
 /** Thumbnails by asset id (assets are content-addressed, so the picture is the same in any notebook), kept across openings. */
@@ -355,6 +360,11 @@ export class FiguresModal extends Modal {
 	}
 
 	private async copy(entry: FigureEntry): Promise<void> {
+		const refused = this.figures.copyRefused?.(entry) ?? null;
+		if (refused) {
+			showErrorNotice(refused, 8000);
+			return;
+		}
 		const ok = await copyFigureImage(this.figures, entry);
 		if (ok) showNotice(t("figures.copied"), 3000);
 		else showErrorNotice(t("figures.copyFailed"), 6000);

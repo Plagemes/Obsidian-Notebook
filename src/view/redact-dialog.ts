@@ -122,6 +122,9 @@ export class RedactModal extends Modal {
 		if (this.url) URL.revokeObjectURL(this.url);
 		this.url = "";
 		this.contentEl.empty();
+		// Review fix (P4): Done hands over the set as it is, even unchanged: boxes that could not be read are then set again (to what is
+		// shown here, possibly none), and exports can go on.
+		this.host.commit(this.boxes);
 		this.host.closed?.();
 	}
 
@@ -318,7 +321,7 @@ export class RedactModal extends Modal {
 		const o = this.host.options;
 		try {
 			await o.prepare?.([page]);
-			const shown = redactPage(page, boxesOf(this.boxes, page.id));
+			const shown = redactPage(page, boxesOf(this.boxes, page.id), this.boxes);
 			const header = o.header;
 			this.renderer ??= new PageImageRenderer(this.host.media, {
 				...(o.hiddenInk ? { hiddenInk: o.hiddenInk } : {}), ...(o.boxLabel ? { boxLabel: o.boxLabel } : {}),

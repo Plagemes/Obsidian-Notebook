@@ -75,6 +75,7 @@ export class ExportModal extends Modal {
 	private redactApply: Setting | null = null;
 	private redactToggle: ToggleComponent | null = null;
 	private redactNote: HTMLElement | null = null;
+	private redactScope: HTMLElement | null = null;
 	private stopHelp: (() => void) | null = null;
 	private layersDesc: HTMLElement | null = null;
 	private fileDesc: HTMLElement | null = null;
@@ -207,6 +208,9 @@ export class ExportModal extends Modal {
 		});
 		this.redactNote = shellNote(parent, "");
 		this.redactNote.addClass("notebook-export-note");
+		// Review fix: one line that says which outputs the boxes do not cover (docs/architecture.md keeps the same list).
+		this.redactScope = shellNote(parent, t("redact.notCovered"));
+		this.redactScope.addClass("notebook-export-note");
 		this.refreshRedact();
 	}
 
@@ -214,14 +218,17 @@ export class ExportModal extends Modal {
 	private refreshRedact(): void {
 		const redact = this.host.redact;
 		if (!redact || !this.redactSetting) return;
-		const boxes = redact.state().boxes;
+		const state = redact.state();
+		const boxes = state.boxes;
 		const n = countBoxes(boxes);
 		const p = countPages(boxes);
 		const summary = n === 0 ? "" : n === 1 ? t("redact.sum.one") : p === 1 ? t("redact.sum.onePage", { boxes: String(n) }) : t("redact.sum.many", { boxes: String(n), pages: String(p) });
 		this.redactSetting.setDesc(summary ? `${t("redact.row.desc")} ${summary}` : t("redact.row.desc"));
 		this.redactApply?.settingEl.toggle(n > 0);
-		this.redactNote?.toggle(n > 0);
-		this.redactNote?.setText(n === 0 ? "" : t(this.redactOn ? "redact.note.on" : "redact.note.off"));
+		// Review fix (P4): boxes that cannot be read are said so: every export is refused until they are set again.
+		this.redactNote?.toggle(n > 0 || state.unreadable === true);
+		this.redactNote?.setText(state.unreadable === true ? t("redact.unreadable.dialog") : n === 0 ? "" : t(this.redactOn ? "redact.note.on" : "redact.note.off"));
+		this.redactScope?.toggle(n > 0 && this.redactOn);
 	}
 
 	private afterRedactEdit(): void {
@@ -248,7 +255,7 @@ export class ExportModal extends Modal {
 	private pageAt(index: number): Page | undefined {
 		const page = this.host.pages?.()[index];
 		const boxes = this.activeRedactions();
-		return page && boxes ? redactPage(page, boxesOf(boxes, page.id)) : page;
+		return page && boxes ? redactPage(page, boxesOf(boxes, page.id), boxes) : page;
 	}
 
 	/** Shows the choices the format and the scope need, and the sentence that says what will happen. */

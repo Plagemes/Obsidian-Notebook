@@ -6,13 +6,13 @@ import { normalizePath, TFile, TFolder, type App } from "obsidian";
 import { t } from "../i18n";
 import type { PdfCommentLabels } from "../ink/export-pdf";
 import type { BoxLabel } from "../ink/marker-render";
-import { metaWithoutRedactedTitles, redactPages } from "../ink/redact";
+import { metaWithoutRedactedTitles } from "../ink/redact";
 import { buildNotebookMarkdown, planMarkdownFiles, type MarkdownDpi } from "../model/export-markdown";
-import { countBoxes, type Redactions } from "../model/redact";
+import type { Redactions } from "../model/redact";
 import type { NotebookDocument, Page } from "../model/types";
 import { ensureFolder } from "../storage/vault-io";
 import { recordPluginWrite } from "../storage/plugin-written";
-import { announceRedaction } from "./export-redact";
+import { announceRedaction, redactionRefused, withRedaction } from "./export-redact";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { PageImageRenderer } from "./page-images";
@@ -31,6 +31,10 @@ export interface MarkdownExportOptions {
 	comments?: PdfCommentLabels;
 	/** 0.26 (#285): redaction boxes by page id: the pages are drawn without what they cover, and so is the text written below them. */
 	redact?: Redactions;
+	/** Review fix (P4): the boxes could not be read: nothing is written. */
+	redactBlocked?: true;
+	/** Review fix (P10): boxes kept switched off (a quiet hint says so). */
+	redactOff?: number;
 }
 
 /** The folder suggested for the export of `notebook`: next to it, named after it. */
@@ -74,9 +78,11 @@ export async function prepareExportFolder(app: App, folder: string): Promise<{ d
  * Pages are rendered one after the other, so memory stays at one page.
  */
 export async function exportMarkdown(app: App, notebook: TFile, source: NotebookDocument, media: NotebookMedia | null, options: MarkdownExportOptions): Promise<string | null> {
+	if (redactionRefused(options)) return null;
 	const working = showNotice(t("export.working"), 0);
-	// 0.26 (#285): the text boxes, equations, notes and comments under a box are not written, nor are the bookmark titles of a covered page.
-	const covered = options.redact && countBoxes(options.redact) > 0 ? redactPages(source.pages, options.redact) : source.pages;
+	// 0.26 (#285): the text boxes, equations, notes and comments under a box are not written, nor are the bookmark titles of a covered page
+	// (nor, review fix P2, an excerpt of a covered region).
+	const covered = withRedaction(source.pages, options.redact ? { redact: options.redact } : {}).pages;
 	const doc: NotebookDocument = covered === source.pages ? source : { ...source, pages: [...covered], meta: metaWithoutRedactedTitles(source.meta, covered) ?? source.meta };
 	let written = 0;
 	const renderer = new PageImageRenderer(media, {

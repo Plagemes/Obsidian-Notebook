@@ -15,6 +15,7 @@ import {
 import { backgroundRect } from "../model/margins";
 import type { Page } from "../model/types";
 import { textUnderBands } from "../pdf/region-text";
+import { redactionOf } from "../ink/redact";
 import { boxesOnPage, type PageTextContent, type TextBox, type TextMeasure } from "../pdf/text-items";
 import { recordPluginWrite } from "../storage/plugin-written";
 import { sanitizeName } from "../storage/names";
@@ -150,7 +151,8 @@ export async function runMeaningDigest(host: MeaningDigestHost, request: Meaning
 				const blob = drawn.blobs[k] ?? null;
 				const image = blob ? await storePicture(app, notePath, meaningImageName(stem, pageIndex + 1, k + 1), blob, known) : null;
 				if (blob && !image) skipped++;
-				const raw = boxes ? textUnderBands(boxes, region.bands, measure) : "";
+				// 0.26 review fix (P6): no PDF word a redaction box touches is quoted (the page is the redacted copy, which carries its boxes).
+			const raw = boxes ? textUnderBands(boxes, region.bands, measure, redactionOf(page)) : "";
 				items.push({ region, pageNumber: pageIndex + 1, image, text: raw ? escapeSearchText(raw) : "" });
 				done++;
 				working.setMessage(t("meaning.digest.working", { done: String(done), total: String(regions.length) }));

@@ -28,6 +28,11 @@ export interface MeaningToolsHost {
 	renderer(): Renderer | null;
 	/** The pages as the view shows them (the live views of pages with states). */
 	pages(): readonly Page[];
+	/**
+	 * Review fix (0.26 #285, P6): the pages the digest writes, with the redaction boxes applied; null (after a notice) when nothing may be
+	 * written. Absent: `pages()`.
+	 */
+	digestPages?(): readonly Page[] | null;
 	media(): NotebookMedia | null;
 	render(): { render: PageImageOptions; prepare?: (pages: readonly Page[]) => Promise<void> };
 }
@@ -140,7 +145,9 @@ export class MeaningTools {
 			showNotice(t("meaning.filter.none"), 6000);
 			return;
 		}
-		const pages = [...h.pages()];
+		const chosen = h.digestPages ? h.digestPages() : h.pages();
+		if (!chosen) return;
+		const pages = [...chosen];
 		const tolerance = this.tolerance();
 		if (meaningDigestCounts(pages, legend, tolerance).regions === 0) {
 			showNotice(t("meaning.digest.none"), 6000);
