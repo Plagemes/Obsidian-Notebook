@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### smooth
+- **Smooth strokes and Straighten strokes (#66).** Two actions in the All actions sheet (Selection) and the command palette work on the handwriting of the selection, each as ONE undo step with a notice that counts the strokes (history titles *Strokes smoothed* / *Strokes straightened*). *Smooth* takes the tremor out of the lines: a few Taubin passes (a smoothing step and a slightly larger step back, so curves do not shrink) with sharp corners held in place, no point moved farther than about a pen width, so the shape stays and only the wobble goes. *Straighten* turns a stroke that is almost a line (bend under 7% of its length, no loops, no doubling back) into a clean line between its two ends, each point keeping its share of the way; curves and short marks are left alone, and a second run does nothing.
+- **Safe.** Strokes keep their id, layer, style, number of points and the pressure of every point; the first and last point never move. Shapes, the highlighter and the marker, invisible ink, ink bound to a graph, the ink a collapsed sticky note keeps hidden, text, pictures and area highlights are not touched; a group is reshaped only when wholly selected and without a locked element; a locked page refuses; the page times do not move. No format change; the stroke pipeline, the renderer and the golden render hashes are untouched.
+- **Code.** Pure module `src/ink/smooth.ts` (no `obsidian` import), `SelectionTools.reshape` in `src/view/selection-actions.ts`, registry entries `selection-smooth` and `selection-straighten` with long-press help, a context-ranking rule and English and Italian texts. Tests: `tests/smooth.test.ts`, `tests/selection-arrange.test.ts`; harness scenario `doc=smooth`.
+
 ## 0.25.0 — 2026-11-08
 
 Seven features and a first part of the history: an area highlighter, a panel of the actions you took, align to baseline, lecture and study writing profiles, copy as image, a toolbar that fades while you write, a suggested paper for a new page and a page navigator view of marked pages only. The notebook format moves to version 23 (the area highlighter): the migration from version 22 is automatic, and 0.24 and older open a v23 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

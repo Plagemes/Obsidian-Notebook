@@ -521,6 +521,21 @@ describe("registry and bar placement (wave 0.10)", () => {
 		}
 	});
 
+	it("offers Smooth and Straighten strokes (0.26) in the sheet for a selection of ink only, not on the bar rows, with command, help and all texts", () => {
+		for (const id of ["selection-smooth", "selection-straighten"]) {
+			expect(idsOf(sel(1)), id).toContain(id);
+			expect(idsOf(sel(0, 2, 0)), id).not.toContain(id);
+			for (const width of [360, 800, 1280]) expect(contextBar(sel(3), width, {}, 0)!.second, `${id} ${width}`).not.toContain(id);
+			const def = ACTIONS.find((a) => a.id === id)!;
+			expect(def.surfaces).toEqual(["sheet"]);
+			const base = id === "selection-smooth" ? "smooth" : "straighten";
+			for (const key of [def.label, String(def.command), `${base}.done`, `${base}.nothing`, `help.${base}`, `histpanel.t.${base}`]) {
+				expect(enSrc, key).toContain(`"${key}"`);
+				expect(itSrc, key).toContain(`"${key}"`);
+			}
+		}
+	});
+
 	it("lists every operation in the All actions sheet with a selection, and none of them without one", () => {
 		const withSel = idsOf(sel(3, 1));
 		for (const id of [

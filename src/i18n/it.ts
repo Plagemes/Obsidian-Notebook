@@ -4865,4 +4865,17 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"navMarked.clear": "Mostra tutte le pagine",
 	"navMarked.empty": "Qui non c'è ancora niente di segnato.",
 	"help.navMarked": "Mostra solo le pagine che hai segnato: segnalibri, segnaposto e domande, colori con significato, caselle da spuntare ed etichette di pagina. Ogni pagina mantiene il suo numero e indica perché è segnata. Nel menu scegli quali tipi contano.",
+	// 0.26 smooth (#66)
+	"smooth.action": "Leviga i tratti",
+	"command.smooth": "Leviga la scrittura a mano della selezione (toglie il tremolio, mantiene la forma)",
+	"smooth.done": "Levigati {n} tratti.",
+	"smooth.nothing": "Nessuna scrittura da levigare nella selezione.",
+	"help.smooth": "Toglie il tremolio dalla scrittura a mano selezionata. La forma, gli estremi di ogni linea e la pressione restano come sono. Annulla la rimette com'era.",
+	"straighten.action": "Raddrizza i tratti",
+	"command.straighten": "Raddrizza le linee quasi dritte della selezione in linee pulite",
+	"straighten.done": "Raddrizzati {n} tratti.",
+	"straighten.nothing": "Nessuna linea quasi dritta da raddrizzare nella selezione.",
+	"help.straighten": "Trasforma le linee quasi dritte in linee dritte e pulite tra i loro estremi. Le curve restano com'erano. Annulla le rimette com'erano.",
+	"histpanel.t.smooth": "Tratti levigati",
+	"histpanel.t.straighten": "Tratti raddrizzati",
 };
