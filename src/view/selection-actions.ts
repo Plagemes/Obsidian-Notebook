@@ -187,7 +187,7 @@ export class SelectionActions {
 
 	/**
 	 * Trims the hooks at the ends of the selected strokes and removes the stray dots touching them, as ONE undo step. Groups come
-	 * whole (`selectableItems`), the ink a collapsed note keeps hidden goes with the note (`withPinnedInk`); a locked page refuses
+	 * whole (`selectableItems`); the ink a collapsed note keeps hidden is never touched (`planCleanup`); a locked page refuses
 	 * the step in the history, which says so. The selection stays on the cleaned strokes.
 	 */
 	cleanUp(): void {
@@ -202,7 +202,7 @@ export class SelectionActions {
 			const onPage = new Set(page.strokes);
 			const elements = part.elements.filter((e) => page.elements?.includes(e));
 			const picked = selectableItems(page, { strokes: part.strokes.filter((s) => onPage.has(s)), elements });
-			const plan = planCleanup(page, withPinnedInk(page.strokes, picked.strokes, picked.elements));
+			const plan = planCleanup(page, picked.strokes);
 			if (plan) plans.push({ part, plan });
 		}
 		if (plans.length === 0) {

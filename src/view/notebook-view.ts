@@ -33,7 +33,7 @@ import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layou
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
-import { trimHooks } from "../ink/hook-clean";
+import { planPenUpTrim } from "../ink/hook-clean";
 import { scribbleEraseSteps } from "../ink/scribble";
 import { lineAt, TextLayoutCache, wordAt } from "../ink/words";
 import { InkBuilder } from "../ink/ink-geometry";
@@ -566,7 +566,7 @@ export class NotebookView extends FileView {
 	 * that continues the same contact (side button pressed while writing) spares them, and a late button signal can
 	 * retract them (`retractStroke`).
 	 */
-	private justCommitted: { ids: ReadonlySet<string>; cmd: Command } | null = null;
+	private justCommitted: { ids: ReadonlySet<string>; cmd: Command; trim?: Command } | null = null;
 	private lasso: Lasso | null = null;
 	/** wave 0.10 (362): the clipboard files shared between devices (made when first used). */
 	private sharedClipStore: SharedClipStore | null = null;
@@ -1780,9 +1780,12 @@ export class NotebookView extends FileView {
 		this.justCommitted = null;
 		if (!c || !this.editable() || this.controller?.drawing || this.history.canRedo()) return false;
 		const steps = this.history.pending();
-		if (steps[steps.length - 1] !== c.cmd) return false;
+		// 0.23 (#314): a hook trimmed at pen-up is its own step after the stroke's; the contact is taken back as a whole.
+		const withTrim = c.trim !== undefined;
+		if (withTrim ? steps[steps.length - 1] !== c.trim || steps[steps.length - 2] !== c.cmd : steps[steps.length - 1] !== c.cmd) return false;
 		this.penLinks?.hideChip();
 		this.pageOffer?.cancel();
+		if (withTrim && this.history.undo() !== c.trim) return false;
 		if (this.history.undo() !== c.cmd) return false;
 		this.renderer?.invalidate();
 		this.afterHistoryChange();
@@ -5360,7 +5363,7 @@ export class NotebookView extends FileView {
 			// The line ends where the pen lifted (the filtered position may trail it slightly).
 			this.ink.add(active.rawX, active.rawY, active.rawP);
 			this.ink.finish();
-			const stroke = this.trimmedAtPenUp(active, freezeStroke({ ...active.stroke, points: this.ink.toPoints() }));
+			const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
 			const snapped = this.reading?.snapStroke(page, stroke);
 			if (snapped) {
 				// Snap to text lines: straight highlights replace the hand-drawn stroke in the same undo step.
@@ -5372,6 +5375,7 @@ export class NotebookView extends FileView {
 			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
 			this.renderer?.endWet(stroke);
 			this.addStrokes(active.pageIndex, page, [stroke]);
+			this.trimCommitted(active, page, stroke);
 			this.updateGhostLines(active.pageIndex, page, stroke.tool);
 			if (active.liveFallback) this.renderer?.setLive(null);
 			const box = this.layout?.boxes[active.pageIndex];
@@ -5385,7 +5389,7 @@ export class NotebookView extends FileView {
 			return;
 		}
 		this.renderer?.setLive(null);
-		const stroke = this.trimmedAtPenUp(active, freezeStroke(active.stroke));
+		const stroke = freezeStroke(active.stroke);
 		const snapped = this.reading?.snapStroke(page, stroke);
 		if (snapped) {
 			this.addStrokes(active.pageIndex, page, snapped);
@@ -5393,16 +5397,24 @@ export class NotebookView extends FileView {
 		}
 		const extras = active.extra.map((points) => freezeStroke({ ...active.stroke, id: createId(), points }));
 		this.addStrokes(active.pageIndex, page, [stroke, ...extras]);
+		this.trimCommitted(active, page, stroke);
 		this.updateGhostLines(active.pageIndex, page, stroke.tool);
 	}
 
 	/**
-	 * 0.23 (#314), setting "Trim hooks as you write": the stroke that is committed when the pen lifts loses a tiny hook at its start
-	 * or end (`ink/hook-clean.ts`). Only the committed points change, once, here: the live pipeline and the renderer are untouched
-	 * (the wet ink shows the line as written until the static layer takes over). A snapped or recognised stroke is left as it is.
+	 * 0.23 (#314), setting "Trim hooks as you write": the stroke is committed exactly as written, then a tiny hook at its start or end
+	 * is cut as a step of its own (`ink/hook-clean.ts`, stricter limits than the manual clean-up). The raw points stay in the history:
+	 * one Undo gives the written stroke back, a second removes it. A snapped or recognised stroke is left as it is.
 	 */
-	private trimmedAtPenUp(active: ActiveStroke, stroke: Stroke): Stroke {
-		return this.host.settings.trimHooks && !active.snap && !active.recognized ? trimHooks(stroke) : stroke;
+	private trimCommitted(active: ActiveStroke, page: Page, stroke: Stroke): void {
+		if (!this.host.settings.trimHooks || active.snap || active.recognized) return;
+		const plan = planPenUpTrim(page, stroke.id);
+		if (!plan || !this.history.execute(plan.command)) return;
+		// `justCommitted` keeps both steps, so a late side-button press still takes the whole contact back.
+		if (this.justCommitted) this.justCommitted = { ...this.justCommitted, trim: plan.command };
+		this.renderer?.invalidate();
+		this.markChanged();
+		this.updateHistoryButtons();
 	}
 
 	/**

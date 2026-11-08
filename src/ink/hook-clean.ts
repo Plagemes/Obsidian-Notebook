@@ -1,3 +1,4 @@
+import { pinnedInk } from "./attach";
 import { Batch, ReplaceStroke, type Command } from "../model/history";
 import { freezeStroke } from "../model/serialize";
 import { isLinePen, type Page, type Point, type Stroke } from "../model/types";
@@ -41,6 +42,21 @@ export const HOOK_RULES = {
 
 const COS_TURN = Math.cos((HOOK_RULES.minTurn * Math.PI) / 180);
 
+/** Limits that can be tightened per call (the defaults are `HOOK_RULES`). */
+export interface HookOptions {
+	/** The turn between the line and the hook, in degrees, at least. */
+	minTurn?: number;
+	/** Longest hook as a share of the stroke's length. */
+	capShare?: number;
+}
+
+/**
+ * The limits of "Trim hooks as you write", which cuts while the person writes and so can meet the exit tail of a printed "a", "d"
+ * or "u": only a near reversal (the pen flicking back along its own line) and a very short hook count. The clean-up of a selection
+ * keeps the wider default rules, because the person asked for it and can see what it does.
+ */
+export const AUTO_HOOK_OPTIONS: HookOptions = { minTurn: 155, capShare: 0.06 };
+
 /** Cumulative arc length at each point. */
 function cumulative(pts: readonly Point[]): number[] {
 	const out = [0];
@@ -56,23 +72,23 @@ export function pathLength(pts: readonly Point[]): number {
 }
 
 /** The longest hook for a pen of `width` (pt) on a line `total` long. */
-function hookCap(width: number, total: number): number {
+function hookCap(width: number, total: number, share: number): number {
 	const abs = Math.min(HOOK_RULES.capMax, Math.max(HOOK_RULES.capMin, HOOK_RULES.capWidths * width));
-	return Math.min(abs, total * HOOK_RULES.capShare);
+	return Math.min(abs, total * share);
 }
 
 /**
  * The index of the point where the line really ends, when the last points are a hook; null when they are not. The points after
  * that index are the hook. The sharpest turn wins when several candidates qualify.
  */
-function endCorner(pts: readonly Point[], cum: readonly number[], width: number): number | null {
+function endCorner(pts: readonly Point[], cum: readonly number[], width: number, opts: HookOptions): number | null {
 	const n = pts.length;
 	const total = cum[n - 1]!;
-	const cap = hookCap(width, total);
+	const cap = hookCap(width, total, opts.capShare ?? HOOK_RULES.capShare);
 	const minChord = Math.max(HOOK_RULES.minChordPt, HOOK_RULES.minChordWidths * width);
 	const end = pts[n - 1]!;
 	let best: number | null = null;
-	let bestCos = COS_TURN;
+	let bestCos = opts.minTurn === undefined ? COS_TURN : Math.cos((opts.minTurn * Math.PI) / 180);
 	for (let k = n - 2; k >= 2; k--) {
 		const hookLen = total - cum[k]!;
 		if (hookLen > cap) break;
@@ -111,18 +127,18 @@ export interface HookTrim {
 }
 
 /** Where the hooks of `stroke` are: the range of points to keep, or null when it has none (or is not a stroke to look at). */
-export function findHooks(stroke: Stroke): HookTrim | null {
+export function findHooks(stroke: Stroke, opts: HookOptions = {}): HookTrim | null {
 	const pts = stroke.points;
 	if (!isLinePen(stroke.tool) || stroke.hidden || pts.length < HOOK_RULES.minPoints) return null;
 	const cum = cumulative(pts);
 	const total = cum[cum.length - 1]!;
 	if (!(total > 0)) return null;
 	const n = pts.length;
-	const tailCorner = endCorner(pts, cum, stroke.width);
+	const tailCorner = endCorner(pts, cum, stroke.width, opts);
 	// The start is the end of the line read backwards.
 	const reversed = [...pts].reverse();
 	const rcum = cumulative(reversed);
-	const headCornerRev = endCorner(reversed, rcum, stroke.width);
+	const headCornerRev = endCorner(reversed, rcum, stroke.width, opts);
 	const to = tailCorner ?? n - 1;
 	const from = headCornerRev === null ? 0 : n - 1 - headCornerRev;
 	// What is left must still be a line, and the two cuts must not meet.
@@ -132,8 +148,8 @@ export function findHooks(stroke: Stroke): HookTrim | null {
 }
 
 /** `stroke` without its hooks (same id, style and fields), or `stroke` itself when it has none. */
-export function trimHooks(stroke: Stroke): Stroke {
-	const hooks = findHooks(stroke);
+export function trimHooks(stroke: Stroke, opts: HookOptions = {}): Stroke {
+	const hooks = findHooks(stroke, opts);
 	if (!hooks) return stroke;
 	const points: Point[] = stroke.points.slice(hooks.from, hooks.to + 1);
 	return freezeStroke({ ...stroke, points });
@@ -192,7 +208,10 @@ export interface CleanupPlan {
  * or not they were asked for. A trimmed stroke keeps its position in the page order (and so its layer), its id and all its fields.
  */
 export function planCleanup(page: Page, strokes: readonly Stroke[]): CleanupPlan | null {
-	const asked = new Set(strokes);
+	// Ink that a collapsed sticky note keeps hidden is out of view: it is never edited here, nor taken for a neighbour.
+	const hidden = new Set(pinnedInk(page.strokes, page.elements ?? []));
+	const asked = new Set(strokes.filter((s) => !hidden.has(s)));
+	const beside = (i: number): Stroke | undefined => { const s = page.strokes[i]; return s && !hidden.has(s) ? s : undefined; };
 	const at = new Map<Stroke, number>();
 	page.strokes.forEach((s, i) => { if (asked.has(s)) at.set(s, i); });
 	const steps: Array<{ index: number; cmd: Command }> = [];
@@ -200,7 +219,7 @@ export function planCleanup(page: Page, strokes: readonly Stroke[]): CleanupPlan
 	let trimmed = 0;
 	let removed = 0;
 	for (const [stroke, index] of at) {
-		if (isStrayDot(stroke, page.strokes[index - 1]) || isStrayDot(stroke, page.strokes[index + 1])) {
+		if (isStrayDot(stroke, beside(index - 1)) || isStrayDot(stroke, beside(index + 1))) {
 			steps.push({ index, cmd: new ReplaceStroke(page.id, stroke, [], index) });
 			after.set(stroke, null);
 			removed++;
@@ -221,4 +240,24 @@ export function planCleanup(page: Page, strokes: readonly Stroke[]): CleanupPlan
 		if (next) kept.push(next);
 	}
 	return { command: new Batch("Clean up strokes", steps.map((s) => s.cmd)), strokes: kept, changes: after, trimmed, removed };
+}
+
+export interface PenUpTrim {
+	/** The step that replaces the committed stroke by its trimmed copy (same id, style and position). */
+	command: ReplaceStroke;
+	trimmed: Stroke;
+}
+
+/**
+ * "Trim hooks as you write": the stroke is committed as written (so the raw points are in the history), and this is the step that
+ * follows it. `strokeId` is looked up on the page because the committed object may not be the one that was drawn. Null when the stroke
+ * is not on the page or has no hook under the stricter automatic limits. One Undo gives the raw stroke back, a second removes it.
+ */
+export function planPenUpTrim(page: Page, strokeId: string): PenUpTrim | null {
+	const index = page.strokes.findIndex((s) => s.id === strokeId);
+	if (index < 0) return null;
+	const stroke = page.strokes[index]!;
+	const trimmed = trimHooks(stroke, AUTO_HOOK_OPTIONS);
+	if (trimmed === stroke) return null;
+	return { command: new ReplaceStroke(page.id, stroke, [trimmed], index), trimmed };
 }

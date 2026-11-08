@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { findHooks, HOOK_RULES, isStrayDot, pathLength, planCleanup, trimHooks } from "../src/ink/hook-clean";
+import { AUTO_HOOK_OPTIONS, findHooks, HOOK_RULES, isStrayDot, pathLength, planCleanup, planPenUpTrim, trimHooks } from "../src/ink/hook-clean";
 import { createDocument, createStroke } from "../src/model/document";
-import { History } from "../src/model/history";
+import { createSticky } from "../src/model/sticky";
+import { AddStroke, History } from "../src/model/history";
+import { pageTimes } from "../src/model/page-times";
 import { RENDER_INK, type Point, type Stroke } from "../src/model/types";
 
 /** A line through the vertices, a point about every `step` pt, pressure `p`. */
@@ -346,5 +348,111 @@ describe("measures", () => {
 	it("path length", () => {
 		expect(pathLength(poly([[0, 0], [3, 4]]))).toBeCloseTo(5, 6);
 		expect(pathLength([])).toBe(0);
+	});
+});
+
+describe("review V2: trimming as you write keeps the raw stroke in the history", () => {
+	const hooked = () => stroke(poly([[40, 50], [100, 50], away(100, 50, 170, 3)]));
+
+	it("the stroke is committed as written, the trim is its own step: one Undo gives the raw points back, a second removes it", () => {
+		const doc = createDocument();
+		const page = doc.pages[0]!;
+		const hist = new History(() => doc, 500, null, null, null, null, () => 1_800_000_000_000);
+		const raw = hooked();
+		expect(hist.execute(new AddStroke(page.id, raw, 0))).toBe(true);
+		const timesAfterAdd = JSON.stringify(pageTimes(page));
+		const plan = planPenUpTrim(page, raw.id)!;
+		expect(plan).not.toBeNull();
+		expect(plan.trimmed.points.length).toBeLessThan(raw.points.length);
+		expect(hist.execute(plan.command)).toBe(true);
+		expect(page.strokes).toHaveLength(1);
+		expect(page.strokes[0]).toBe(plan.trimmed);
+		expect(page.strokes[0]!.id).toBe(raw.id);
+		// The cleanup is not "writing": the page times keep what the stroke stamped.
+		expect(JSON.stringify(pageTimes(page))).toBe(timesAfterAdd);
+		hist.undo();
+		expect(page.strokes).toHaveLength(1);
+		expect(page.strokes[0]).toBe(raw);
+		expect(page.strokes[0]!.points).toHaveLength(raw.points.length);
+		hist.undo();
+		expect(page.strokes).toHaveLength(0);
+		hist.redo();
+		hist.redo();
+		expect(page.strokes[0]).toBe(plan.trimmed);
+	});
+
+	it("finds the committed object by id (the one the history holds may not be the one that was drawn)", () => {
+		const doc = createDocument();
+		const page = doc.pages[0]!;
+		const raw = hooked();
+		page.strokes.push(stroke(poly([[0, 0], [30, 0]])), { ...raw });
+		const plan = planPenUpTrim(page, raw.id)!;
+		expect(plan.command.index).toBe(1);
+		expect(planPenUpTrim(page, "missing")).toBeNull();
+	});
+
+	it("a locked page refuses the trim and keeps the raw stroke", () => {
+		const doc = createDocument();
+		const page = doc.pages[0]!;
+		const raw = hooked();
+		page.strokes.push(raw);
+		page.locked = true;
+		const hist = new History(() => doc);
+		expect(hist.execute(planPenUpTrim(page, raw.id)!.command)).toBe(false);
+		expect(page.strokes[0]).toBe(raw);
+	});
+
+	it("the writing-time rules are stricter: the exit tail of a printed a, d or u stays, a flick back along the line goes", () => {
+		// A down stroke whose exit tail turns 130 degrees (a letter's tail), 3 pt long.
+		const tail = stroke(poly([[50, 20], [50, 80], away(50, 80, 90 + 130, 3)]));
+		expect(findHooks(tail)).not.toBeNull();
+		expect(trimHooks(tail)).not.toBe(tail);
+		expect(trimHooks(tail, AUTO_HOOK_OPTIONS)).toBe(tail);
+		const doc = createDocument();
+		doc.pages[0]!.strokes.push(tail);
+		expect(planPenUpTrim(doc.pages[0]!, tail.id)).toBeNull();
+		// A near reversal is trimmed by both.
+		const flick = hooked();
+		expect(trimHooks(flick, AUTO_HOOK_OPTIONS)).not.toBe(flick);
+		// A hook that is over 6 percent of a short stroke stays for the automatic rule.
+		const short = stroke(poly([[0, 0], [30, 0], away(30, 0, 170, 3)]));
+		expect(trimHooks(short)).not.toBe(short);
+		expect(trimHooks(short, AUTO_HOOK_OPTIONS)).toBe(short);
+	});
+});
+
+describe("review V7: clean-up never edits ink a collapsed sticky note keeps hidden", () => {
+	it("leaves hooks and bounce dots of hidden ink alone, and does not take a hidden stroke for a neighbour", () => {
+		const doc = createDocument();
+		const page = doc.pages[0]!;
+		const hiddenHook = stroke(poly([[40, 50], [100, 50], away(100, 50, 160, 4)]));
+		const hiddenStem = stroke(poly([[50, 120], [50, 160]]));
+		const hiddenDot = stroke([[51.5, 161, 0.4]]);
+		const visibleDot = stroke([[50, 300, 0.4]]);
+		const hiddenNeighbour = stroke(poly([[50, 301], [50, 340]]));
+		const visibleHook = stroke(poly([[40, 400], [100, 400], away(100, 400, 160, 4)]));
+		const note = { ...createSticky(200, 200, page), collapsed: true, ink: [hiddenHook.id, hiddenStem.id, hiddenDot.id, hiddenNeighbour.id] };
+		page.strokes.push(hiddenHook, hiddenStem, hiddenDot, visibleDot, hiddenNeighbour, visibleHook);
+		page.elements = [note];
+		const plan = planCleanup(page, [...page.strokes])!;
+		expect(plan.trimmed).toBe(1);
+		expect(plan.removed).toBe(0);
+		new History(() => doc).execute(plan.command);
+		expect(page.strokes).toHaveLength(6);
+		expect(page.strokes[0]).toBe(hiddenHook);
+		expect(page.strokes[2]).toBe(hiddenDot);
+		expect(page.strokes[3]).toBe(visibleDot);
+		expect(page.strokes[5]).not.toBe(visibleHook);
+		// Only hidden ink asked for: nothing to do.
+		expect(planCleanup(page, [hiddenHook, hiddenDot])).toBeNull();
+	});
+
+	it("an expanded note hides nothing: its ink is cleaned like any other", () => {
+		const doc = createDocument();
+		const page = doc.pages[0]!;
+		const hook = stroke(poly([[40, 50], [100, 50], away(100, 50, 160, 4)]));
+		page.strokes.push(hook);
+		page.elements = [{ ...createSticky(200, 200, page), ink: [hook.id] }];
+		expect(planCleanup(page, [hook])).not.toBeNull();
 	});
 });
