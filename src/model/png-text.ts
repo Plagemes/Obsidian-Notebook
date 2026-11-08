@@ -165,3 +165,18 @@ export function pictureIntact(png: Uint8Array): boolean {
 	const v1 = readPngText(png, PIXEL_SUM_KEYWORD);
 	return v1 !== null && v1 === pngDataSum(png);
 }
+
+/**
+ * A picture the plugin wrote: `png` with the text chunk `markKeyword` = `key` and the checksums of its pixels, both kinds. The
+ * 0.21 one (`PIXEL_SUM_V2_KEYWORD`, every chunk but text and time) is what 0.21 trusts. The 0.20 one (`PIXEL_SUM_KEYWORD`, image
+ * data only) is written beside it for a release or two, so a device still on 0.20 sees the picture as untouched and does not
+ * write a numbered copy at every change (review W21 D7). Not a PNG: returned as it is.
+ */
+export function markPictureBytes(png: Uint8Array, markKeyword: string, key: string): Uint8Array {
+	const sum = pngPixelSum(png);
+	const oldSum = pngDataSum(png);
+	let out = addPngText(png, markKeyword, key);
+	if (sum) out = addPngText(out, PIXEL_SUM_V2_KEYWORD, sum);
+	if (oldSum) out = addPngText(out, PIXEL_SUM_KEYWORD, oldSum);
+	return out;
+}

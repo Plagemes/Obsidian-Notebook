@@ -77,21 +77,25 @@ export function numberedName(path: string, n: number): string {
 
 /**
  * Where the picture of ink `key` goes, starting from `base`. When every name is taken by files that are not rewritable, the
- * picture does not vanish from the note: the plan is `full`, pointing at the newest picture of ours (a stale one, left as it is),
+ * picture does not vanish from the note: the plan is `full`, pointing at `previous` (the picture the note linked before, when it is
+ * one of ours) or else the newest picture of ours (a stale one, left as it is),
  * so the previous link stays; null only when none of the names is ours.
  */
-export async function choosePicturePath(base: string, key: string, probe: (path: string) => Promise<PictureProbe>): Promise<PicturePlan | null> {
+export async function choosePicturePath(base: string, key: string, probe: (path: string) => Promise<PictureProbe>, previous = ""): Promise<PicturePlan | null> {
 	let newestOurs: string | null = null;
+	let previousOurs: string | null = null;
 	for (let n = 1; n <= MAX_PICTURE_NAMES; n++) {
 		const path = numberedName(base, n);
 		const found = await probe(path);
 		if (found.kind === "free") return { path, action: "create" };
 		if (found.mark === key) return { path, action: "keep" };
 		if (found.mark !== null) newestOurs = path;
+		if (found.mark !== null && path === previous) previousOurs = path;
 		// `intact` false: the pixels are no longer the ones this plugin wrote, so the file has become the user's (next name).
 		if (found.mark !== null && found.intact !== false) return { path, action: "rewrite", ...(found.stamp ? { stamp: found.stamp } : {}) };
 	}
-	return newestOurs ? { path: newestOurs, action: "full" } : null;
+	const link = previousOurs ?? newestOurs;
+	return link ? { path: link, action: "full" } : null;
 }
 
 /** True when a file is no longer as it was at `before`: gone, or another size or time. */
