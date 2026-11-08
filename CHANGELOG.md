@@ -46,6 +46,10 @@
 
 ### Review fixes
 - **Page times (format v19), review round.** Undoing a merge no longer loses a stamp made after it: the merge's page-times step undoes only while the times are still what it set, and redo widens the current times, so the end stays at or after every ink on the page. A copy that differs from the notebook only by a page's start or end now counts as a change to merge (the dialog, the *Merge* button and recovery agree, and recovery keeps the widest span). Clock readings before 2015 or after 2100 (a device that booted without network time) are ignored when stamping. Editing the text of an element (text box, sticky note, marker, box title, equation, checkbox label) now moves the page's last-written time; moving or restyling does not, and ink moved in from another page, or made from an equation, no longer stamps the page it lands on. The stamp runs after the step is recorded and is guarded, so a clock error never costs an undo step. Comments in `page-times.ts` match the behaviour.
+- **Index note keeps its notebook.** The index note now also records the notebook's document id, so renaming or moving the notebook and its folder no longer leaves the note behind and starts a numbered copy; a note whose recorded path is gone is taken back at the notebook's own index name. Older markers still work.
+- **Backups.** An old backup larger than this device's cap is never read or trashed (a phone no longer loads a desktop backup to check it). The per-device `_meta` files get the same changed-while-read check as notebooks.
+- **Backup folder setting.** The folder is checked and saved when you finish typing, not on every keystroke, so a refused name no longer leaves a half-typed folder behind. The retention text says plainly that a plugin backup in that folder is trashed when it is old.
+- **Heading pictures.** When every picture name is taken, the old picture that stays linked is no longer remembered as current, so a name you free is used on the next write.
 
 ## 0.20.0 — 2026-11-05
 

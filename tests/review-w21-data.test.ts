@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { choosePicturePath, MAX_PICTURE_NAMES, numberedName, PICTURE_MARK, type PictureProbe } from "../src/model/companion-pictures";
+import { choosePicturePath, MAX_PICTURE_NAMES, numberedName, PICTURE_MARK, pictureCacheable, type PictureProbe } from "../src/model/companion-pictures";
 import { crc32, markPictureBytes, PIXEL_SUM_KEYWORD, PIXEL_SUM_V2_KEYWORD, pictureIntact, pngDataSum, pngPixelSum, readPngText } from "../src/model/png-text";
 
 function chunk(type: string, d: number[]): number[] {
@@ -70,5 +70,14 @@ describe("D9: the full case keeps the previous link", () => {
 	it("never writes over anything in the full case", async () => {
 		const plan = await choosePicturePath(base, "new", allTaken((n) => `old${n}`), "Headings/other.png");
 		expect(plan?.action).toBe("full");
+	});
+});
+
+describe("N6: a stale picture of the full case is not remembered under the current ink", () => {
+	it("caches create, keep and rewrite plans, never a full one", () => {
+		expect(pictureCacheable({ path: "a.png", action: "create" })).toBe(true);
+		expect(pictureCacheable({ path: "a.png", action: "keep" })).toBe(true);
+		expect(pictureCacheable({ path: "a.png", action: "rewrite" })).toBe(true);
+		expect(pictureCacheable({ path: "a.png", action: "full" })).toBe(false);
 	});
 });
