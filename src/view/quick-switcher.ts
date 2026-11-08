@@ -25,6 +25,30 @@ export interface QuickNavHost {
 const THUMB_WIDTH = 72;
 const THUMB_CACHE = 80;
 
+/**
+ * Review fix (R7): what a saving refresh writes: the entries a read-only refresh kept and the ones it read now, one per path (the last
+ * read wins), and only those the index in memory still holds as they are (same mtime). An entry of a notebook deleted since, or read
+ * again since, is not written.
+ */
+export function entriesToSave(pending: readonly LibraryEntry[], updated: readonly LibraryEntry[], index: Pick<LibraryIndex, "get">): LibraryEntry[] {
+	const byPath = new Map<string, LibraryEntry>();
+	for (const e of [...pending, ...updated]) byPath.set(e.path, e);
+	return [...byPath.values()].filter((e) => index.get(e.path)?.mtime === e.mtime);
+}
+
+/**
+ * Review fix (R7): the entries merged into the index as it is on disk: an entry older than the one already there (the library view saved a
+ * newer read of the file meanwhile) is left out; a newer thumbnail of the same version of the file is kept.
+ */
+export function mergeIntoIndex(onDisk: Pick<LibraryIndex, "get" | "upsert">, entries: readonly LibraryEntry[]): void {
+	for (const entry of entries) {
+		const have = onDisk.get(entry.path);
+		if (have && have.mtime > entry.mtime) continue;
+		const thumb = have && have.mtime === entry.mtime && have.thumb !== undefined ? { thumb: have.thumb, thumbMtime: have.thumbMtime } : {};
+		onDisk.upsert({ ...entry, ...thumb });
+	}
+}
+
 /** The library index, loaded once from the saved cache and brought up to date a few notebooks at a time. */
 class PageDirectory {
 	index = new LibraryIndex();
@@ -72,7 +96,7 @@ class PageDirectory {
 			this.pending.push(...updated);
 			return;
 		}
-		const toSave = [...this.pending, ...updated];
+		const toSave = entriesToSave(this.pending, updated, this.index);
 		this.pending = [];
 		if (toSave.length > 0) await this.save(toSave);
 	}
@@ -88,12 +112,7 @@ class PageDirectory {
 		try {
 			const onDisk = LibraryIndex.fromJSON(await this.host.loadIndex());
 			if (onDisk.keepsNewerVersion) return;
-			for (const entry of updated) {
-				const have = onDisk.get(entry.path);
-				// The library view may have a newer thumbnail of the same version of the file: keep it.
-				const thumb = have && have.mtime === entry.mtime && have.thumb !== undefined ? { thumb: have.thumb, thumbMtime: have.thumbMtime } : {};
-				onDisk.upsert({ ...entry, ...thumb });
-			}
+			mergeIntoIndex(onDisk, updated);
 			await saveIndex(onDisk.toJSON());
 		} catch (e) {
 			console.error("[notebook] saving the library index failed", e);
