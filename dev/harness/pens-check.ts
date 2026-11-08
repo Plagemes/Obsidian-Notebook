@@ -107,7 +107,7 @@ export async function checkPens(api: PensCheckApi): Promise<{ ok: boolean; resul
 		const back = parse(checked.text);
 		const tools = back.ok ? back.doc.pages[v.currentPage()]!.strokes.slice(before).map((s) => `${s.tool}${s.nib ?? ""}`).join(",") : "";
 		add("it reads back with the same tools and nib angles", back.ok && back.dropped === undefined && tools === "pen,fountain,fountain120,brush,brush,marker", tools);
-		add("the file is format 20 or newer (23 since 0.25)", /"version": 2[0-3]\D/.test(checked.text));
+		add("the file is format 20 or newer (24 since 0.26)", /"version": 2[0-4]\D/.test(checked.text));
 	}
 
 	// Exports: one construction, the marker 85% opaque.

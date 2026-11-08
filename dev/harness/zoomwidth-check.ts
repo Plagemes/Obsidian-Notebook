@@ -68,6 +68,16 @@ export async function checkZoomwidth(api: ZoomwidthCheckApi): Promise<{ ok: bool
 		await api.frames(3);
 		const hint = q<HTMLElement>(".notebook-options .notebook-zoom-hint");
 		add("the pen options show the zoom hint when on", !!hint && hint.offsetWidth > 0 && /×/.test(hint.textContent ?? ""), hint?.textContent ?? "");
+		// 0.26 integration: the opacity row (#358) shows beside the zoom hint and both apply to the next stroke.
+		const opRow = q<HTMLElement>(".notebook-options .notebook-pen-opacity");
+		add("the opacity row shows beside the zoom hint", !!opRow && opRow.offsetWidth > 0 && !!hint && hint.offsetWidth > 0);
+		const zv = api.view as ZoomView;
+		zv.toolbar.update({ penOpacity: 0.5 });
+		const strokes = zv.document.pages[zv.currentPage()]!.strokes as Array<{ width: number; opacity?: number }>;
+		const w = await write(api, zv, 90);
+		const last = strokes[strokes.length - 1]!;
+		add("a stroke written with both keeps the on-screen width and the opacity", Math.abs(w - chosen / 4) < 1e-9 && last.opacity === 0.5, `${w} ${last.opacity}`);
+		zv.toolbar.update({ penOpacity: 1 });
 		setup(api, 4, false);
 		await api.frames(3);
 		add("the hint is hidden when off", !q<HTMLElement>(".notebook-options .notebook-zoom-hint:not(.notebook-hidden)"));

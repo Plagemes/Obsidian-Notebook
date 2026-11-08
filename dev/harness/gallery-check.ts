@@ -13,7 +13,7 @@ import type { LibraryEntry } from "../../src/library/index";
 import { PageThumbs } from "../../src/library/page-thumbs";
 import { createDocument, createStroke } from "../../src/model/document";
 import { createMarker } from "../../src/model/markers";
-import type { NotebookDocument, Page } from "../../src/model/types";
+import type { NotebookDocument } from "../../src/model/types";
 import { App } from "./obsidian-stub";
 import type { CheckResult } from "./reading-check";
 
@@ -29,7 +29,7 @@ const COLORS = ["#1d4ed8", "#b91c1c", "#047857", "#7c3aed"];
 /** A notebook of `pages` pages, each with a few wavy lines; `tags`/`markers` map a page index to what it carries. */
 function notebook(seed: number, pages: number, tags: Record<number, string[]> = {}, markers: Record<number, "question" | "homework" | "gap"> = {}): NotebookDocument {
 	const doc = createDocument(new Date(2026, 10, 1 + seed));
-	while (doc.pages.length < pages) doc.pages.push({ ...doc.pages[0]!, id: `p${seed}-${doc.pages.length}`, strokes: [], elements: [] } as Page);
+	while (doc.pages.length < pages) doc.pages.push({ ...doc.pages[0]!, id: `p${seed}-${doc.pages.length}`, strokes: [], elements: [] });
 	doc.pages.forEach((page, p) => {
 		page.id = `p${seed}-${p}`;
 		for (let l = 0; l < 6; l++) {
@@ -38,7 +38,7 @@ function notebook(seed: number, pages: number, tags: Record<number, string[]> = 
 			page.strokes.push(createStroke(COLORS[(seed * 3 + p * 2 + l) % COLORS.length]!, 3, pts));
 		}
 		if (tags[p]) page.tags = tags[p];
-		if (markers[p]) page.elements = [createMarker(markers[p]!, 480, 90)];
+		if (markers[p]) page.elements = [createMarker(markers[p], 480, 90)];
 	});
 	return doc;
 }
@@ -164,7 +164,7 @@ export async function checkGallery(api: GalleryCheckApi): Promise<{ ok: boolean;
 	add("bookmarked: own and global bookmarks", bmNames.join(",") === "Physicsp. 3,Lawp. 2", bmNames.join(","));
 	const course = mount("course: Physics");
 	await sleep(150);
-	add("course: one notebook, its first page", tiles(course).length === 1 && tiles(course)[0]!.textContent!.includes("Physics"));
+	add("course: one notebook, its first page", tiles(course).length === 1 && tiles(course)[0]!.textContent.includes("Physics"));
 	const one = mount("notebook: Notebooks/Sketches\nlimit: 2");
 	await sleep(150);
 	add("notebook: its pages in order", tiles(one).map((t) => t.querySelector(".nb-gallery-page")?.textContent).join(",") === "p. 1,p. 2");

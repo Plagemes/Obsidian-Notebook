@@ -4112,11 +4112,16 @@ Implemented, not verified on hardware. No format change: strokes keep plain page
 2926. **Shapes and highlighter.** Line, arrow and shapes, and the stroke highlighter, follow the rule. The area highlighter (a rectangle) and the eraser sizes are unchanged.
 2927. **Old ink.** Turning the option on or off never changes strokes already written; undo, redo, export and another device show them as saved.
 2928. **Looks.** Light and dark, tablet and phone: the hint fits in the pen options without moving the width buttons. Italian texts.
+2929. **Content that takes the pen's style.** Stamps, graphs and axes drawn from the pen, ink of objects (boxes, markers, equations) and the text style use the plain chosen width, not the zoomed one: with the option on and the view zoomed in 4x, insert a stamp or a graph and its lines are the chosen width on the page (as with the option off). Only strokes written with the pen, the shapes and the highlighter follow the zoom.
+2930. **With opacity.** The *Opacity* row of the pen options (0.26, #358) stays next to the width row and the hint; a stroke written with both stores the width divided by the zoom and the chosen opacity.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Pen width follows zoom (setting, off by default; stored width = chosen / zoom, clamped) | yes | `tests/zoom-width.test.ts`; harness `doc=zoomwidth` | | | |
 | Pen options hint (on-screen width, "× zoom") | yes | harness `doc=zoomwidth` | | | |
+| Content inserted from the pen style (stamps, graphs, object ink, text style) keeps the plain chosen width | yes | by construction (`penStyle` / `style` read `penWidth`); step 2929 | | | |
+| Opacity row and the zoom hint together in the pen options | yes | harness `doc=zoomwidth` | | | |
+| Cross-feature rules of the wave (opacity kept by smooth, tidy, join, redaction; palette ignores it) | yes | `tests/wave026-integration.test.ts` | | | |
 
 ### 0.26 — ctxpalette: context palette in the colour picker (roadmap #394; steps 2900-2919)
 
