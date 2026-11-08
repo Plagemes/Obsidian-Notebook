@@ -155,6 +155,8 @@ export function pagesWithBoxes(r: Redactions | undefined, pageIds: readonly stri
 export interface RedactState {
 	on: boolean;
 	boxes: Redactions;
+	/** Review fix (P4): what was stored for this notebook could not be read (exports refuse to write until it is set again). */
+	unreadable?: true;
 }
 
 export const EMPTY_REDACT_STATE: RedactState = { on: false, boxes: {} };

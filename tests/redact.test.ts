@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { burnPixelRects, burnPlan, cutStroke, headerAfterRedaction, metaWithoutRedactedTitles, outsideRuns, redactBounds, redactionOf, redactPage, redactPages } from "../src/ink/redact";
+import { burnPixelRects, burnPlan, coveredExcerpt, cutStroke, hasRedactions, headerAfterRedaction, metaWithoutRedactedTitles, outsideRuns, pessimisticMeasure, redactBounds, redactionOf, redactPage, redactPages, redactReach } from "../src/ink/redact";
+import { layoutText } from "../src/ink/text-layout";
+import { cleanPageForExport } from "../src/model/clean-export";
+import { pageTexts } from "../src/model/export-markdown";
+import { liveStateView, pageCopy } from "../src/model/states";
 import { addBox, boxFromDrag, boxesOf, cleanBox, clearPage, countBoxes, countPages, isArmed, normaliseRedactions, pointToPage, removeBox, removeLast, REDACT_MAX_PER_PAGE, REDACT_MAX_TOTAL, type Redactions } from "../src/model/redact";
 import { A4_HEIGHT, A4_WIDTH, PAPER_SPACING, RENDER_INK, type NotebookMeta, type Page, type PageElement, type Point, type Stroke } from "../src/model/types";
 
@@ -97,7 +101,7 @@ describe("ink under a box", () => {
 		const pieces = cutStroke(across, [box]);
 		expect(pieces).toHaveLength(2);
 		expect(pieces.map((p) => p.id)).toEqual(["x", "x.r1"]);
-		const reach = 2 / 2 + 1; // inkReach of a 2 pt pen plus the pad
+		const reach = 2 * 0.8 + 1; // the widest a 2 pt pen draws (0.8 of its width at full pressure, review fix P8) plus the pad
 		for (const p of pieces) {
 			expect(p.tool).toBe("pen");
 			expect(p.color).toBe("#1e1e1e");
@@ -297,6 +301,127 @@ describe("the parts around the page", () => {
 		expect(out?.bookmarkInfo?.p2).toEqual({ title: "Open" });
 		expect(JSON.stringify(meta)).toContain("SECRET");
 		expect(metaWithoutRedactedTitles(meta, [page({ id: "p1" })])).toBe(meta);
+	});
+});
+
+describe("review fixes (0.26 privacy review)", () => {
+	/** The lines a text box fills on a canvas whose glyphs are `em` wide (a stand-in for the real font: CJK 1 em, emoji ~1.2 em, W ~0.94 em). */
+	const canvasHeight = (el: Extract<PageElement, { type: "text" }>, em: (ch: string) => number): number =>
+		layoutText(el.text, el.fontSize, el.width, (s) => Array.from(s).reduce((w, ch) => w + em(ch), 0) * el.fontSize).height;
+	const realEm = (ch: string): number => (ch.codePointAt(0)! > 0xffff ? 1.25 : ch.codePointAt(0)! >= 0x1100 ? 1 : /[WM]/.test(ch) ? 0.94 : 0.6);
+
+	/** A box over the last line the canvas draws of `el`, and nothing above it. */
+	function boxOverLastLine(el: Extract<PageElement, { type: "text" }>): { x: number; y: number; width: number; height: number } {
+		const h = canvasHeight(el, realEm);
+		return { x: el.x, y: el.y + h - el.fontSize * 1.25 + 2, width: 80, height: el.fontSize };
+	}
+
+	it("P1: drops a text box whose last line (CJK, emoji, capitals) is under a box, which the old two-width measure kept", () => {
+		const cases = [
+			"漢".repeat(120) + " SECRET",
+			"😀".repeat(60) + " SECRET",
+			"WWWW MMMM ".repeat(14) + "SECRET",
+		];
+		for (const body of cases) {
+			const el = { id: "t", type: "text" as const, x: 100, y: 300, width: 200, text: body, fontSize: 14, color: "#000000" };
+			const covering = boxOverLastLine(el);
+			// The box is below what the old measure (0.55 / 0.66 em per character) said the text box covers: the leak the review found.
+			const old = Math.max(
+				layoutText(body, 14, 200, (s) => Array.from(s).length * 14 * 0.55).height,
+				layoutText(body, 14, 200, (s) => Array.from(s).length * 14 * 0.66).height,
+			);
+			expect(covering.y).toBeGreaterThan(el.y + old + 3);
+			// Positive control: the same page with the box far away keeps the marker.
+			expect(JSON.stringify(redactPage(page({ elements: [el] }), [{ x: 400, y: 20, width: 40, height: 40 }]))).toContain("SECRET");
+			const out = redactPage(page({ elements: [el] }), [covering]);
+			expect(out.elements).toBeUndefined();
+			expect(JSON.stringify(out)).not.toContain("SECRET");
+			// The bounds are never shorter than the canvas draws it.
+			expect(redactBounds(el).maxY).toBeGreaterThanOrEqual(el.y + canvasHeight(el, realEm));
+		}
+	});
+
+	it("P1: a single character wider than a narrow text box widens its area", () => {
+		const el: PageElement = { id: "t", type: "text", x: 100, y: 100, width: 4, text: "漢SECRET", fontSize: 20, color: "#000000" };
+		expect(redactBounds(el).maxX).toBeGreaterThanOrEqual(100 + 1.5 * 20);
+		expect(pessimisticMeasure("漢", 10)).toBe(15);
+		expect(pessimisticMeasure("ab", 10)).toBe(16);
+		expect(pessimisticMeasure("Wm", 10)).toBe(20);
+	});
+
+	it("P2: an excerpt whose SOURCE region is under a box is left out of every page that shows it", () => {
+		const source = page({ id: "src" });
+		const ex: PageElement = { id: "ex", type: "excerpt", x: 50, y: 50, width: 100, height: 60, asset: "SECRETSNAP", source: { notebook: "n", doc: "d", page: "src", x: 110, y: 110, width: 40, height: 20 } };
+		const shows = page({ id: "dst", elements: [ex] });
+		// Positive control: no box over the source, or a box elsewhere: the excerpt and its snapshot stay.
+		expect(JSON.stringify(redactPages([source, shows], {}))).toContain("SECRETSNAP");
+		const elsewhere = redactPages([source, shows], { src: [{ x: 400, y: 400, width: 40, height: 40 }] });
+		expect(elsewhere[1]).toBe(shows);
+		const out = redactPages([source, shows], { src: [box] });
+		expect(out[1]).not.toBe(shows);
+		expect(out[1]!.id).toBe("dst");
+		expect(JSON.stringify(out)).not.toContain("SECRETSNAP");
+		expect(coveredExcerpt(ex, { src: [box] })).toBe(true);
+		expect(coveredExcerpt(ex, { dst: [box] })).toBe(false);
+		expect(hasRedactions([shows], { src: [box] })).toBe(true);
+		// The page that shows it can have its own boxes too.
+		const both = redactPage(shows, [{ x: 400, y: 400, width: 40, height: 40 }], { src: [box] });
+		expect(both.elements).toBeUndefined();
+	});
+
+	it("P3: the copy of a page shown in a drawing state keeps its id, size, paper and background", () => {
+		const bg = { kind: "pdf" as const, asset: "pdf1", page: 1 };
+		const base = page({ id: "ps", background: bg, strokes: [stroke("a", [[20, 120], [300, 120]])], elements: [text("t", 110, 105)], states: { parts: [], list: [] } });
+		const view = liveStateView(base);
+		expect(view).not.toBe(base);
+		expect(Object.keys({ ...view })).toEqual(["strokes"]); // what the old spread kept
+		const out = redactPage(view, [box]);
+		expect(out.id).toBe("ps");
+		expect(out.width).toBe(A4_WIDTH);
+		expect(out.height).toBe(A4_HEIGHT);
+		expect(out.paper).toEqual(base.paper);
+		expect(out.background).toEqual(bg);
+		expect(out.states).toBeUndefined();
+		expect(out.elements).toBeUndefined();
+		expect(burnPlan(out)?.boxes).toEqual([box]);
+		const copy = pageCopy(view);
+		expect(copy.id).toBe("ps");
+		expect(copy.strokes).toBe(view.strokes);
+		// A clean copy of a page with states keeps them as well, so its boxes are still found by id.
+		const marker: PageElement = { id: "mk", type: "marker", kind: "question", x: 400, y: 400 };
+		const clean = cleanPageForExport(liveStateView({ ...base, elements: [marker] }));
+		expect(clean.id).toBe("ps");
+		expect(clean.width).toBe(A4_WIDTH);
+	});
+
+	it("P8: a high-pressure pen stroke is cut by the widest the pen can draw, not half its width", () => {
+		const heavy: Stroke = { id: "h", tool: "pen", color: "#000000", width: 10, render: RENDER_INK, points: [[20, 120, 1], [300, 120, 1]] };
+		expect(redactReach(heavy)).toBeCloseTo(8, 6);
+		const pieces = cutStroke(heavy, [box]);
+		expect(pieces).toHaveLength(2);
+		// No kept point is closer to the box than the radius the pen draws at full pressure (0.8 w) plus the pad.
+		for (const p of pieces) for (const [x] of p.points) expect(x <= box.x - 9 + 1e-6 || x >= box.x + box.width + 9 - 1e-6).toBe(true);
+		// Control: the old reach (half the width) would have kept ink 6 to 9 pt from the box, under its edge once drawn.
+		expect(last(pieces[0]!.points)[0]).toBeLessThan(box.x - 6);
+		// A stored pressure above 1 widens it further; the new pens keep their own maxima.
+		expect(redactReach({ tool: "pen", width: 10, points: [[0, 0, 1.5]] })).toBeCloseTo(10 * (0.2 + 0.6 * 1.5), 6);
+		expect(redactReach({ tool: "fountain", width: 10, points: [[0, 0, 1]] })).toBeCloseTo(6.5, 6);
+		expect(redactReach({ tool: "brush", width: 10, points: [[0, 0, 1]] })).toBeCloseTo(8, 6);
+		expect(redactReach({ tool: "highlighter", width: 10, points: [[0, 0, 1]] })).toBeCloseTo(5, 6);
+	});
+
+	it("P13: a checkbox whose handwritten label is under a box loses its typed label (and keeps it otherwise)", () => {
+		const cb: PageElement = { id: "cb", type: "checkbox", x: 60, y: 110, size: 20, color: "#000000", label: "SECRET account" };
+		const hand = stroke("hand", [[90, 118], [130, 122], [180, 120]]);
+		const p = page({ strokes: [hand], elements: [cb] });
+		// Positive control: a box elsewhere leaves the typed label, which the Markdown text writes.
+		const control = redactPage(p, [{ x: 400, y: 400, width: 40, height: 40 }]);
+		expect(pageTexts(control).join("\n")).toContain("SECRET");
+		const out = redactPage(p, [{ x: 120, y: 105, width: 80, height: 30 }]);
+		const kept = out.elements?.find((e) => e.id === "cb");
+		expect(kept).toBeDefined();
+		expect(JSON.stringify(out.elements)).not.toContain("SECRET");
+		expect(pageTexts(out).join("\n")).not.toContain("SECRET");
 	});
 });
 
