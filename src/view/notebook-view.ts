@@ -4046,6 +4046,12 @@ export class NotebookView extends FileView {
 		// wave 0.10 (51): read-only mode never schedules a save (nothing changed; a stray call must not write the file).
 		if (this.userReadOnly) return;
 		this.session?.markChanged();
+		this.followChange();
+	}
+
+	/** What follows a change besides scheduling the save (the save itself is `session.markChanged()`). */
+	private followChange(): void {
+		if (this.userReadOnly) return;
 		this.headingWarm.touch();
 		// 0.19 (#103): the task lines of linked checkboxes follow the ticks a moment later.
 		this.checklist?.docChanged();
@@ -4059,12 +4065,14 @@ export class NotebookView extends FileView {
 	}
 
 	private afterHistoryChange(): void {
+		// The save is scheduled first (review W21 D6): if the layout or the viewport below throws, the recorded step is still written.
+		if (!this.userReadOnly) this.session?.markChanged();
 		this.renderer?.setGhost(null);
 		this.refreshLayout();
 		this.minimap?.invalidate();
 		// The document may be shorter now (page deleted or made smaller): keep the view inside it.
 		this.setViewport(this.viewport);
-		this.markChanged();
+		this.followChange();
 		this.updateHistoryButtons();
 		this.updatePageIndicator();
 		this.pageNav?.refresh();
