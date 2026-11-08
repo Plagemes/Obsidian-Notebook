@@ -80,10 +80,10 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Edit stroke": ["histpanel.t.strokeChanged", "pencil"],
 	"Clean up strokes": ["histpanel.t.cleanUp", "sparkles"],
 	"Join broken strokes": ["histpanel.t.join", "link"],
-	"Make axes": ["histpanel.t.axes", "chart-line"],
+	"Make axes": ["histpanel.t.axes", "activity"],
 	"Convert equation to ink": ["histpanel.t.eqInk", "pencil"],
 	"Balance reaction": ["histpanel.t.balance", "flask-conical"],
-	"Edit graph": ["histpanel.t.graph", "chart-line"],
+	"Edit graph": ["histpanel.t.graph", "activity"],
 	"Sign and date": ["histpanel.t.stamp", "stamp"],
 	"Place stamp": ["histpanel.t.stamp", "stamp"],
 	"Place symbol": ["histpanel.t.stamp", "stamp"],
@@ -134,7 +134,7 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Move pages out": ["histpanel.t.pageTransfer", "arrow-right-left"],
 	"Take pages out": ["histpanel.t.pageTransfer", "arrow-right-left"],
 	"Change paper": ["histpanel.t.paper", "file"],
-	"Change page size": ["histpanel.t.pageSize", "maximize"],
+	"Change page size": ["histpanel.t.pageSize", "expand"],
 	"Change page margins": ["histpanel.t.margins", "frame"],
 	"Change page background": ["histpanel.t.background", "image"],
 	"Change infinite page": ["histpanel.t.infinite", "infinity"],
@@ -263,7 +263,7 @@ function leafInfo(cmd: Command): { title: Title; thing?: MessageKey } {
 	if (cmd instanceof ReorderPages) return { title: ["histpanel.t.pagesReordered", "arrow-up-down"] };
 	if (cmd instanceof ReplacePage) return { title: ["histpanel.t.pageRestored", "history"] };
 	if (cmd instanceof SetPaper) return { title: ["histpanel.t.paper", "file"] };
-	if (cmd instanceof SetPageSize) return { title: ["histpanel.t.pageSize", "maximize"] };
+	if (cmd instanceof SetPageSize) return { title: ["histpanel.t.pageSize", "expand"] };
 	if (cmd instanceof SetPageMargins) return { title: ["histpanel.t.margins", "frame"] };
 	if (cmd instanceof SetPageBackground) return { title: ["histpanel.t.background", "image"] };
 	if (cmd instanceof SetPageInfinite) return { title: ["histpanel.t.infinite", "infinity"] };

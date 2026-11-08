@@ -161,6 +161,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "slideback", theme, device, lowLatency: false });
 // 0.23 savedviews (#264): saved views (dev/harness/savedviews-check.ts), tablet and phone, light and dark (dist/shots/savedviews-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "savedviews", theme, device, lowLatency: false });
+// 0.25 histpanel (#84): the action history panel (dev/harness/histpanel-check.ts), tablet and phone, light and dark (dist/shots/histpanel-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "histpanel", theme, device, lowLatency: false });
 // 0.22 pagerefs (#179): the chip and list of pages that link here (dev/harness/pagerefs-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "pagerefs", theme, device, lowLatency: false });
 // 0.22 review fix: every floating pill at once, no overlap (dev/harness/pillstack-check.ts), tablet and phone, light and dark (dist/shots/pillstack-*.png).
@@ -421,6 +423,7 @@ async function main() {
 				else if (s.doc === "pagetime") report = await cdp.evaluate("window.harness.checkPagetime()", 60000);
 				else if (s.doc === "pens") report = await cdp.evaluate("window.harness.checkPens()", 90000);
 				else if (s.doc === "savedviews") report = await cdp.evaluate("window.harness.checkSavedviews()", 90000); // 0.23 savedviews
+				else if (s.doc === "histpanel") report = await cdp.evaluate("window.harness.checkHistpanel()", 90000); // 0.25 histpanel
 				else if (s.doc === "share") report = await cdp.evaluate("window.harness.checkShare()", 180000); // 0.20 share
 				// 0.18 mentions: its own check.
 				else if (s.doc === "mentions") report = await cdp.evaluate("window.harness.checkMentions()", 60000);

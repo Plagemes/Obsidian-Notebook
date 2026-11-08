@@ -77,7 +77,7 @@ export class HistoryPanelModal extends Modal {
 			cls: "nb-hist-row-btn",
 			attr: { type: "button", "aria-label": t("histpanel.row.aria", { title: row.title }), ...(row.current ? { "aria-current": "step" } : {}) },
 		});
-		setIcon(button.createSpan({ cls: "nb-hist-row-icon", attr: { "aria-hidden": "true" } }), row.side === "redo" && row.kind === "step" ? "redo-2" : row.icon);
+		setIcon(button.createSpan({ cls: "nb-hist-row-icon", attr: { "aria-hidden": "true" } }), row.side === "redo" && row.kind === "step" ? "redo" : row.icon);
 		const text = button.createSpan({ cls: "nb-hist-row-text" });
 		text.createSpan({ cls: "nb-hist-row-title", text: row.title });
 		if (row.detail !== "") text.createSpan({ cls: "nb-hist-row-detail", text: row.detail });

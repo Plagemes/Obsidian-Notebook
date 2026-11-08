@@ -64,7 +64,7 @@ function everyClass(): Array<[string, Command, string]> {
 		["MovePage", new MovePage(page.id, 0, 1), "histpanel.t.pageMoved"],
 		["SetPaper", new SetPaper(page.id, paper, paper), "histpanel.t.paper"],
 		["SetPageSize", new SetPageSize(page.id, { width: 1, height: 1 }, { width: 2, height: 2 }), "histpanel.t.pageSize"],
-		["SetPageMargins", new SetPageMargins(page.id, undefined, { left: 1, right: 1, top: 1, bottom: 1 }), "histpanel.t.margins"],
+		["SetPageMargins", new SetPageMargins(page.id, undefined, { left: 1, right: 1, bottom: 1 }), "histpanel.t.margins"],
 		["SetPageBackground", new SetPageBackground(page.id, { kind: "image", asset: "a1" } as never, { width: 1, height: 1 }), "histpanel.t.background"],
 		["AddElement", new AddElement(page.id, el, 0), "histpanel.t.added"],
 		["RemoveElement", new RemoveElement(page.id, el), "histpanel.t.removed"],
@@ -375,7 +375,7 @@ describe("the rows of the panel", () => {
 		const { doc, history } = listed();
 		jumpHistory(history, { kind: "start" });
 		const rows = historyRows(history.entries(), doc, 10_000_000);
-		expect(rows.at(-1)).toMatchObject({ kind: "start", current: true });
+		expect(rows[rows.length - 1]).toMatchObject({ kind: "start", current: true });
 		expect(rows.filter((r) => r.current)).toHaveLength(1);
 		expect(historyRows(new History(() => doc).entries(), doc, 0)).toEqual([]);
 	});

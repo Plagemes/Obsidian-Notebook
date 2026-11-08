@@ -3809,3 +3809,24 @@ Manual steps (real Obsidian; nothing here is verified on Android). Use a noteboo
 | Hand in…: page grid with checkboxes, cover fields (name remembered per device, course from the timetable, title, date) | yes | page choice, cover layout and its PDF: `tests/hand-in.test.ts`; harness `doc=handin` (real dialog, remembered name, grid) | | | the page panel's own multi-selection is not read yet: the dialog starts on the page in view |
 | Pre-flight: blank pages, open gaps/questions/homework, unticked checkboxes, TODO notes, empty template boxes, with links to fix and "export anyway" | yes | `tests/hand-in.test.ts`; harness `doc=handin` (rows, leave out, link) | | | |
 | PDF with generated cover first, saved next to the notebook under a free name, recorded as plugin-written, optional share sheet | yes | harness `doc=handin` (written through a stand-in vault, second export `hand-in 2.pdf`, cover plus chosen pages) | | | share sheet depends on the WebView |
+
+### 0.25 — histpanel: action history panel (roadmap #84, panel only; steps 2640-2659)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook with three pages. Persistent undo ("undo that survives reopening") is **not** part of 0.25: closing the notebook still empties the history.
+
+2640. **Open.** The all-actions sheet (History) or the notebook menu: *Action history…* opens the panel. The command palette has *Action history: jump back to a point…*. Long-press the entry in the sheet: a bubble explains it.
+2641. **The list.** Write two strokes on page 1, add a text box on page 2, move a selection, erase a stroke. The panel lists the steps newest first ("Stroke written", "Added: text box", "Selection moved or transformed", "Erased"), each with its page (*p. 2*) and when (*just now*, *5 min ago*, then the time of day). The newest step is highlighted and marked *Now*; the last row is *Start of the history*.
+2642. **Go back.** Tap an older step: the notebook goes to the point just after it (the later steps are undone one by one), a notice says how many steps, the panel stays open and the undone steps are listed dimmed above the highlighted one.
+2643. **Go forward.** Tap one of the dimmed steps: everything up to and including it is redone. Tap the top one: everything is back.
+2644. **Start.** Tap *Start of the history*: every step the history holds is undone (the page you were on may disappear if you added it in this session; Redo/tap the top step brings it back).
+2645. **Refusal.** (Needs a lock that arrives from outside the history, e.g. synced from another device while this one is open; locking from this device is itself a step, and going back past it unlocks the page first.) With a lock on page 3 that was set after you wrote on it, tap an older step: the jump stops at the first step on the locked page, a notice says *Stopped after N of M steps*, the page lock notice shows, and nothing on the locked page changed. Unlock the page, open the panel again, tap the same step: the jump completes.
+2646. **Same as Undo.** Keyboard Undo/Redo, the toolbar buttons and the panel all walk the same list: after a few Undos the panel shows them as dimmed rows.
+2647. **Drawing.** With the pen down (or while a text box is being typed) a tap on a row first closes the text box; during a stroke it says *Finish what you are drawing first* and does nothing.
+2648. **Read-only.** In read-only mode the panel lists the steps, says it is read-only and no row can be tapped.
+2649. **Style.** Light and dark, phone and tablet: a normal Notebook dialog; rows are at least 44 px, the list scrolls, nothing sideways.
+2650. **Italian.** Switch to Italian: all texts, including the step titles, are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Action history panel: the undo and redo stacks as readable steps (title per command type, page, time, item count), current point highlighted, tap goes back or forward step by step through ordinary Undo/Redo, stops and says so when a step is refused | yes | titles of every command class and of every label in the source, jump back/forward/start, locked page and guard refusals mid-way, read-only, rows: `tests/history-panel.test.ts`; harness `doc=histpanel` (real view and dialog, notices, refusal, read-only) | | | no preview of the state at a step; the list shows the last 500 steps (the history limit) |
+| Persistent undo (survives closing the notebook) | no | | | | not built: commands hold element objects by identity and private apply state, so they cannot be saved and re-attached to a freshly read notebook without a per-class serialiser plus a verified dry run; the history would also have to be saved at idle saves because Android can end the app without a close event. See the roadmap note |
