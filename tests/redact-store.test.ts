@@ -299,7 +299,7 @@ describe("review fix T6: every distinct unreadable value gets its own bounded co
 		d2.set(REDACT_PRESENT_KEY, 1);
 		expect(saveRedactState(other, "nb-a", { on: true, boxes: { p1: [good] } }, 2).stored).toBe(true);
 		expect(JSON.stringify(d2.get(REDACT_KEY))).not.toContain("SECRET-torn");
-		expect(copies(d2).at(-1)!.raw).toContain("SECRET-torn");
+		expect(copies(d2)[copies(d2).length - 1]!.raw).toContain("SECRET-torn");
 	});
 
 	it("a copy kept by the first version of the fix (a single object) still keeps every notebook refused", () => {

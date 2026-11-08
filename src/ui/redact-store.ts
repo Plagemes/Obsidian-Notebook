@@ -171,11 +171,14 @@ export const QUARANTINE_MAX_COPIES = 6;
 
 function textOf(raw: unknown): string | null {
 	if (raw === null || raw === undefined) return null;
+	if (typeof raw === "string") return raw;
 	try {
-		return typeof raw === "string" ? raw : (JSON.stringify(raw) ?? String(raw));
+		const text = JSON.stringify(raw);
+		if (typeof text === "string") return text;
 	} catch {
-		return String(raw);
+		// A cycle or a value JSON cannot write: kept as a marker of its kind (nothing more can be read from it).
 	}
+	return `[unserialisable ${typeof raw}]`;
 }
 
 /** The copies kept aside (a copy written by the first version of this fix, a single object, reads as one `store` copy). Throws when storage throws. */

@@ -1,7 +1,7 @@
 // 0.26 privacy review, round 3 (#285): each fix has a SECRET marker test with its own positive control (without the box, or with the box
 // elsewhere, the same output carries the marker). The store fixes (T5, T6, T9) are in redact-store.test.ts.
 import { describe, expect, it, vi } from "vitest";
-import type { App, TFile } from "obsidian";
+import { TFile, type App } from "obsidian";
 
 vi.mock("obsidian", async () => (await import("./fake-vault")).obsidianMock());
 
@@ -64,7 +64,11 @@ describe("T1: an excerpt of a page of this notebook never shows a stale snapshot
 
 describe("T2: a picture of a selection applies every box that touches the selected text measured at its widest", () => {
 	function notebookFile(): TFile {
-		return { path: "Notebooks/Demo.notebook", basename: "Demo", extension: "notebook", parent: { path: "Notebooks" } } as unknown as TFile;
+		const Made = TFile as unknown as new (path: string) => unknown;
+		const made = new Made("Notebooks/Demo.notebook");
+		if (!(made instanceof TFile)) throw new Error("test: could not build the notebook file");
+		Object.defineProperty(made, "parent", { value: { path: "Notebooks" } });
+		return made;
 	}
 
 	for (const [name, text] of [
