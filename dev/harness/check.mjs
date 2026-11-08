@@ -187,6 +187,8 @@ for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"])
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "planner", theme, device, lowLatency: false });
 // 0.15 storage (128): the Storage manager at tablet and phone widths, light and dark (dev/harness/storage-check.ts).
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "storage", theme, device, lowLatency: false });
+// 0.22 covers (#53): "Change cover…" at tablet and phone widths, light and dark (dev/harness/covers-check.ts, dist/shots/design/covers-*.png).
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "covers", theme, device, lowLatency: false });
 // 0.17 pdfcopy (#23): the notebook menu entry, the save hook and the three settings rows (dev/harness/pdfcopy-check.ts), tablet and phone, light and dark.
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "pdfcopy", theme, device, lowLatency: false });
 // 0.16 bulk import (#80): the dialog, its run and the drop at tablet and phone widths, light and dark (dev/harness/bulk-check.ts).
@@ -343,6 +345,7 @@ async function main() {
 				// 0.15 storage: its own check (the list below is one line per document).
 				if (s.doc === "storage") report = await cdp.evaluate("window.harness.checkStorage()", 120000);
 				else if (s.doc === "bulk") report = await cdp.evaluate("window.harness.checkBulk()", 120000);
+				else if (s.doc === "covers") report = await cdp.evaluate("window.harness.checkCovers()", 90000); // 0.22 covers
 				else if (s.doc === "xfer") report = await cdp.evaluate("window.harness.checkXfer()", 120000);
 				else if (s.doc === "linkback") report = await cdp.evaluate("window.harness.checkLinkback()", 120000);
 				else if (s.doc === "slideback") report = await cdp.evaluate("window.harness.checkSlideback()", 60000);
@@ -440,6 +443,20 @@ async function main() {
 					}
 				}
 				await cdp.evaluate("window.harness.closeStorage()");
+			}
+			// 0.22 covers: a screenshot of each source of the cover dialog.
+			if (s.doc === "covers") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of await cdp.evaluate("window.harness.coverStates")) {
+					try {
+						await cdp.evaluate(`window.harness.coverShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `covers-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`covers ${state} screenshot: ${e.message}`);
+					}
+				}
+				await cdp.evaluate("window.harness.closeCovers()");
 			}
 			// 0.20 dropfiles: a screenshot of each state of the drop (frame, blocked frame, PDF choice, pictures placed).
 			if (s.doc === "dropfiles") {

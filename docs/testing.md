@@ -3332,3 +3332,19 @@ Roadmap #101. Say what each ink colour means (red = definition, blue = example) 
 | Per-notebook legend in `_meta/meanings-<device>.json` (one file per device, latest wins, tombstone, unknown fields kept, never overwrites an unreadable file) | yes | round trip, merge, store (own file only, damaged and empty files, other device's bad file): `tests/colour-meaning.test.ts` | | | |
 | View filter "Filter by meaning": other ink drawn faint through the renderer (static layer redrawn once, no per-frame work), pill to clear it | yes | dimmer, counts: `tests/colour-meaning.test.ts`; pixels and pill in the harness (`colours`) | | | text boxes, equations and pictures are not dimmed (ink only) |
 | Digest by colour: `<Notebook> — Colours.md`, a section per meaning, pictures, PDF text, marker-bounded rewrite | yes | regions, grouping, Markdown, marker replacement: `tests/colour-meaning.test.ts`; the note and pictures in the harness (`colours`) | | | |
+
+### 0.22 — covers (custom covers, roadmap #53; steps 2160-2179)
+2160. **Open.** Library card menu > *Change cover…* (also the notebook tab's "more options" menu): a dialog with Pattern, Image, Page, Template. Cancel writes nothing.
+2161. **Pattern.** Pick another family and colour, *Use this cover*: the card changes; no file appears in `_assets`.
+2162. **Image.** Image > choose from the vault, then from the device (a camera photo): the picture fills the frame; drag it with the S Pen and with a finger, pinch with two fingers, use the slider and the reset button. *Use this cover*: the card shows exactly what the frame showed.
+2163. **Large photo (Android).** Choose a 12 MP photo: the dialog stays responsive, says it was reduced, and the saved cover file is small (under about 150 KB).
+2164. **Page.** Page > step to another page; the frame shows it; crop to the heading; apply.
+2165. **Template.** Try the five templates and colours; apply; the title is the notebook name.
+2166. **Open notebook.** With the notebook open, change the cover; undo in the notebook restores the previous cover.
+2167. **Failure.** Make the notebook read-only (open, locked) and apply an image: a notice says it failed and no new file stays in `_assets`.
+2168. **Themes and phone.** Light, dark, "Follow Obsidian theme", phone and tablet: nothing overflows, targets are easy to hit.
+2169. **Italian.** Switch the plugin language: the dialog and the menu item are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Change cover: pattern, image (crop), page, template; stored as an image asset + `meta.coverArt` (no format change) | yes | crop maths, template wrapping and colours, `patchNotebookCover`: `tests/cover-crop.test.ts`, `tests/cover-template.test.ts`; dialog flow in the harness (`doc=covers`) | | | not tried on Android; the creation dialog keeps its own image option; a cover is not redrawn when the notebook is renamed |

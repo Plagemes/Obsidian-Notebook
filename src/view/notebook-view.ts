@@ -272,6 +272,8 @@ export interface NotebookHost {
 	logLecture?(file: TFile, cls: LectureClass, snap: LectureSnapshot, docId?: string): void;
 	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
 	runGlobal?(id: string): void;
+	/** 0.22 (#53): opens "Change cover…" for that notebook (library/cover-dialog.ts). Optional: absent in tests and the harness. */
+	changeCover?(file: TFile): void;
 	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
 	syncSafety?: SyncSafetyService;
 	/** wave 0.7: resilience: safe mode, storage-full warning, integrity ledger. Optional: absent in tests. */
@@ -1653,6 +1655,21 @@ export class NotebookView extends FileView {
 		const after = mergeMeta(before, patch);
 		if (metaEquals(before, after)) return true;
 		this.history.execute(new SetMeta(before, after));
+		this.afterHistoryChange();
+		return true;
+	}
+
+	/**
+	 * 0.22 (#53): a new cover for the library's "Change cover": registers the cover picture `asset` (when there is one) and sets the
+	 * metadata in one undo step. Same refusal rules as `applyMetaPatch`; false also when the history refuses the step.
+	 */
+	applyCoverChange(asset: Asset | null, patch: Partial<NotebookMeta>): boolean {
+		const doc = this.session?.doc;
+		if (!doc || !this.editable() || this.controller?.drawing) return false;
+		const before = doc.meta ?? cloneMeta(DEFAULT_META);
+		const after = mergeMeta(before, patch);
+		const done = this.history.execute(new Batch("Change cover", [...(asset ? [new AddAsset(asset)] : []), new SetMeta(before, after)]));
+		if (!done) return false;
 		this.afterHistoryChange();
 		return true;
 	}
@@ -3595,6 +3612,15 @@ export class NotebookView extends FileView {
 				.onClick(() => (a.scope === "global" ? this.host.runGlobal?.(id) : this.runAction(id))));
 		}
 		this.addPdfCopyItems(menu);
+		this.addCoverItem(menu);
+	}
+
+	/** 0.22 (#53): "Change cover…" in the notebook tab's menu. */
+	private addCoverItem(menu: Menu): void {
+		const file = this.file;
+		const host = this.host;
+		if (!file || !host.changeCover || isInTrash(file.path)) return;
+		menu.addItem((i) => i.setTitle(t("cover.menu")).setIcon("image").setSection("action").onClick(() => host.changeCover?.(file)));
 	}
 
 	/** 0.17 (#23): "Keep a PDF copy" (this notebook's own choice) and, under it, when the copy was last updated. */

@@ -441,6 +441,11 @@ export default class NotebookPlugin extends Plugin {
 		return Promise.all(this.views().map((v) => v.flushNow().catch((e) => console.error("[notebook] flush failed", e))));
 	}
 
+	/** 0.22 (#53): "Change cover…" from the notebook tab's menu. */
+	changeCover(file: TFile): void {
+		this.host.changeCover(file);
+	}
+
 	/** ui redesign: runs a plugin-level action of the registry (the notebook tab's menu). */
 	runGlobal(id: string): void {
 		this.globalActions[id]?.();

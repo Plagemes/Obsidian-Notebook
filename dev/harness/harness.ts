@@ -89,6 +89,7 @@ import { shareApi } from "./share-check"; // 0.20 share
 import { templatesApi } from "./templates-check";
 import { plannerApi } from "./planner-check";
 import { storageApi } from "./storage-check";
+import { coversApi } from "./covers-check";
 import { bulkApi } from "./bulk-check";
 import { xferApi } from "./pagesplit-check";
 import { linkbackApi } from "./linkback-check";
@@ -2246,6 +2247,8 @@ Object.assign(harnessApi, templatesApi({ app, errors, notices }));
 Object.assign(harnessApi, plannerApi({ app, errors, notices }));
 // 0.15 storage: the Storage manager (doc=storage, storage-check.ts).
 Object.assign(harnessApi, storageApi({ app, errors, notices }));
+// 0.22 covers (#53): "Change cover…" (covers-check.ts).
+Object.assign(harnessApi, coversApi({ app, errors, notices }));
 // 0.16 bulk import (doc=bulk, bulk-check.ts).
 Object.assign(harnessApi, bulkApi({ app, errors, notices }));
 // 0.17 merge / split / extract (doc=xfer, pagesplit-check.ts).
