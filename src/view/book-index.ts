@@ -1,12 +1,13 @@
 // 0.21 (#187) Back-of-book index: the dialogs and the vault side. "Add to index…" turns a lasso selection into an ordinary star marker whose
 // label is `<prefix> <term>` (settings: indexPrefix); the index dialog lists the terms A-Z with their pages (a tap on a page goes there)
 // and can write the same list into the note "<Notebook> — Index.md" next to the notebook. The note is derived data: only the part between
-// the index markers is rewritten (vault.process); a note of the user's with that name and no markers is never touched.
+// the index markers is rewritten (vault.process); a note of the user's with that name and no markers is never touched, and a note whose
+// start marker records another notebook is never rewritten (the name gets " (2)" instead).
 import { Modal, TFile, getLanguage, normalizePath, setIcon, type App } from "obsidian";
 import { t } from "../i18n";
 import { stablePageSubpath } from "../integration/page-links";
 import {
-	buildIndex, buildIndexSection, collectIndexEntries, filterIndex, indexCounts, indexLabel, newIndexNote, replaceIndexSection, type IndexSection, type IndexTerm,
+	buildIndex, buildIndexSection, collectIndexEntries, filterIndex, indexCounts, indexLabel, indexOwnerOf, newIndexNote, pickIndexNote, replaceIndexSection, type IndexSection, type IndexTerm,
 } from "../model/book-index";
 import type { Page } from "../model/types";
 import { recordPluginWrite } from "../storage/plugin-written";
@@ -14,15 +15,26 @@ import { sanitizeName } from "../storage/names";
 import { modalShell, shellButton, shellField, shellNote } from "../ui/components/modal-shell";
 import { showNotice } from "./notice";
 
-/** Name of the index note, without the folder. */
-export function indexNoteName(notebook: TFile): string {
-	return `${sanitizeName(notebook.basename) || "Notebook"} — Index.md`;
+/** Name of the index note, without the folder; `n` > 1 gives the disambiguated `Index (2)`. */
+export function indexNoteName(notebook: TFile, n = 1): string {
+	return `${sanitizeName(notebook.basename) || "Notebook"} — Index${n > 1 ? ` (${n})` : ""}.md`;
 }
 
 /** Vault path of the index note of `notebook`: next to it. */
-export function indexNotePath(notebook: TFile): string {
+export function indexNotePath(notebook: TFile, n = 1): string {
 	const dir = notebook.parent && notebook.parent.path !== "/" ? `${notebook.parent.path}/` : "";
-	return normalizePath(`${dir}${indexNoteName(notebook)}`);
+	return normalizePath(`${dir}${indexNoteName(notebook, n)}`);
+}
+
+/** The path of the index note to write for `notebook`: its plain name, or `(2)`... when that note belongs to another notebook. */
+export async function resolveIndexNotePath(app: App, notebook: TFile): Promise<string | null> {
+	const n = await pickIndexNote(async (i) => {
+		const found = app.vault.getAbstractFileByPath(indexNotePath(notebook, i));
+		if (!found) return { exists: false };
+		if (!(found instanceof TFile)) return { exists: true, folder: true };
+		return { exists: true, owner: indexOwnerOf(await app.vault.cachedRead(found)) };
+	}, notebook.path);
+	return n === null ? null : indexNotePath(notebook, n);
 }
 
 /** The index of the pages now (locale: the plugin's language). */
@@ -43,7 +55,11 @@ export interface BookIndexHost {
 export async function writeIndexNote(host: BookIndexHost): Promise<string | null> {
 	const { app, file } = host;
 	const sections = currentIndex(host.pages(), host.prefix);
-	const notePath = indexNotePath(file);
+	const notePath = await resolveIndexNotePath(app, file);
+	if (notePath === null) {
+		showNotice(t("bookindex.failed", { error: indexNotePath(file) }), 10000);
+		return null;
+	}
 	const existing = app.vault.getAbstractFileByPath(notePath);
 	if (existing && !(existing instanceof TFile)) {
 		showNotice(t("bookindex.failed", { error: notePath }), 10000);
@@ -59,16 +75,22 @@ export async function writeIndexNote(host: BookIndexHost): Promise<string | null
 		pageLink: (n, id) => app.fileManager.generateMarkdownLink(file, notePath, stablePageSubpath(n, id), t("bookindex.page", { n: String(n) })),
 		intro: t("bookindex.intro", { link: app.fileManager.generateMarkdownLink(file, notePath, undefined, file.basename), terms: String(counts.terms), pages: String(counts.pages) }),
 		none: t("bookindex.empty"),
+		owner: file.path,
 	});
 	try {
 		if (existing instanceof TFile) {
-			const state: { outcome: "ok" | "unsafe" | "foreign" } = { outcome: "ok" };
+			const state: { outcome: "ok" | "unsafe" | "foreign" | "other" } = { outcome: "ok" };
 			await app.vault.process(existing, (current) => {
-				const r = replaceIndexSection(current, section);
+				const r = replaceIndexSection(current, section, file.path);
 				if (r.outcome === "unsafe") state.outcome = "unsafe";
 				else if (r.outcome === "appended") state.outcome = "foreign";
+				else if (r.outcome === "other") state.outcome = "other";
 				return r.outcome === "replaced" || r.outcome === "created" ? r.text : current;
 			});
+			if (state.outcome === "other") {
+				showNotice(t("bookindex.other", { path: notePath }), 12000);
+				return null;
+			}
 			if (state.outcome === "unsafe") {
 				showNotice(t("bookindex.unsafe", { path: notePath }), 12000);
 				return null;

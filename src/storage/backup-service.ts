@@ -16,7 +16,7 @@ import { formatBytes } from "./sync-state";
 import { showErrorNotice, showNotice, type NoticeHandle } from "../view/notice";
 import type { NotebookSettings } from "../settings";
 import { whenIdle } from "./idle";
-import { recordPluginWrite } from "./plugin-written";
+import { loadWritten, recordPluginWrite, writtenSet } from "./plugin-written";
 import { ensureFolder } from "./vault-io";
 import {
 	BACKUP_MEMORY_KEY, isDue, nextDueAt, newestBackupAt, normaliseMemory, remember, type BackupMemory, type BackupResult, type FolderChild,
@@ -27,9 +27,14 @@ import { runBackup, type BackupPorts } from "./backup-run";
 const FIRST_CHECK_MS = 90_000;
 /** Then every half hour. */
 const CHECK_EVERY_MS = 30 * 60_000;
-/** Most the zip may hold in memory: a phone or tablet WebView has far less than a computer. */
-const MAX_BYTES_MOBILE = 200 * 1024 * 1024;
+/**
+ * Most the zip may hold in memory: a phone or tablet WebView has far less than a computer. The files and the finished archive
+ * are in memory together (about twice the size), and Obsidian's mobile file bridge adds copies on top (review W21 D3).
+ */
+const MAX_BYTES_MOBILE = 64 * 1024 * 1024;
 const MAX_BYTES_DESKTOP = 1024 * 1024 * 1024;
+/** An old backup bigger than this is not read to check its marker, so it is never trashed. */
+const MAX_VERIFY_BYTES = 512 * 1024 * 1024;
 /** The progress notice is updated at most this often. */
 const PROGRESS_EVERY_MS = 700;
 
@@ -137,7 +142,10 @@ export class BackupService {
 		const s = this.d.settings();
 		// runBackup never throws: a failure is in the result.
 		const result: BackupResult = await runBackup(
-			{ notebooksFolder: s.folder, folder: normalizePath(s.zipBackupFolder), keep: s.zipBackupKeep, maxBytes: Platform.isMobile ? MAX_BYTES_MOBILE : MAX_BYTES_DESKTOP },
+			{
+				notebooksFolder: s.folder, folder: normalizePath(s.zipBackupFolder), keep: s.zipBackupKeep, maxBytes: Platform.isMobile ? MAX_BYTES_MOBILE : MAX_BYTES_DESKTOP,
+				templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder,
+			},
 			this.ports((done, total) => {
 				const now = Date.now();
 				if (now - lastTick < PROGRESS_EVERY_MS) return;
@@ -196,6 +204,16 @@ export class BackupService {
 			now: () => Date.now(),
 			files: () => vault.getFiles().map((f) => ({ path: f.path, size: f.stat.size, mtime: f.stat.mtime })),
 			read: async (path) => new Uint8Array(await vault.readBinary(file(path))),
+			stat: async (path) => {
+				const st = await vault.adapter.stat(normalizePath(path));
+				return st ? { size: st.size, mtime: st.mtime } : null;
+			},
+			readOld: async (path) => {
+				const f = file(path);
+				if (f.stat.size > MAX_VERIFY_BYTES) throw new Error("too big to check");
+				return new Uint8Array(await vault.readBinary(f));
+			},
+			writtenByPlugin: (path) => writtenSet(loadWritten(app)).has(normalizePath(path).toLowerCase()),
 			flush: async () => {
 				await this.d.flush();
 			},

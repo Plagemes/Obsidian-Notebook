@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	backupFileName, backupFolderOf, DAY_MS, DEFAULT_BACKUP_FOLDER, DEFAULT_BACKUP_SETTINGS, EMPTY_MEMORY, INTERVAL_MS, isDue, isTempName, MIN_GAP_MS, newestBackupAt,
+	backupFileName, backupFolderConflict, backupFolderOf, DAY_MS, DEFAULT_BACKUP_FOLDER, DEFAULT_BACKUP_SETTINGS, EMPTY_MEMORY, INTERVAL_MS, isDue, isTempName, MIN_GAP_MS, newestBackupAt,
 	looksNotDownloaded, nextDueAt, normaliseMemory, parseBackupName, planBackupFiles, planRetention, readBackupSettings, remember, RETRY_AFTER_FAILURE_MS, STALE_TEMP_MS, tempName,
 	type BackupMemory, type BackupResult, type FolderChild,
 } from "../src/storage/backup-logic";
@@ -245,5 +245,76 @@ describe("retention", () => {
 		const first = planRetention([a, b], 1, T);
 		const second = planRetention([b, a], 1, T);
 		expect(first.kept.map((c) => c.name)).toEqual(second.kept.map((c) => c.name));
+	});
+});
+
+describe("review W21 D1: the backup just written is always kept", () => {
+	const child = (name: string): FolderChild => ({ name, path: `B/${name}`, file: true });
+	const future = "Notebook backup 20300101-000000.zip";
+
+	it("keep = 1 keeps the new backup and lists the future-dated one", () => {
+		const fresh = backupFileName(T);
+		const plan = planRetention([child(future), child(fresh)], 1, T, "", fresh);
+		expect(plan.kept.map((c) => c.name)).toEqual([fresh]);
+		expect(plan.trash.map((c) => c.name)).toEqual([future]);
+	});
+
+	it("a name dated more than a day ahead ranks as the oldest even without the just-written name", () => {
+		const fresh = backupFileName(T);
+		const plan = planRetention([child(future), child(fresh)], 1, T);
+		expect(plan.kept.map((c) => c.name)).toEqual([fresh]);
+	});
+
+	it("a name a few hours ahead (another time zone) still counts as recent", () => {
+		const ahead = backupFileName(T + 5 * 3_600_000);
+		const plan = planRetention([child(ahead), child(backupFileName(T))], 1, T, "", backupFileName(T));
+		expect(plan.kept.map((c) => c.name).sort()).toEqual([ahead, backupFileName(T)].sort());
+	});
+
+	it("the just-written backup stays even when it is partial and older names fill the quota", () => {
+		const fresh = backupFileName(T, true);
+		const complete = backupFileName(T - DAY_MS);
+		const plan = planRetention([child(complete), child(fresh)], 1, T, "", fresh);
+		expect(plan.kept.map((c) => c.name).sort()).toEqual([complete, fresh].sort());
+		expect(plan.trash).toEqual([]);
+	});
+});
+
+describe("review W21 D2: the backup folder must not overlap the notebooks", () => {
+	const layout = { notebooksFolder: "School/Notebooks", templatesFolder: "", notebookTemplatesFolder: "" };
+
+	it("refuses the notebooks folder, a folder that contains it, and one inside it", () => {
+		for (const b of ["School/Notebooks", "School", "School/Notebooks/_assets", "School/Notebooks/Backups"]) expect(backupFolderConflict(b, layout), b).toBe("notebooks");
+	});
+
+	it("accepts a sibling and a name that only starts the same", () => {
+		for (const b of ["Notebook backups", "School/Backups", "School/Notebooks2"]) expect(backupFolderConflict(b, layout), b).toBeNull();
+	});
+
+	it("refuses a templates folder, wherever it is", () => {
+		expect(backupFolderConflict("Templates", { ...layout, templatesFolder: "Templates" })).toBe("templates");
+		expect(backupFolderConflict("Templates/books", { ...layout, notebookTemplatesFolder: "Templates/books/x" })).toBe("templates");
+	});
+
+	it("refuses a folder that holds a notebook file, but not one that holds the trash or a _backup copy", () => {
+		const files = ["Other/Maths.notebook", "Other/_trash/items/a/Old.notebook", "Elsewhere/_backup/x.notebook"];
+		expect(backupFolderConflict("Other", layout, files)).toBe("holds-notebooks");
+		expect(backupFolderConflict("Other/Sub", layout, files)).toBeNull();
+		expect(backupFolderConflict("Elsewhere", layout, files)).toBeNull();
+	});
+
+	it("with the notebooks at the vault root only reserved folders and notebook holders are refused", () => {
+		const root = { notebooksFolder: "", templatesFolder: "", notebookTemplatesFolder: "" };
+		expect(backupFolderConflict("Notebook backups", root)).toBeNull();
+		expect(backupFolderConflict("_assets", root)).toBe("notebooks");
+	});
+});
+
+describe("review W21 D2: readSettings falls back from an overlapping backup folder", () => {
+	it("resets a backup folder that is the notebooks folder or inside it", async () => {
+		const { readSettings } = await import("../src/settings");
+		expect(readSettings({ folder: "Notebooks", zipBackupFolder: "Notebooks" }).zipBackupFolder).toBe(DEFAULT_BACKUP_FOLDER);
+		expect(readSettings({ folder: "Notebooks", zipBackupFolder: "Notebooks/_assets" }).zipBackupFolder).toBe(DEFAULT_BACKUP_FOLDER);
+		expect(readSettings({ folder: "Notebooks", zipBackupFolder: "Elsewhere/Backups" }).zipBackupFolder).toBe("Elsewhere/Backups");
 	});
 });

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createPage } from "../src/model/document";
 import { createMarker } from "../src/model/markers";
 import {
-	DEFAULT_INDEX_PREFIX, INDEX_END, INDEX_START, buildIndex, buildIndexSection, collectIndexEntries, filterIndex, indexCounts, indexLabel, indexTermOf,
+	DEFAULT_INDEX_PREFIX, INDEX_END, INDEX_START, indexOwnerOf, indexStartMarker, pickIndexNote, buildIndex, buildIndexSection, collectIndexEntries, filterIndex, indexCounts, indexLabel, indexTermOf,
 	newIndexNote, normalizeIndexPrefix, replaceIndexSection, sectionLetter, splitTerm, type IndexEntry,
 } from "../src/model/book-index";
 import type { Page } from "../src/model/types";
@@ -158,5 +158,49 @@ describe("Markdown section", () => {
 		expect(replaceIndexSection("my note", section).outcome).toBe("appended");
 		expect(replaceIndexSection(`x ${INDEX_START} y`, section)).toEqual({ text: `x ${INDEX_START} y`, outcome: "unsafe" });
 		expect(replaceIndexSection(`x ${INDEX_END} y`, section).outcome).toBe("unsafe");
+	});
+});
+
+describe("review W21 D8: an index note belongs to one notebook", () => {
+	const link = (n: number) => `[[Nb#p${n}|p. ${n}]]`;
+	const make = (owner?: string) => buildIndexSection({ sections: [], pageLink: link, intro: "Intro", none: "Nothing", owner });
+
+	it("records the notebook path in the start marker and reads it back, whatever the path holds", () => {
+		for (const path of ["School/Bio 1.notebook", "A--B --> C.notebook", "Études/été #1.notebook"]) {
+			const section = make(path);
+			expect(section.startsWith("<!-- notebook-index:start for=")).toBe(true);
+			expect(indexOwnerOf(`# t\n\n${section}\n`)).toBe(path);
+		}
+		expect(indexOwnerOf(`${make()}`)).toBeNull();
+		expect(indexOwnerOf("my note")).toBeUndefined();
+		expect(indexOwnerOf(`${indexStartMarker("x")} no end`)).toBeUndefined();
+	});
+
+	it("replaces a region of the same notebook, of a plain marker, and refuses another notebook's", () => {
+		const mine = `Before\n\n${make("A.notebook")}\nAfter`;
+		expect(replaceIndexSection(mine, make("A.notebook"), "A.notebook").outcome).toBe("replaced");
+		const other = replaceIndexSection(mine, make("B.notebook"), "B.notebook");
+		expect(other).toEqual({ text: mine, outcome: "other" });
+		expect(replaceIndexSection(`x\n${make()}\ny`, make("A.notebook"), "A.notebook").outcome).toBe("replaced");
+		// text outside the markers is untouched
+		expect(replaceIndexSection(mine, make("A.notebook"), "A.notebook").text.startsWith("Before\n\n")).toBe(true);
+		expect(replaceIndexSection(mine, make("A.notebook"), "A.notebook").text.endsWith("\nAfter")).toBe(true);
+	});
+
+	it("picks the plain name, or the first numbered one that is free or its own", async () => {
+		const slots = (m: Record<number, { exists: boolean; folder?: boolean; owner?: string | null }>) => async (n: number) => m[n] ?? { exists: false };
+		expect(await pickIndexNote(slots({}), "A")).toBe(1);
+		expect(await pickIndexNote(slots({ 1: { exists: true, owner: "A" } }), "A")).toBe(1);
+		// another notebook's note is skipped
+		expect(await pickIndexNote(slots({ 1: { exists: true, owner: "B" } }), "A")).toBe(2);
+		expect(await pickIndexNote(slots({ 1: { exists: true, owner: "B" }, 2: { exists: true, owner: "A" } }), "A")).toBe(2);
+		expect(await pickIndexNote(slots({ 1: { exists: true, owner: "B" }, 2: { exists: true, owner: "C" } }), "A")).toBe(3);
+		// the user's own note (no region) at the plain name is reported by the caller, not skipped
+		expect(await pickIndexNote(slots({ 1: { exists: true, owner: undefined } }), "A")).toBe(1);
+		// at a numbered name only the notebook's own note is reused
+		expect(await pickIndexNote(slots({ 1: { exists: true, owner: "B" }, 2: { exists: true, owner: undefined } }), "A")).toBe(3);
+		expect(await pickIndexNote(slots({ 1: { exists: true, folder: true } }), "A")).toBe(1);
+		const all = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { exists: true, owner: "B" }]));
+		expect(await pickIndexNote(slots(all), "A")).toBeNull();
 	});
 });

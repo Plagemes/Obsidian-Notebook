@@ -7,15 +7,17 @@
  *  1. open notebooks are flushed through the views' own save path, then every file is read as it is on disk;
  *  2. the zip is built in memory, then checked (structure and every CRC) BEFORE anything is written;
  *  3. it is written under a temporary name, its size is checked, and only then renamed to the final name;
- *  4. only after the new backup is in place are old ones trimmed, and only those `planRetention` names.
+ *  4. only after the new backup is in place are old ones trimmed: only `planRetention` names, never the one just written, and
+ *     only files whose zip comment carries the plugin's marker.
  * A run that fails at any step leaves the older backups exactly as they were.
  *
  * It yields to the interface between files and every YIELD_BYTES bytes, so a large vault does not freeze the app.
  */
 import { readZip, safeEntryName, verifyZipEntry, ZipError, ZipWriter } from "../model/zip";
 import { NOTEBOOK_EXTENSIONS } from "./format";
+import { isInTrash } from "./trash-paths";
 import {
-	backupFileName, isTempName, looksNotDownloaded, parseBackupName, planBackupFiles, planRetention, tempName,
+	backupFileName, backupFolderConflict, isTempName, looksNotDownloaded, parseBackupName, planBackupFiles, planRetention, tempName,
 	type BackupResult, type FolderChild, type VaultFileInfo,
 } from "./backup-logic";
 
@@ -25,6 +27,27 @@ export const YIELD_BYTES = 8 * 1024 * 1024;
 export const YIELD_FILES = 25;
 /** The marker in the zip comment: tells what wrote the archive. */
 export const ZIP_COMMENT = "notebook-plugin-backup 1";
+const ZIP_COMMENT_KIND = "notebook-plugin-backup";
+const END_SIGNATURE = 0x06054b50;
+
+/**
+ * Whether `bytes` is a zip whose end-of-central-directory record carries our comment marker (review W21 D4). Looks only at the
+ * tail, and only at a record whose comment runs exactly to the end of the file, so a marker inside a stored entry does not count.
+ */
+export function hasBackupMarker(bytes: Uint8Array): boolean {
+	const END_FIXED = 22;
+	if (bytes.length < END_FIXED) return false;
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const first = Math.max(0, bytes.length - END_FIXED - 0xffff);
+	for (let at = bytes.length - END_FIXED; at >= first; at--) {
+		if (view.getUint32(at, true) !== END_SIGNATURE) continue;
+		const len = view.getUint16(at + 20, true);
+		if (at + END_FIXED + len !== bytes.length) continue;
+		const comment = new TextDecoder().decode(bytes.subarray(at + END_FIXED, at + END_FIXED + len));
+		return comment.startsWith(ZIP_COMMENT_KIND);
+	}
+	return false;
+}
 
 export interface BackupPorts {
 	now(): number;
@@ -32,6 +55,12 @@ export interface BackupPorts {
 	files(): VaultFileInfo[];
 	/** The bytes of a vault file as they are on disk; throws when it cannot be read. */
 	read(path: string): Promise<Uint8Array>;
+	/** Size and modification time of a vault file now, or null when there is none. */
+	stat(path: string): Promise<{ size: number; mtime: number } | null>;
+	/** The bytes of an old backup, to check it is ours before it is trashed; throws when it cannot be read (or is too big to). */
+	readOld(path: string): Promise<Uint8Array>;
+	/** Whether this device's record says the plugin wrote the file (for a leftover temporary file, which has no end record). */
+	writtenByPlugin(path: string): boolean;
 	/** Saves what the open notebooks hold unsaved. Never throws (a failure just means the file on disk is backed up as it is). */
 	flush(): Promise<void>;
 	/** Direct children of the backup folder (empty when it does not exist). */
@@ -58,6 +87,9 @@ export interface BackupConfig {
 	keep: number;
 	/** Most bytes one backup may hold in memory. */
 	maxBytes: number;
+	/** The templates settings (as stored, "" for the default), so the backup folder is checked against them. */
+	templatesFolder?: string;
+	notebookTemplatesFolder?: string;
 }
 
 function failed(ports: BackupPorts, error: string, extra: Partial<BackupResult> = {}): BackupResult {
@@ -65,6 +97,32 @@ function failed(ports: BackupPorts, error: string, extra: Partial<BackupResult> 
 }
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+const isNotebook = (path: string): boolean => NOTEBOOK_EXTENSIONS.includes(path.slice(path.lastIndexOf(".") + 1).toLowerCase());
+
+const CONFLICT_TEXT = {
+	notebooks: "is the notebooks folder or overlaps it",
+	templates: "overlaps a templates folder",
+	"holds-notebooks": "holds notebooks",
+} as const;
+
+/**
+ * Reads a file and makes sure it did not change while it was read (review W21 D5): a notebook is saved by the open views while
+ * the backup runs, and a write can overlap the read. The file's size and modification time are compared before and after; if
+ * they differ the file is read once more, and a file that is still changing throws (the caller skips it and the backup is
+ * marked partial). Only notebooks are checked: assets are written once and never change in place.
+ */
+async function readStable(path: string, ports: BackupPorts): Promise<Uint8Array> {
+	if (!isNotebook(path)) return ports.read(path);
+	for (let attempt = 0; attempt < 2; attempt++) {
+		const before = await ports.stat(path);
+		const bytes = await ports.read(path);
+		const after = await ports.stat(path);
+		if (before !== null && after !== null && before.size === after.size && before.mtime === after.mtime && bytes.length === after.size) return bytes;
+		if (before === null || after === null) throw new Error("the file disappeared while it was read");
+	}
+	throw new Error("the file changed while it was read");
+}
 
 /** Runs one backup. Never throws: the answer says what happened. */
 export async function runBackup(cfg: BackupConfig, ports: BackupPorts): Promise<BackupResult> {
@@ -82,11 +140,19 @@ async function run(cfg: BackupConfig, ports: BackupPorts): Promise<BackupResult>
 		console.error("[notebook] backup: flushing the open notebooks failed; backing up the files as they are on disk", e);
 	}
 
-	const plan = planBackupFiles(ports.files(), cfg.notebooksFolder, cfg.folder);
+	const vaultFiles = ports.files();
+	// A backup folder that overlaps the notebooks (or holds some) would hide them and leave them out of the zip: never "ok".
+	const conflict = backupFolderConflict(cfg.folder, { notebooksFolder: cfg.notebooksFolder, templatesFolder: cfg.templatesFolder ?? "", notebookTemplatesFolder: cfg.notebookTemplatesFolder ?? "" }, vaultFiles.map((f) => f.path));
+	if (conflict) return failed(ports, `the backup folder "${cfg.folder}" ${CONFLICT_TEXT[conflict]}; choose another folder in the settings`);
+	const plan = planBackupFiles(vaultFiles, cfg.notebooksFolder, cfg.folder);
 	if (plan.bytes > cfg.maxBytes) {
-		return failed(ports, `too large: ${Math.ceil(plan.bytes / 1048576)} MB (limit ${Math.floor(cfg.maxBytes / 1048576)} MB)`);
+		return failed(ports, `too large for one backup on this device: ${Math.ceil(plan.bytes / 1048576)} MB (limit ${Math.floor(cfg.maxBytes / 1048576)} MB)`);
 	}
-	if (plan.include.length === 0) return { ...failed(ports, ""), outcome: "ok" };
+	if (plan.include.length === 0 || !plan.include.some((f) => isNotebook(f.path))) {
+		// Nothing to copy is fine for a vault without notebooks, but not when the vault has some that the plan left out.
+		if (vaultFiles.some((f) => isNotebook(f.path) && !isInTrash(f.path) && !/(^|\/)_backup(\/|$)/.test(f.path))) return failed(ports, "no notebook file was selected for the backup");
+		if (plan.include.length === 0) return { ...failed(ports, ""), outcome: "ok" };
+	}
 
 	// ---- 1. read everything as it is on disk
 	const zip = new ZipWriter();
@@ -102,9 +168,9 @@ async function run(cfg: BackupConfig, ports: BackupPorts): Promise<BackupResult>
 			continue;
 		}
 		try {
-			const bytes = await ports.read(f.path);
+			const bytes = await readStable(f.path, ports);
 			// A notebook a sync client has not finished downloading is not a copy worth keeping (and is not damage either).
-			if (NOTEBOOK_EXTENSIONS.includes(f.path.slice(f.path.lastIndexOf(".") + 1).toLowerCase()) && looksNotDownloaded(bytes)) throw new Error("not downloaded yet");
+			if (isNotebook(f.path) && looksNotDownloaded(bytes)) throw new Error("not downloaded yet");
 			zip.add(f.path, bytes, f.mtime);
 			sinceYield += bytes.length;
 		} catch (e) {
@@ -153,7 +219,7 @@ async function run(cfg: BackupConfig, ports: BackupPorts): Promise<BackupResult>
 	await ports.rename(`${dir}/${temp}`, `${dir}/${finalName}`);
 
 	// ---- 4. only now trim the old ones
-	const trashed = await trim(cfg, ports, at);
+	const trashed = await trim(cfg, ports, at, finalName);
 	return { at: ports.now(), outcome: partial ? "partial" : "ok", files, bytes: bytes.length, skipped, trashed, name: finalName, error: partial ? `${skipped} file(s) could not be read` : "" };
 }
 
@@ -178,14 +244,16 @@ async function check(bytes: Uint8Array, expected: number, ports: BackupPorts): P
 }
 
 /** Trashes the old backups and the stale temporary files the retention names; returns how many backups were trashed. */
-async function trim(cfg: BackupConfig, ports: BackupPorts, now: number): Promise<number> {
+async function trim(cfg: BackupConfig, ports: BackupPorts, now: number, finalName: string): Promise<number> {
 	let trashed = 0;
 	try {
-		const plan = planRetention(ports.children(), cfg.keep, now);
+		const plan = planRetention(ports.children(), cfg.keep, now, "", finalName);
 		for (const old of plan.trash) {
-			// Belt and braces: the name is checked again right before the call.
+			// Belt and braces: the name is checked again right before the call, and so is the zip comment the plugin writes (review
+			// W21 D4): a file the user copied here under a backup's name carries no marker and is left alone.
 			if (!old.file || parseBackupName(old.name) === null || old.path !== `${cfg.folder}/${old.name}`) continue;
 			try {
+				if (!hasBackupMarker(await ports.readOld(old.path))) continue;
 				await ports.trash(old.path);
 				trashed++;
 			} catch (e) {
@@ -193,7 +261,10 @@ async function trim(cfg: BackupConfig, ports: BackupPorts, now: number): Promise
 			}
 		}
 		for (const temp of plan.staleTemps) {
+			// An interrupted write may have no end record to look at: a temporary file is removed only when it carries the marker or
+			// this device's record says the plugin wrote it.
 			if (!temp.file || !isTempName(temp.name) || temp.path !== `${cfg.folder}/${temp.name}`) continue;
+			if (!ports.writtenByPlugin(temp.path) && !(await ports.readOld(temp.path).then(hasBackupMarker, () => false))) continue;
 			await ports.trash(temp.path).catch((e) => console.error(`[notebook] backup: could not trash "${temp.path}"`, e));
 		}
 	} catch (e) {

@@ -12,7 +12,8 @@
  *    can point the folder at one that their own sync tool copies elsewhere.
  */
 import { NOTEBOOK_EXTENSIONS } from "./format";
-import { isInTrash } from "./trash-paths";
+import { isInTrash, isWithin, notebookTemplatesFolderPath, templatesFolderPath } from "./trash-paths";
+import { isReservedPath } from "../library/folders";
 import { cleanFolder } from "./pdf-copy-logic";
 
 export const BACKUP_SCHEDULES = ["off", "daily", "weekly"] as const;
@@ -48,6 +49,36 @@ export function readBackupSettings(data: Record<string, unknown>): BackupSetting
 /** The backup folder as stored: cleaned, and never empty (an empty setting would mean the vault root). */
 export function backupFolderOf(setting: string): string {
 	return cleanFolder(setting.replace(/\\/g, "/")) || DEFAULT_BACKUP_FOLDER;
+}
+
+/** The folders a backup folder must not overlap (review W21 D2). */
+export interface BackupLayout {
+	notebooksFolder: string;
+	templatesFolder: string;
+	notebookTemplatesFolder: string;
+}
+
+export type BackupFolderConflict = "notebooks" | "templates" | "holds-notebooks";
+
+const overlaps = (a: string, b: string) => a !== "" && b !== "" && (isWithin(a, b) || isWithin(b, a));
+const NOT_BACKUP_COPY = (path: string) => !/(^|\/)_backup(\/|$)/.test(path);
+const isNotebookFile = (path: string) => NOTEBOOK_EXTENSIONS.includes(path.slice(path.lastIndexOf(".") + 1).toLowerCase()) && !isInTrash(path) && NOT_BACKUP_COPY(path);
+
+/**
+ * Why `backupFolder` cannot be the backup folder, or null when it can. A backup folder is hidden from the library, the API, the
+ * update links and the companion service, and its files are left out of every backup. So it must not be the notebooks folder,
+ * contain it, or lie inside it (that covers `_assets`, `_trash`, `_meta`), must not overlap a templates folder, and must not hold
+ * a notebook file (`filePaths`: paths of the vault's files; only notebook files count). With the notebooks folder at the vault
+ * root only the reserved subfolders and the notebook files are checked.
+ */
+export function backupFolderConflict(backupFolder: string, layout: BackupLayout, filePaths: readonly string[] = []): BackupFolderConflict | null {
+	const b = cleanFolder(backupFolder.replace(/\\/g, "/"));
+	if (b === "") return "notebooks";
+	const root = cleanFolder(layout.notebooksFolder.replace(/\\/g, "/"));
+	if (overlaps(b, root) || (root === "" && isReservedPath(b, ""))) return "notebooks";
+	if (overlaps(b, templatesFolderPath(layout.templatesFolder, root)) || overlaps(b, notebookTemplatesFolderPath(layout.notebookTemplatesFolder, layout.templatesFolder, root))) return "templates";
+	if (filePaths.some((p) => isNotebookFile(p) && isWithin(p, b))) return "holds-notebooks";
+	return null;
 }
 
 // ------------------------------------------------------------------------------------------------------------- names
@@ -271,16 +302,32 @@ export interface RetentionPlan {
 /**
  * What the retention may remove from the backup folder after a run. `children` are the direct children of the folder.
  * Only a plain file named exactly like a backup of ours can be listed. The newest `keep` backups stay, and so does the newest
- * complete one (a partial backup never pushes the last complete one out). A temporary file is listed only when its own timestamp
+ * complete one (a partial backup never pushes the last complete one out). `justWritten` (a file name) is always kept: names dated
+ * more than a day after `now` rank as the oldest. A temporary file is listed only when its own timestamp
  * is older than STALE_TEMP_MS (another device's run may be writing one right now) and it is not `currentTemp`.
  */
-export function planRetention(children: readonly FolderChild[], keep: number, now: number, currentTemp = ""): RetentionPlan {
+export function planRetention(children: readonly FolderChild[], keep: number, now: number, currentTemp = "", justWritten = ""): RetentionPlan {
+	// A name dated more than a day ahead came from a wrong clock (or a time zone far ahead): it counts as the oldest, so it can
+	// neither push out nor stand in for the backup that was just written (review W21 D1).
+	const rank = (at: number) => (at > now + DAY_MS ? Number.NEGATIVE_INFINITY : at);
 	const ours = children
 		.filter((c) => c.file && parseBackupName(c.name) !== null)
 		.map((c) => ({ child: c, at: parseBackupName(c.name)!.at, partial: parseBackupName(c.name)!.partial }))
-		.sort((a, b) => b.at - a.at || (a.child.name < b.child.name ? 1 : -1));
+		.sort((a, b) => {
+			const ra = rank(a.at);
+			const rb = rank(b.at);
+			if (ra !== rb) return ra > rb ? -1 : 1;
+			return b.at - a.at || (a.child.name < b.child.name ? 1 : -1);
+		});
 	const quota = Number.isFinite(keep) ? Math.max(BACKUP_KEEP_MIN, Math.floor(keep)) : BACKUP_KEEP_MIN;
-	const keepSet = new Set(ours.slice(0, quota).map((o) => o.child.path));
+	// The backup this run just wrote always stays and counts toward the quota; the rest of the quota goes to the newest others.
+	const fresh = justWritten === "" ? undefined : ours.find((o) => o.child.name === justWritten);
+	const keepSet = new Set<string>();
+	if (fresh) keepSet.add(fresh.child.path);
+	for (const o of ours) {
+		if (keepSet.size >= quota) break;
+		keepSet.add(o.child.path);
+	}
 	const newestComplete = ours.find((o) => !o.partial);
 	if (newestComplete) keepSet.add(newestComplete.child.path);
 	return {

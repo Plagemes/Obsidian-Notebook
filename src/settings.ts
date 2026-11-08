@@ -31,7 +31,7 @@ import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from ".
 import { DEFAULT_SNAP_SETTINGS, readSnapSettings, type SnapSettings } from "./view/snap-settings";
 import { DEFAULT_GHOST_SETTINGS, readGhostSettings, type GhostSettings } from "./view/ghost-settings";
 import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
-import { DEFAULT_BACKUP_SETTINGS, readBackupSettings, type BackupSettings } from "./storage/backup-logic";
+import { backupFolderConflict, DEFAULT_BACKUP_FOLDER, DEFAULT_BACKUP_SETTINGS, readBackupSettings, type BackupSettings } from "./storage/backup-logic";
 import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 import { normalizeIndexPrefix } from "./model/book-index";
 import { clampSymbolCount } from "./ui/symbol-rank";
@@ -542,6 +542,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readBoardSettings(d));
 	Object.assign(s, readPdfCopySettings(d));
 	Object.assign(s, readBackupSettings(d)); // 0.21 backups
+	// A backup folder that overlaps the notebooks or the templates would hide them (review W21 D2): back to the default.
+	if (backupFolderConflict(s.zipBackupFolder, { notebooksFolder: s.folder, templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder }) !== null) s.zipBackupFolder = DEFAULT_BACKUP_FOLDER;
 	return s;
 }
 

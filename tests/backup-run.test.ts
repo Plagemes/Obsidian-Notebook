@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { readZip, verifyZipEntry, zipEntryData } from "../src/model/zip";
+import { readZip, verifyZipEntry, ZipWriter, zipEntryData } from "../src/model/zip";
 import { backupFileName, DAY_MS, tempName, type FolderChild } from "../src/storage/backup-logic";
-import { runBackup, ZIP_COMMENT, type BackupConfig, type BackupPorts } from "../src/storage/backup-run";
+import { hasBackupMarker, runBackup, ZIP_COMMENT, type BackupConfig, type BackupPorts } from "../src/storage/backup-run";
 
 const T = new Date(2026, 10, 5, 10, 15, 0).getTime();
 const enc = (s: string) => new TextEncoder().encode(s);
 const FOLDER = "Notebook backups";
+/** A small zip that carries the plugin's marker, like the backups the plugin writes. */
+const marked = (): Uint8Array => {
+	const z = new ZipWriter();
+	z.add("Notebooks/A.notebook", enc("{}"), T);
+	return z.finish(ZIP_COMMENT);
+};
 const CFG: BackupConfig = { notebooksFolder: "Notebooks", folder: FOLDER, keep: 3, maxBytes: 1_000_000 };
 
 /** An in-memory vault with the same behaviour the ports promise. */
@@ -20,13 +26,27 @@ class FakeVault {
 	order: string[] = [];
 	breathed = 0;
 	clock = T;
+	written = new Set<string>();
+	/** Changes the file after it was read (what an autosave during the backup does), this many times. */
+	racing = new Map<string, number>();
+	mtimes = new Map<string, number>();
 
 	ports(over: Partial<BackupPorts> = {}): BackupPorts {
 		return {
 			now: () => this.clock,
 			files: () => [...this.files].map(([path, b]) => ({ path, size: b.length, mtime: T - 1000 })),
+			stat: async (p) => (this.files.has(p) ? { size: this.files.get(p)!.length, mtime: this.mtimes.get(p) ?? T - 1000 } : null),
+			readOld: async (p) => this.files.get(p)!,
+			writtenByPlugin: (p) => this.written.has(p),
 			read: async (p) => {
 				if (this.unreadable.has(p)) throw new Error("not downloaded");
+				const left = this.racing.get(p) ?? 0;
+				if (left > 0) {
+					this.racing.set(p, left - 1);
+					const cut = this.files.get(p)!;
+					this.mtimes.set(p, (this.mtimes.get(p) ?? T - 1000) + 1);
+					return cut.slice(0, cut.length - 1); // a read that overlapped a save: the file is cut short, and changes afterwards
+				}
 				return this.files.get(p)!;
 			},
 			flush: async () => void this.flushes++,
@@ -240,7 +260,7 @@ describe("retention in a run", () => {
 		const v = new FakeVault();
 		v.seed();
 		const ours = [1, 2, 3, 4, 5].map((d) => `${FOLDER}/${backupFileName(T - d * DAY_MS)}`);
-		for (const p of ours) v.files.set(p, enc("old"));
+		for (const p of ours) v.files.set(p, marked());
 		const foreign = [
 			`${FOLDER}/notes.md`, `${FOLDER}/holiday.zip`, `${FOLDER}/Notebook backup 20200101-000000 mine.zip`, `${FOLDER}/Notebook backup.zip`,
 			`${FOLDER}/sub/Notebook backup 20200101-000000.zip`, `${FOLDER}/Maths 20260101-000000 unsaved 0a1b2c3d.bak`,
@@ -283,6 +303,7 @@ describe("retention in a run", () => {
 		const recent = `${FOLDER}/${tempName(backupFileName(T - 5 * 60_000))}`;
 		const foreignTmp = `${FOLDER}/draft.tmp`;
 		for (const p of [stale, recent, foreignTmp]) v.files.set(p, enc("tmp"));
+		v.written.add(stale);
 		await runBackup(CFG, v.ports());
 		expect(v.files.has(stale)).toBe(false);
 		expect(v.files.has(recent)).toBe(true);
@@ -292,9 +313,138 @@ describe("retention in a run", () => {
 	it("survives a trash that fails and still reports the backup", async () => {
 		const v = new FakeVault();
 		v.seed();
-		for (const d of [1, 2, 3, 4]) v.files.set(`${FOLDER}/${backupFileName(T - d * DAY_MS)}`, enc("old"));
+		for (const d of [1, 2, 3, 4]) v.files.set(`${FOLDER}/${backupFileName(T - d * DAY_MS)}`, marked());
 		const result = await runBackup(CFG, v.ports({ trash: async () => Promise.reject(new Error("locked")) }));
 		expect(result.outcome).toBe("ok");
 		expect(result.trashed).toBe(0);
+	});
+});
+
+describe("review W21: retention never loses the backup just written (D1)", () => {
+	it("keeps the new backup with keep = 1 when a backup is dated in the future", async () => {
+		const v = new FakeVault();
+		v.seed();
+		const future = `${FOLDER}/Notebook backup 20300101-000000.zip`;
+		v.files.set(future, marked());
+		const result = await runBackup({ ...CFG, keep: 1 }, v.ports());
+		expect(result.outcome).toBe("ok");
+		expect(v.files.has(`${FOLDER}/${result.name}`)).toBe(true);
+		// the clock-skewed one is the one that goes, not the backup just written
+		expect(v.trashed).toEqual([future]);
+	});
+
+	it("keeps the new backup when several future-dated backups fill the quota", async () => {
+		const v = new FakeVault();
+		v.seed();
+		for (const y of [2031, 2032, 2033]) v.files.set(`${FOLDER}/Notebook backup ${y}0101-000000.zip`, marked());
+		const result = await runBackup({ ...CFG, keep: 3 }, v.ports());
+		expect(v.files.has(`${FOLDER}/${result.name}`)).toBe(true);
+	});
+});
+
+describe("review W21: the backup folder must not hide the notebooks (D2)", () => {
+	it("fails, writes nothing and trashes nothing when the backup folder is the notebooks folder", async () => {
+		const v = new FakeVault();
+		v.seed();
+		const before = new Set(v.files.keys());
+		const result = await runBackup({ ...CFG, folder: "Notebooks" }, v.ports());
+		expect(result.outcome).toBe("failed");
+		expect(result.error).toMatch(/notebooks folder/);
+		expect([...v.files.keys()]).toEqual([...before]);
+		expect(v.trashed).toEqual([]);
+	});
+
+	it("fails when the backup folder is inside the notebooks folder (even _assets) or holds notebooks", async () => {
+		for (const folder of ["Notebooks/_assets", "Notebooks/Sub", "Notebooks/Backups"]) {
+			const v = new FakeVault();
+			v.seed();
+			expect((await runBackup({ ...CFG, folder }, v.ports())).outcome, folder).toBe("failed");
+		}
+		const v = new FakeVault();
+		v.files.set("School/Maths/Algebra.notebook", enc('{"version":18}'));
+		const result = await runBackup({ ...CFG, notebooksFolder: "Notebooks", folder: "School" }, v.ports());
+		expect(result).toMatchObject({ outcome: "failed" });
+		expect(result.error).toMatch(/holds notebooks/);
+	});
+
+	it("is 'ok' with nothing to copy only when the vault has no notebook to back up", async () => {
+		const v = new FakeVault();
+		v.files.set("Notebooks/_backup/a.notebook", enc("{}")); // only a copy kept by the plugin
+		const result = await runBackup(CFG, v.ports());
+		expect(result).toMatchObject({ outcome: "ok", files: 0 });
+	});
+});
+
+describe("review W21: a mobile-sized limit is reported for the device (D3)", () => {
+	it("says the backup is too large for this device", async () => {
+		const v = new FakeVault();
+		v.seed();
+		const result = await runBackup({ ...CFG, maxBytes: 10 }, v.ports());
+		expect(result.error).toMatch(/too large for one backup on this device/);
+	});
+});
+
+describe("review W21: only files carrying the plugin's marker are trashed (D4)", () => {
+	it("hasBackupMarker finds the comment at the end of the zip, and nowhere else", () => {
+		expect(hasBackupMarker(marked())).toBe(true);
+		const plain = new ZipWriter();
+		plain.add("a.txt", enc(ZIP_COMMENT), T);
+		expect(hasBackupMarker(plain.finish("someone else"))).toBe(false);
+		expect(hasBackupMarker(enc("not a zip"))).toBe(false);
+		expect(hasBackupMarker(new Uint8Array(0))).toBe(false);
+	});
+
+	it("leaves a file the user copied under a backup's name", async () => {
+		const v = new FakeVault();
+		v.seed();
+		const mine = `${FOLDER}/${backupFileName(T - 9 * DAY_MS)}`;
+		v.files.set(mine, enc("my own copy, kept forever"));
+		const ours = `${FOLDER}/${backupFileName(T - 8 * DAY_MS)}`;
+		v.files.set(ours, marked());
+		const result = await runBackup({ ...CFG, keep: 1 }, v.ports());
+		expect(result.trashed).toBe(1);
+		expect(v.trashed).toEqual([ours]);
+		expect(v.files.has(mine)).toBe(true);
+	});
+
+	it("never trashes a file it cannot read", async () => {
+		const v = new FakeVault();
+		v.seed();
+		const old = `${FOLDER}/${backupFileName(T - 9 * DAY_MS)}`;
+		v.files.set(old, marked());
+		const result = await runBackup({ ...CFG, keep: 1 }, v.ports({ readOld: async () => Promise.reject(new Error("too big to check")) }));
+		expect(result.trashed).toBe(0);
+		expect(v.files.has(old)).toBe(true);
+	});
+
+	it("leaves a stale temporary file that the record does not know and that has no marker", async () => {
+		const v = new FakeVault();
+		v.seed();
+		const stale = `${FOLDER}/${tempName(backupFileName(T - 2 * DAY_MS))}`;
+		v.files.set(stale, enc("tmp"));
+		await runBackup(CFG, v.ports());
+		expect(v.files.has(stale)).toBe(true);
+	});
+});
+
+describe("review W21: a notebook that changes while it is read (D5)", () => {
+	it("reads it again once and backs up the settled content", async () => {
+		const v = new FakeVault();
+		v.seed();
+		v.racing.set("Notebooks/Maths.notebook", 1);
+		const result = await runBackup(CFG, v.ports());
+		expect(result).toMatchObject({ outcome: "ok", skipped: 0 });
+		const bytes = v.files.get(`${FOLDER}/${result.name}`)!;
+		const entry = readZip(bytes).entries.find((e) => e.name === "Notebooks/Maths.notebook")!;
+		expect(Array.from(zipEntryData(bytes, entry))).toEqual(Array.from(v.files.get("Notebooks/Maths.notebook")!));
+	});
+
+	it("skips a notebook that keeps changing and marks the backup partial", async () => {
+		const v = new FakeVault();
+		v.seed();
+		v.racing.set("Notebooks/Maths.notebook", 5);
+		const result = await runBackup(CFG, v.ports());
+		expect(result).toMatchObject({ outcome: "partial", skipped: 1, files: 3 });
+		expect(readZip(v.files.get(`${FOLDER}/${result.name}`)!).entries.map((e) => e.name)).not.toContain("Notebooks/Maths.notebook");
 	});
 });

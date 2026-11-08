@@ -4,7 +4,7 @@ import {
 	COMPANION_HEADING_PIXELS, COMPANION_HEADING_WIDTH, headingPictureName, pickCompanionHeadings,
 } from "../model/companion-headings";
 import { choosePicturePath, NotebookLru, PICTURE_MARK, rewriteIfUnchanged, type PictureProbe } from "../model/companion-pictures";
-import { addPngText, pictureIntact, PIXEL_SUM_V2_KEYWORD, pngPixelSum, readPngText } from "../model/png-text";
+import { markPictureBytes, pictureIntact, readPngText } from "../model/png-text";
 import { embedWithWidth } from "../model/selection-task";
 import type { NotebookDocument } from "../model/types";
 import { t } from "../i18n";
@@ -96,15 +96,13 @@ export class CompanionHeadings {
 				const render = (): ArrayBuffer | null => {
 					if (data !== undefined) return data;
 					const bytes = headingPngBytes(page, strokes, r, COMPANION_HEADING_PIXELS);
-					const sum = bytes ? pngPixelSum(bytes) : null;
-					const keyed = bytes ? addPngText(bytes, PICTURE_MARK, key) : null;
-					const marked = keyed && sum ? addPngText(keyed, PIXEL_SUM_V2_KEYWORD, sum) : keyed;
+					const marked = bytes ? markPictureBytes(bytes, PICTURE_MARK, key) : null;
 					data = marked ? (marked.buffer.slice(marked.byteOffset, marked.byteOffset + marked.byteLength) as ArrayBuffer) : null;
 					return data;
 				};
 				// A file that changed between the check and the write is the user's (or a sync's): the plan is made again, bounded.
 				for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS && !target; attempt++) {
-					const plan = await choosePicturePath(wanted, key, (path) => this.probe(path));
+					const plan = await choosePicturePath(wanted, key, (path) => this.probe(path), known?.path ?? "");
 					if (!plan) return null; // every name is taken by files that are not ours
 					if (plan.action === "keep") {
 						target = app.vault.getFileByPath(plan.path);
@@ -114,6 +112,8 @@ export class CompanionHeadings {
 						// No free name left: the previous picture stays linked (it shows older ink) and the user is told once.
 						this.tellFull();
 						const previous = app.vault.getFileByPath(plan.path);
+						// Remembered for this ink: the next runs link it without reading all the names again.
+						if (previous) this.made.set(wanted, { path: previous.path, key });
 						return previous ? embedWithWidth(withEmbedMarker(app.fileManager.generateMarkdownLink(previous, notePath), true), COMPANION_HEADING_WIDTH) : null;
 					}
 					const bytes = render();

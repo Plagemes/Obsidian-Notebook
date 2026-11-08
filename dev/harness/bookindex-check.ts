@@ -8,7 +8,10 @@
 import { BookIndexModal, AddToIndexModal, indexNotePath, writeIndexNote, type BookIndexHost } from "../../src/view/book-index";
 import { createPage } from "../../src/model/document";
 import { createMarker } from "../../src/model/markers";
-import { INDEX_END, INDEX_START } from "../../src/model/book-index";
+import { INDEX_END, INDEX_START, indexOwnerOf } from "../../src/model/book-index";
+
+/** The start marker without its closing, which the generated one carries a notebook path in (review W21 D8). */
+const START_OPEN = INDEX_START.slice(0, INDEX_START.indexOf(" -->"));
 import { t } from "../../src/i18n";
 import { App } from "./obsidian-stub";
 import type { CheckResult } from "./reading-check";
@@ -63,12 +66,12 @@ export async function checkBookIndex(api: BookIndexCheckApi): Promise<{ ok: bool
 	const written = await writeIndexNote(host);
 	const file = vault.getFileByPath(notePath);
 	const text1 = file ? await vault.read(file) : "";
-	add("'Write to note' makes the note with the generated region", written === notePath && text1.includes(INDEX_START) && text1.includes(INDEX_END) && text1.includes("### C") && text1.includes("Nucleus"), text1.slice(0, 120));
+	add("'Write to note' makes the note with the generated region", written === notePath && text1.includes(START_OPEN) && indexOwnerOf(text1) === (notebook as unknown as { path: string }).path && text1.includes(INDEX_END) && text1.includes("### C") && text1.includes("Nucleus"), text1.slice(0, 120));
 	if (file) await vault.modify(file, `My preface\n\n${text1.trimEnd()}\n\nMy afterword`);
 	pages[0]!.elements = [...(pages[0]!.elements ?? []), mk("#idx Zygote", 600)];
 	await writeIndexNote(host);
 	const text2 = file ? await vault.read(file) : "";
-	add("a second run rewrites only the region", text2.startsWith("My preface\n\n") && text2.endsWith("\n\nMy afterword") && text2.includes("Zygote") && text2.split(INDEX_START).length === 2, text2.slice(-80));
+	add("a second run rewrites only the region", text2.startsWith("My preface\n\n") && text2.endsWith("\n\nMy afterword") && text2.includes("Zygote") && text2.split(START_OPEN).length === 2, text2.slice(-80));
 	if (file) await vault.modify(file, `Only mine ${INDEX_START} broken`);
 	const before = api.notices.length;
 	const unsafe = await writeIndexNote(host);
@@ -76,6 +79,12 @@ export async function checkBookIndex(api: BookIndexCheckApi): Promise<{ ok: bool
 	if (file) await vault.modify(file, "A note of mine without markers");
 	const foreign = await writeIndexNote(host);
 	add("a foreign note with that name is never changed", foreign === null && (file ? await vault.read(file) : "") === "A note of mine without markers");
+	// A note that records another notebook is never rewritten: this notebook's index goes to the "(2)" note.
+	const otherText = `# Other\n\n<!-- notebook-index:start for=School%2FOther.notebook -->\n\nOther index\n\n${INDEX_END}\n`;
+	if (file) await vault.modify(file, otherText);
+	const second = await writeIndexNote(host);
+	const secondFile = second ? vault.getFileByPath(second) : null;
+	add("another notebook's index note is never rewritten", (file ? await vault.read(file) : "") === otherText && second === "Notebooks/Biology — Index (2).md" && !!secondFile && indexOwnerOf(await vault.read(secondFile)) === (notebook as unknown as { path: string }).path, String(second));
 
 	// 3. A chip jumps and closes.
 	chips[0]?.click();
