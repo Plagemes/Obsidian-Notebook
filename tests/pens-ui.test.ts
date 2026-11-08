@@ -143,9 +143,9 @@ describe("style eyedropper", () => {
 		expect(styleOfStroke({ tool: "brush", color: "#112233", width: 6 })).toMatchObject({ penKind: "brush" });
 	});
 
-	it("the other strokes give the style they always gave", () => {
-		expect(styleOfStroke({ tool: "pen", color: "#112233", width: 2 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 2 });
-		expect(styleOfStroke({ tool: "shape", color: "#112233", width: 2 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 2 });
+	it("a ballpoint or shape stroke selects the ballpoint again, so an eyedropper never keeps the fountain pen", () => {
+		expect(styleOfStroke({ tool: "pen", color: "#112233", width: 2 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 2, penKind: "pen", nibAngle: 45 });
+		expect(styleOfStroke({ tool: "shape", color: "#112233", width: 2 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 2, penKind: "pen", nibAngle: 45 });
 		expect(styleOfStroke({ tool: "highlighter", color: "#facc15", width: 14 })).toEqual({ tool: "highlighter", highlighterColor: "#facc15", highlighterWidth: 14 });
 	});
 });

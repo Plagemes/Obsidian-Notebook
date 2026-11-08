@@ -162,7 +162,8 @@ export function styleOfStroke(stroke: Pick<Stroke, "tool" | "color" | "width"> &
 	const width = Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Number.isFinite(stroke.width) ? stroke.width : 1)) * 100) / 100;
 	if (stroke.tool === "highlighter") return { tool: "highlighter", highlighterColor: colour, highlighterWidth: width };
 	if (isNewPen(stroke.tool)) return { tool: "pen", penColor: colour, penWidth: width, penKind: stroke.tool as PenKind, nibAngle: stroke.nib ?? NIB_DEFAULT };
-	return { tool: "pen", penColor: colour, penWidth: width };
+	// Review fix (D3): a ballpoint or shape stroke selects the ballpoint (and the default nib), so the eyedropper never keeps another pen.
+	return { tool: "pen", penColor: colour, penWidth: width, penKind: "pen", nibAngle: NIB_DEFAULT };
 }
 
 /** Which toolbar colour a tool edits: the eraser's own when it is limited to one colour, the highlighter's, else the pen's. */
