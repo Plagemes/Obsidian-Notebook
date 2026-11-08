@@ -3,6 +3,7 @@
 // Two profiles are built in (constants, never stored); the user's own are saved from the current state and live in the plugin
 // settings with the active id, so they are the same on every device that shares the settings. Switching a profile changes tools
 // and defaults only: no stroke, page or document is ever touched, and the document format is unchanged.
+import { PROFILE_SCORE, type PaperCandidate } from "../model/paper-suggest";
 import { PAPER_KINDS, type PaperKind } from "../model/types";
 import { FAVOURITE_SLOTS, validPen, type FavouritePen } from "./favourites";
 import { MAX_PEN_SETS, MAX_SET_NAME, type PenSet } from "./pen-sets";
@@ -117,6 +118,12 @@ export function isCurrent(p: WritingProfile, s: Pick<ProfileSettings, "stabiliza
 export function activeProfile(custom: readonly WritingProfile[], s: ProfileSettings): WritingProfile | null {
 	const p = s.writingProfileActive ? findProfile(custom, s.writingProfileActive) : null;
 	return p && isCurrent(p, s) ? p : null;
+}
+
+/** The candidate the "+" strip gets from the active profile (roadmap 409): its paper, above any history signal; none when no profile is active or the settings drifted from it (the same rule as the chip). */
+export function profilePaperCandidate(custom: readonly WritingProfile[], s: ProfileSettings): PaperCandidate[] {
+	const p = activeProfile(custom, s);
+	return p ? [{ paper: p.paper, score: PROFILE_SCORE, reason: { kind: "profile" } }] : [];
 }
 
 /** The pens a profile puts on the strip: those of its pen set while that exists, else its own list. */

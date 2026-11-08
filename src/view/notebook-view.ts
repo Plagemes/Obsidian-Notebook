@@ -211,7 +211,7 @@ import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites"
 import { PenControls, type PenStore } from "./pen-controls";
 import { PenSetControls, setForOpen, type PenSetHost } from "./pen-set-controls";
 import { ProfileControls, type ProfileHost } from "./profile-controls";
-import { activeProfile, addProfile, applyPatch, deleteProfile, ensureProfileSet, findProfile, nextProfileId, profileName, profileSetId, switchOnLecture, updateProfile, type CurrentState } from "./writing-profiles";
+import { activeProfile, addProfile, profilePaperCandidate, applyPatch, deleteProfile, ensureProfileSet, findProfile, nextProfileId, profileName, profileSetId, switchOnLecture, updateProfile, type CurrentState } from "./writing-profiles";
 import { favouritePatch } from "./favourites";
 import { MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, slotsOf, withSetPens, type PenSet } from "./pen-sets";
 import { PdfReading, type ReadingHost } from "./pdf-reading";
@@ -2251,7 +2251,7 @@ export class NotebookView extends FileView {
 		if (!doc || !this.host.settings.paperSuggest || !this.editable()) return null;
 		const name = suggestedCourse(this.file?.path);
 		const course = name ? { name, usage: courseUsageOf(this.coursePapers(), name) } : null;
-		return suggestPaper({ pages: doc.pages.map((p) => p.paper.kind), index: this.currentPageIndex(), course });
+		return suggestPaper({ pages: doc.pages.map((p) => p.paper.kind), index: this.currentPageIndex(), course, extra: profilePaperCandidate(this.host.settings.writingProfiles, this.host.settings) });
 	}
 
 	/** The paper habit per course of this device (bounded, damaged data reads as empty). */
