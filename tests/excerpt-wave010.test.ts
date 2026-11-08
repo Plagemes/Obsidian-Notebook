@@ -70,7 +70,7 @@ describe("anchored excerpts and the wave 0.10 features", () => {
 		if (!back.ok) return;
 		const e = back.clip.elements[0] as ExcerptElement;
 		expect(e.type).toBe("excerpt");
-		expect(e.source).toEqual(clip.elements[0]!.type === "excerpt" ? clip.elements[0]!.source : null);
+		expect(e.source).toEqual(clip.elements[0]!.type === "excerpt" ? clip.elements[0].source : null);
 		expect(e.asset).toBe(snap(1).id);
 		expect(back.clip.assets.map((a) => a.id)).toEqual([snap(1).id]);
 	});

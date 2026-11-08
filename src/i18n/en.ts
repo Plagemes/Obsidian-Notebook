@@ -4635,6 +4635,16 @@ export const en = {
 	"handIn.export": "Export PDF",
 	"handIn.exportAnyway": "Export anyway",
 	"handIn.fixHint": "The dialog closes when you go to a page; open it again from the notebook menu when you are done.",
+	// 0.25 areahl (#99)
+	"highlighter.mode": "What the highlighter marks",
+	"highlighter.mode.stroke": "Stroke",
+	"highlighter.mode.area": "Area",
+	"highlighter.areaAction": "Area highlighter",
+	"command.highlighterArea": "Toggle the area highlighter (marks rectangles)",
+	"groups.kind.area": "Highlighter area",
+	"help.highlighterArea": "Mark a block with a translucent rectangle that sits under your writing: drag from corner to corner. Ideal on scanned PDFs.",
+	"help.highlighter.modeStroke": "Highlight along the line you draw, like a marker.",
+	"help.highlighter.modeArea": "Drag a rectangle to highlight a whole block. It stays under your ink and can be moved, resized, recoloured and erased.",
 } as const;
 
 export type MessageKey = keyof typeof en;

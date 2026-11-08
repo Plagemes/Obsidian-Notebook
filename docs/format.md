@@ -1,6 +1,6 @@
-# The `.notebook` file format (version 22)
+# The `.notebook` file format (version 23)
 
-This guide is for people who write tools that read (or carefully write) Notebook files: converters, search indexes, viewers, backup scripts. The machine-readable contract is the JSON Schema [`docs/schema/notebook-v22.schema.json`](schema/notebook-v22.schema.json) (draft 2020-12). The reasoning behind the format and the full history of every field is in [architecture.md](architecture.md), section 2.
+This guide is for people who write tools that read (or carefully write) Notebook files: converters, search indexes, viewers, backup scripts. The machine-readable contract is the JSON Schema [`docs/schema/notebook-v23.schema.json`](schema/notebook-v23.schema.json) (draft 2020-12). The reasoning behind the format and the full history of every field is in [architecture.md](architecture.md), section 2.
 
 A schema file is also kept in the test suite: `tests/format-schema.test.ts` validates real serializer output (a document that uses every element type and every optional field) against it, and checks that invalid documents are refused. If the plugin changes the format, that test fails until the schema is updated.
 
@@ -16,7 +16,7 @@ Top level:
 | Field | Meaning |
 |---|---|
 | `format` | always `"obsidian-notebook"` |
-| `version` | integer, currently `22` |
+| `version` | integer, currently `23` |
 | `id` | document id; survives renames and "Make a copy" |
 | `createdAt`, `modifiedAt` | ISO times |
 | `meta` | `tags`, `favorite`, `cover` (colour), `bookmarks` (page ids), optional `bookmarkInfo`, `description`, `coverArt` |
@@ -43,6 +43,7 @@ A **stroke** is vector ink: `id`, `tool` (`pen`, `highlighter`, `shape`, and fro
 | `excerpt` | a region of a page of this or another notebook, with an optional PNG snapshot asset |
 | `sticky` | coloured note with text; ink written on it is ordinary page ink |
 | `checkbox` | handwritten checkbox, optionally linked to a task line of a note |
+| `area` | area highlighter (v23): a translucent axis-aligned rectangle `x`, `y`, `width`, `height` in a highlighter `color`, drawn under the ink |
 
 Every element may also carry `group`, `locked` and `lockAt` (v18).
 
@@ -61,8 +62,8 @@ Rules a JSON Schema cannot say (the plugin enforces them when it writes and chec
 ## Versioning and migrations
 
 - `version` is an integer that grows with every schema change. Every change adds a tested migration (`src/model/migrations.ts`), and every older valid document stays valid after migration (most steps are "the identity plus the new version number").
-- Newer fields are always **optional** and written only when used; the version of a file is the version of the plugin that last saved it. v22 added the fill and the line style of shapes (`fill`, `fillTint`, `dash` of a stroke); v21 added the saved views (the notebook-level `views` list); v20 added the fountain pen, the brush and the marker (three more `tool` values) and the nib angle of a stroke; v19 added the start and end time of a page; v18 groups and locks; v17 checkboxes; v16 margin comments; v15 sticky notes; v14 page lock; v13 states; v12 slides; v11 description and cover art; v10 excerpts; v9 equations and graphs; v8 markers, boxes and hidden ink; v7 bookmark details, page tags, reading position and more paper kinds; v6 margins; v5 the per-stroke `render`; v4 metadata, assets, backgrounds and elements. The table of what each version added is in architecture.md.
-- **This schema describes version 22 only.** A file with another `version` is not valid against it. The schema file name carries the version (`notebook-v22.schema.json`); a future format version ships its own schema next to this one, and older schemas stay available in the repository history.
+- Newer fields are always **optional** and written only when used; the version of a file is the version of the plugin that last saved it. v23 added the area highlighter (the element type `area`); v22 added the fill and the line style of shapes (`fill`, `fillTint`, `dash` of a stroke); v21 added the saved views (the notebook-level `views` list); v20 added the fountain pen, the brush and the marker (three more `tool` values) and the nib angle of a stroke; v19 added the start and end time of a page; v18 groups and locks; v17 checkboxes; v16 margin comments; v15 sticky notes; v14 page lock; v13 states; v12 slides; v11 description and cover art; v10 excerpts; v9 equations and graphs; v8 markers, boxes and hidden ink; v7 bookmark details, page tags, reading position and more paper kinds; v6 margins; v5 the per-stroke `render`; v4 metadata, assets, backgrounds and elements. The table of what each version added is in architecture.md.
+- **This schema describes version 23 only.** A file with another `version` is not valid against it. The schema file name carries the version (`notebook-v23.schema.json`); a future format version ships its own schema next to this one, and older schemas stay available in the repository history.
 - A plugin never rewrites a file of a **newer** version than it understands: it opens it read-only and keeps a backup copy in `<notebooks folder>/_backup/`. A tool that writes notebooks should follow the same rule: never save a file whose `version` it does not know.
 
 ## Reading leniently
@@ -94,7 +95,7 @@ All of these live under the notebooks folder (a setting, `Notebooks` by default)
 ```json
 {
 	"format": "obsidian-notebook",
-	"version": 22,
+	"version": 23,
 	"id": "6f1c2d3e-0000-4000-8000-000000000001",
 	"createdAt": "2026-11-05T09:00:00.000Z",
 	"modifiedAt": "2026-11-05T09:05:00.000Z",
@@ -125,7 +126,7 @@ Any draft 2020-12 validator works, for example with Python:
 
 ```python
 import json, jsonschema
-schema = json.load(open("docs/schema/notebook-v22.schema.json"))
+schema = json.load(open("docs/schema/notebook-v23.schema.json"))
 doc = json.load(open("Physics.notebook"))
 jsonschema.Draft202012Validator(schema).validate(doc)
 ```

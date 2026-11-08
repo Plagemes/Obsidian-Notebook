@@ -7,6 +7,7 @@ import { hiddenStickyInk } from "../model/sticky";
 import type { Page } from "../model/types";
 import { drawSticky } from "../ink/sticky-render";
 import { drawCheckbox } from "../ink/checkbox-render";
+import { drawArea } from "../ink/area-render";
 
 export interface ThumbnailOptions {
 	/** Draws under the paper pattern and the ink (e.g. a PDF page). `scale` is canvas px per pt. */
@@ -81,6 +82,8 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 
 	// v15 sticky notes (under the ink written on them); the ink a collapsed note keeps hidden is left out.
 	for (const el of page.elements ?? []) if (el.type === "sticky") drawSticky(ctx, el);
+	// v23 area highlighter (under the ink, with the look of the highlighter): a scanned page keeps its marked passages on a card.
+	for (const el of page.elements ?? []) if (el.type === "area") drawArea(ctx, el);
 	const noteInk = hiddenStickyInk(page.elements);
 	// Small thumbnails draw strokes from simplified points (ink/lod.ts); the saved points are untouched.
 	const lod = lodLevel(scale, 1);

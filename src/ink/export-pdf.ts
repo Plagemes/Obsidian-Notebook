@@ -415,6 +415,12 @@ function pageContent(
 		if (op.font) res.font = true;
 		ops.push(op.ops);
 	}
+	// v23 area highlighter: after the sticky notes, before the equations, with the look of the highlighter (GS1: its opacity, multiplied).
+	for (const el of page.elements ?? []) {
+		if (el.type !== "area") continue;
+		res.highlighter = true;
+		ops.push(`q\n/GS1 gs\n${rgb(el.color)} rg\n${num(el.x)} ${num(el.y)} ${num(el.width)} ${num(el.height)} re f\nQ`);
+	}
 	const noteInk = hiddenStickyInk(page.elements);
 	for (const el of page.elements ?? []) {
 		if (el.type !== "equation") continue;

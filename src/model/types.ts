@@ -2,6 +2,8 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v23: area highlighter (#99): the page element "area" (a translucent axis-aligned rectangle in a highlighter colour, drawn under the ink and over the
+ * background, so what it covers stays readable; ideal on scanned PDFs).
  * v22: filled shapes and dashed or dotted lines (#37): the optional `Stroke.fill` / `Stroke.fillTint` (a closed shape is filled with a colour, solid or
  * as a translucent tint) and `Stroke.dash` ("dashed" or "dotted" instead of a solid line); only strokes of the "shape" tool have them, never freehand ink.
  * v21: saved views (#264): the optional notebook-level `views` list (a name, a page and the region of it that was in view, with the zoom).
@@ -21,7 +23,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 22;
+export const CURRENT_VERSION = 23;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -528,7 +530,23 @@ export interface CheckboxElement extends ElementFlags {
 	task?: CheckboxTask;
 }
 
-export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement | ExcerptElement | StickyElement | CheckboxElement;
+/**
+ * v23 area highlighter (#99): a translucent rectangle (`x`, `y` top-left corner, `width` × `height`, page coordinates, pt) in the highlighter
+ * colour `color` (`#rrggbb`). It is drawn with the look of the highlighter (same translucency, multiplied over the page in the day, screened at
+ * night), above the background and below all the ink, so what is under it stays readable. It never rotates. Nothing else is stored: the
+ * translucency is the highlighter's, so a notebook looks the same on every device.
+ */
+export interface AreaElement extends ElementFlags {
+	id: string;
+	type: "area";
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	color: string;
+}
+
+export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement | ExcerptElement | StickyElement | CheckboxElement | AreaElement;
 /** Element types that exist only from format v8: an older file that uses one was not written by this plugin. */
 export const ELEMENT_TYPES_V8: readonly string[] = ["marker", "box"];
 /** Element types that exist only from format v9. */
@@ -539,6 +557,8 @@ export const ELEMENT_TYPES_V10: readonly string[] = ["excerpt"];
 export const ELEMENT_TYPES_V15: readonly string[] = ["sticky"];
 /** Element types that exist only from format v17. */
 export const ELEMENT_TYPES_V17: readonly string[] = ["checkbox"];
+/** Element types that exist only from format v23. */
+export const ELEMENT_TYPES_V23: readonly string[] = ["area"];
 
 /**
  * v6: blank space added around a page's background (a PDF page or a scan), in pt. The background is

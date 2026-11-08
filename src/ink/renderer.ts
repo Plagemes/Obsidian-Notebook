@@ -1,4 +1,4 @@
-import type { ExcerptElement, Page, PageElement, Point, ShapeDash, Stroke, TextElement, Tool } from "../model/types";
+import type { AreaElement, ExcerptElement, Page, PageElement, Point, ShapeDash, Stroke, TextElement, Tool } from "../model/types";
 import { isNewPen, MM, RENDER_FREEHAND, RENDER_INK } from "../model/types";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
@@ -7,6 +7,7 @@ import { drawExcerpt, drawExcerptBadge } from "./excerpt-render";
 import { hiddenStickyInk } from "../model/sticky";
 import { drawSticky } from "./sticky-render";
 import { drawCheckbox } from "./checkbox-render";
+import { drawArea } from "./area-render";
 import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
@@ -135,6 +136,10 @@ export function drawElement(
 	}
 	if (el.type === "checkbox") {
 		drawCheckbox(ctx, el);
+		return;
+	}
+	if (el.type === "area") {
+		drawArea(ctx, el);
 		return;
 	}
 	ctx.save();
@@ -301,6 +306,8 @@ export class Renderer {
 	private numbersKey = "";
 	private layout: Layout | null = null;
 	private live: LiveStroke | null = null;
+	/** v23 (#99): the rectangle of the area highlighter being dragged, on the live layer (never saved). */
+	private areaPreview: { pageIndex: number; area: AreaElement } | null = null;
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
 	private peek: PeekOverlay | null = null;
@@ -315,7 +322,7 @@ export class Renderer {
 	private hideAnnotations = false;
 	private backgroundAlpha = 1;
 	/** 0.22 (#101): view-only "filter by meaning": ink for which this says true is drawn faint (never saved; the static layer is redrawn once when it changes). */
-	private inkDim: ((stroke: Stroke) => boolean) | null = null;
+	private inkDim: ((stroke: Pick<Stroke, "color">) => boolean) | null = null;
 	private dimNow = false;
 	/** wave 0.9 (367): night mode, view-only. Colours are mapped when they are drawn; the document is never touched. */
 	private night = false;
@@ -539,7 +546,7 @@ export class Renderer {
 	}
 
 	/** View-only: draws the strokes for which `dim` is true faint (null: no filter). */
-	setInkDim(dim: ((stroke: Stroke) => boolean) | null): void {
+	setInkDim(dim: ((stroke: Pick<Stroke, "color">) => boolean) | null): void {
 		if (dim === this.inkDim) return;
 		this.inkDim = dim;
 		this.invalidate();
@@ -768,6 +775,13 @@ export class Renderer {
 		if (!wet) return;
 		const t = this.pageTransform(this.wetPage);
 		if (t && (force || !this.sameTransform(wet.transform, t))) wet.setTransform(t);
+	}
+
+	/** v23 (#99): shows the area being dragged (null ends it). Only the live layer is redrawn. */
+	setAreaPreview(preview: { pageIndex: number; area: AreaElement } | null): void {
+		this.areaPreview = preview;
+		this.liveDirty = true;
+		this.schedule();
 	}
 
 	setLive(live: LiveStroke | null): void {
@@ -1112,6 +1126,12 @@ export class Renderer {
 			if (el.type !== "sticky" || skip(el)) continue;
 			this.guarded(ctx, "sticky element", () => drawSticky(ctx, el, this.night));
 		}
+		// v23 area highlighter: above the sticky notes, under the equations, the text boxes and all the ink, with the look of the highlighter
+		// (multiplied in the day, screened at night); dimmed like highlighter ink in the "filter by meaning" view.
+		for (const el of elements) {
+			if (el.type !== "area" || skip(el)) continue;
+			this.guarded(ctx, "area element", () => drawArea(ctx, el, this.areaPaint(el, this.inkDim?.(el) ?? false)));
+		}
 		const numbers = this.equationNumbers();
 		for (const el of elements) {
 			if (el.type !== "equation" || skip(el)) continue;
@@ -1316,6 +1336,26 @@ export class Renderer {
 			} else ctx.fill(new Path2D(strokePath(points, live.width, false, live.tool)));
 			ctx.restore();
 		});
+		// v23 (#99): the rectangle of the area highlighter being dragged, with its final look and a hairline edge to read its corners.
+		const area = this.areaPreview;
+		if (area && boxes[area.pageIndex]) this.guarded(ctx, "area preview", () => {
+			this.beginPage(ctx, boxes[area.pageIndex]!);
+			drawArea(ctx, area.area, this.areaPaint(area.area, false));
+			ctx.strokeStyle = this.inkColor("highlighter", area.area.color);
+			ctx.globalAlpha = 0.9;
+			ctx.lineWidth = 1 / this.viewport.scale;
+			ctx.strokeRect(area.area.x, area.area.y, area.area.width, area.area.height);
+			ctx.restore();
+		});
+	}
+
+	/** How an area highlighter is painted: the highlighter's look in the day, its night counterpart at night, fainter when dimmed by the meaning filter. */
+	private areaPaint(el: AreaElement, dim: boolean): { colour: string; alpha: number; blend: GlobalCompositeOperation } {
+		return {
+			colour: this.inkColor("highlighter", el.color),
+			alpha: (this.night ? NIGHT_HIGHLIGHTER_ALPHA : HIGHLIGHTER_ALPHA) * (dim ? DIM_ALPHA : 1),
+			blend: this.night ? "screen" : "multiply",
+		};
 	}
 
 	/** Translucent straight edge with millimetre ticks and centimetre numbers; the working edge is the top one (before rotation). */

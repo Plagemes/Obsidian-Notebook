@@ -324,6 +324,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"pdf-search-previous": (v) => v.readingTools?.step(-1),
 	"toggle-annotations": (v) => v.readingTools?.toggleAnnotations(),
 	"toggle-snap-highlighter": (v) => v.readingTools?.toggleSnap(),
+	"highlighter-area": (v) => v.toggleHighlighterArea(),
 	"pdf-select-text": (v) => { if (!v.presenting) v.pdfTextTools?.toggle(); },
 	"toggle-dim-background": (v) => v.readingTools?.toggleDim(),
 	"pdf-margins": onPage((v, p) => {

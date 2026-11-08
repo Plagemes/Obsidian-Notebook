@@ -1,5 +1,6 @@
 import { createId, quantizePoint } from "../model/document";
 import { Batch, RemoveElement, ReplaceStroke, type Command } from "../model/history";
+import { areaMatchesFilter } from "./area-erase";
 import { strokePieces } from "../model/groups";
 import { hiddenStickyInk } from "../model/sticky";
 import type { Page, Point, Stroke } from "../model/types";
@@ -117,10 +118,17 @@ export function eraseAreaCommand(page: Pick<Page, "id" | "strokes" | "elements">
 	});
 	edits.sort((a, b) => b.index - a.index);
 	const commands: Command[] = edits.map((e) => new ReplaceStroke(page.id, e.stroke, e.after, e.index));
+	const removed = new Set<string>();
 	if (options.includeElements && options.filter.kind === "all") {
 		for (const el of elementsInLasso(page.elements ?? [], poly, options.measure ?? estimateMeasure)) {
 			commands.push(new RemoveElement(page.id, el));
+			removed.add(el.id);
 		}
+	}
+	// v23: an area highlighter is highlighter ink, not an object: the area eraser removes the ones whose centre is inside the outline (the
+	// selective eraser applies: a highlighter of that colour), whatever the setting for text boxes and images says. Locked ones stay.
+	for (const el of elementsInLasso(page.elements ?? [], poly, options.measure ?? estimateMeasure)) {
+		if (el.type === "area" && !removed.has(el.id) && areaMatchesFilter(el.color, options.filter)) commands.push(new RemoveElement(page.id, el));
 	}
 	return commands.length > 0 ? new Batch("Erase area", commands) : null;
 }

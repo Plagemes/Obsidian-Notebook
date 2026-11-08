@@ -1,7 +1,7 @@
-// docs/schema/notebook-v22.schema.json against what the serializer really writes (roadmap #167).
+// docs/schema/notebook-v23.schema.json against what the serializer really writes (roadmap #167).
 // The schema is a published contract for other tools: a document the plugin writes must always satisfy it, and a document that
 // breaks one of the writer's rules must not. The validator is a small dependency-free one (tests/json-schema-lite.ts).
-import schemaText from "../docs/schema/notebook-v22.schema.json?raw";
+import schemaText from "../docs/schema/notebook-v23.schema.json?raw";
 import guide from "../docs/format.md?raw";
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
@@ -105,6 +105,9 @@ function fullDocument(): NotebookDocument {
 		{ id: "el-sticky-min", type: "sticky", x: 400, y: 450, width: 150, height: 120, color: "#F59E0B", fontSize: 14 },
 		{ id: "el-cb", type: "checkbox", x: 30, y: 650, size: 20, color: "#1f2430", checked: true, at: 1_700_000_000_001, taskAt: 1_700_000_000_002, label: "Read chapter 2", task: { path: "Notes/Tasks.md", block: "nb-abc123" } },
 		{ id: "el-cb-min", type: "checkbox", x: 30, y: 690, size: 20, color: "#1f2430" },
+		// v23: the area highlighter (the second one is locked).
+		{ id: "el-area", type: "area", x: 30, y: 730, width: 200, height: 24, color: "#facc15" },
+		{ id: "el-area-locked", type: "area", x: 250, y: 730, width: 120.5, height: 24.25, color: "#4ADE80", locked: true, lockAt: 1_700_000_000_003 },
 	];
 	const page1: Page = {
 		id: "p-ink", width: 595.28, height: 841.89, paper: { kind: "cornell", spacing: 22.68 },
@@ -144,7 +147,7 @@ function fullDocument(): NotebookDocument {
 	return doc;
 }
 
-describe("notebook-v22.schema.json: what the serializer writes validates", () => {
+describe("notebook-v23.schema.json: what the serializer writes validates", () => {
 	it("is a well-formed draft 2020-12 schema for the current format version", () => {
 		expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
 		expect((getAt(schema as Raw, ["properties", "version", "const"]))).toBe(CURRENT_VERSION);
@@ -170,7 +173,7 @@ describe("notebook-v22.schema.json: what the serializer writes validates", () =>
 		// The test document really covers everything: every element type and the optional fields of the format are in the output.
 		const raw = JSON.parse(text) as { pages: { elements?: { type: string }[] }[] };
 		const types = new Set(raw.pages.flatMap((p) => (p.elements ?? []).map((e) => e.type)));
-		expect([...types].sort()).toEqual(["box", "checkbox", "equation", "excerpt", "graph", "image", "marker", "sticky", "text"]);
+		expect([...types].sort()).toEqual(["area", "box", "checkbox", "equation", "excerpt", "graph", "image", "marker", "sticky", "text"]);
 		for (const key of [
 			'"bookmarkInfo"', '"description"', '"coverArt"', '"position"', '"slides"', '"views"', '"tags"', '"background"', '"margins"', '"infinite"', '"locked"',
 			'"states"', '"comments"', '"hidden"', '"slide"', '"group"', '"lockAt"', '"outline"', '"taskAt"', '"sketch"', '"resolved"', '"inline"', '"numbered"',
@@ -189,7 +192,7 @@ describe("notebook-v22.schema.json: what the serializer writes validates", () =>
 	});
 });
 
-describe("notebook-v22.schema.json: invalid documents are refused", () => {
+describe("notebook-v23.schema.json: invalid documents are refused", () => {
 	const base = (): Raw => parseRaw(written(fullDocument()));
 	const bad = (name: string, edit: (raw: Raw) => void): void => {
 		it(name, () => {
@@ -327,6 +330,12 @@ describe("notebook-v22.schema.json: invalid documents are refused", () => {
 	bad("checkbox block id of someone else", set(["pages", 0, "elements", 12, "task", "block"], "abc123"));
 	bad("checkbox time negative", set(["pages", 0, "elements", 12, "at"], -5));
 	bad("checkbox time fractional", set(["pages", 0, "elements", 12, "at"], 1.5));
+	// v23: the area highlighter.
+	bad("area too thin", set(["pages", 0, "elements", 14, "height"], 1));
+	bad("area too wide", set(["pages", 0, "elements", 14, "width"], 20001));
+	bad("area without a colour", del(["pages", 0, "elements", 14, "color"]));
+	bad("area with a colour name", set(["pages", 0, "elements", 14, "color"], "yellow"));
+	bad("area without a size", del(["pages", 0, "elements", 14, "width"]));
 	bad("element lockAt as a string", set(["pages", 0, "elements", 7, "lockAt"], "now"));
 	bad("element locked false", set(["pages", 0, "elements", 7, "locked"], false));
 	// States.
@@ -376,7 +385,7 @@ describe("docs/format.md", () => {
 	});
 
 	it("names the schema file and the version it describes", () => {
-		expect(guide).toContain("schema/notebook-v22.schema.json");
+		expect(guide).toContain("schema/notebook-v23.schema.json");
 		expect(guide).toContain(`version ${CURRENT_VERSION}`);
 	});
 });
