@@ -40,6 +40,7 @@ import { commitTrim, isTrimStep, retractCommit, type Committed } from "./commit-
 import { scribbleEraseSteps } from "../ink/scribble";
 import { lineAt, TextLayoutCache, wordAt } from "../ink/words";
 import { InkBuilder } from "../ink/ink-geometry";
+import { effectiveScreenWidth, zoomedWidth } from "../ink/zoom-width";
 import { OneEuroFilter, stabilizationParams } from "../ink/one-euro";
 import { PointerController, type InkSample, type SampleBuffer } from "../ink/pointer-controller";
 import { PressureModel } from "../ink/pressure";
@@ -1728,6 +1729,7 @@ export class NotebookView extends FileView {
 		this.pressure.mode = settings.pressureMode;
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
+		this.syncZoomHint();
 		this.scrollbar?.update();
 		this.minimap?.update();
 		this.symbols?.sync();
@@ -4739,6 +4741,7 @@ export class NotebookView extends FileView {
 		const before = this.tools;
 		this.tools = state;
 		this.pens?.onToolsChanged(state);
+		this.syncZoomHint();
 		this.radial?.noteTools(state);
 		this.colour?.noteTools(state);
 		this.lastTool.note(state.tool);
@@ -5006,6 +5009,7 @@ export class NotebookView extends FileView {
 		const layout = this.layout;
 		this.viewport = layout ? (this.pageMode?.enabled ? this.pageMode.clamp(v) : clampToPage(v, this.viewSize, layout)) : v;
 		this.renderer?.setViewport(this.viewport, interactive);
+		this.syncZoomHint();
 		this.penLinks?.viewChanged();
 		this.checklist?.viewChanged();
 		this.axes?.viewChanged(interactive);
@@ -5360,7 +5364,7 @@ export class NotebookView extends FileView {
 		const inkTool: Tool = highlighter ? "highlighter" : kindTool(this.tools.penKind);
 		const nib = strokeNib(inkTool, this.tools.nibAngle);
 		const color = highlighter ? this.tools.highlighterColor : this.tools.penColor;
-		const width = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
+		const width = this.inkWidth(highlighter);
 		this.ink.reset(inkTool, width, nib);
 		this.ink.add(start[0], start[1], p);
 		this.active = {
@@ -5899,10 +5903,25 @@ export class NotebookView extends FileView {
 			this.commitArea(shape, page);
 			return;
 		}
-		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.tools.penWidth, this.shiftDown);
+		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.inkWidth(false), this.shiftDown);
 		if (points.length < 2) return;
-		const stroke = freezeStroke({ ...createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"), ...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine) });
+		const stroke = freezeStroke({ ...createStroke(this.tools.penColor, this.inkWidth(false), points, "shape"), ...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine) });
 		this.addStrokes(shape.pageIndex, page, [stroke], false);
+	}
+
+	/** 0.26 (#350): the page-unit width a new stroke gets: the chosen width, or (option on) the width that looks the chosen size at this zoom. */
+	private inkWidth(highlighter: boolean): number {
+		const chosen = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
+		return zoomedWidth(chosen, this.viewport.scale, this.host.settings.penWidthFollowsZoom, highlighter);
+	}
+
+	/** The pen options' width hint: shows the on-screen width and "× zoom" while the option is on. */
+	private syncZoomHint(): void {
+		if (!this.toolbar) return;
+		const on = this.host.settings.penWidthFollowsZoom;
+		const hl = this.tools.tool === "highlighter";
+		const chosen = hl ? this.tools.highlighterWidth : this.tools.penWidth;
+		this.toolbar.setZoomHint(on ? { screen: effectiveScreenWidth(chosen, this.viewport.scale, true, hl), page: this.inkWidth(hl) } : null);
 	}
 
 	private pushLive(): void {
@@ -5924,9 +5943,9 @@ export class NotebookView extends FileView {
 			this.renderer?.setAreaPreview(area ? { pageIndex: s.pageIndex, area } : null);
 			return;
 		}
-		const points = shapePoints(this.tools.shapeKind, s.a, s.b, this.tools.penWidth, this.shiftDown);
+		const points = shapePoints(this.tools.shapeKind, s.a, s.b, this.inkWidth(false), this.shiftDown);
 		this.renderer?.setLive({
-			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.tools.penWidth, points, predicted: [],
+			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.inkWidth(false), points, predicted: [],
 			...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine),
 		});
 	}

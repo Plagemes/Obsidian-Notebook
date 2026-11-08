@@ -4863,6 +4863,11 @@ export const en = {
 	"navMarked.clear": "Show all pages",
 	"navMarked.empty": "Nothing marked here yet.",
 	"help.navMarked": "Show only the pages you marked: bookmarks, markers and questions, colours with a meaning, open checkboxes and page tags. Each page keeps its number and shows why it is marked. Choose which kinds count in the menu.",
+	// 0.26 zoomwidth
+	"settings.penWidthFollowsZoom": "Pen width follows zoom",
+	"settings.penWidthFollowsZoom.desc": "On: strokes look the chosen width at any zoom. Off: width is fixed on the page.",
+	"tool.widthZoom.hint": "{px} px on screen · {page} on page × zoom",
+	"tool.widthZoom.aria": "Width follows zoom: {px} pixels on screen, {page} page units",
 } as const;
 
 export type MessageKey = keyof typeof en;

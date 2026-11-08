@@ -19760,3 +19760,16 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-navigator-mark.is-meaning .notebook-navigator-mark-text {
 	max-width: 14em;
 }
+
+/* ===== 0.26 zoomwidth ===== */
+.workspace-leaf-content .view-content.notebook-view .notebook-zoom-hint {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin-inline-start: var(--nb-space-2, 8px);
+	font-size: var(--nb-text-s);
+	font-variant-numeric: tabular-nums;
+	color: var(--nb-text-muted, var(--nb-text));
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}

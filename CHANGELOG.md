@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### zoomwidth
+- **Pen width follows zoom (#350).** New setting *Writing > Pen width follows zoom* (off by default, so nothing changes). On: a new stroke looks as wide on screen as the width you chose at any zoom; the stored width is the chosen width divided by the zoom, clamped to 0.1 to 48 page units (96 for the highlighter). Pens, shapes and the stroke highlighter follow the rule; the area highlighter and the eraser do not. The live ink and the saved stroke have the same width. The pen options show the on-screen width with a "× zoom" hint.
+- **No format change.** Strokes stay plain page-unit widths; the golden pen hashes are unchanged. Code: `src/ink/zoom-width.ts` (pure helper), the stroke start in `notebook-view.ts`.
+
 ## 0.25.0 — 2026-11-08
 
 Seven features and a first part of the history: an area highlighter, a panel of the actions you took, align to baseline, lecture and study writing profiles, copy as image, a toolbar that fades while you write, a suggested paper for a new page and a page navigator view of marked pages only. The notebook format moves to version 23 (the area highlighter): the migration from version 22 is automatic, and 0.24 and older open a v23 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

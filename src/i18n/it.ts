@@ -4865,4 +4865,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"navMarked.clear": "Mostra tutte le pagine",
 	"navMarked.empty": "Qui non c'è ancora niente di segnato.",
 	"help.navMarked": "Mostra solo le pagine che hai segnato: segnalibri, segnaposto e domande, colori con significato, caselle da spuntare ed etichette di pagina. Ogni pagina mantiene il suo numero e indica perché è segnata. Nel menu scegli quali tipi contano.",
+	// 0.26 zoomwidth
+	"settings.penWidthFollowsZoom": "Spessore della penna con lo zoom",
+	"settings.penWidthFollowsZoom.desc": "Attivo: il tratto ha lo spessore scelto a ogni zoom. Spento: spessore fisso sulla pagina.",
+	"tool.widthZoom.hint": "{px} px sullo schermo · {page} sulla pagina × zoom",
+	"tool.widthZoom.aria": "Spessore con lo zoom: {px} pixel sullo schermo, {page} unità di pagina",
 };
