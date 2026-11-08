@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### colormeaning
+- **Colours with meaning (#101).** *Settings > Reading & PDF > Colour meanings* opens a legend editor: give each ink colour a name (red = definition, blue = example), reorder, recolour, add and remove; *Add the usual meanings* starts from red / blue / green. *Colour matching* (strict, normal, loose) says how close a stroke's colour must be to a legend colour; two legend colours that are too close are flagged. A notebook can have a legend of its own (its menu, *Colour meanings…*), kept in `_meta/meanings-<device>.json` (one file per device, like the quick tabs; read leniently, unknown fields kept, an unreadable file is never overwritten).
+- **Filter by meaning.** The notebook menu has *Filter by meaning…*: choose a meaning and the ink of the others (and of no meaning) is drawn faint, with a pill at the bottom left to clear it. It is view-only (the renderer redraws its static layer once; nothing is saved and the document is not touched) and not kept when you switch notebook.
+- **Digest by colour.** *Digest by colour…* writes `<Notebook> — Colours.md` next to the notebook: one section per meaning in legend order, a picture of each place the colour was used (close ink of one meaning is one place), the PDF text under it and a link to the page. Only the part between the `notebook-meanings` markers is rewritten; your text around it stays, a second run makes no new pictures, an unpaired marker is left alone and a note of yours with that name is added to only after you agree.
+- No document format change. New: `src/model/colour-meaning.ts`, `src/library/meanings.ts`, `src/library/meanings-store.ts`, `src/view/colour-meaning.ts`, `src/view/meaning-modals.ts`, `src/view/meaning-digest.ts`; the renderer has a view-only `setInkDim`.
+
 ## 0.21.0 — 2026-11-08
 
 Eight features: a start and end time on every page, scheduled backups, a documented file format with a JSON Schema, an interactive HTML export, a back-of-book index, a reusable signature and date stamp, a way back to the current slide and a strip of recent symbols; plus the review fixes carried over from 0.20. The notebook format moves to version 19 (page start and end times): the migration from version 18 is automatic, and 0.20 and older open a v19 notebook read-only and never overwrite it.
