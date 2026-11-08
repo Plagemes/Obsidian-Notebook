@@ -50,7 +50,6 @@
 - **Code.** Pure, Node-tested ranking in `src/library/related-pages.ts` (no `obsidian` import); the panel in `src/view/related-view.ts`; what it reads from Obsidian in `src/view/related-source.ts` (reuses the page switcher's index and thumbnails). Tests: `tests/related-pages.test.ts`; harness `doc=related`.
 
 ### Review fixes
-<<<<<<< ours
 - **Opacity is kept where ink is made for you.** *Snap to text lines* gives each snapped highlighter band the opacity the highlighter was drawn with, instead of full strength. The stroke a pen gesture leaves as ink after one Undo, and the built-in stamps (check, star, arrow), use the opacity of the pen in hand.
 - **Opacity above 1 in a file.** A value above 1 is read as full strength and saved with no `opacity` key at all (still counted as repaired), so the app never writes `"opacity":1`.
 - **Tidy up.** A line never ends on top of another line that moves, whatever their horizontal overlap (a short line under the end of a longer one used to count as unrelated below 15 %), also when lines are moved sideways to a common margin. Invisible ink and the ink a collapsed note keeps hidden are in the way like any other ink: a line is not moved onto them.
@@ -67,7 +66,6 @@
 - Redaction: the book index, the formula sheet, the figures' *Copy image*, the pictures sent to a checklist task and *Export as Markdown* go through the same redaction as the other exports.
 - Redaction: the reach of a stroke follows the real width of its pen (pressure, fountain and brush nibs), a checkbox whose label a box covers keeps its box but loses the label, and the header handed to a note's page picture is the redacted one.
 - Redaction: the dialog preview drops covered excerpts like the export, *Done* saves the boxes even when nothing changed (so an unreadable state is set again), and the dialog lists what redaction does not cover.
->>>>>>> theirs
 
 ## 0.25.0 — 2026-11-08
 
