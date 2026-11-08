@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyseBaseline, BASELINE_RULES, planBaseline, ruledLines, weightedMedian, wordBaseline } from "../src/ink/baseline";
 import { createDocument, createPage, createStroke, quantizePoint } from "../src/model/document";
+import { createArea } from "../src/model/area";
 import { AddStroke, History } from "../src/model/history";
 import { pageTimes } from "../src/model/page-times";
 import { freezeElement, freezeStroke, parse, serialize } from "../src/model/serialize";
@@ -268,6 +269,27 @@ describe("what is not handwriting", () => {
 		for (const s of [under, circle, hl, box]) expect(moved.has(s)).toBe(false);
 		expect(a.words).toBe(3);
 		expect(a.skipped).toBeGreaterThanOrEqual(4);
+	});
+
+	it("ignores a highlighter area under the words: the words move as before, the area stays where it is (0.25)", () => {
+		const row = sentence(["one", "two", "three"], [300, 306, 297]);
+		const strokes = row.flatMap((w) => w.strokes);
+		const bare = analyseBaseline(pageWith(strokes), strokes);
+		const doc = createDocument();
+		const page = doc.pages[0]!;
+		page.strokes.push(...strokes);
+		const area = createArea([40, 250], [400, 330], page, "#ffd400")!;
+		page.elements = [area];
+		const withArea = analyseBaseline(page, strokes);
+		expect(withArea.words).toBe(bare.words);
+		expect(withArea.moves.map((m) => m.dy)).toEqual(bare.moves.map((m) => m.dy));
+		const hist = new History(() => doc);
+		const plan = planBaseline(page, strokes)!;
+		expect(hist.execute(plan.command)).toBe(true);
+		expect(page.elements).toEqual([area]);
+		expect(page.elements![0]).toBe(area);
+		hist.undo();
+		expect(page.elements![0]).toBe(area);
 	});
 
 	it("leaves a lone dot and a lone dash alone", () => {
