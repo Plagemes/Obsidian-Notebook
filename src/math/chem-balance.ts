@@ -106,7 +106,7 @@ function normalize(raw: string): Norm {
 		}
 		const sub = SUB.indexOf(c);
 		if (sub >= 0) text += String(sub);
-		else if (/[   ]/.test(c)) text += " ";
+		else if (/\p{Zs}/u.test(c)) text += " ";
 		else if (/[−–—]/.test(c)) text += "-";
 		else text += c;
 		from.push(i);
@@ -119,7 +119,7 @@ function normalize(raw: string): Norm {
 const plain = (raw: string): string => normalize(raw).text;
 
 /** The original spelling of the normalised range [a, b). */
-const spelled = (n: Norm, a: number, b: number): string => n.original.slice(n.from[a]!, n.from[b]!);
+const spelled = (n: Norm, a: number, b: number): string => n.original.slice(n.from[a], n.from[b]);
 
 const ARROW = /<[-=]{1,3}>|[-=]{1,3}>|<[-=]{1,3}|⇌|⇄|⇋|↔|→|⟶|⟹|⇒|⟷|=/g;
 
@@ -243,7 +243,7 @@ function readGroups(s: string, whole: string): Record<string, number> {
 
 /** `CuSO4·5H2O`, `Fe(OH)3`, `[Fe(CN)6]`: atoms per element. */
 function readFormula(body: string, whole: string): Record<string, number> {
-	const compact = body.replace(/\s*[·•*]\s*/g, "·").replace(/\s*\.\s*(?=[\d(\[A-Z])/g, "·");
+	const compact = body.replace(/\s*[·•*]\s*/g, "·").replace(/\s*\.\s*(?=[\d([A-Z])/g, "·");
 	const counts: Record<string, number> = {};
 	for (const part of compact.trim().split("·")) {
 		const m = /^\s*(\d+)\s*(.*)$/.exec(part);
@@ -263,7 +263,7 @@ function readSpecies(raw: string, at: number, side: "left" | "right", n: Norm): 
 	let rest = text;
 	let offset = raw.length - raw.trimStart().length;
 	const frac = /^(\d+)\s*\/\s*(\d+)\s*/.exec(rest);
-	const lead = /^(\d+)\s*(?=[A-Z(\[e·])/.exec(rest);
+	const lead = /^(\d+)\s*(?=[A-Z([e·])/.exec(rest);
 	if (frac) {
 		rest = rest.slice(frac[0].length);
 		offset += frac[0].length;
