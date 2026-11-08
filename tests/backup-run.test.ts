@@ -448,3 +448,54 @@ describe("review W21: a notebook that changes while it is read (D5)", () => {
 		expect(readZip(v.files.get(`${FOLDER}/${result.name}`)!).entries.map((e) => e.name)).not.toContain("Notebooks/Maths.notebook");
 	});
 });
+
+describe("review W21: _meta sidecars are read stably (N4)", () => {
+	const META = "Notebooks/_meta/folders-ab12cd34.json";
+
+	it("reads a sidecar that changed during the read once more", async () => {
+		const v = new FakeVault();
+		v.seed();
+		v.racing.set(META, 1);
+		const result = await runBackup(CFG, v.ports());
+		expect(result).toMatchObject({ outcome: "ok", skipped: 0 });
+		const bytes = v.files.get(`${FOLDER}/${result.name}`)!;
+		const entry = readZip(bytes).entries.find((e) => e.name === META)!;
+		expect(Array.from(zipEntryData(bytes, entry))).toEqual(Array.from(v.files.get(META)!));
+	});
+
+	it("skips a sidecar that keeps changing and marks the backup partial", async () => {
+		const v = new FakeVault();
+		v.seed();
+		v.racing.set(META, 5);
+		const result = await runBackup(CFG, v.ports());
+		expect(result).toMatchObject({ outcome: "partial", skipped: 1 });
+		expect(readZip(v.files.get(`${FOLDER}/${result.name}`)!).entries.map((e) => e.name)).not.toContain(META);
+	});
+});
+
+describe("review W21: an old backup over the device cap is not read or trashed (N2)", () => {
+	const big = (): Uint8Array => {
+		const z = new ZipWriter();
+		let s = 12345;
+		z.add("Notebooks/A.notebook", Uint8Array.from({ length: 20_000 }, () => ((s = (s * 1103515245 + 12345) >>> 0), (s >>> 16) & 255)), T);
+		return z.finish(ZIP_COMMENT);
+	};
+
+	it("leaves it in place without reading it, and trashes a small one as before", async () => {
+		const v = new FakeVault();
+		v.seed();
+		const old = `${FOLDER}/${backupFileName(T - 9 * DAY_MS)}`;
+		v.files.set(old, big());
+		let read = 0;
+		const result = await runBackup({ ...CFG, keep: 1, maxBytes: 10_000 }, v.ports({ readOld: async (p) => (read++, v.files.get(p)!) }));
+		expect(result.outcome).toBe("ok");
+		expect(read).toBe(0);
+		expect(result.trashed).toBe(0);
+		expect(v.files.has(old)).toBe(true);
+		const w = new FakeVault();
+		w.seed();
+		const small = `${FOLDER}/${backupFileName(T - 9 * DAY_MS)}`;
+		w.files.set(small, marked());
+		expect((await runBackup({ ...CFG, keep: 1, maxBytes: 10_000 }, w.ports())).trashed).toBe(1);
+	});
+});

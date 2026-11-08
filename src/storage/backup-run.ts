@@ -100,6 +100,9 @@ const message = (e: unknown): string => (e instanceof Error ? e.message : String
 
 const isNotebook = (path: string): boolean => NOTEBOOK_EXTENSIONS.includes(path.slice(path.lastIndexOf(".") + 1).toLowerCase());
 
+/** A per-device `_meta` sidecar: rewritten in place, so it gets the same stability check as a notebook (review W21 N4). */
+const isMetaSidecar = (path: string): boolean => /(?:^|\/)_meta\//u.test(path);
+
 const CONFLICT_TEXT = {
 	notebooks: "is the notebooks folder or overlaps it",
 	templates: "overlaps a templates folder",
@@ -110,10 +113,10 @@ const CONFLICT_TEXT = {
  * Reads a file and makes sure it did not change while it was read (review W21 D5): a notebook is saved by the open views while
  * the backup runs, and a write can overlap the read. The file's size and modification time are compared before and after; if
  * they differ the file is read once more, and a file that is still changing throws (the caller skips it and the backup is
- * marked partial). Only notebooks are checked: assets are written once and never change in place.
+ * marked partial). Notebooks and the `_meta` sidecars (rewritten in place) are checked: assets are written once and never change in place.
  */
 async function readStable(path: string, ports: BackupPorts): Promise<Uint8Array> {
-	if (!isNotebook(path)) return ports.read(path);
+	if (!isNotebook(path) && !isMetaSidecar(path)) return ports.read(path);
 	for (let attempt = 0; attempt < 2; attempt++) {
 		const before = await ports.stat(path);
 		const bytes = await ports.read(path);
@@ -253,6 +256,9 @@ async function trim(cfg: BackupConfig, ports: BackupPorts, now: number, finalNam
 			// W21 D4): a file the user copied here under a backup's name carries no marker and is left alone.
 			if (!old.file || parseBackupName(old.name) === null || old.path !== `${cfg.folder}/${old.name}`) continue;
 			try {
+				// Review W21 N2: an old backup bigger than the device cap (it came from a bigger device) is never read, so never trashed.
+				const size = await ports.sizeOf(old.path);
+				if (size === null || size > cfg.maxBytes) continue;
 				if (!hasBackupMarker(await ports.readOld(old.path))) continue;
 				await ports.trash(old.path);
 				trashed++;
@@ -264,7 +270,10 @@ async function trim(cfg: BackupConfig, ports: BackupPorts, now: number, finalNam
 			// An interrupted write may have no end record to look at: a temporary file is removed only when it carries the marker or
 			// this device's record says the plugin wrote it.
 			if (!temp.file || !isTempName(temp.name) || temp.path !== `${cfg.folder}/${temp.name}`) continue;
-			if (!ports.writtenByPlugin(temp.path) && !(await ports.readOld(temp.path).then(hasBackupMarker, () => false))) continue;
+			if (!ports.writtenByPlugin(temp.path)) {
+				const size = await ports.sizeOf(temp.path).catch(() => null);
+				if (size === null || size > cfg.maxBytes || !(await ports.readOld(temp.path).then(hasBackupMarker, () => false))) continue;
+			}
 			await ports.trash(temp.path).catch((e) => console.error(`[notebook] backup: could not trash "${temp.path}"`, e));
 		}
 	} catch (e) {
