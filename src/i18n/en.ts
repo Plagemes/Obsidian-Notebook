@@ -4465,7 +4465,7 @@ export const en = {
 	"trim.undone": "Hook put back. Undo again to remove the stroke.",
 	// 0.24 iconhelp
 	"settings.iconHelp": "Explain icons on long press",
-	"settings.iconHelp.desc": "Hold a finger on a toolbar or Home icon to see what it does. Mouse hover and the pen are not affected.",
+	"settings.iconHelp.desc": "Hold a finger on an icon to see what it does. Mouse and pen are not affected.",
 	"help.hint.options": "Tap it again for its options.",
 	"help.chip": "Shows the active pen. Tap for colour, width and the other options of the tool.",
 	"help.tool.pen": "Write and draw with ink. Choose ballpoint, fountain pen, brush or marker.",
