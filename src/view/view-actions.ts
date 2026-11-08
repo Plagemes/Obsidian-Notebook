@@ -177,6 +177,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-similar": (v) => v.arrangeTools?.menu("similar"),
 	"selection-cleanup": (v) => v.selectionTools?.cleanUp(),
 	"selection-join": (v) => v.selectionTools?.joinBroken(),
+	"selection-baseline": (v) => v.selectionTools?.alignBaseline(),
 	// 0.15 (241): drawings with states
 	"selection-part": (v) => v.stateTools?.makePartFromSelection(),
 	"states-toggle": (v) => v.stateTools?.toggle(),

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### baseline
+- **Align to baseline (#93).** Select handwriting and tap *Align to baseline* (second row of the selection bar on tablet widths, the All actions sheet everywhere, command *Align the words of the selection to a common baseline*): the words of each line are moved straight up or down onto one common baseline, in one undo step, with a notice that counts the words. On ruled paper the words go onto the ruled line instead. A line that is clearly written uphill or downhill keeps its slope and loses only the wobble.
+- **How it reads the writing.** Words are found from the gaps between strokes (the dot of an i, a comma or a full stop go with their word), lines from the baselines, and the baseline of a word is where most letters sit, not the lowest ink: a g, p, y or q keeps its tail below the line, and the bar of a T or an f does not pull the baseline up. Everything is relative to the size of the hand, so large and small writing work alike.
+- **Safe.** Strokes only translate in y (same x, pressure, width, style, id and layer; nothing is rotated, scaled or redrawn). Underlines, drawings, shapes, the highlighter and the marker, invisible ink, ink bound to a graph and the ink a collapsed sticky note keeps hidden are left where they are. A group moves as one unit, and a group that is not wholly selected or that holds a locked element stays put. A word that would have to move more than twice the height of the writing is left alone (it is another line). A move under a quarter of a point is not made, so a second run does nothing. The page times do not move (it is a move, not writing); a locked page refuses it.
+- **Code.** Pure, Node-tested module `src/ink/baseline.ts` (no `obsidian` import; reuses `applyPlacement`); the action in `src/view/selection-actions.ts` (`alignBaseline`) and the registry (`selection-baseline`), with a long-press explanation, a context-ranking rule (higher on ruled paper) and English and Italian texts. No format change. On a phone-width bar (five places) the older actions keep their places and this one is in the sheet.
+- **Tests.** `tests/baseline.test.ts` (synthetic words with descenders, punctuation, two lines, ruled paper, slopes, groups, locks, pinned ink, undo, page times, a 20-line page), and new cases in `tests/selection-arrange.test.ts`, `tests/context-rank.test.ts` and `tests/long-press-help.test.ts`.
+
 ## 0.24.0 — 2026-11-08
 
 Eight features: filled shapes and dashed or dotted lines, joining of broken strokes, a context-ordered actions sheet, explanations on long press of an icon, tag suggestions, an adaptive page navigator, global bookmarks across notebooks and a hand-in dialog. The notebook format moves to version 22 (filled shapes and dashed or dotted lines): the migration from version 21 is automatic, and 0.23 and older open a v22 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

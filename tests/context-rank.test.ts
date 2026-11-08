@@ -145,3 +145,26 @@ describe("context ranking of the 0.24 actions", () => {
 		for (const id of ["bookmarks-open", "page-global-bookmark", "hand-in"]) expect(contextBoost(find(id), contexts.closed), id).toBe(0);
 	});
 });
+
+describe("context ranking of Align to baseline (0.25, #93)", () => {
+	const strokes = baseContext({ selection: { strokes: 4, elements: 0, images: 0 } });
+	const ruled = baseContext({ selection: { strokes: 4, elements: 0, images: 0 }, page: { index: 0, count: 1, background: "none", infinite: false, bookmarked: false, kind: "ruled" } });
+	const blank = baseContext({ selection: { strokes: 4, elements: 0, images: 0 }, page: { index: 0, count: 1, background: "none", infinite: false, bookmarked: false, kind: "plain" } });
+
+	it("is ranked for a selection of strokes, a little higher on ruled paper, and not without a selection", () => {
+		const a = find("selection-baseline");
+		expect(contextBoost(a, strokes)).toBeGreaterThanOrEqual(20);
+		expect(contextBoost(a, ruled)).toBeGreaterThan(contextBoost(a, blank));
+		expect(contextBoost(a, baseContext())).toBeLessThan(20);
+		expect(contextBoost(a, baseContext({ open: false, editable: false }))).toBe(0);
+		expect(forThisPage(ACTIONS, strokes, {}, NOW, new Set(), 100).map((x) => x.id)).toContain("selection-baseline");
+		expect(forThisPage(ACTIONS, baseContext({ selection: { strokes: 1, elements: 0, images: 0 } }), {}, NOW, new Set(), 100).map((x) => x.id)).not.toContain("selection-baseline");
+	});
+
+	it("is found by what a person would type, in both languages", () => {
+		for (const query of ["baseline", "crooked", "allinea", "rigo"]) {
+			const ids = sheet(strokes, { query }).flatMap((s) => s.actions.map((x) => x.id));
+			expect(ids, query).toContain("selection-baseline");
+		}
+	});
+});

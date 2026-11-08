@@ -4635,6 +4635,13 @@ export const en = {
 	"handIn.export": "Export PDF",
 	"handIn.exportAnyway": "Export anyway",
 	"handIn.fixHint": "The dialog closes when you go to a page; open it again from the notebook menu when you are done.",
+	// 0.25 baseline (#93)
+	"baseline.action": "Align to baseline",
+	"command.alignBaseline": "Align the words of the selection to a common baseline (crooked handwriting)",
+	"baseline.done": "Aligned {n} words to their baseline.",
+	"baseline.doneRuled": "Aligned {n} words to the ruled lines.",
+	"baseline.nothing": "No crooked words to align in the selection.",
+	"help.alignBaseline": "Move crooked handwritten words straight up or down onto a common baseline, or onto the ruled line. Undo puts them back.",
 } as const;
 
 export type MessageKey = keyof typeof en;
