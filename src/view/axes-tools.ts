@@ -1,5 +1,6 @@
 import { t } from "../i18n";
 import { axesFromCross, axesFromL, buildAxes, defaultAxes, tickSpacing, type AxesSpec } from "../ink/axes";
+import { writing } from "../ink/writing-guard";
 import { AddElement, AddStroke, Batch, removeStrokes, type Command } from "../model/history";
 import type { NotebookDocument, PageElement, Stroke } from "../model/types";
 import type { NotebookSettings } from "../settings";
@@ -61,8 +62,18 @@ export class AxesTools {
 
 	destroy(): void {
 		this.hideOffer();
+		this.cancelAuto();
+	}
+
+	/** Review fix (D7): the automatic conversion that waits for its 450 ms is dropped (the gesture stays as the ink it is). */
+	private cancelAuto(): void {
 		if (this.autoTimer !== null) window.clearTimeout(this.autoTimer);
 		this.autoTimer = null;
+	}
+
+	/** The pen touched the page again: the person is still writing, so a conversion that waits is dropped. */
+	strokeStarted(): void {
+		this.cancelAuto();
 	}
 
 	/** Another document was loaded. */
@@ -74,17 +85,22 @@ export class AxesTools {
 	}
 
 	/** The view moved or zoomed: the chip would point at the wrong place. */
-	viewChanged(): void {
+	viewChanged(interactive = false): void {
 		if (this.chipEl) this.hideOffer();
+		// A scroll or zoom by the person (not the follow-the-pen movement) cancels a conversion that waits.
+		if (interactive) this.cancelAuto();
 	}
 
 	/** A page was left. */
 	cancelOffer(): void {
 		this.hideOffer();
+		this.cancelAuto();
 	}
 
 	/** Strokes were added to page `pageIndex` by the pen: an "L" or the second line of a "+" is offered (or made) as axes. */
 	strokesAdded(pageIndex: number, strokes: readonly Stroke[]): void {
+		// A new stroke: whatever waited for its 450 ms is dropped, the next gesture (or nothing) decides.
+		this.cancelAuto();
 		const page = this.host.doc()?.pages[pageIndex];
 		const stroke = strokes[strokes.length - 1];
 		if (!page || !stroke) return;
@@ -113,6 +129,8 @@ export class AxesTools {
 		if (mode === "auto") {
 			this.autoTimer = window.setTimeout(() => {
 				this.autoTimer = null;
+				// Never in the middle of a contact: if the pen is on the screen again the gesture stays as ink.
+				if (writing.penOnScreen()) return;
 				this.convert(offer, false);
 			}, AUTO_DELAY_MS);
 			return;

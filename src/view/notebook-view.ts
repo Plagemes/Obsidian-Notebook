@@ -4526,7 +4526,7 @@ export class NotebookView extends FileView {
 		this.renderer?.setViewport(this.viewport, interactive);
 		this.penLinks?.viewChanged();
 		this.checklist?.viewChanged();
-		this.axes?.viewChanged();
+		this.axes?.viewChanged(interactive);
 		this.reading?.viewportChanged();
 		this.pdfText?.viewportChanged();
 		if (this.selection) this.pushSelection();
@@ -4857,6 +4857,7 @@ export class NotebookView extends FileView {
 		// A selection made with the side button's lasso is not carried into new ink.
 		this.clearSelection();
 		this.penLinks?.strokeStarted();
+		this.axes?.strokeStarted();
 		this.checklist?.strokeStarted();
 		this.pageOffer?.penDown();
 		this.smartAdd?.hide();

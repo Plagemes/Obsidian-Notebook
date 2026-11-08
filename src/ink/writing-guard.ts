@@ -65,6 +65,12 @@ export class WritingGuard {
 		return this.down.size > 0 || now - this.lastUp < this.quietMs;
 	}
 
+	/** True only while a pen is actually on the screen (no quiet period after it). */
+	penOnScreen(): boolean {
+		this.writing(); // drops a pen assumed lost
+		return this.down.size > 0;
+	}
+
 	/**
 	 * Runs `task` now when not writing, otherwise at the first pause. With a `key`, a task still waiting under the same
 	 * key is replaced by this one (a notice repeated while writing is shown once).
