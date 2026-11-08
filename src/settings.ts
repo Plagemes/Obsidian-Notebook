@@ -1,5 +1,6 @@
 import type { PressureMode } from "./ink/pressure";
 import { defaultPenSets, MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, type PenSet } from "./view/pen-sets";
+import { normaliseActive, normaliseProfiles, type WritingProfile } from "./view/writing-profiles";
 import { isToleranceName, parseLegend, type Meaning, type ToleranceName } from "./model/colour-meaning";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
@@ -103,6 +104,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	penSetFolders: Record<string, string>;
 	/** 0.15 pen sets: notebook document id -> set id (wins over the folder). Bounded. */
 	penSetNotebooks: Record<string, string>;
+	/** 0.25 profiles (#219): the user's own writing profiles (Lecture and Study are built in). Bounded. */
+	writingProfiles: WritingProfile[];
+	/** 0.25 profiles: the id of the profile last switched to ("" none, "lecture", "study" or a custom id). */
+	writingProfileActive: string;
+	/** 0.25 profiles: starting lecture mode switches to the Lecture profile. */
+	writingProfileOnLecture: boolean;
 	/** Eraser radius, CSS px. */
 	eraserSize: number;
 	/** Vault path of the loose sheet (quick notes) notebook; empty = `<notebooks folder>/Quick notes.notebook`. */
@@ -341,6 +348,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penSets: defaultPenSets(),
 	penSetFolders: {},
 	penSetNotebooks: {},
+	writingProfiles: [],
+	writingProfileActive: "",
+	writingProfileOnLecture: false,
 	eraserSize: DEFAULT_ERASER_SIZE,
 	looseSheetPath: "",
 	dailyNotebookPath: "",
@@ -501,6 +511,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.penSets = normalisePenSets(d.penSets);
 	s.penSetFolders = normaliseAssignments(d.penSetFolders, MAX_FOLDER_ASSIGNMENTS);
 	s.penSetNotebooks = normaliseAssignments(d.penSetNotebooks, MAX_NOTEBOOK_ASSIGNMENTS);
+	s.writingProfiles = normaliseProfiles(d.writingProfiles); // 0.25 profiles
+	s.writingProfileActive = normaliseActive(d.writingProfileActive, s.writingProfiles);
+	if (typeof d.writingProfileOnLecture === "boolean") s.writingProfileOnLecture = d.writingProfileOnLecture;
 	s.eraserSize = normaliseEraserSize(d.eraserSize);
 	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();
 	if (typeof d.dailyNotebookPath === "string") s.dailyNotebookPath = d.dailyNotebookPath.trim();

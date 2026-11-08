@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### profiles
+- **Writing profiles (#219).** A chip on the pen options (and the commands "Writing profile: Lecture / Study / next", also in All actions) switches the pens on the strip, the stabilization and the paper that new notebooks start on in one tap. *Lecture* has thin fast pens, light smoothing and ruled paper; *Study* has fountain pens, strong smoothing and grid paper. "Save current setup as a profile" keeps your own (up to 12; update or delete from the same menu). A pen set can be referenced by a profile; otherwise its pens become a normal pen set. The chip shows the profile only while the smoothing and paper still match it. A setting under Writing switches to Lecture when lecture mode starts (off by default). Switching changes tools and defaults only: no stroke, page or document is touched; no format change. English and Italian; long-press help and context ranking (Lecture first during a class). Not done: the optional toolbar density per profile.
+
 ## 0.24.0 — 2026-11-08
 
 Eight features: filled shapes and dashed or dotted lines, joining of broken strokes, a context-ordered actions sheet, explanations on long press of an icon, tag suggestions, an adaptive page navigator, global bookmarks across notebooks and a hand-in dialog. The notebook format moves to version 22 (filled shapes and dashed or dotted lines): the migration from version 21 is automatic, and 0.23 and older open a v22 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

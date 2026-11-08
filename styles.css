@@ -19544,3 +19544,13 @@ body.notebook-style-obsidian {
 	display: flex;
 	justify-content: flex-start;
 }
+
+/* ===== 0.25 profiles ===== */
+.nb-ui.notebook-profile-chip.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-soft, var(--nb-tile));
+}
+
+.nb-ui.notebook-profile-chip.is-active .notebook-penset-icon {
+	color: var(--nb-accent);
+}
