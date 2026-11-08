@@ -136,6 +136,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	slideBack: boolean;
 	/** 0.22 pagerefs (#179): a chip on a page that other pages link to. */
 	pageRefs: boolean;
+	/** 0.25 papersuggest (#409): the "+" strip highlights the paper the history and the course suggest, with the reason. */
+	paperSuggest: boolean;
 	/** 0.23 welcomeback (#420): a quiet card with the way back, the open questions and gaps when a notebook is reopened after a while. */
 	welcomeBack: boolean;
 	/** Hours away before the card is offered. */
@@ -373,6 +375,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	refWindowSnap: true, // 0.20 refwindow
 	slideBack: true, // 0.21 slideback
 	pageRefs: true, // 0.22 pagerefs
+	paperSuggest: true, // 0.25 papersuggest
 	welcomeBack: true, // 0.23 welcomeback
 	welcomeBackHours: WELCOME_HOURS_DEFAULT, // 0.23 welcomeback
 	lectureHeader: "ask", // 0.22 lecthead
@@ -540,6 +543,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.refWindowSnap === "boolean") s.refWindowSnap = d.refWindowSnap; // 0.20 refwindow
 	if (typeof d.slideBack === "boolean") s.slideBack = d.slideBack; // 0.21 slideback
 	if (typeof d.pageRefs === "boolean") s.pageRefs = d.pageRefs; // 0.22 pagerefs
+	if (typeof d.paperSuggest === "boolean") s.paperSuggest = d.paperSuggest; // 0.25 papersuggest
 	if (typeof d.welcomeBack === "boolean") s.welcomeBack = d.welcomeBack; // 0.23 welcomeback
 	if (typeof d.welcomeBackHours === "number") s.welcomeBackHours = clampWelcomeHours(d.welcomeBackHours); // 0.23 welcomeback
 	if (d.lectureHeader === "off" || d.lectureHeader === "ask" || d.lectureHeader === "auto") s.lectureHeader = d.lectureHeader; // 0.22 lecthead

@@ -329,6 +329,8 @@ const PAGES: SettingSpec[] = [
 		id: "outlinePdf", section: "pages", group: "outline", order: 50, name: "settings.outlinePdf", desc: "settings.outlinePdf.desc",
 		control: { type: "dropdown", options: options([["merged", "settings.outlinePdf.merged"], ["section", "settings.outlinePdf.section"], ["off", "settings.outlinePdf.off"]]) }, keywords: "outline pdf bookmarks table of contents indice segnalibri sommario",
 	},
+	// 0.25 papersuggest (#409): the "+" strip highlights the likeliest paper with the reason.
+	{ id: "paperSuggest", section: "pages", order: 11.5, name: "settings.paperSuggest", desc: "settings.paperSuggest.desc", control: { type: "toggle" }, keywords: "suggest paper new page plus add grid ruled habit course suggerisci carta nuova pagina" },
 	// 0.22 pagerefs (#179): the chip "Referenced on p. 3" on a page that other pages link to.
 	{ id: "pageRefs", section: "pages", group: "outline", order: 60, name: "settings.pageRefs", desc: "settings.pageRefs.desc", control: { type: "toggle" }, keywords: "references backlinks links pages referenced riferimenti collegamenti" },
 	// 0.15 page header (#75): the page number, date and notebook title drawn on the paper, never stored on the page.

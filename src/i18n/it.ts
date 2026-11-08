@@ -4826,4 +4826,14 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.clipImageBackground.desc": "Copia come immagine. Il bianco va bene per le app che mostrano la trasparenza come nero.",
 	"settings.clipImageBackground.white": "Bianco",
 	"settings.clipImageBackground.transparent": "Trasparente",
+	// 0.25 papersuggest
+	"settings.paperSuggest": "Suggerisci una carta per le nuove pagine",
+	"settings.paperSuggest.desc": "Il + evidenzia la carta delle ultime pagine o della lezione, e perché.",
+	"paperSuggest.recent": "Come le ultime {n} pagine",
+	"paperSuggest.recentMost": "Come la maggior parte delle ultime {n} pagine",
+	"paperSuggest.pattern": "Alternata, come le ultime pagine",
+	"paperSuggest.course": "Di solito per {course}",
+	"paperSuggest.notebook": "Di solito in questo quaderno",
+	"paperSuggest.profile": "La carta del tuo profilo",
+	"paperSuggest.suggested": "Suggerita: {reason}",
 };

@@ -4824,6 +4824,16 @@ export const en = {
 	"settings.clipImageBackground.desc": "Copy as image. White suits apps that show transparency as black.",
 	"settings.clipImageBackground.white": "White",
 	"settings.clipImageBackground.transparent": "Transparent",
+	// 0.25 papersuggest
+	"settings.paperSuggest": "Suggest a paper for new pages",
+	"settings.paperSuggest.desc": "The + strip highlights the paper your last pages or class use, and why.",
+	"paperSuggest.recent": "Like the last {n} pages",
+	"paperSuggest.recentMost": "Like most of the last {n} pages",
+	"paperSuggest.pattern": "Alternating, like the last pages",
+	"paperSuggest.course": "Usual for {course}",
+	"paperSuggest.notebook": "Usual in this notebook",
+	"paperSuggest.profile": "Your profile paper",
+	"paperSuggest.suggested": "Suggested: {reason}",
 } as const;
 
 export type MessageKey = keyof typeof en;

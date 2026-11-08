@@ -19664,6 +19664,8 @@ body.notebook-style-obsidian {
 
 .nb-ui.notebook-profile-chip.is-active .notebook-penset-icon {
 	color: var(--nb-accent);
+}
+
 /* ===== 0.25 toolfade ===== */
 /* "Toolbar fades while writing" (src/view/tool-fade.ts): one class on the view root, opacity only (no layout shift, still hit-testable). */
 .workspace-leaf-content .view-content.notebook-view {
@@ -19680,4 +19682,22 @@ body.notebook-style-obsidian {
 	.workspace-leaf-content .view-content.notebook-view :is(.notebook-toolbar, .notebook-context-bar, .notebook-slide-back, .notebook-symbol-strip, .notebook-welcome-back, .notebook-page-refs, .notebook-lecture-header-offer) {
 		transition: none;
 	}
+}
+
+/* ===== 0.25 papersuggest ===== */
+.nb-ui.nb-smart-add .nb-chip.nb-smart-suggested {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-smart-add .nb-chip.nb-smart-suggested .nb-smart-reason {
+	color: var(--nb-text-muted);
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.nb-ui.nb-smart-add .nb-chip.nb-smart-suggested .nb-smart-reason::before {
+	content: "\00b7";
+	margin-right: 6px;
 }
