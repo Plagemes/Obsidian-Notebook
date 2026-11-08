@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### exportarea
+- **Export only the written area, or the selection, as a transparent picture (#280).** *Export written area…* (page sheet, notebook menu and command) crops the current page to everything written on it, with a small margin; the *Export selection as picture* action on the selection bar does the same for the selected items alone (a selected collapsed sticky note brings its ink). Both write a PNG with a transparent background at 1x, 2x or 3x, or a vector SVG (every pen, the highlighter and marker transparency, text boxes with their link labels), next to the notebook, never overwriting, and remember the file as written by the plugin. *Copy* puts the picture on the clipboard where the device allows it. The sheet, the PDF or picture background and the paper are never drawn. An empty page says so and writes nothing. The document format is unchanged.
+
 ## 0.22.0 — 2026-11-08
 
 Seven features: three new pens, optional cloud sync with Google Drive or OneDrive, two-way page references, colours with meaning, instant axes, custom covers and an automatic lecture header. The notebook format moves to version 20 (the new pen tools and the nib angle): the migration from version 19 is automatic, and 0.21 and older open a v20 notebook read-only and never overwrite it. Cloud sync is off by default and uses your own OAuth client; the plugin ships no client ID or secret.

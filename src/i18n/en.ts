@@ -4288,6 +4288,26 @@ export const en = {
 	"cover.notice.failed": "The cover could not be changed: {error}",
 	"cover.notice.encode": "The cover picture could not be made.",
 	"cover.notice.missing": "The notebook is no longer there.",
+	// 0.23 exportarea
+	"exportArea.menu": "Export written area…",
+	"command.exportArea": "Export the written area as a transparent picture…",
+	"exportArea.selection": "Export selection as picture",
+	"exportArea.title": "Export written area",
+	"exportArea.scope": "What to export",
+	"exportArea.scope.page": "Written area of page {n}",
+	"exportArea.scope.selection": "The selection",
+	"exportArea.format": "Format",
+	"exportArea.format.png": "PNG (transparent)",
+	"exportArea.format.svg": "SVG (vector, transparent)",
+	"exportArea.note.png": "A transparent PNG of {w} × {h} pt, {px} × {py} px, cropped to what is written, with a small margin. The paper and the background are left out.",
+	"exportArea.note.svg": "A transparent vector SVG of {w} × {h} pt, cropped to what is written, with a small margin. The paper and the background are left out.",
+	"exportArea.empty": "This page has nothing written yet, so there is no area to export.",
+	"exportArea.emptySelection": "The selection has nothing to draw.",
+	"exportArea.save": "Save",
+	"exportArea.copy": "Copy",
+	"exportArea.copied": "Picture copied to the clipboard.",
+	"exportArea.copyFailed": "Could not copy the picture: {error}",
+	"exportArea.noImageClipboard": "this device cannot copy pictures to the clipboard (save it instead)",
 } as const;
 
 export type MessageKey = keyof typeof en;

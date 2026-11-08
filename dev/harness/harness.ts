@@ -86,6 +86,7 @@ import { a4splitApi } from "./a4split-check";
 import { headingsApi } from "./headings-check";
 import { cleanExportApi } from "./cleanexport-check";
 import { htmlExportApi } from "./htmlexport-check";
+import { exportAreaApi } from "./exportarea-check";
 import { shareApi } from "./share-check"; // 0.20 share
 import { templatesApi } from "./templates-check";
 import { plannerApi } from "./planner-check";
@@ -2245,6 +2246,7 @@ Object.assign(harnessApi, a4splitApi({ app, errors, notices }));
 Object.assign(harnessApi, headingsApi({ app, errors, notices }));
 Object.assign(harnessApi, cleanExportApi({ app, errors, notices }));
 Object.assign(harnessApi, htmlExportApi({ app, errors, notices }));
+Object.assign(harnessApi, exportAreaApi({ app, errors, notices }));
 Object.assign(harnessApi, shareApi({ app, errors, notices })); // 0.20 share
 Object.assign(harnessApi, templatesApi({ app, errors, notices }));
 // 0.20 planner (#118): the Planner tab of the creation dialog and the generated pages (doc=planner, planner-check.ts).

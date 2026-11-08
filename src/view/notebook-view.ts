@@ -76,6 +76,7 @@ import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
 import { MakeTaskModal, runMakeTask, type TaskRequest } from "./selection-task";
 import { runInsertIntoNote } from "./selection-insert";
+import { AreaExportModal } from "./export-area";
 import { taskCropRect } from "../model/selection-task";
 import { Mentions } from "./mentions";
 import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
@@ -2106,6 +2107,27 @@ export class NotebookView extends FileView {
 			pages: () => this.renderPagesOf(doc),
 			run: (request) => void runExport(this.app, file, this.renderPagesOf(doc), request, this.media, this.exportOptions()),
 		}).open();
+	}
+
+	/** 0.23 (#280): the dialog that exports the written area of the current page, or the selection, as a transparent PNG or SVG. */
+	openAreaExport(scope: "page" | "selection"): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file) return;
+		const sel = this.selection;
+		const useSel = !!sel && !this.statesTools?.ownsSelection(sel) && sel.strokes.length + sel.elements.length > 0;
+		const pageIndex = useSel && sel ? sel.pageIndex : this.currentPageIndex();
+		const shown = this.renderPagesOf(doc)[pageIndex];
+		if (!shown) return;
+		const options = this.exportOptions();
+		new AreaExportModal({
+			app: this.app, file, page: shown, pageNumber: pageIndex + 1, media: this.media, exportOptions: options,
+			selection: useSel && sel ? { strokes: sel.strokes, elements: sel.elements } : null,
+			render: {
+				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+			},
+		}, { scope: scope === "selection" && useSel ? "selection" : "page" }).open();
 	}
 
 	/** wave 0.9 (382): the dialog of the Markdown export (folder, resolution). */

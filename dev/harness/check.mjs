@@ -117,6 +117,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "cleanexport", theme, device, lowLatency: false });
 // 0.21 htmlexport (#164): Interactive HTML in the export dialog and its viewer (dev/harness/htmlexport-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "htmlexport", theme, device, lowLatency: false });
+// 0.23 exportarea (#280): export of the written area or the selection as transparent PNG or SVG (dev/harness/exportarea-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "exportarea", theme, device, lowLatency: false });
 // 0.20 share (#30): Share page… dialog and both branches of the share (dev/harness/share-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "share", theme, device, lowLatency: false });
 // Quick tabs (0.18, #227): the strip with pinned pages, Back, a gone page, another notebook; tablet and phone, light and dark.
@@ -373,6 +375,7 @@ async function main() {
 				else if (s.doc === "a4split") report = await cdp.evaluate("window.harness.checkA4split()", 60000);
 				else if (s.doc === "cleanexport") report = await cdp.evaluate("window.harness.checkCleanExport()", 60000);
 				else if (s.doc === "htmlexport") report = await cdp.evaluate("window.harness.checkHtmlExport()", 60000);
+				else if (s.doc === "exportarea") report = await cdp.evaluate("window.harness.checkExportArea()", 60000);
 				else if (s.doc === "ghostlines") report = await cdp.evaluate("window.harness.checkGhostlines()", 60000);
 				else if (s.doc === "pagetime") report = await cdp.evaluate("window.harness.checkPagetime()", 60000);
 				else if (s.doc === "pens") report = await cdp.evaluate("window.harness.checkPens()", 90000);

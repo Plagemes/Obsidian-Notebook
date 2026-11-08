@@ -417,6 +417,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"figures": (v) => v.openFigures(),
 	// wave 0.10: PNG images (81) and Print (81) are choices of the same dialog; read-only mode (51)
 	"export-png": (v) => v.openExportDialog(undefined, "png"),
+	// 0.23 (#280): written area and selection as transparent pictures
+	"export-area": (v) => v.openAreaExport("page"),
+	"selection-export-area": (v) => v.openAreaExport("selection"),
 	"print": (v) => {
 		if (canPrint()) v.openExportDialog(undefined, "print");
 		else showNotice(t("export.print.unavailable"), 8000);
