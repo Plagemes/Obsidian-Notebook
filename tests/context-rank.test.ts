@@ -90,3 +90,58 @@ describe("context ranking (#424)", () => {
 		expect((ita as Record<string, string>)["ui.group.here"]).toBeTruthy();
 	});
 });
+
+describe("context ranking of the 0.24 actions", () => {
+	const NEW_IDS = ["bookmarks-open", "page-global-bookmark", "hand-in", "selection-join"];
+	const contexts = {
+		closed: baseContext({ open: false, editable: false }),
+		plain: baseContext(),
+		readOnly: baseContext({ editable: false }),
+		pdf: baseContext({ page: { index: 0, count: 3, background: "pdf", infinite: false, bookmarked: false, globalBookmark: true }, notebook: { pdfPages: true, backgrounds: true } }),
+		oneStroke: baseContext({ selection: { strokes: 1, elements: 0, images: 0 } }),
+		strokes: baseContext({ selection: { strokes: 3, elements: 0, images: 0 } }),
+		shapeTool: baseContext({ tool: "shape" }),
+		lasso: baseContext({ tool: "lasso" }),
+	};
+
+	it("scores, lists and builds the sheet for every context without errors", () => {
+		for (const [name, c] of Object.entries(contexts)) {
+			for (const id of NEW_IDS) {
+				const a = find(id);
+				expect(a, id).toBeDefined();
+				expect(Number.isFinite(contextBoost(a, c)), `${id} in ${name}`).toBe(true);
+			}
+			expect(() => forThisPage(ACTIONS, c, {}, NOW, new Set(), 100), name).not.toThrow();
+			expect(() => sheet(c), name).not.toThrow();
+			for (const id of NEW_IDS) expect(() => sheet(c, { query: id.split("-")[0]! }), `${id} search in ${name}`).not.toThrow();
+		}
+	});
+
+	it("join broken strokes is ranked for a selection of strokes, and only then", () => {
+		const join = find("selection-join");
+		expect(contextBoost(join, contexts.strokes)).toBeGreaterThanOrEqual(20);
+		const here = forThisPage(ACTIONS, contexts.strokes, {}, NOW, new Set(), 100).map((a) => a.id);
+		expect(here).toContain("selection-join");
+		// One stroke cannot be joined with anything: not offered.
+		expect(forThisPage(ACTIONS, contexts.oneStroke, {}, NOW, new Set(), 100).map((a) => a.id)).not.toContain("selection-join");
+		// Nothing selected and no lasso: no boost to the selection group.
+		expect(contextBoost(join, contexts.plain)).toBeLessThan(20);
+		const sections = sheet(contexts.strokes);
+		expect(sections[0]!.id).toBe("here");
+	});
+
+	it("the shape tool's own actions (the shape kinds) are ranked first with the shape tool in hand", () => {
+		const kinds = ACTIONS.filter((a) => a.id.startsWith("shape-"));
+		expect(kinds.length).toBeGreaterThan(0);
+		for (const a of kinds) {
+			expect(contextBoost(a, contexts.shapeTool), a.id).toBeGreaterThanOrEqual(22);
+			expect(contextBoost(a, contexts.plain), a.id).toBe(0);
+		}
+	});
+
+	it("bookmarks and hand-in never crowd a selection out of 'For this page'", () => {
+		const here = sheet(contexts.strokes)[0]!.actions.map((a) => a.id);
+		for (const id of ["bookmarks-open", "hand-in"]) expect(here, id).not.toContain(id);
+		for (const id of ["bookmarks-open", "page-global-bookmark", "hand-in"]) expect(contextBoost(find(id), contexts.closed), id).toBe(0);
+	});
+});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cleanHelp, ClickGuard, HELP_CLICK_GUARD_MS, HELP_PRESS_MS, HELP_SLOP_PX, LongPressTracker, placeBubble, startsHelp } from "../src/ui/long-press-logic";
-import { ACTION_HELP, TOOL_HELP } from "../src/ui/help-text";
+import { ACTION_HELP, FILL_HELP, LINE_HELP, TOOL_HELP } from "../src/ui/help-text";
 import { ACTIONS, actionById } from "../src/ui/actions";
 import { en } from "../src/i18n/en";
 import { it as itMessages } from "../src/i18n/it";
@@ -170,5 +170,24 @@ describe("ClickGuard (the click that ends a long press)", () => {
 		expect(g.consume(btn, 10)).toBe(false);
 		g.lift(5);
 		expect(g.armed).toBe(false);
+	});
+});
+
+describe("the controls added late in the wave have their explanation", () => {
+	it("the registry actions: global bookmarks, hand in, join broken strokes", () => {
+		for (const id of ["page-global-bookmark", "bookmarks-open", "hand-in", "selection-join"]) {
+			expect(ACTION_HELP[id], id).toBeDefined();
+			expect(actionById(id), id).toBeDefined();
+		}
+	});
+	it("the Home bookmarks chip, the navigator layout button and every shape style control", () => {
+		const keys = ["help.home.bookmarks", "help.navLayout", "help.shape.fillSame", "help.shape.fillColor", ...Object.values(FILL_HELP), ...Object.values(LINE_HELP)];
+		expect(Object.values(FILL_HELP)).toHaveLength(3);
+		expect(Object.values(LINE_HELP)).toHaveLength(3);
+		for (const key of keys) {
+			expect((en as Record<string, string>)[key], key).toBeTruthy();
+			expect((itMessages as Record<string, string>)[key], key).toBeTruthy();
+			expect((en as Record<string, string>)[key]!.length, key).toBeLessThanOrEqual(200);
+		}
 	});
 });

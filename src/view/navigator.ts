@@ -7,6 +7,7 @@ import { pageHasTag, pageTagCounts } from "../model/page-tags";
 import type { Page } from "../model/types";
 import { writing } from "../ink/writing-guard";
 import { classifyPages, nextMode, pageRowTime, pageRowTitle, resolveLayout, ThumbCache, type NavLayout, type NavMode } from "../ui/nav-adapt";
+import { attachLongPressHelp, resolveHelp } from "../ui/long-press-help";
 import { renderOutline, type OutlineHost } from "./outline";
 import { pageSignature } from "./view-helpers";
 
@@ -82,9 +83,12 @@ export class PageNavigator {
 	private readonly selectBar: HTMLElement;
 	private readonly selectCount: HTMLElement;
 	private readonly rangeButton: HTMLButtonElement;
+	/** Stops the long-press explanation of the header buttons that have one. */
+	private stopHelp: (() => void) | null = null;
 
 	constructor(parent: HTMLElement, private readonly host: NavigatorHost) {
 		this.el = parent.createDiv({ cls: "notebook-navigator notebook-hidden" });
+		this.stopHelp = attachLongPressHelp(this.el, (b) => (b.dataset.help ? resolveHelp(b) : null));
 		const header = this.el.createDiv({ cls: "notebook-navigator-header" });
 		this.titleEl = header.createSpan({ text: t("nav.title"), cls: "notebook-navigator-title" });
 		this.selectButton = header.createEl("button", {
@@ -110,6 +114,7 @@ export class PageNavigator {
 		});
 		if (host.setLayoutMode) {
 			this.layoutButton = header.createEl("button", { cls: "notebook-tool clickable-icon notebook-navigator-layout", attr: { type: "button" } });
+			this.layoutButton.dataset.help = "help.navLayout"; // 0.24 iconhelp (#429): the long-press explanation
 			this.layoutButton.addEventListener("click", () => {
 				host.setLayoutMode?.(nextMode(host.layoutMode?.() ?? "auto"));
 				this.updateLayoutButton();
@@ -503,6 +508,8 @@ export class PageNavigator {
 		this.observer.disconnect();
 		this.drag?.ghost.remove();
 		this.drag = null;
+		this.stopHelp?.();
+		this.stopHelp = null;
 		this.thumbs.clear(); // the data URLs go with the panel
 		this.el.remove();
 	}

@@ -6,7 +6,7 @@
  * 0.12.2/0.12.3 rules stay: creation is always reachable, an empty vault gets an empty state that teaches the first step, and
  * each section is drawn on its own, so one that fails shows an error card and never takes the others (or creation) with it.
  */
-import { t } from "../i18n";
+import { t, type MessageKey } from "../i18n";
 import { chip } from "../ui/components/chip";
 import { continueCard, quickPageCard, type ContinueCardOptions, type QuickPageOptions } from "../ui/components/continue-card";
 import { createTile, type CreateTileOptions } from "../ui/components/create-tile";
@@ -42,6 +42,8 @@ export interface DynamicChip {
 	label: string;
 	count: number;
 	onClick: () => void;
+	/** 0.24 iconhelp: the long-press explanation of the chip (a message key). */
+	help?: MessageKey;
 }
 
 export interface HomeHost {
@@ -88,7 +90,13 @@ export function renderHome(el: HTMLElement, h: HomeHost): void {
 	if (dynamic.length > 0) {
 		part(page, "dynamic sections", t("dyn.home.label"), () => {
 			const row = page.createDiv({ cls: "nb-chips nb-home-dynamic", attr: { role: "toolbar", "aria-label": t("dyn.home.label") } });
-			for (const d of dynamic) chip(row, { label: d.label, icon: d.icon, count: d.count, key: `dyn:${d.id}`, onClick: d.onClick });
+			for (const d of dynamic) {
+				const b = chip(row, { label: d.label, icon: d.icon, count: d.count, key: `dyn:${d.id}`, onClick: d.onClick });
+				if (d.help) {
+					b.dataset.help = d.help; // 0.24 iconhelp (#429): the long-press explanation
+					b.setAttribute("aria-label", d.label);
+				}
+			}
 		});
 	}
 

@@ -44,6 +44,11 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"comment-selection": "help.comment",
 	"math-edit": "help.mathEdit",
 	"pdf-search": "help.pdfSearch",
+	// 0.24 review: the actions added later in the wave
+	"page-global-bookmark": "help.globalBookmark",
+	"bookmarks-open": "help.openBookmarks",
+	"hand-in": "help.handIn",
+	"selection-join": "help.joinStrokes",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */
@@ -56,3 +61,7 @@ export const TOOL_HELP: Readonly<Record<string, MessageKey>> = {
 	text: "help.tool.text",
 	space: "help.tool.space",
 };
+
+/** The explanation of each segment of the shape style row (fill and line style), shown in the toolbar options and in the selection bar. */
+export const FILL_HELP: Readonly<Record<"none" | "solid" | "tint", MessageKey>> = { none: "help.shape.fillNone", solid: "help.shape.fillSolid", tint: "help.shape.fillTint" };
+export const LINE_HELP: Readonly<Record<"solid" | "dashed" | "dotted", MessageKey>> = { solid: "help.shape.lineSolid", dashed: "help.shape.lineDashed", dotted: "help.shape.lineDotted" };

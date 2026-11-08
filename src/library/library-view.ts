@@ -2236,7 +2236,7 @@ export class LibraryView extends ItemView {
 				})),
 				// 0.24 (#265): the global bookmarks list, once there is a bookmark in it.
 				...((this.host.bookmarksCount?.() ?? 0) > 0 && this.host.openBookmarks
-					? [{ id: "bookmarks", icon: "bookmark", label: t("gbm.home"), count: this.host.bookmarksCount?.() ?? 0, onClick: () => this.host.openBookmarks?.() }]
+					? [{ id: "bookmarks", icon: "bookmark", label: t("gbm.home"), count: this.host.bookmarksCount?.() ?? 0, onClick: () => this.host.openBookmarks?.(), help: "help.home.bookmarks" as const }]
 					: []),
 			],
 			shared: sharedPort ? (page) => renderSharedInboxCard(page, sharedPort, () => this.openSharedInbox()) : undefined,
