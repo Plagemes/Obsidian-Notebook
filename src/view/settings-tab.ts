@@ -15,6 +15,8 @@ import { deviceNameRow, type SyncSafetyService } from "./sync-safety";
 import { renderDeviceInfo } from "./device-info";
 import { BoardColumnsModal } from "./board-columns-modal";
 import { renderBackupRow } from "./backup-settings";
+import { backupFolderConflict, backupFolderOf } from "../storage/backup-logic";
+import { showErrorNotice } from "./notice";
 import type { BackupService } from "../storage/backup-service";
 import { resetHints } from "../ui/hints";
 import { resetToolbarAdaptation } from "../ui/toolbar-reset";
@@ -22,6 +24,12 @@ import {
 	ADVANCED, groupKey, groupSpec, SECTIONS, sectionGroups, settingSpecs, settingsView, translations,
 	type SectionSpec, type SettingActionId, type SettingCustomId, type SettingsContext, type SettingSpec, type SettingsView,
 } from "./settings-schema";
+
+const BACKUP_FOLDER_MESSAGES = {
+	notebooks: "settings.backupFolder.overlapNotebooks",
+	templates: "settings.backupFolder.overlapTemplates",
+	"holds-notebooks": "settings.backupFolder.holdsNotebooks",
+} as const;
 
 export interface SettingsHost extends Plugin {
 	settings: NotebookSettings;
@@ -159,6 +167,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 
 	// ------------------------------------------------------------------------------------- values and actions
 
+	private lastBackupFolderNotice = 0;
+
 	getControlValue(key: string): unknown {
 		// The hold-still toggle shows what is in effect: without a choice of the user that depends on the device.
 		if (key === "penHoldStill") return effectivePenHold(this.host.settings.penHoldStill, this.host.settings.penButtonSeen);
@@ -172,6 +182,18 @@ export class NotebookSettingTab extends PluginSettingTab {
 		if (gesture) {
 			await setGestureEnabled(this.penGestureHost(), gesture, value === true);
 		} else {
+			// A backup folder that overlaps the notebooks would hide them and leave them out of the backups (review W21 D2): refused,
+			// the previous folder stays.
+			if (key === "zipBackupFolder" && typeof value === "string") {
+				const s = this.host.settings;
+				const conflict = backupFolderConflict(backupFolderOf(value), { notebooksFolder: s.folder, templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder }, this.app.vault.getFiles().map((f) => f.path));
+				if (conflict !== null) {
+					const now = Date.now();
+					if (now - this.lastBackupFolderNotice > 3000) showErrorNotice(t(BACKUP_FOLDER_MESSAGES[conflict]), 8000);
+					this.lastBackupFolderNotice = now;
+					return;
+				}
+			}
 			// readSettings drops values of the wrong type and keeps the defaults.
 			this.host.settings = readSettings({ ...this.host.settings, [key]: value });
 			await this.host.saveSettings();
