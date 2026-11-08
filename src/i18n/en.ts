@@ -4463,6 +4463,11 @@ export const en = {
 	"settings.trimHooks": "Trim hooks as you write",
 	"settings.trimHooks.desc": "Cuts the tiny tick at the start or end of a line when the pen lifts. Corners stay.",
 	"trim.undone": "Hook put back. Undo again to remove the stroke.",
+	// 0.24 navadapt
+	"navAdapt.auto": "Auto",
+	"navAdapt.thumbs": "Thumbnails",
+	"navAdapt.list": "List",
+	"navAdapt.toggle": "Page panel layout: {mode}. Tap to change.",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -106,6 +106,7 @@ import { checkTermOrder, installTermTimetable } from "./termorder-check";
 import { checkPillstack, pillstackShot } from "./pillstack-check";
 import { checkDimcheck, dimcheckShot, type DimcheckState } from "./dimcheck-check";
 import { checkWelcomeback, welcomebackShot } from "./welcomeback-check";
+import { checkNavadapt, navadaptShot } from "./navadapt-check";
 import { checkSymbols } from "./symbols-check";
 import { checkBackups } from "./backups-check";
 import { checkSynccore } from "./synccore-check";
@@ -327,7 +328,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, lectureHeaderClassFor: doc === "lecthead" || doc === "pillstack" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, meanings: doc === "colours" || doc === "coloursedit" ? harnessMeanings() : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "savedviews" || doc === "chembal" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pillstack" || doc === "welcomeback" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" || doc === "hookclean" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "savedviews" || doc === "chembal" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pillstack" || doc === "welcomeback" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" || doc === "hookclean" || doc === "navadapt" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2285,6 +2286,8 @@ harnessApi.ready = main();
 // 0.22 lecthead: the automatic lecture header (doc=lecthead, lecthead-check.ts).
 Object.assign(harnessApi, { checkLecthead: () => checkLecthead({ get view() { return view; }, open, frames, penStroke, errors, notices }), lectheadShot: (state: "chip" | "header") => lectheadShot({ get view() { return view; }, open, frames, penStroke, errors, notices }, state) });
 
+// 0.24 navadapt: the adaptive page navigator (doc=navadapt, navadapt-check.ts).
+Object.assign(harnessApi, { checkNavadapt: () => checkNavadapt({ get view() { return view; }, open, frames, errors, notices }), navadaptShot: () => navadaptShot({ get view() { return view; }, open, frames, errors, notices }) });
 // 0.23 welcomeback: the welcome-back card (doc=welcomeback, welcomeback-check.ts).
 Object.assign(harnessApi, { checkWelcomeback: () => checkWelcomeback({ get view() { return view; }, open, frames, penStroke, errors, notices }), welcomebackShot: () => welcomebackShot({ get view() { return view; }, open, frames, penStroke, errors, notices }) });
 // 0.22 review fix: every floating pill at once (doc=pillstack, pillstack-check.ts).

@@ -19092,3 +19092,106 @@ body.notebook-style-obsidian {
 	color: var(--nb-text-muted);
 	font-size: var(--nb-fs-meta);
 }
+
+/* ===== 0.24 navadapt ===== */
+/* Large thumbnails (PDF and picture notebooks): a wider panel. */
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-large {
+	flex-basis: 240px;
+	width: 240px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body.is-narrow > .notebook-navigator.is-large {
+	width: min(260px, 80%);
+}
+
+/* Compact list (written notebooks): a wider panel too, one row per page, rows drawn only when near the screen. */
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list {
+	flex-basis: 260px;
+	width: 260px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body.is-narrow > .notebook-navigator.is-list {
+	width: min(260px, 85%);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-item {
+	display: grid;
+	grid-template-columns: 40px minmax(0, 1fr);
+	align-items: center;
+	column-gap: 8px;
+	margin-bottom: 2px;
+	padding: 4px 6px;
+	content-visibility: auto;
+	contain-intrinsic-size: auto 52px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-thumb {
+	grid-column: 1;
+	grid-row: 1 / span 2;
+	align-self: start;
+	width: 40px;
+	border-radius: 4px;
+	box-shadow: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowtext {
+	grid-column: 2;
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-number {
+	flex: 0 0 auto;
+	min-width: 1.6em;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-variant-numeric: tabular-nums;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowbody {
+	flex: 1 1 auto;
+	text-align: left;
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowtitle,
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowmeta {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowtitle {
+	color: var(--nb-text);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowtitle.is-untitled {
+	color: var(--nb-text-muted);
+	font-weight: var(--font-normal);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-rowmeta {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-footer {
+	grid-column: 2;
+	justify-content: flex-end;
+	margin-top: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator.is-list .notebook-navigator-check {
+	top: 4px;
+	left: 4px;
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-layout.is-active {
+	color: var(--nb-accent);
+}
