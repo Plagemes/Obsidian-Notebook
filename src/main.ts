@@ -58,6 +58,9 @@ import { registerNavigation } from "./view/nav-service";
 import { QuickTabsStore } from "./library/quicktabs-store";
 import { MeaningsStore } from "./library/meanings-store";
 import { QuickTabsService } from "./view/quick-tabs-service";
+import { BookmarksStore } from "./library/bookmarks-store";
+import { BookmarksService } from "./view/bookmarks-service";
+import { openBookmarks } from "./view/bookmarks-dialog";
 import { NotebookStatusBar } from "./view/status-bar";
 import { registerResilience, type ResilienceServices } from "./view/resilience";
 import { PdfCopyService } from "./storage/pdf-copy-service";
@@ -83,6 +86,8 @@ export default class NotebookPlugin extends Plugin {
 	nav!: NavController;
 	/** 0.18 (#227): quick tabs, pages pinned in a notebook (one file per device in `_meta`, library/quicktabs-store.ts). */
 	quickTabs!: QuickTabsService;
+	/** 0.24 (#265): global bookmarks (one file per device in `_meta`, library/bookmarks-store.ts). */
+	bookmarks!: BookmarksService;
 	/** 0.22 (#101): per-notebook colour meanings (one file per device in `_meta`, library/meanings-store.ts). */
 	meanings!: MeaningsStore;
 	private statusBar: NotebookStatusBar | null = null;
@@ -242,6 +247,15 @@ export default class NotebookPlugin extends Plugin {
 			this.quickTabs = new QuickTabsService({ app: this.app, store, readNotebook: (file) => this.host.readNotebook(file), notebooksFolder: () => this.settings.folder });
 			this.quickTabs.register(this);
 		});
+		// 0.24 (#265): global bookmarks follow the vault, renamed notebooks and other devices' files; Home reaches the list through the library host.
+		this.step("global bookmarks", () => {
+			const store = new BookmarksStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
+			this.bookmarks = new BookmarksService({
+				app: this.app, store, readNotebookId: (file) => this.host.readNotebookId(file), readNotebook: (file) => this.host.readNotebook(file), notebooksFolder: () => this.settings.folder,
+			});
+			this.bookmarks.register(this);
+			Object.assign(this.host, { bookmarksCount: () => this.bookmarks.count(), openBookmarks: () => openBookmarks(this.app, this.bookmarks), onBookmarksChange: (fn: () => void) => this.bookmarks.onChange(fn) });
+		});
 		// 0.22 (#101): per-notebook colour meanings follow other devices' files.
 		this.step("colour meanings", () => {
 			const store = new MeaningsStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
@@ -289,6 +303,7 @@ export default class NotebookPlugin extends Plugin {
 				if (quickNav) openPageSwitcher(quickNav);
 			},
 			"recent-pages": () => openRecentPages(this.app, this.recentPages),
+			"bookmarks-open": () => openBookmarks(this.app, this.bookmarks),
 			"sync-check": () => void this.syncSafety.openCheck(),
 			"check-integrity": () => void this.resilience?.check(),
 			"library-check": () => this.host.checkLibrary(),

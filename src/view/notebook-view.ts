@@ -104,6 +104,7 @@ import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { QuickTabsStrip } from "./quick-tabs";
 import type { QuickTabsService, QuickTabsViewApi } from "./quick-tabs-service";
+import type { BookmarksService } from "./bookmarks-service";
 import { PageNavigator } from "./navigator";
 import { NotebookMapCache } from "../model/notebook-map";
 import { NotebookMapModal } from "./notebook-map-modal";
@@ -264,6 +265,8 @@ export interface NotebookHost {
 	nav?: NavController;
 	/** 0.18 (#227): quick tabs, pages pinned in a notebook (view/quick-tabs-service.ts). Optional: absent in tests. */
 	quickTabs?: QuickTabsService;
+	/** 0.24 (#265): global bookmarks, pages of different notebooks in one list (view/bookmarks-service.ts). Optional: absent in tests. */
+	bookmarks?: BookmarksService;
 	/** 0.22 (#101): per-notebook colour meanings (library/meanings-store.ts). Optional: absent in tests. */
 	meanings?: MeaningsStore;
 	/** Roadmap O15: the page in view or the save state of `view` changed (the status bar item follows the active view). Optional. */
@@ -3441,6 +3444,11 @@ export class NotebookView extends FileView {
 		void this.host.quickTabs?.togglePin(this.quickApi());
 	}
 
+	/** 0.24 (#265): adds the page in view to the global bookmarks, or removes it when it is there (the page sheet and the command). */
+	toggleGlobalBookmark(): void {
+		void this.host.bookmarks?.toggle(this.quickApi());
+	}
+
 	/** "Pin a page from another notebook…" */
 	pinQuickTabFromOther(): void {
 		this.host.quickTabs?.pinFromOther(this.quickApi());
@@ -3713,6 +3721,7 @@ export class NotebookView extends FileView {
 				lockedElements: lockedElementsOf(page).length,
 				bookmarked: doc?.meta?.bookmarks.includes(page.id) ?? false, splittable: page.id === this.heavyPageId,
 				...(this.host.quickTabs ? { quickTab: this.host.quickTabs.isPinnedAt(this.quickApi(), index) } : {}),
+				...(this.host.bookmarks ? { globalBookmark: this.host.bookmarks.isBookmarkedAt(this.quickApi(), index) } : {}),
 				kind: pageKindOf({ background: page.background?.kind ?? "none", paper: page.paper.kind, width: page.width, height: page.height }),
 			} : null,
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },

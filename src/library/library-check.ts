@@ -37,6 +37,7 @@ import { COLLECTIONS_PREFIX } from "./collections";
 import { FOLDER_META_PREFIX } from "./folder-meta";
 import { SEEN_PREFIX } from "./library-check-seen";
 import { QUICKTABS_PREFIX } from "./quicktabs";
+import { BOOKMARKS_PREFIX } from "./bookmarks";
 import { LIBRARY_STATE_PREFIX } from "./library-state";
 import { MEANINGS_PREFIX } from "./meanings";
 
@@ -57,7 +58,7 @@ const HOLDER_EXTENSIONS = new Set(["notebook", "json", "snapshot", "bak", "stamp
  * but is no reference; nor are the copies kept of them when unreadable (`<prefix>.unreadable-<hash>.json`). Left out, an
  * unsynced or empty one no longer makes the check incomplete. Every other file of the kept folders stays a holder.
  */
-const NOT_HOLDERS: readonly string[] = [FOLDER_META_PREFIX, LIBRARY_STATE_PREFIX, SEEN_PREFIX, BOARD_PREFIX, COLLECTIONS_PREFIX, PDF_COPY_PREFIX, QUICKTABS_PREFIX, MEANINGS_PREFIX];
+const NOT_HOLDERS: readonly string[] = [FOLDER_META_PREFIX, LIBRARY_STATE_PREFIX, SEEN_PREFIX, BOARD_PREFIX, COLLECTIONS_PREFIX, PDF_COPY_PREFIX, QUICKTABS_PREFIX, MEANINGS_PREFIX, BOOKMARKS_PREFIX];
 const SIDECAR_NAME = /^([a-z-]+?)(?:-[0-9a-f]{8}|\.unreadable-[0-9a-f]{8})\.json$/;
 
 /** Whether `path` is one of the `_meta` device sidecars that cannot name an asset (see NOT_HOLDERS). */

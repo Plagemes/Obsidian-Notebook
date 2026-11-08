@@ -302,6 +302,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.16 (#124): lock a finished page. The history refuses every edit of a locked page; these only flip the flag (one undo step).
 	"page-quick-tab": (v) => v.togglePageQuickTab(),
 	"page-quick-tab-other": (v) => v.pinQuickTabFromOther(),
+	"page-global-bookmark": (v) => v.toggleGlobalBookmark(),
 	"page-lock": onPage((v, p) => void v.setPageLocked(p, true)),
 	"page-unlock": onPage((v, p) => void v.setPageLocked(p, false)),
 	"page-lock-toggle": onPage((v, p) => void v.setPageLocked(p, !p.locked)),

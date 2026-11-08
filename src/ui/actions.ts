@@ -64,6 +64,8 @@ export interface UiContext {
 		locked?: boolean;
 		/** 0.18 (#227): the page is a quick tab of this notebook. Optional (false when absent). */
 		quickTab?: boolean;
+		/** 0.24 (#265): the page is in the global bookmarks list. Optional (false when absent). */
+		globalBookmark?: boolean;
 		/** 0.20 (#39): how many locked elements the page has. Optional (0 when absent). */
 		lockedElements?: number;
 	} | null;
@@ -270,6 +272,7 @@ export const ACTIONS: readonly ActionDef[] = [
 	// width allows), part of the Go to section of the page sheet, commands (hotkeys) and the mouse side buttons on desktop.
 	{ id: "nav-back", label: "nav.back", icon: "arrow-left", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 64, scope: "view", command: "command.navBack", readOnly: true, when: hasNav, enabled: (c) => !!c.nav?.back, keywords: "previous history visited return indietro" },
 	{ id: "nav-forward", label: "nav.forward", icon: "arrow-right", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 63, scope: "view", command: "command.navForward", readOnly: true, when: hasNav, enabled: (c) => !!c.nav?.forward, keywords: "next history visited avanti" },
+	{ id: "bookmarks-open", label: "gbm.open", icon: "bookmark", group: "navigate", surfaces: ["page", "sheet", "library"], priority: 54, scope: "global", command: true, readOnly: true, keywords: "bookmarks list pages notebooks segnalibri elenco pagine" },
 	{ id: "go-to-page", label: "command.goToPage", icon: "file-search", group: "navigate", surfaces: ["sheet", "library"], priority: 55, scope: "global", command: true, readOnly: true, keywords: "switcher find notebook" },
 	{ id: "toggle-page-mode", label: "toolbar.pageMode", icon: "book-open", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 46, scope: "view", command: "command.pageMode", readOnly: true, checked: (c) => !!c.toggles.pageMode, keywords: "swipe paged continuous scroll" },
 	// wave 0.9 (361): find and replace in the text boxes of the notebook (a panel; the results jump to the page).
@@ -340,6 +343,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.18 (#227): quick tabs. Pinning does not edit the notebook (the pins are in _meta), so it works on a read-only or locked page too.
 	{ id: "page-quick-tab", label: "quicktabs.pin", icon: "pin", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: true, checked: (c) => !!c.page?.quickTab, keywords: "quick tab pin pinned formula sheet fissa scheda rapida" },
 	{ id: "page-quick-tab-other", label: "quicktabs.pinOther", icon: "book-open", group: "page", surfaces: ["page", "sheet"], priority: 46, scope: "view", command: true, keywords: "quick tab pin other notebook formula sheet fissa altro quaderno" },
+	// 0.24 (#265): global bookmarks. The list is in _meta, never in a notebook, so toggling works on a read-only or locked page too.
+	{ id: "page-global-bookmark", label: "gbm.toggle", icon: "bookmark-plus", group: "page", surfaces: ["page", "sheet"], priority: 45, scope: "view", command: true, checked: (c) => !!c.page?.globalBookmark, keywords: "global bookmark list all notebooks segnalibro globale elenco" },
 	{ id: "page-save-template", label: "page.saveTemplate", icon: "layout-template", group: "page", surfaces: ["page"], priority: 25, scope: "view" },
 	{ id: "page-restore-version", label: "page.restoreVersion", icon: "history", group: "page", surfaces: ["page"], priority: 20, scope: "view", enabled: pageOpen },
 	{ id: "page-compare-version", label: "page.compareVersion", icon: "git-compare", group: "page", surfaces: ["page"], priority: 21, scope: "view", enabled: pageOpen },

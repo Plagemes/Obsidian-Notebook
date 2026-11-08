@@ -163,6 +163,10 @@ export interface LibraryHost {
 	sharedInbox?(): SharedInboxPort | null;
 	/** 0.13: the "Your name" setting (Home's greeting). */
 	userName?(): string;
+	/** 0.24 (#265): global bookmarks (pages of different notebooks in one list): how many there are, the dialog, and a way to follow changes (Home's Bookmarks chip). */
+	bookmarksCount?(): number;
+	openBookmarks?(): void;
+	onBookmarksChange?(fn: () => void): () => void;
 	/** 0.13: pages and minutes written per day on this device (Home's greeting and statistics; view/recent-pages.ts). */
 	activity?(): { records: ActivityRecord[]; minutes: Record<string, number> };
 	/** 0.13: the class in progress and the notebook it opens, or where one is made (Continue card). */
@@ -461,6 +465,8 @@ export class LibraryView extends ItemView {
 		// 0.16 (#177): a file was shared to the vault, or one was dealt with.
 		const offShared = this.host.sharedInbox?.()?.onChange(() => this.requestRender());
 		if (offShared) this.register(offShared);
+		const offBookmarks = this.host.onBookmarksChange?.(() => this.requestRender());
+		if (offBookmarks) this.register(offBookmarks);
 		// 0.15 views: the Board's columns were edited (its dialog, the settings).
 		this.register(onBoardColumnsChanged(() => this.requestRender()));
 
@@ -2223,10 +2229,16 @@ export class LibraryView extends ItemView {
 		const fit = this.mode === "wide" ? DASH_SUBJECTS_WIDE : this.mode === "medium" ? DASH_SUBJECTS_MEDIUM : DASH_SUBJECTS_PHONE;
 		const sharedPort = this.host.sharedInbox?.() ?? null;
 		renderHome(el, {
-			dynamic: DYNAMIC_IDS.filter((id) => this.dynamicSections()[id].length > 0).map((id) => ({
-				id, icon: COLLECTION_LOOK[id].icon, label: this.dynamicLabel(id, true), count: this.dynamicSections()[id].length,
-				onClick: () => this.navigate({ collection: id }),
-			})),
+			dynamic: [
+				...DYNAMIC_IDS.filter((id) => this.dynamicSections()[id].length > 0).map((id) => ({
+					id, icon: COLLECTION_LOOK[id].icon, label: this.dynamicLabel(id, true), count: this.dynamicSections()[id].length,
+					onClick: () => this.navigate({ collection: id }),
+				})),
+				// 0.24 (#265): the global bookmarks list, once there is a bookmark in it.
+				...((this.host.bookmarksCount?.() ?? 0) > 0 && this.host.openBookmarks
+					? [{ id: "bookmarks", icon: "bookmark", label: t("gbm.home"), count: this.host.bookmarksCount?.() ?? 0, onClick: () => this.host.openBookmarks?.() }]
+					: []),
+			],
 			shared: sharedPort ? (page) => renderSharedInboxCard(page, sharedPort, () => this.openSharedInbox()) : undefined,
 			continue: cont.card,
 			empty: cont.empty,
