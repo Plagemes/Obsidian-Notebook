@@ -459,6 +459,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "figures", label: "figures.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 23, scope: "view", command: "command.figures", readOnly: true, keywords: "figures photos pictures images crops gallery section immagini foto figure galleria ritagli" },
 	// wave 0.10 (81): the same dialog started on PNG images (a vault folder, a scale, a page range) or on Print (desktop only).
 	{ id: "export-png", label: "export.png.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 27, scope: "view", command: "command.exportPng", readOnly: true, keywords: "png images pictures pages folder scale range esporta immagini" },
+	// 0.23 (#280): the written area of the page, or the selection, as a transparent PNG or SVG
+	{ id: "export-area", label: "exportArea.menu", icon: "crop", group: "share", surfaces: ["sheet", "notebook"], priority: 26.5, scope: "view", command: "command.exportArea", readOnly: true, keywords: "export written area crop transparent png svg esporta area scritta ritaglia trasparente" },
+	{ id: "selection-export-area", label: "exportArea.selection", icon: "crop", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40.3, scope: "view", command: true, readOnly: true, when: hasSelection, keywords: "export selection transparent png svg esporta selezione trasparente" },
 	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
 
 	// --- notebooks: the library, the ribbon and the palette.

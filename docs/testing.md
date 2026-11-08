@@ -3492,3 +3492,26 @@ Implemented, not verified on hardware. **Format change: v20 → v21** (the optio
 |---|---|---|---|---|---|
 | Saved views (#264): save the page, region and zoom under a name; recall; rename, update, reorder, remove, each one undo step; missing views; read-only recall | yes | model, commands, history, merge and geometry: `tests/model-v21.test.ts`; dialog and commands: harness `doc=savedviews` | | | not tried on Android |
 | Format v21: optional `views` list, migration v20 → v21 (identity plus version), lenient read, strict write, staged loading of large v20 files, repair | yes | `tests/model-v21.test.ts`, `tests/format-schema.test.ts` (schema `docs/schema/notebook-v21.schema.json`) | | | |
+### 0.23 — exportarea (written area and selection as transparent PNG or SVG, #280; steps 2300-2319)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook page with several pen types, a text box with a `[[link|label]]`, and a collapsed sticky note with ink.
+
+2300. **Page menu.** Open the all-actions sheet (Export & share): *Export written area…* opens the dialog. The same entry is in the notebook menu and the command palette.
+2301. **Crop.** Choose *PNG*, 2x, *Save*: a file `<notebook> p<N> area.png` appears next to the notebook. Open it: transparent background (no white, no paper), cropped to your writing with a small margin.
+2302. **Scales.** Export again at 1x and 3x: the pixel size scales; the notice names the path. A second export never overwrites the first (` 2`).
+2303. **SVG.** Choose *SVG*: the Scale row hides. The saved `.svg` opens in a browser on a transparent background, strokes are vector; the highlighter stays see-through over the pen.
+2304. **Pens.** Page with fountain pen, brush and marker strokes: each looks like on the page in the PNG and the SVG.
+2305. **Selection.** Lasso some items: the bar has *Export selection as picture* (also in the sheet). The dialog offers *The selection* and exports only those items, cropped to them.
+2306. **Collapsed note.** Select a collapsed sticky note and export: its hidden ink comes with it. On the whole page, a collapsed note does not widen the area with its hidden ink.
+2307. **Labels.** The text box with `[[Note|label]]` shows the label, not the link source.
+2308. **Empty.** On a page with nothing written, run the export: a notice says there is nothing to export and no file is written. Same for a selection of nothing drawable.
+2309. **Locked page.** Lock the page: the export still works (read-only).
+2310. **Copy.** Press *Copy*, paste into another app: the PNG arrives with a transparent background (SVG copies its source text). Where the device cannot copy pictures, a notice says to save instead.
+2311. **Library inbox.** The saved picture is not offered by the shared-files inbox as an unknown file.
+2312. **Style.** Light and dark, phone and tablet: the dialog is a normal Notebook dialog, the three buttons fit in one row.
+2313. **Italian.** Switch to Italian: all texts are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Export of the written area of a page (bounding box of visible ink and elements plus margin) as transparent PNG 1x/2x/3x or SVG, saved next to the notebook, optional copy to the clipboard | yes | bounds, margin, hidden ink, collapsed notes: `tests/export-area.test.ts`; harness `doc=exportarea` (real dialog, transparent PNG corner, SVG without sheet, empty refusal) | | | clipboard image copy depends on the WebView (`ClipboardItem`) |
+| Export of the selection as transparent PNG or SVG (selected items and pinned note ink only; groups expanded by the selection; locked items fine) | yes | selection cut: `tests/export-area.test.ts` (SVG of each pen type, highlighter and marker alpha, wikilink label) | | | |

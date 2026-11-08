@@ -521,7 +521,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### Paper ↔ digital and exports
 278. **P2** Paper round trip: print pages with a code, write on paper, scan it and it returns to the right page of the notebook.
 279. **P2** Custom paper editor: spacing, colours, margins, header area, combinations.
-280. **P2** Export only the written area, or the selection, as transparent PNG or SVG.
+280. **P2** 🧪 Export only the written area, or the selection, as transparent PNG or SVG.
 281. **P3** Poster printing over several sheets.
 282. **P3** Export optimised for e-ink readers.
 283. **P3** Export to LaTeX/Overleaf for theses and reports.
