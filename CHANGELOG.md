@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### lecthead
+- **Automatic lecture header (#210).** When a class of the timetable is on for the notebook, its header (course, lecturer, room, date and start time) can be written on the page you are writing on: two small text boxes in a fresh group (course larger, the rest in a quiet line under it) at the top margin, as one undo step. It goes only where the page is empty: it moves down to the first free spot in the top of the page and never overlaps ink or objects; with no free spot nothing is written and the chip *Add lecture header* waits. It is offered or done when a new page is added during the class, and when lecture mode starts on a page that is not a lecture page of its own. New settings in *Study > Timetable*: *Lecture header* (Off / Ask / Automatic; Ask shows a quiet chip) and which fields to write (Lecturer, Room, Date, Start time). New command *Insert lecture header*: uses the class in progress or else the closest class of today, and refuses a locked page. Date and time follow the interface language (English, Italian). No document format change. Pure rules in `src/timetable/lecture-header.ts`, view side in `src/view/lecture-header.ts`. Tests: `tests/lecture-header.test.ts`. Harness: `dev/harness/lecthead-check.ts` (`doc=lecthead`).
+
 ## 0.21.0 — 2026-11-08
 
 Eight features: a start and end time on every page, scheduled backups, a documented file format with a JSON Schema, an interactive HTML export, a back-of-book index, a reusable signature and date stamp, a way back to the current slide and a strip of recent symbols; plus the review fixes carried over from 0.20. The notebook format moves to version 19 (page start and end times): the migration from version 18 is automatic, and 0.20 and older open a v19 notebook read-only and never overwrite it.

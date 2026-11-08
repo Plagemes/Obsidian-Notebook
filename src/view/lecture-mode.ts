@@ -185,7 +185,10 @@ export class LectureModeController {
 		this.hideBanner();
 		this.asking = null;
 		this.enter(match, true);
-		if (match) this.host.started?.(match, this.ensurePage(match, now));
+		if (match) {
+			const pageAdded = this.ensurePage(match, now);
+			this.host.started?.(match, pageAdded);
+		}
 	}
 
 	/**
@@ -404,7 +407,8 @@ export class LectureModeController {
 			const now = this.now();
 			this.asking = null;
 			this.enter(cls, false);
-			this.host.started?.(cls, this.ensurePage(cls, now));
+			const pageAdded = this.ensurePage(cls, now);
+			this.host.started?.(cls, pageAdded);
 		});
 		actions.createEl("button", { text: t("lectureMode.notNow"), attr: { type: "button" } }).addEventListener("click", () => {
 			this.remember("declined", cls.key);

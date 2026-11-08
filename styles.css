@@ -17808,10 +17808,10 @@ body.notebook-style-obsidian {
 }
 
 /* ===== 0.22 lecthead ===== */
-/* The chip "Add lecture header": quiet, under the lecture chip at the top left, away from the page's top margin where the header goes. */
+/* The chip "Add lecture header": quiet, at the bottom left, clear of the top strips and pills and of the page margin where the header goes. */
 .workspace-leaf-content .view-content.notebook-view .notebook-lecture-header-offer {
 	position: absolute;
-	top: 50px;
+	bottom: 16px;
 	left: 8px;
 	z-index: 4;
 	display: flex;
@@ -17849,6 +17849,9 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-lecture-header-close {
 	width: 36px;
 	min-height: 40px;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 	color: var(--nb-text-muted);
 }
 

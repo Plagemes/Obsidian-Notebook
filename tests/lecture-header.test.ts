@@ -13,7 +13,7 @@ vi.mock("obsidian", () => ({
 
 import { estimateMeasure } from "../src/ink/text-layout";
 import { createDocument, createPage } from "../src/model/document";
-import { History } from "../src/model/history";
+import { History, type Command } from "../src/model/history";
 import { SetPageLocked } from "../src/model/page-lock";
 import { checkContent } from "../src/model/serialize";
 import type { NotebookDocument, Stroke, TextElement } from "../src/model/types";
@@ -213,7 +213,7 @@ describe("lecture header: one undo step", () => {
 			doc,
 			measure: estimateMeasure,
 			currentPage: () => 0,
-			execute: (cmd) => history.execute(cmd),
+			execute: (cmd: Command) => history.execute(cmd),
 		} as unknown as EditContext;
 		return { doc, history, ctx };
 	}
@@ -251,5 +251,16 @@ describe("lecture header: one undo step", () => {
 	it("a page that does not exist is nothing", () => {
 		const { ctx } = scene();
 		expect(insertHeader(ctx, 5, cls, DEFAULT_HEADER_FIELDS, "en", mon(9, 30))).toBe("empty");
+	});
+});
+
+describe("lecture header: settings", () => {
+	it("reads the mode and the fields, ignoring values of the wrong type", async () => {
+		const { readSettings, DEFAULT_SETTINGS } = await import("../src/settings");
+		expect(DEFAULT_SETTINGS.lectureHeader).toBe("ask");
+		expect(readSettings({ lectureHeader: "auto", lectureHeaderRoom: false }).lectureHeader).toBe("auto");
+		expect(readSettings({ lectureHeader: "auto", lectureHeaderRoom: false }).lectureHeaderRoom).toBe(false);
+		expect(readSettings({ lectureHeader: "always" }).lectureHeader).toBe("ask");
+		expect(readSettings({ lectureHeaderDate: "no" }).lectureHeaderDate).toBe(true);
 	});
 });

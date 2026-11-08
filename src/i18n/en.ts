@@ -3905,7 +3905,7 @@ export const en = {
 	"slideBack.dismiss": "Dismiss",
 	// 0.22 lecthead
 	"settings.lectureHeader": "Lecture header",
-	"settings.lectureHeader.desc": "Writes the course, lecturer, room, date and time of the class on the page you are writing on, in an empty spot at the top.",
+	"settings.lectureHeader.desc": "Writes the class details at the top of the page you write on.",
 	"settings.lectureHeader.off": "Off (use the command)",
 	"settings.lectureHeader.ask": "Ask",
 	"settings.lectureHeader.auto": "Automatic",

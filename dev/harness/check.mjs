@@ -145,6 +145,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "minimap", theme, device, lowLatency: false });
 // 0.21 slideback (#225): the pill back to the current slide (dev/harness/slideback-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "slideback", theme, device, lowLatency: false });
+// 0.22 lecthead (#210): the lecture header (dev/harness/lecthead-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "lecthead", theme, device, lowLatency: false });
 // Recent symbols (0.21, #212): the strip, a tapped character and a saved symbol placed pen-sized, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "symbols", theme, device, lowLatency: false });
 // 0.21 backups: scheduled zip backups and their settings rows (dev/harness/backups-check.ts), tablet and phone, dark and light.
@@ -338,6 +340,7 @@ async function main() {
 				else if (s.doc === "xfer") report = await cdp.evaluate("window.harness.checkXfer()", 120000);
 				else if (s.doc === "linkback") report = await cdp.evaluate("window.harness.checkLinkback()", 120000);
 				else if (s.doc === "slideback") report = await cdp.evaluate("window.harness.checkSlideback()", 60000);
+				else if (s.doc === "lecthead") report = await cdp.evaluate("window.harness.checkLecthead()", 90000);
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -509,6 +512,19 @@ async function main() {
 					writeFileSync(join(designDir, `slideback-away-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				} catch (e) {
 					problems.push(`slideback screenshot: ${e.message}`);
+				}
+			}
+			// 0.22 lecthead: the chip, and the header written on a new page.
+			if (s.doc === "lecthead") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["chip", "header"]) {
+					try {
+						await cdp.evaluate(`window.harness.lectheadShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `lecthead-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`lecthead ${state} screenshot: ${e.message}`);
+					}
 				}
 			}
 			// 0.13 ds-zettel: review screenshots of each Zettelkasten surface.

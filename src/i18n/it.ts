@@ -3907,7 +3907,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"slideBack.dismiss": "Chiudi",
 	// 0.22 lecthead
 	"settings.lectureHeader": "Intestazione della lezione",
-	"settings.lectureHeader.desc": "Scrive corso, docente, aula, data e ora della lezione nella pagina in cui scrivi, in un punto libero in alto.",
+	"settings.lectureHeader.desc": "Scrive i dati della lezione in cima alla pagina in cui scrivi.",
 	"settings.lectureHeader.off": "No (usa il comando)",
 	"settings.lectureHeader.ask": "Chiedi",
 	"settings.lectureHeader.auto": "Automatica",
