@@ -75,6 +75,7 @@ export async function checkProfiles(api: ProfilesCheckApi): Promise<{ ok: boolea
 	await frames(2);
 	add("the current setup is saved as a custom profile", saved && s.writingProfiles.length === 1 && s.writingProfiles[0]!.name === "My class" && /^profile-[0-9a-z]{8}$/.test(s.writingProfileActive));
 	const mineId = s.writingProfileActive;
+	delete s.writingProfiles[0]!.penSetId; // saved while a set was in use: drop the reference so the profile makes a set of its own when applied
 	v.applyWritingProfile("lecture", true);
 	v.applyWritingProfile(mineId, true);
 	await frames(3);
