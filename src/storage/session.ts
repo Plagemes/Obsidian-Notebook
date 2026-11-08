@@ -1,4 +1,5 @@
 import { parse, parseStaged, serialize, serializeChecked, StagedParse, warmStrokeLines, type ParseFailure, type ParseResult } from "../model/serialize";
+import { repairLiveDocument } from "../model/repair";
 import type { NotebookDocument } from "../model/types";
 import { extractDocId } from "./history";
 import { buildEntry, fingerprint, fullWriteGapMs, inspectJournal, journalKey, splitLines, type JournalStore } from "./journal";
@@ -955,7 +956,21 @@ export class DocumentSession {
 			this.runBeforeSerialize(doc);
 			doc.modifiedAt = this.now().toISOString();
 		}
-		const checked = serializeChecked(doc);
+		let checked = serializeChecked(doc);
+		if (!checked.ok) {
+			// An item in memory that can no longer be written (a missing colour, say) would keep every later save refused:
+			// repair it with the lenient reader a damaged file gets, then check again (strictly, as always).
+			let repaired = 0;
+			try {
+				repaired = repairLiveDocument(doc);
+			} catch (e) {
+				console.error("[notebook] repairing the document before saving failed", e);
+			}
+			if (repaired > 0) {
+				console.warn(`[notebook] ${repaired} invalid item(s) repaired before saving (${checked.message})`);
+				checked = serializeChecked(doc);
+			}
+		}
 		if (!checked.ok) {
 			doc.modifiedAt = previousModifiedAt;
 			this.events.onSaveState?.("error");

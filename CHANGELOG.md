@@ -66,6 +66,7 @@
 - Redaction: the book index, the formula sheet, the figures' *Copy image*, the pictures sent to a checklist task and *Export as Markdown* go through the same redaction as the other exports.
 - Redaction: the reach of a stroke follows the real width of its pen (pressure, fountain and brush nibs), a checkbox whose label a box covers keeps its box but loses the label, and the header handed to a note's page picture is the redacted one.
 - Redaction: the dialog preview drops covered excerpts like the export, *Done* saves the boxes even when nothing changed (so an unreadable state is set again), and the dialog lists what redaction does not cover.
+- **A stroke or element with no colour no longer makes a notebook unsavable.** The writer refuses a missing colour (or any `undefined`) with a message naming the item, before any text is built; if such an item is already in memory, the save repairs it with the lenient reader a damaged file gets (a checkbox, sticky note, area or equation takes the default colour of its kind, a stroke or text box black) and saves, instead of failing on every later attempt. Found by a harness fixture that built a checkbox with no colour.
 
 ## 0.25.0 — 2026-11-08
 

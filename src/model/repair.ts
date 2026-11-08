@@ -26,7 +26,9 @@
  * in the original file, which is never modified.
  */
 import { normalizeBookmarkInfo, normalizeBookmarkInfoMap } from "./bookmarks";
+import { CHECKBOX_DEFAULT_COLOR } from "./checklist";
 import { createId } from "./document";
+import { STICKY_DEFAULT_COLOR } from "./sticky";
 import { cleanMarkerText, isBoxKind, isIsoDate, isMarkerKind } from "./markers";
 import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
@@ -1007,4 +1009,54 @@ export function repairNotebookText(text: string, now: Date = new Date()): Repair
 	const again = parse(checked.text);
 	if (!again.ok) return { ok: false, reason: "nothing", message: again.message, summary };
 	return { ok: true, doc: again.doc, text: checked.text, summary };
+}
+
+/** Colour given to an element whose own is missing (what a new one of its kind starts with); strokes and text are defaulted by the repair itself. */
+const MISSING_COLOUR: Readonly<Record<string, string>> = { checkbox: CHECKBOX_DEFAULT_COLOR, sticky: STICKY_DEFAULT_COLOR, area: "#facc15", equation: "#000000" };
+
+/**
+ * Repairs, in place, the strokes and elements of a document held in memory that can no longer be written (a missing colour, say), so
+ * a save that was refused is not refused forever. Each item that does not pass the strict write on its own goes through
+ * `repairNotebookText` (the same lenient reader a damaged file gets) on a one-item copy of the document, and is replaced by what that
+ * returns; an item that cannot be repaired is left as it is (the save is then refused as before). Nothing is touched when the
+ * document fails for another reason than one of its items. Returns how many items were replaced.
+ */
+export function repairLiveDocument(doc: NotebookDocument): number {
+	const base: NotebookDocument = { ...doc };
+	delete base.views;
+	delete base.position;
+	const withItem = (page: Page, strokes: Stroke[], elements: PageElement[]): NotebookDocument => ({
+		...base, pages: [{ id: page.id, width: page.width, height: page.height, paper: page.paper, strokes, elements }],
+	});
+	if (doc.pages.length === 0 || !serializeChecked(withItem(doc.pages[0]!, [], [])).ok) return 0;
+	let fixed = 0;
+	for (const page of doc.pages) {
+		const repair = (item: Stroke | PageElement, isStroke: boolean): Stroke | PageElement | null => {
+			const candidate: Record<string, unknown> = { ...item };
+			const fallback = isStroke ? undefined : MISSING_COLOUR[(item as PageElement).type];
+			if (fallback !== undefined && (typeof candidate.color !== "string" || !COLOR_RE.test(candidate.color))) candidate.color = fallback;
+			const mini = withItem(page, [], []);
+			const text = JSON.stringify({ ...mini, pages: [{ ...mini.pages[0], strokes: isStroke ? [candidate] : [], elements: isStroke ? [] : [candidate] }] });
+			const result = repairNotebookText(text);
+			if (!result.ok) return null;
+			return (isStroke ? result.doc.pages[0]?.strokes[0] : result.doc.pages[0]?.elements?.[0]) ?? null;
+		};
+		page.strokes.forEach((s, i) => {
+			if (serializeChecked(withItem(page, [s], [])).ok) return;
+			const replacement = repair(s, true);
+			if (replacement) {
+				page.strokes[i] = replacement as Stroke;
+				fixed++;
+			}
+		});
+		(page.elements ?? []).forEach((e, i) => {
+			if (serializeChecked(withItem(page, [], [e])).ok) return;
+			const replacement = repair(e, false);
+			if (replacement) {
+				page.elements![i] = replacement as PageElement;
+				fixed++;
+			}
+		});
+	}
+	return fixed;
 }
