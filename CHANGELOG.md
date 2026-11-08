@@ -28,6 +28,8 @@
 ### papersuggest
 - **Suggested paper for a new page (#409).** The **+** strip highlights the paper the notebook and the course point to, with a short reason on the chip: *Like the last 5 pages* (a run of one paper), *Like most of the last 6 pages*, *Alternating, like the last pages* (ruled, grid, ruled, grid), *Usual for Analysis* (what was added while that class was in progress, kept on this device), *Usual in this notebook*. If the suggested paper is not among the usual chips it takes the place of the weakest one; the same-paper chip and the slide chip stay. It never adds anything by itself and never replaces your choice. New setting *Suggest a paper for new pages* (Pages), on by default.
 - **Code.** Pure, Node-tested ranker `src/model/paper-suggest.ts` (no `obsidian` import): a list of candidates with a score and a structured reason, with an `extra` input so another feature (a profile paper, score `PROFILE_SCORE`) outranks history. The course habit is a bounded per-device value in local storage. No format change; notebooks are only read. English and Italian.
+### markedview
+- **Marked pages only in the page navigator (#419).** A flag button in the panel header switches between all pages and *Marked pages only*: pages with a bookmark, a global bookmark, a marker (gap, question, homework, importance), ink in a colour with a meaning, an open checkbox or a page tag. Each page keeps its number and shows why it is marked; a menu picks which kinds count; works in thumbnails, the large layout and the compact list; an empty result says so quietly. The choice is remembered per notebook on this device (bounded local storage). Read-only: no format change; long-press help in English and Italian.
 
 ## 0.24.0 — 2026-11-08
 

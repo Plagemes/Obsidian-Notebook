@@ -4834,6 +4834,28 @@ export const en = {
 	"paperSuggest.notebook": "Usual in this notebook",
 	"paperSuggest.profile": "Your profile paper",
 	"paperSuggest.suggested": "Suggested: {reason}",
+	// 0.25 markedview
+	"navMarked.button": "Marked pages",
+	"navMarked.menuAll": "All pages",
+	"navMarked.menuOnly": "Marked pages only",
+	"navMarked.kindsHeading": "Count as marked",
+	"navMarked.kind.bookmark": "Bookmarks",
+	"navMarked.kind.global": "Global bookmarks",
+	"navMarked.kind.marker": "Markers and questions",
+	"navMarked.kind.meaning": "Colour meanings",
+	"navMarked.kind.task": "Open checkboxes",
+	"navMarked.kind.tag": "Page tags",
+	"navMarked.why.bookmark": "Bookmark",
+	"navMarked.why.global": "Global bookmark",
+	"navMarked.why.marker": "Marker",
+	"navMarked.why.meaning": "Colour",
+	"navMarked.why.task": "{n} open",
+	"navMarked.why.tag": "Tags",
+	"navMarked.barAll": "Marked pages only",
+	"navMarked.bar": "Marked pages only: {kinds}",
+	"navMarked.clear": "Show all pages",
+	"navMarked.empty": "Nothing marked here yet.",
+	"help.navMarked": "Show only the pages you marked: bookmarks, markers and questions, colours with a meaning, open checkboxes and page tags. Each page keeps its number and shows why it is marked. Choose which kinds count in the menu.",
 } as const;
 
 export type MessageKey = keyof typeof en;

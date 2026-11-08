@@ -164,6 +164,16 @@ export class BookmarksService {
 		return this.deps.store.find(ref, this.pathHolds) !== null;
 	}
 
+	/** 0.25 (#419): the ids of the pages of the notebook in view that have a global bookmark (read-only; used by the navigator's marked-pages filter). */
+	bookmarkedPageIds(view: BookmarksViewApi): Set<string> {
+		const out = new Set<string>();
+		for (const id of view.pageIds()) {
+			const ref = this.ref(view, id);
+			if (ref && this.deps.store.find(ref, this.pathHolds) !== null) out.add(id);
+		}
+		return out;
+	}
+
 	/** Bookmarks the page in view, or removes its bookmark when it has one. */
 	async toggle(view: BookmarksViewApi): Promise<void> {
 		const cur = view.current();
