@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### palettectx
+- **Actions ordered by context (#424).** Obsidian does not let a plugin reorder its own command palette, so the plugin's *All actions* sheet does it: it opens with a short *For this page* section (up to five actions that fit what is in front of you: the selection, a PDF page, the lasso in hand, a lecture, the side pane, presentation mode), and the search ranks matching actions by designed importance, recent use and fit to the context. Library-level and diagnostic actions step back while a notebook is open. Commands that act on a notebook were already hidden from Obsidian's palette when no notebook view is active (`checkCallback`); that is unchanged. No format change. English and Italian.
+
 ## 0.23.0 — 2026-11-08
 
 Eight features: saved views, export of the written area or the selection, dimensional analysis of formulas, balancing of chemical reactions, an automatic formula sheet, a welcome-back card, notebooks ordered by the active term and clean-up of pen hooks and stray dots. The notebook format moves to version 21 (saved views): the migration from version 20 is automatic, and 0.22 and older open a v21 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

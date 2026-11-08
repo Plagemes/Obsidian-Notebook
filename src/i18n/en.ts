@@ -1378,6 +1378,8 @@ export const en = {
 	"ui.group.zettel": "Zettelkasten",
 	"ui.group.integration": "Obsidian",
 	"ui.group.dev": "Diagnostics",
+	// 0.24 palettectx
+	"ui.group.here": "For this page",
 	"ui.group.recent": "Recent",
 	"ui.group.results": "Results",
 	"ui.sheet.title": "All actions",

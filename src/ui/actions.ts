@@ -88,6 +88,8 @@ export interface UiContext {
 	states?: { open: boolean };
 	/** 0.18 (#86): the comments panel is open, how many comments the notebook has (open ones apart), and a rectangle is being drawn for a new one. Optional (absent: none). */
 	comments?: { panel: boolean; total: number; open: number; drawing?: boolean };
+	/** 0.24 (#424): presentation mode is on. Optional (off when absent). */
+	presenting?: boolean;
 	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
 	openNotebooks?: number;
 	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */

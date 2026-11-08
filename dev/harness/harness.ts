@@ -105,6 +105,7 @@ import { checkLecthead, lectheadShot } from "./lecthead-check";
 import { checkTermOrder, installTermTimetable } from "./termorder-check";
 import { checkPillstack, pillstackShot } from "./pillstack-check";
 import { checkDimcheck, dimcheckShot, type DimcheckState } from "./dimcheck-check";
+import { checkPalettectx, palettectxShot } from "./palettectx-check";
 import { checkWelcomeback, welcomebackShot } from "./welcomeback-check";
 import { checkSymbols } from "./symbols-check";
 import { checkBackups } from "./backups-check";
@@ -2292,6 +2293,8 @@ Object.assign(harnessApi, { checkPillstack: () => checkPillstack({ get view() { 
 
 // 0.23 dimcheck (#293): the units hint of the equation editor (doc=dimcheck, dimcheck-check.ts).
 Object.assign(harnessApi, { checkDimcheck: () => checkDimcheck({ get view() { return view; }, open, frames, errors, notices }), dimcheckShot: (state: DimcheckState) => dimcheckShot({ get view() { return view; }, open, frames, errors, notices }, state) });
+// 0.24 palettectx (#424): the context-ordered All actions sheet (doc=palettectx, palettectx-check.ts).
+Object.assign(harnessApi, { checkPalettectx: () => checkPalettectx({ get view() { return view; }, open, frames, penStroke, errors, notices }), palettectxShot: () => palettectxShot({ get view() { return view; }, open, frames, penStroke, errors, notices }) });
 // 0.23 termorder: the Library's "Active term" order (doc=termorder, termorder-check.ts).
 harnessApi.checkTermOrder = async () => {
 	try {

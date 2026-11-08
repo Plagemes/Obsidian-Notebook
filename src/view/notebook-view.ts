@@ -3708,6 +3708,7 @@ export class NotebookView extends FileView {
 			} : null,
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
 			lecture: this.lectureMode?.on ?? false,
+			presenting: this.presenting,
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false, selectText: this.pdfText?.active ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },

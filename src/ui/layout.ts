@@ -3,6 +3,7 @@
 // "All actions" and page sheets are organised. Deterministic and pure (no DOM, no 'obsidian'): unit-tested.
 import { ACTIONS, activeContexts, GROUP_ORDER, isRelevant, type ActionDef, type ActionGroup, type ContextKind, type Surface, type ToolId, type UiContext } from "./actions";
 import { adaptBoost, NO_ADAPT, pageVariant, selectionVariant, suggestedTools, type LayoutAdapt } from "./adapt";
+import { contextScore, forThisPage } from "./context-rank";
 import { usageBoost, type UsageMap } from "./usage";
 
 /** Sizes (CSS px) the toolbar is laid out with. They match styles.css (40 px buttons, 4 px gaps) at the normal toolbar size. */
@@ -146,7 +147,7 @@ export function buildLayout(c: UiContext, width: number, usage: UsageMap, now: n
 	return { ...plan, quick, context, suggested: [...suggestedTools(c, adapt)] };
 }
 
-export type SectionId = ActionGroup | "recent" | "results";
+export type SectionId = ActionGroup | "here" | "recent" | "results";
 
 export interface SheetSection {
 	id: SectionId;
@@ -187,7 +188,7 @@ export function buildSheet(c: UiContext, opts: SheetOptions, actions: readonly A
 				const text = fold(`${opts.label(a)} ${a.keywords ?? ""} ${opts.groupLabel?.(a.group) ?? ""} ${a.id.replace(/-/g, " ")}`);
 				if (!words.every((w) => text.includes(w))) return null;
 				const starts = fold(opts.label(a)).startsWith(words[0]!) ? 1000 : 0;
-				return { a, i, s: starts + score(a, opts.usage, opts.now) };
+				return { a, i, s: starts + contextScore(a, c, opts.usage, opts.now) };
 			})
 			.filter((x): x is { a: ActionDef; i: number; s: number } => x !== null)
 			.sort((x, y) => y.s - x.s || x.i - y.i)
@@ -197,8 +198,11 @@ export function buildSheet(c: UiContext, opts: SheetOptions, actions: readonly A
 	const sections: SheetSection[] = [];
 	if (opts.kind === "all") {
 		const visible = opts.visible ?? new Set<string>();
+		// 0.24 (#424): what suits the view in front of the person comes first.
+		const here = forThisPage(pool, c, opts.usage, opts.now, visible);
+		if (here.length) sections.push({ id: "here", actions: here });
 		const recent = pool
-			.filter((a) => !visible.has(a.id) && !a.choices && usageBoost(opts.usage[a.id], opts.now) > 0)
+			.filter((a) => !visible.has(a.id) && !a.choices && !here.includes(a) && usageBoost(opts.usage[a.id], opts.now) > 0)
 			.sort((x, y) => usageBoost(opts.usage[y.id], opts.now) - usageBoost(opts.usage[x.id], opts.now))
 			.slice(0, RECENT_COUNT);
 		if (recent.length) sections.push({ id: "recent", actions: recent });

@@ -3629,3 +3629,22 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 | Clean up strokes: one undo step, keeps ids, order, groups, nib; refuses a locked page; selection follows | yes | `tests/hook-clean.test.ts` (History: execute, undo, redo, locked page); harness `doc=hookclean` | | | |
 | Selection action, palette command and sheet entry (`selection-cleanup`) | yes | registry tests (`tests/ui-registry.test.ts`); harness `doc=hookclean` | | | |
 | Setting *Trim hooks as you write* (off by default): the stroke is committed as written and the trim is its own undo step (Undo gives the written stroke back, a second Undo removes it); stricter limits than the manual clean-up (near reversal, very short hook), so letter tails stay; live input and rendering untouched | yes | `tests/hook-clean.test.ts` (review V2: raw stroke kept in the history, page times, locked page, limits), `tests/commit-trim.test.ts` (the pen-up wiring the view calls: trim step after the commit, locked page, late side-button take-back of both steps, partial take-back), the first-Undo notice and the real pen path: harness `doc=hookclean`; settings read: `tests/hook-clean-settings.test.ts`; golden hashes unchanged: `tests/pens-golden.test.ts`; harness `doc=hookclean` | | yes | needs real pen data to judge |
+
+### 0.24 — palettectx: actions ordered by context (roadmap #424; steps 2480-2499)
+
+Implemented, not verified on hardware. Obsidian's own command palette keeps its order (a plugin cannot change it); the plugin's *All actions* sheet (the grid button at the end of the toolbar) is what is ordered.
+
+2480. **Plain page.** Open a notebook on a plain page with the pen: the sheet opens with *Recent* (if any) and the groups; there is no *For this page* section.
+2481. **Eraser.** Pick the lasso and open the sheet: it starts with *For this page*, listing selection actions such as *Select by style* and *Select same tool*.
+2482. **Selection.** Select some ink with the lasso: the section lists selection actions (those already in the selection bar are not repeated).
+2483. **PDF.** On a PDF page the section offers reading actions (select text, dimming, crop); on an ordinary page it does not.
+2484. **Lecture and side pane.** During a lecture the lecture actions come first; with the PDF side pane open the side-by-side actions do.
+2485. **Presentation.** While presenting, navigation actions and *Present* come first.
+2486. **Search.** Type a word that matches several actions: the ones that fit the current context come first, then recently used ones; the same word on another page type orders differently.
+2487. **Rows work.** Every row in *For this page* runs its action; a toggle that is already on, a disabled action and a locked-page action are not listed.
+2488. **Obsidian palette.** With no notebook open, the notebook commands (draw tools, page actions) are absent from Obsidian's command palette; with one open they appear.
+2489. **Italian, light, dark, phone.** The section reads *Per questa pagina* in Italian and fits a phone's bottom sheet.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Context ordering of the *All actions* sheet (#424): *For this page* section and context-aware search ranking (selection, PDF page, tool in hand, lecture, side pane, presentation) on top of priority and recent use | yes | boosts per context, section content, search order, no repeats, disabled/visible left out, labels: `tests/context-rank.test.ts`; sheet at tablet and phone widths: harness `doc=palettectx` | | | Obsidian's own palette order cannot be changed by a plugin |
