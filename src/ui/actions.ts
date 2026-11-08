@@ -548,6 +548,7 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// --- registered by other modules (listed so that every command has a documented place).
 	external("insert-embed", "command.embedInsert", "picture-in-picture", "integration", "integration/index.ts"),
+	external("insert-gallery", "command.galleryInsert", "layout-grid", "integration", "integration/gallery.ts"),
 	external("restore-version", "command.restore", "history", "integration", "integration/index.ts"),
 	// wave 0.8 (388): lists the old #pN links of the notes, then rewrites the ones the user accepts.
 	external("update-page-links", "command.updateLinks", "link-2", "integration", "integration/index.ts", ["notebook", "palette"]),

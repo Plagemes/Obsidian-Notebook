@@ -23,7 +23,7 @@ export class PageThumbs {
 	private readonly cache = new Map<string, string>();
 	private readonly failed = new Set<string>();
 	private readonly docs = new Map<string, NotebookDocument>();
-	private readonly queue: Array<{ el: HTMLElement; key: string; path: string; mtime: number; pageId: string | undefined; width: number }> = [];
+	private readonly queue: Array<{ el: HTMLElement; key: string; path: string; mtime: number; pageId: string | undefined; index: number | undefined; width: number }> = [];
 	private running = false;
 
 	constructor(private readonly deps: PageThumbDeps, private readonly mtimeOf: (path: string) => number) {}
@@ -34,12 +34,15 @@ export class PageThumbs {
 		if (!path) return;
 		const pageId = el.dataset.pageThumbId || undefined;
 		const width = Number(el.dataset.pageThumbWidth) || 200;
+		// 0.26: `data-page-thumb-index` (0-based) is where to look when the page id is gone or not known.
+		const raw = el.dataset.pageThumbIndex;
+		const index = raw !== undefined && /^[0-9]{1,6}$/.test(raw) ? Number(raw) : undefined;
 		const mtime = this.mtimeOf(path);
-		const key = `${path}@${mtime}#${pageId ?? "first"}@${width}`;
+		const key = `${path}@${mtime}#${pageId ?? "first"}${index === undefined ? "" : `~${index}`}@${width}`;
 		const url = this.cache.get(key);
 		if (url) return show(el, url);
 		if (this.failed.has(key)) return;
-		this.queue.push({ el, key, path, mtime, pageId, width });
+		this.queue.push({ el, key, path, mtime, pageId, index, width });
 		void this.run();
 	}
 
@@ -64,7 +67,7 @@ export class PageThumbs {
 					continue;
 				}
 				try {
-					const url = await this.draw(job.path, job.mtime, job.pageId, job.width);
+					const url = await this.draw(job.path, job.mtime, job.pageId, job.index, job.width);
 					if (url) {
 						this.remember(job.key, url);
 						if (job.el.isConnected) show(job.el, url);
@@ -88,7 +91,7 @@ export class PageThumbs {
 		}
 	}
 
-	private async draw(path: string, mtime: number, pageId: string | undefined, width: number): Promise<string> {
+	private async draw(path: string, mtime: number, pageId: string | undefined, index: number | undefined, width: number): Promise<string> {
 		const file = this.deps.fileOf(path);
 		if (!file) return "";
 		const docKey = `${path}@${mtime}`;
@@ -102,7 +105,7 @@ export class PageThumbs {
 				if (oldest !== undefined) this.docs.delete(oldest);
 			}
 		}
-		const page = (pageId ? doc.pages.find((p) => p.id === pageId) : undefined) ?? doc.pages[0];
+		const page = (pageId ? doc.pages.find((p) => p.id === pageId) : undefined) ?? (index !== undefined ? doc.pages[index] : undefined) ?? doc.pages[0];
 		if (!page) return "";
 		const drawBackground = await this.deps.background?.(doc, page, width);
 		return renderThumbnail(page, width, { drawBackground: drawBackground ?? undefined, mime: "image/jpeg", quality: 0.82 });

@@ -4137,3 +4137,21 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 |---|---|---|---|---|---|
 | Pure usage ranking, ΔE dedupe, dominant colours (median cut + k-means), cache | yes | `tests/context-palette.test.ts` | | | |
 | *On this page* and *From the slide* rows in the colour picker, meaning labels, long-press help, no format change | yes | harness `doc=ctxpalette` (PDF page) and `doc=ctxpalettew` (written page) | | | the rows follow the page the picker was opened on (not a page turned to later) |
+
+### 0.26 — gallery: dynamic gallery block in notes (roadmap #421; steps 2860-2879)
+2860. **Insert.** In a Markdown note run "Insert gallery block": pick a page tag, a course (only offered when the timetable has classes), a marker, bookmarked, how many and the order. The preview shows the block; Insert puts it at the cursor on its own lines.
+2861. **Reading view.** The block shows a grid of page thumbnails, each with the notebook name and page number. On a tablet several columns, on a phone two.
+2862. **Live Preview.** Move the cursor out of the block: the same grid; move it into the block: the plain lines, editable.
+2863. **Tap.** Tap a thumbnail: the notebook opens at that page (a page picked by bookmark or marker still opens the right page after pages moved).
+2864. **Conditions.** Try `tag: #x`, `bookmarked` (notebook bookmarks and global bookmarks), `course: <name>` (a course of the timetable), `notebook: <path or name or folder>` (one notebook: its pages in order), `marked: question|homework` (any marker of those kinds, also resolved ones), `limit: 6`, `sort: title`. Several conditions must all hold.
+2865. **Refresh.** With the note open, add a tag to a page in a notebook: within about a second after you stop writing the grid shows it.
+2866. **Empty and errors.** A query with no match shows a quiet "No pages match" card; a misspelled key or value shows one readable red line naming it.
+2867. **Writes nothing.** Reading view and Live Preview never change the note or any notebook file.
+2868. **Looks.** Light and dark theme, phone and tablet width, Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Query parsing, page selection, marker conditions (pure) | yes | `tests/gallery-query.test.ts` | | | |
+| Gallery block grid, tap to open, empty and error states, refresh | yes | harness `doc=gallery` | | | |
+| Thumbnails through the shared page thumbnail cache | yes | harness `doc=gallery` | | | |
+| Command "Insert gallery block" with builder | yes | harness `doc=gallery` | | | |
