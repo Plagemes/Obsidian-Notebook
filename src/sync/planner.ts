@@ -50,8 +50,11 @@ export type SyncAction =
 	| { kind: "conflict"; path: string; remote: RemoteMeta; size: number }
 	| { kind: "forget"; path: string };
 
-/** What happens to deletions this run: guarded (stop and ask above the limits), allowed (confirmed), or restored instead. */
-export type DeletionPolicy = "guard" | "allow" | "restore";
+/**
+ * What happens to deletions this run: guarded (stop and ask above the limits), allowed (confirmed), restored instead, or
+ * deferred (review W22 S7: the runs at start-up and on leaving never delete; the next periodic or manual run does).
+ */
+export type DeletionPolicy = "guard" | "allow" | "restore" | "defer";
 export type LargeRule = "ask" | "skip";
 
 export interface PlanOptions {
@@ -66,6 +69,10 @@ export interface PlanOptions {
 	declinedLarge?: ReadonlySet<string>;
 	/** Deletions the user confirmed (paths): never held back by the guard, and not counted by it. */
 	allowedDeletes?: ReadonlySet<string>;
+	/** The guard's absolute limit (default MASS_DELETE_MAX; automatic runs use MASS_DELETE_AUTO_MAX). */
+	massDeleteMax?: number;
+	/** Review W22 S16: files larger than this (bytes) are never transferred on this device, even when approved; 0: no cap. */
+	hardMaxBytes?: number;
 }
 
 export interface Plan {
@@ -77,18 +84,24 @@ export interface Plan {
 	askLarge: SyncAction[];
 	/** Large files skipped by the rule. */
 	skippedLarge: SyncAction[];
+	/** Files above the device's hard cap (`hardMaxBytes`): skipped, whatever the user approved. */
+	tooLarge: SyncAction[];
+	/** Deletions left for a later run (`deletions: "defer"`). */
+	deferred: SyncAction[];
 	/** Paths that have a base (the files tracked), for the guard's percentage. */
 	tracked: number;
 }
 
 /** The mass-deletion guard: more than this many deletions in one run... */
 export const MASS_DELETE_MAX = 20;
+/** ...or, for an automatic run (review W22 S7), more than this many. */
+export const MASS_DELETE_AUTO_MAX = 10;
 /** ...or at least MASS_DELETE_MIN deletions that are more than this share of the tracked files, stop and ask. */
 export const MASS_DELETE_SHARE = 0.3;
 export const MASS_DELETE_MIN = 3;
 
-export function massDeletion(deletions: number, tracked: number): boolean {
-	if (deletions > MASS_DELETE_MAX) return true;
+export function massDeletion(deletions: number, tracked: number, max = MASS_DELETE_MAX): boolean {
+	if (deletions > max) return true;
 	return deletions >= MASS_DELETE_MIN && deletions > tracked * MASS_DELETE_SHARE;
 }
 
@@ -151,18 +164,31 @@ export function plan(facts: readonly PathFacts[], o: PlanOptions): Plan {
 	}
 	const isDelete = (a: SyncAction) => a.kind === "delete-local" || a.kind === "delete-remote";
 	let heldDeletes: SyncAction[] = [];
+	let deferred: SyncAction[] = [];
 	const allowed = o.allowedDeletes ?? new Set<string>();
 	const unconfirmed = (a: SyncAction) => isDelete(a) && !allowed.has(a.path);
 	const deletes = actions.filter(unconfirmed);
 	if (deletes.length > 0) {
 		if (o.deletions === "restore") actions = actions.map((a) => (unconfirmed(a) ? restoreOf(a, byPath) : a));
-		else if (o.deletions === "guard" && massDeletion(deletes.length, tracked)) {
+		else if (o.deletions === "defer") {
+			deferred = deletes;
+			actions = actions.filter((a) => !unconfirmed(a));
+		} else if (o.deletions === "guard" && massDeletion(deletes.length, tracked, o.massDeleteMax)) {
 			heldDeletes = deletes;
 			actions = actions.filter((a) => !unconfirmed(a));
 		}
 	}
 	const askLarge: SyncAction[] = [];
 	const skippedLarge: SyncAction[] = [];
+	const tooLarge: SyncAction[] = [];
+	const cap = o.hardMaxBytes ?? 0;
+	if (cap > 0) {
+		actions = actions.filter((a) => {
+			if (transferSize(a) <= cap) return true;
+			tooLarge.push(a);
+			return false;
+		});
+	}
 	if (o.largeBytes > 0) {
 		actions = actions.filter((a) => {
 			if (transferSize(a) <= o.largeBytes || o.approvedLarge.has(a.path)) return true;
@@ -171,5 +197,5 @@ export function plan(facts: readonly PathFacts[], o: PlanOptions): Plan {
 		});
 	}
 	actions.sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-	return { actions, heldDeletes, askLarge, skippedLarge, tracked };
+	return { actions, heldDeletes, askLarge, skippedLarge, tooLarge, deferred, tracked };
 }

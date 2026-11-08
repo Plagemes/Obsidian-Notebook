@@ -28,9 +28,27 @@ export interface RemoteEntry {
 	hashAlg?: string;
 }
 
+/**
+ * Review W22 S3: a revision another device wrote between the provider's check and its write, which the write replaced (Google
+ * Drive has no conditional write). The engine keeps it as a conflicted copy, so nothing is overwritten silently.
+ */
+export interface DisplacedRevision {
+	rev: string;
+	data: ArrayBuffer;
+}
+
+/** What `upload` returns: the new entry, plus any revision the write replaced without being able to refuse it. */
+export interface UploadedEntry extends RemoteEntry {
+	displaced?: DisplacedRevision[];
+}
+
 /** Result of a delta listing: everything that changed since `cursor`, or a full listing when `cursor` was undefined. */
 export interface RemoteChanges {
-	/** Files present or changed. A full listing returns every file under the root. */
+	/**
+	 * Files present or changed. A full listing returns every file under the root.
+	 * Review W22: two files with one path (Google Drive allows it) are BOTH listed, whenever either appears, so the engine can keep
+	 * both; a name the contract cannot carry (a "/" inside a Drive name) comes with "\" in its place, and the engine skips it.
+	 */
 	upserts: RemoteEntry[];
 	/** Paths (relative to the root) of files deleted or moved away since the cursor. Empty on a full listing. */
 	deletions: string[];
@@ -82,7 +100,7 @@ export interface CloudProvider {
 	 * With `ifRev`, replaces only if the remote revision still equals it, otherwise throws RemoteConflictError.
 	 * With `ifRev === null`, creates only if no file exists at `path`, otherwise throws RemoteConflictError.
 	 */
-	upload(path: string, data: ArrayBuffer, ifRev: string | null | undefined, signal?: AbortSignal): Promise<RemoteEntry>;
+	upload(path: string, data: ArrayBuffer, ifRev: string | null | undefined, signal?: AbortSignal): Promise<UploadedEntry>;
 	/** Moves the file to the remote trash. With `ifRev`, only if unchanged (else RemoteConflictError). */
 	remove(id: string, ifRev?: string, signal?: AbortSignal): Promise<void>;
 }

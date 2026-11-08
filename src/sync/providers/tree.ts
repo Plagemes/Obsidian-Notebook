@@ -8,6 +8,11 @@
  * When the index cannot answer safely it asks for a full listing instead (`needFull`): the first delta after a restart
  * (the index lives in memory only), and any change to a folder already inside the root (rename, move, delete), because its
  * descendants' paths change without being listed. A full listing is always correct; it only costs more requests.
+ *
+ * Review W22: two files with one path (Google Drive allows it) are all kept in the index and all listed whenever any of them
+ * is, so the engine keeps both instead of seeing only the newest (S4); a path still held by another file is never reported
+ * deleted. A name the contract cannot carry (a "/" inside a Drive name) is listed with "\" in its place, which the engine
+ * skips with a note, instead of being dropped (which read as a deletion, S10).
  * Pure: no `obsidian` import.
  */
 import { TransientRemoteError, type RemoteEntry } from "../provider-types";
@@ -47,6 +52,14 @@ export function validName(name: string | undefined): name is string {
 	return !!name && !name.includes("/") && name !== "." && name !== "..";
 }
 
+/**
+ * The path segment of a listed name: undefined only when there is none. A "/" inside the name (allowed on Drive) becomes "\",
+ * which no contract path may contain: the engine then skips that file with a note (never a deletion of its old path).
+ */
+export function segmentOf(name: string | undefined): string | undefined {
+	return name ? name.replace(/\//g, "\\") : undefined;
+}
+
 /** Splits a contract path ("a/b/c.notebook") into segments; throws for a path the contract does not allow. */
 export function splitPath(path: string): string[] {
 	const parts = path.split("/");
@@ -63,6 +76,8 @@ export class TreeIndex {
 	readonly folders = new Map<string, { name: string; parent: string | undefined }>();
 	/** Files under the root: id → path. */
 	readonly files = new Map<string, string>();
+	/** What the last listing said about each file (to list every file that shares a path, review W22 S4). */
+	private readonly entries = new Map<string, Omit<RemoteEntry, "path">>();
 	/** True once a full listing filled the index in this session. */
 	complete = false;
 
@@ -98,9 +113,14 @@ export class TreeIndex {
 	}
 
 	/** Records an item the provider just wrote (upload, folder create, remove). */
-	noteFile(id: string, path: string | undefined): void {
-		if (path === undefined) this.files.delete(id);
-		else this.files.set(id, path);
+	noteFile(id: string, path: string | undefined, entry?: Omit<RemoteEntry, "path">): void {
+		if (path === undefined) {
+			this.files.delete(id);
+			this.entries.delete(id);
+			return;
+		}
+		this.files.set(id, path);
+		if (entry) this.entries.set(id, { ...entry });
 	}
 
 	noteFolder(id: string, name: string, parent: string): void {
@@ -109,27 +129,42 @@ export class TreeIndex {
 
 	/**
 	 * Rebuilds the index from a full listing (every folder and file reachable under the root) and returns the files.
-	 * Two files at the same path (Drive allows it) keep only the newest.
+	 * Two files at the same path (Drive allows it) are both returned (review W22 S4).
 	 */
 	buildFull(items: TreeItem[]): RemoteEntry[] {
 		this.folders.clear();
 		this.files.clear();
-		for (const it of items) if (it.folder && !it.removed && it.id !== this.rootId && validName(it.name)) this.folders.set(it.id, { name: it.name, parent: it.parent });
-		// A listing of the whole drive (OneDrive's fallback) also has folders outside the root: keep only the root's.
-		for (const id of [...this.folders.keys()]) if (this.folderPath(id) === undefined) this.folders.delete(id);
-		const byPath = new Map<string, RemoteEntry & { id: string }>();
+		this.entries.clear();
 		for (const it of items) {
-			if (it.folder || it.removed || !it.entry || !validName(it.name)) continue;
+			const seg = segmentOf(it.name);
+			if (it.folder && !it.removed && it.id !== this.rootId && seg !== undefined) this.folders.set(it.id, { name: seg, parent: it.parent });
+		}
+		// A listing of more than the root also has folders outside it: keep only the root's.
+		for (const id of [...this.folders.keys()]) if (this.folderPath(id) === undefined) this.folders.delete(id);
+		const out = new Map<string, RemoteEntry>();
+		for (const it of items) {
+			const seg = segmentOf(it.name);
+			if (it.folder || it.removed || !it.entry || seg === undefined) continue;
 			const dir = this.folderPath(it.parent);
 			if (dir === undefined) continue;
-			const path = joinPath(dir, it.name);
-			const prev = byPath.get(path);
-			if (prev && prev.mtime >= it.entry.mtime) continue;
-			byPath.set(path, { ...it.entry, path });
+			const path = joinPath(dir, seg);
+			out.set(it.id, { ...it.entry, path });
+			this.files.set(it.id, path);
+			this.entries.set(it.id, it.entry);
 		}
-		for (const e of byPath.values()) this.files.set(e.id, e.path);
 		this.complete = true;
-		return [...byPath.values()];
+		return [...out.values()];
+	}
+
+	/** File ids by path (the reverse of `files`). */
+	private idsByPath(): Map<string, string[]> {
+		const out = new Map<string, string[]>();
+		for (const [id, p] of this.files) {
+			const list = out.get(p);
+			if (list) list.push(id);
+			else out.set(p, [id]);
+		}
+		return out;
 	}
 
 	/** Applies a delta (see the module comment). `lookup` fetches a parent folder the index does not know. */
@@ -150,7 +185,8 @@ export class TreeIndex {
 			if (known !== undefined) return known;
 			if (outside.has(id) || this.folders.has(id)) return undefined;
 			const f = await lookup(id);
-			if (!f || !validName(f.name)) {
+			const seg = segmentOf(f?.name);
+			if (!f || seg === undefined) {
 				outside.add(id);
 				return undefined;
 			}
@@ -159,8 +195,8 @@ export class TreeIndex {
 				outside.add(id);
 				return undefined;
 			}
-			this.folders.set(id, { name: f.name, parent: f.parent });
-			return joinPath(dir, f.name);
+			this.folders.set(id, { name: seg, parent: f.parent });
+			return joinPath(dir, seg);
 		};
 
 		for (const it of latest.values()) {
@@ -170,35 +206,53 @@ export class TreeIndex {
 				continue;
 			}
 			const known = this.folders.get(it.id);
+			const seg = segmentOf(it.name);
 			if (known) {
-				if (it.removed || known.name !== it.name || known.parent !== it.parent) return { ...none, needFull: true };
+				if (it.removed || known.name !== seg || known.parent !== it.parent) return { ...none, needFull: true };
 				continue;
 			}
-			if (it.removed || !validName(it.name)) continue;
+			if (it.removed || seg === undefined) continue;
 			const dir = await resolve(it.parent);
-			if (dir !== undefined) this.folders.set(it.id, { name: it.name, parent: it.parent });
+			if (dir !== undefined) this.folders.set(it.id, { name: seg, parent: it.parent });
 		}
 
 		const upserts = new Map<string, RemoteEntry>();
 		const deletions = new Set<string>();
+		const touched = new Set<string>();
 		for (const it of latest.values()) {
 			if (it.folder) continue;
 			const old = this.files.get(it.id);
-			const dir = it.removed || !it.entry || !validName(it.name) ? undefined : await resolve(it.parent);
-			if (dir === undefined || !it.entry || !it.name) {
+			const seg = it.removed || !it.entry ? undefined : segmentOf(it.name);
+			const dir = seg === undefined ? undefined : await resolve(it.parent);
+			if (dir === undefined || seg === undefined || !it.entry) {
 				if (old !== undefined) {
 					deletions.add(old);
 					this.files.delete(it.id);
+					this.entries.delete(it.id);
 				}
 				continue;
 			}
-			const path = joinPath(dir, it.name);
+			const path = joinPath(dir, seg);
 			if (old !== undefined && old !== path) deletions.add(old);
 			this.files.set(it.id, path);
-			const prev = upserts.get(path);
-			if (!prev || prev.mtime <= it.entry.mtime) upserts.set(path, { ...it.entry, path });
+			this.entries.set(it.id, it.entry);
+			upserts.set(it.id, { ...it.entry, path });
+			touched.add(path);
 		}
-		for (const p of upserts.keys()) deletions.delete(p);
+		// Review W22 S4: a path another file still holds is not deleted (that file is listed instead), and every file that shares a
+		// listed path is listed with it, so the engine sees them all.
+		const byPath = this.idsByPath();
+		for (const p of deletions) {
+			if (!byPath.has(p)) continue;
+			deletions.delete(p);
+			touched.add(p);
+		}
+		for (const p of touched) {
+			for (const id of byPath.get(p) ?? []) {
+				const e = this.entries.get(id);
+				if (e && !upserts.has(id)) upserts.set(id, { ...e, path: p });
+			}
+		}
 		return { upserts: [...upserts.values()], deletions: [...deletions], needFull: false };
 	}
 }

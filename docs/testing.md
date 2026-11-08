@@ -3304,7 +3304,46 @@ Cloud connector, part 2 (roadmap #126): the two providers and the device-code si
 | Device-code sign-in (RFC 8628) for Google and Microsoft: code and address, Copy code, Open sign-in page, countdown, `interval` and `slow_down`, denied / expired / refused client / network, Cancel; then the sync folder `Notebook sync` found or created and the account label | yes | `tests/sync-device-flow.test.ts`; harness `doc=syncprov` (dialog, refused sign-in, Cancel) | | | not run against the live endpoints; Google needs the client secret of a limited-input client |
 | Tokens: device-local store (`app.saveLocalStorage`), refresh before expiry and after 401, rotation reported via `onAuthChange`, `invalid_grant` → sign in again, Disconnect (Google revokes; Microsoft local only) | yes | `tests/sync-tokens.test.ts` | | | the settings section must store the state on every `onAuthChange` (part 1) |
 | Google Drive provider (`drive.file`): full listing, changes feed with parent walk, moves in/out of the root, multipart and resumable upload (256 KiB chunks, 308), `ifRev` by metadata read, trash, retries | yes | `tests/sync-gdrive.test.ts` | | | `ifRev` race window of one request (Drive has no If-Match); `308` through `requestUrl` not tried on a device; first non-empty delta after a restart is a full listing |
-| OneDrive provider (`Files.ReadWrite`): folder delta with nextLink/deltaLink, deletions, moves out, 410 resync, Business root-delta fallback, simple and session upload (320 KiB fragments, no bearer on fragments), If-Match / conflictBehavior, recycle bin, download URL | yes | `tests/sync-onedrive.test.ts` | | | Business fallback and `deltaExcludeParent` on consumer OneDrive not tried live; moves out of the folder may not appear in a folder delta on consumer OneDrive (then the file stays listed until the next full listing) |
+| OneDrive provider (`Files.ReadWrite`): folder delta with nextLink/deltaLink, deletions, moves out, 410 resync, Business root-delta fallback, simple and session upload (320 KiB fragments, no bearer on fragments), If-Match / conflictBehavior, recycle bin, download URL | yes | `tests/sync-onedrive.test.ts` | | | Business fallback and `deltaExcludeParent` on consumer OneDrive not tried live; moves out of the folder may not appear in a folder delta on consumer OneDrive (then the file stays listed until the next full listing). Superseded by the review W22 rows below (app folder scope, children walk, hash revision) |
+
+### 0.22 — review W22: cloud sync fixes (steps 2240-2259)
+
+Fixes of the wave 0.22 cloud sync review (S1–S16 and the provider switch). Implemented and unit-tested with fakes (no network); not verified on hardware or against the live services. Needs the set-up of the synccore and syncprov steps.
+
+2240. **Loading.** Start Obsidian and tap *Sync now* at once (before the vault has finished loading on a large vault): a notice says cloud sync starts once the vault has loaded; the status says so; a few seconds later *Sync now* works.
+2241. **Never permanent.** With *Files & links > Deleted files* set to *Permanently delete*, delete a synced note on device A and sync both: on device B the note is in the vault's `.trash` folder.
+2242. **Start-up does not delete.** Delete a note on device A, sync A. On B, close and reopen Obsidian (sync on open): the note is still there and the status says one deletion waits; *Sync now* then moves it to `.trash`.
+2243. **Automatic limit.** Delete 12 synced notes on A and sync A; on B wait for the periodic run: it stops and asks (*Delete 12 files?*).
+2244. **Same name twice (Google).** On the Drive website upload a second file with the name of a synced note but other content into `Notebook sync`; sync: the vault has the note and a conflicted copy with the other content; Drive's trash has the extra file.
+2245. **Simultaneous write (Google).** Edit one notebook on two devices offline, then bring both online and sync them within seconds of each other: both versions survive (one as a conflicted copy) on both devices.
+2246. **Rename on OneDrive's website.** Rename a synced file on the OneDrive website (no content change), then edit it in Obsidian and sync: no conflicted copy is made.
+2247. **Names.** Create `bad?.md` on the Drive website: sync shows one notice naming it; it never appears locally and nothing is deleted. Rename a synced file on the web to `CON.md`: the local file stays and goes up again under its old name.
+2248. **Case rename.** Rename `Note.md` to `note.md` in Obsidian (Windows) and sync: the cloud shows `note.md` only; on the other device the file follows.
+2249. **OneDrive app folder.** Sign in to OneDrive again: the consent screen asks only for the app's own folder; the files go to `Apps/<app name>` in OneDrive; the settings say Notebook sees only that folder.
+2250. **OneDrive work account.** Sign in with a work or school account: note whether the sign-in is allowed and whether delta or the children walk is used (slower runs on a large folder).
+2251. **Disconnect.** *Disconnect* during a run: a dialog asks first (Google: with *Also forget the client secret*); after confirming, the run stops and the settings show signed out; signing in again makes a union (nothing deleted).
+2252. **Switch service.** Signed in to Google, choose OneDrive and sign in: Google is disconnected first (gone from <https://myaccount.google.com/connections>).
+2253. **Phone, unknown network.** On a phone whose WebView does not report the network type, with *Wi-Fi only* on: automatic runs wait (status says so); *Sync now* runs with a note.
+2254. **Phone size cap.** On a phone, with *Size cap on phones* at 5 MB, add a 10 MB PDF on the desktop and sync both: the phone skips it with one notice, even after approving large files.
+2255. **Languages and themes.** Italian: the new notices, status lines, skip reasons and the Disconnect dialog are translated; the dialog fits a phone in light and dark.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| S1 ready gate: no trigger (manual included) before layout ready and the metadata cache's first `resolved` (30 s fallback); the start-up run waits for it | yes | `tests/sync-service-w22.test.ts`; harness `doc=synccore` (loading notice, gate) | | | |
+| S2 local sync deletions to Obsidian's `.trash` (`vault.trash(file, false)`), never permanent | yes | `tests/sync-service-w22.test.ts` | | | lint warns `prefer-file-manager-trash-file` (intended; the rule cannot be disabled) |
+| S3 Drive: revisions displaced by our write kept as conflicted copies; a racing trash undone | yes | `tests/sync-gdrive.test.ts`, `tests/sync-review-w22.test.ts` | | | `revisions.list` may be incomplete (then one copy too many) |
+| S4 two cloud files with one name: smallest id followed, others kept as copies then trashed; idempotent creates with `files.generateIds` (409 → read) | yes | `tests/sync-gdrive.test.ts`, `tests/sync-review-w22.test.ts`, `tests/sync-engine.test.ts` | | | |
+| S5 Disconnect cancels and awaits the run before removing the state; controller made before any wait | yes | `tests/sync-service-w22.test.ts` | | | |
+| S6 OneDrive revision = content hash; If-Match with the eTag read just before; same content as the base is not a conflict | yes | `tests/sync-onedrive.test.ts`, `tests/sync-review-w22.test.ts` | | | state files of earlier builds hold eTag revisions: the first run after the update re-reads changed-looking files (no copies, the hash check adopts them) |
+| S7 start-up/leaving runs defer deletions (count in the status); automatic guard limit 10 | yes | `tests/sync-review-w22.test.ts`, `tests/sync-service-w22.test.ts` | | | |
+| S8 conflicted copy outside the scope stays local | yes | `tests/sync-review-w22.test.ts` | | | |
+| S9/S10 names: one rule both sides, skipped with one notice, never a deletion; NFC/case clashes never both written; case-only renames followed | yes | `tests/sync-review-w22.test.ts` | | | |
+| S11 state saved at most every 10 s during a run | yes | `tests/sync-review-w22.test.ts` | | | |
+| S12 Drive web folders invisible to `drive.file` | documented (`docs/cloud-sync.md`) | | | | a move into such a folder reads as a deletion (to `.trash`, recoverable) |
+| S13/S14 OneDrive `Files.ReadWrite.AppFolder`, root = app folder; children walk when the folder delta is refused | yes | `tests/sync-onedrive.test.ts`, `tests/sync-device-flow.test.ts` | | | work or school accounts: docs disagree; not tried live |
+| S15 Drive upload session only on `www.googleapis.com`; addresses stripped from error texts | yes | `tests/sync-gdrive.test.ts`, `tests/sync-review-w22.test.ts` | | | |
+| S16 mobile: unknown network holds automatic runs; *Size cap on phones* (5–500 MB, default 50) | yes | `tests/sync-service-w22.test.ts`, `tests/sync-review-w22.test.ts` | | | |
+| Provider switch disconnects the previous account; Disconnect dialog can forget Google's secret | yes | `tests/sync-service-w22.test.ts`; harness `doc=synccore` (dialog, Cancel) | | | |
 
 ### 0.22 — colormeaning: colours with meaning (steps 2120-2139)
 

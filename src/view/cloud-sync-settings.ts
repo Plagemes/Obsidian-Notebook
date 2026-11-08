@@ -7,7 +7,9 @@ import type { ButtonComponent, Setting } from "obsidian";
 import { t } from "../i18n";
 import type { MessageKey } from "../i18n/en";
 import type { LogEntry, LogKind } from "../sync/sync-memory";
-import type { CloudSyncService } from "../sync/sync-service";
+import { needsClientSecret } from "../sync/settings";
+import { providerName, type CloudSyncService } from "../sync/sync-service";
+import { CloudDisconnectModal } from "./cloud-sync-modals";
 import { setDestructive } from "../ui/destructive";
 
 /** The account row: who is signed in and to which folder; "Sign in", or "Change folder" and "Disconnect". */
@@ -23,7 +25,13 @@ export function renderCloudAccountRow(setting: Setting, service: CloudSyncServic
 			return;
 		}
 		if (auth.chooseRoot) setting.addButton((b) => b.setButtonText(t("cloudSync.account.chooseFolder")).onClick(() => void service.chooseRoot()));
-		setting.addButton((b) => setDestructive(b.setButtonText(t("cloudSync.account.disconnect"))).onClick(() => void service.disconnect()));
+		setting.addButton((b) =>
+			setDestructive(b.setButtonText(t("cloudSync.account.disconnect"))).onClick(() => {
+				// Review W22: confirm first; Google's secret can be forgotten too (unchecked by default).
+				const hasSecret = needsClientSecret(p) && service.clientSecret(p) !== "";
+				new CloudDisconnectModal(service.app(), providerName(p), hasSecret, (o) => void service.disconnect(o)).open();
+			}),
+		);
 	};
 	update();
 	return service.onChange(update);
@@ -87,6 +95,8 @@ const SKIP_REASON: Record<string, MessageKey> = {
 	changed: "cloudSync.skip.changed",
 	unsaved: "cloudSync.skip.unsaved",
 	large: "cloudSync.skip.large",
+	name: "cloudSync.skip.name",
+	"too-large": "cloudSync.skip.tooLarge",
 };
 
 const OUTCOME_LABEL: Record<string, MessageKey> = {

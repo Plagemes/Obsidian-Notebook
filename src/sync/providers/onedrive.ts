@@ -1,18 +1,21 @@
 /**
- * OneDrive provider (#126), Microsoft Graph v1.0 with `Files.ReadWrite`: the sync root is a folder at the top of the
- * user's OneDrive ("Notebook sync"). Sources and limits: docs/research.md, docs/architecture.md.
+ * OneDrive provider (#126), Microsoft Graph v1.0 with the least-privilege `Files.ReadWrite.AppFolder` scope (review W22 S14):
+ * the sync root is the app's own folder (`/me/drive/special/approot`, "Apps/<app name>" in the user's OneDrive, made on first
+ * use); the plugin sees nothing else of the drive. Sources and limits: docs/research.md, docs/architecture.md.
  *
  * - Listing and deltas: `delta` on the root folder (pages via `@odata.nextLink`, the cursor is the `@odata.deltaLink`).
  *   Delta items carry parent ids, not paths, so paths come from the id index (tree.ts). Incremental calls send
  *   `deltaExcludeParent` so a folder in the feed means the folder itself changed. `410 Gone` starts a full listing.
- *   OneDrive for Business supports delta only on the drive root: when the folder delta is refused, the provider lists the
- *   drive root's delta and keeps what is under the sync folder.
+ *   When the folder delta is refused (older OneDrive for Business), the provider walks the folder's children on every run
+ *   (review W22 S13: the app folder scope cannot read the drive root's delta, and that listing loaded the whole drive).
+ * - Revision (review W22 S6): the content hash (quickXorHash, else sha1Hash), so a rename or a property change is not a new
+ *   revision; the eTag only when no hash is given. The eTag still guards each write: it is read just before and sent as
+ *   `If-Match` (412 → conflict); create-only uses `conflictBehavior=fail` (409).
  * - Upload: a simple PUT up to `chunkThreshold` (4 MiB), an upload session in 320 KiB-multiple fragments above it
  *   (the fragments go to the pre-authorised upload URL without the bearer token, as Graph requires).
- * - Conditional writes: `If-Match` with the eTag (412 → conflict); create-only uses `conflictBehavior=fail` (409).
  * - Remove: DELETE, which moves the item to the OneDrive recycle bin; never `permanentDelete`.
  */
-import { RemoteConflictError, TransientRemoteError, type CloudProvider, type RemoteChanges, type RemoteEntry } from "../provider-types";
+import { RemoteConflictError, TransientRemoteError, type CloudProvider, type RemoteChanges, type RemoteEntry, type UploadedEntry } from "../provider-types";
 import { json, JSON_TYPE, num, obj, str, type HttpResponse } from "../auth/http";
 import { throwIfAborted } from "../auth/retry";
 import { RemoteHttpError, type ApiClient } from "./api";
@@ -30,12 +33,25 @@ const enc = encodeURIComponent;
 
 type Item = Record<string, unknown>;
 
-function entryOf(it: Item): Omit<RemoteEntry, "path"> {
+function hashOf(it: Item): { hash: string; hashAlg: string } | null {
 	const hashes = obj(obj(it.file).hashes);
 	const quick = str(hashes.quickXorHash);
 	const sha1 = str(hashes.sha1Hash);
-	const hash = quick ? { hash: quick, hashAlg: "quickXor" } : sha1 ? { hash: sha1.toLowerCase(), hashAlg: "sha1" } : {};
-	return { id: str(it.id) ?? "", size: num(it.size) ?? 0, mtime: Date.parse(str(it.lastModifiedDateTime) ?? "") || 0, rev: str(it.eTag) ?? "", ...hash };
+	return quick ? { hash: quick, hashAlg: "quickXor" } : sha1 ? { hash: sha1.toLowerCase(), hashAlg: "sha1" } : null;
+}
+
+/**
+ * Review W22 S6: the revision of a file is its content hash, so a metadata-only change (rename in place, properties, the eTag
+ * bump after processing) is not a new revision and never makes a conflicted copy. The eTag only when there is no hash.
+ */
+export function revOf(it: Item): string {
+	const h = hashOf(it);
+	return h ? `${h.hashAlg}:${h.hash}` : str(it.eTag) ?? "";
+}
+
+function entryOf(it: Item): Omit<RemoteEntry, "path"> {
+	const h = hashOf(it);
+	return { id: str(it.id) ?? "", size: num(it.size) ?? 0, mtime: Date.parse(str(it.lastModifiedDateTime) ?? "") || 0, rev: revOf(it), ...(h ?? {}) };
 }
 
 /** True for a link the connector may follow with the user's token: Graph itself, over HTTPS. */
@@ -43,10 +59,17 @@ export function isGraphUrl(url: string): boolean {
 	return url.startsWith(`${GRAPH}/`);
 }
 
-/** Finds or creates the sync root at the top of the user's OneDrive. */
-export async function prepareOneDriveRoot(api: ApiClient, name: string, signal?: AbortSignal): Promise<{ rootId: string; rootLabel: string }> {
-	const id = await childFolder(api, `${GRAPH}/me/drive/root`, name, signal);
-	return { rootId: id, rootLabel: `OneDrive/${name}` };
+/**
+ * The sync root: the app's own folder (review W22 S14). Graph makes it on the first request ("Apps/<app name>", named after the
+ * app registration), so `name` is not used here; it is the folder name on Google Drive.
+ */
+export async function prepareOneDriveRoot(api: ApiClient, _name: string, signal?: AbortSignal): Promise<{ rootId: string; rootLabel: string }> {
+	const res = await api.send({ url: `${GRAPH}/me/drive/special/approot?$select=id,name,folder`, method: "GET" }, signal);
+	if (res.status !== 200) api.fail(res, "app folder");
+	const it = obj(json(res));
+	const id = str(it.id);
+	if (!id || !it.folder) throw new TransientRemoteError("OneDrive gave no app folder");
+	return { rootId: id, rootLabel: `OneDrive/Apps/${str(it.name) ?? "Notebook"}` };
 }
 
 /** The id of folder `name` under `parentUrl` (an item URL), creating it when missing. */
@@ -76,8 +99,8 @@ export class OneDriveProvider implements CloudProvider {
 	private readonly folderIds = new Map<string, string>();
 	private readonly threshold: number;
 	private readonly chunk: number;
-	/** True once the folder delta was refused (OneDrive for Business): list the drive root's delta instead. */
-	private rootDelta = false;
+	/** True once the folder delta was refused (older OneDrive for Business): walk the folder's children on every run instead. */
+	private walkOnly = false;
 
 	constructor(private readonly api: ApiClient, private readonly rootId: string, chunks: ChunkOptions = {}) {
 		this.index = new TreeIndex(rootId);
@@ -149,21 +172,50 @@ export class OneDriveProvider implements CloudProvider {
 		if (root.status === 404 || (root.status === 200 && obj(json(root)).deleted)) throw new RootMissingError();
 		if (root.status !== 200) this.api.fail(root, "sync folder");
 		let pages: { items: Item[]; deltaLink: string } | null = null;
-		if (!this.rootDelta) {
+		if (!this.walkOnly) {
 			try {
 				pages = await this.pages(`${GRAPH}/me/drive/items/${enc(this.rootId)}/delta?$select=${SELECT}`, false, signal);
+				if (!pages) throw new TransientRemoteError("OneDrive refused a fresh delta listing");
 			} catch (e) {
-				// OneDrive for Business: delta only on the drive root.
+				// Older OneDrive for Business: delta only on the drive root, which the app folder scope cannot read.
 				if (!(e instanceof RemoteHttpError && [400, 403, 501].includes(e.status))) throw e;
-				this.rootDelta = true;
+				this.walkOnly = true;
 			}
 		}
-		if (this.rootDelta) pages = await this.pages(`${GRAPH}/me/drive/root/delta?$select=${SELECT}`, false, signal);
-		if (!pages) throw new TransientRemoteError("OneDrive refused a fresh delta listing");
 		this.folderIds.clear();
+		if (this.walkOnly || !pages) {
+			const items = await this.walk(signal);
+			// No delta link: the next run lists everything again.
+			return { upserts: this.index.buildFull(items), deletions: [], cursor: `${CURSOR}walk`, full: true };
+		}
 		const items = pages.items.map((it) => this.itemOf(it)).filter((x): x is TreeItem => !!x);
 		const upserts = this.index.buildFull(items);
 		return { upserts, deletions: [], cursor: CURSOR + pages.deltaLink, full: true };
+	}
+
+	/** Every file and folder under the root, breadth first through `children` (pages via `@odata.nextLink`). */
+	private async walk(signal?: AbortSignal): Promise<TreeItem[]> {
+		const items: TreeItem[] = [];
+		const queue = [this.rootId];
+		while (queue.length) {
+			const folder = queue.shift() as string;
+			let url: string | undefined = `${GRAPH}/me/drive/items/${enc(folder)}/children?$select=${SELECT}&$top=1000`;
+			for (let guard = 0; url && guard < 100_000; guard++) {
+				throwIfAborted(signal);
+				const res = await this.api.send({ url, method: "GET" }, signal);
+				if (res.status !== 200) this.api.fail(res, "list");
+				const body = obj(json(res));
+				for (const raw of Array.isArray(body.value) ? body.value : []) {
+					const it = this.itemOf({ ...obj(raw), parentReference: { ...obj(obj(raw).parentReference), id: folder } });
+					if (!it) continue;
+					items.push(it);
+					if (it.folder && !it.removed) queue.push(it.id);
+				}
+				const next = str(body["@odata.nextLink"]);
+				url = next && isGraphUrl(next) ? next : undefined;
+			}
+		}
+		return items;
 	}
 
 	async download(id: string, signal?: AbortSignal): Promise<ArrayBuffer> {
@@ -179,27 +231,31 @@ export class OneDriveProvider implements CloudProvider {
 		return res.arrayBuffer;
 	}
 
-	async upload(path: string, data: ArrayBuffer, ifRev: string | null | undefined, signal?: AbortSignal): Promise<RemoteEntry> {
+	async upload(path: string, data: ArrayBuffer, ifRev: string | null | undefined, signal?: AbortSignal): Promise<UploadedEntry> {
 		const parts = splitPath(path);
 		const name = parts.pop() as string;
 		const parent = await this.ensureFolder(parts, signal);
 		const target = `${GRAPH}/me/drive/items/${enc(parent)}:/${enc(name)}`;
+		let eTag: string | undefined;
 		if (typeof ifRev === "string") {
-			// If-Match does the check on the server; this read only turns "no such file" into a conflict.
+			// The revision (content) is checked here; the eTag read with it goes in If-Match, so the server refuses any change made
+			// after this read.
 			const got = await this.api.send({ url: `${target}?$select=id,eTag,file`, method: "GET" }, signal);
 			if (got.status === 404) throw new RemoteConflictError(path);
 			if (got.status !== 200) this.api.fail(got, "upload");
-			const current = str(obj(json(got)).eTag);
+			const it = obj(json(got));
+			const current = revOf(it);
 			if (current !== ifRev) throw new RemoteConflictError(path, current);
+			eTag = str(it.eTag);
 		}
 		const behaviour = ifRev === null ? "fail" : "replace";
-		const ifMatch: Record<string, string> = typeof ifRev === "string" ? { "If-Match": ifRev } : {};
+		const ifMatch: Record<string, string> = eTag ? { "If-Match": eTag } : {};
 		const item = data.byteLength > this.threshold
 			? await this.session(target, behaviour, ifMatch, data, path, signal)
 			: await this.simple(target, behaviour, ifMatch, data, path, signal);
 		if (!item.file) throw new RemoteConflictError(path);
 		const entry = { ...entryOf(item), path };
-		this.index.noteFile(entry.id, path);
+		this.index.noteFile(entry.id, path, entryOf(item));
 		return entry;
 	}
 
@@ -256,7 +312,21 @@ export class OneDriveProvider implements CloudProvider {
 	}
 
 	async remove(id: string, ifRev?: string, signal?: AbortSignal): Promise<void> {
-		const res = await this.api.send({ url: `${GRAPH}/me/drive/items/${enc(id)}`, method: "DELETE", headers: ifRev !== undefined ? { "If-Match": ifRev } : {} }, signal);
+		let ifMatch: Record<string, string> = {};
+		if (ifRev !== undefined) {
+			// The revision is the content hash: read the item, compare, and send the eTag read with it in If-Match.
+			const got = await this.api.send({ url: `${GRAPH}/me/drive/items/${enc(id)}?$select=id,eTag,file`, method: "GET" }, signal);
+			if (got.status === 404) {
+				this.index.noteFile(id, undefined);
+				return;
+			}
+			if (got.status !== 200) this.api.fail(got, "remove");
+			const it = obj(json(got));
+			if (revOf(it) !== ifRev) throw new RemoteConflictError(this.index.files.get(id) ?? id, revOf(it));
+			const eTag = str(it.eTag);
+			if (eTag) ifMatch = { "If-Match": eTag };
+		}
+		const res = await this.api.send({ url: `${GRAPH}/me/drive/items/${enc(id)}`, method: "DELETE", headers: ifMatch }, signal);
 		if (res.status === 204 || res.status === 200 || res.status === 404) {
 			this.index.noteFile(id, undefined);
 			return;

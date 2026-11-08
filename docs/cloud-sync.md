@@ -29,6 +29,11 @@ asks for **`drive.file`**: it can see and change **only the files and folders it
 Drive. It keeps everything in one folder it creates at the top of My Drive, **`Notebook sync`**. Files you put in that
 folder with the Drive website or another app are not visible to the plugin (that is how `drive.file` works).
 
+**Folders made on the Drive website are invisible too.** If you create a folder inside `Notebook sync` on the Drive
+website and move a synced file into it there, the plugin can no longer see that file: it reads as deleted in the cloud,
+and the next run that may delete moves this device's copy to Obsidian's trash (`.trash` in the vault, so it can be
+restored). Organise the files in Obsidian instead; folders the plugin made itself (from your vault's folders) are fine.
+
 ### 1. Create a Google Cloud project
 
 1. Open <https://console.cloud.google.com/> and sign in with the Google account whose Drive you want to use.
@@ -70,10 +75,19 @@ folder with the Drive website or another app are not visible to the plugin (that
 
 ### What the plugin can reach
 
-The plugin asks for `Files.ReadWrite` (your OneDrive), `offline_access` (stay signed in) and `User.Read` (your name and
-address for the settings page). It keeps everything in one folder at the top of your OneDrive, **`Notebook sync`**.
-Personal Microsoft accounts and work or school accounts both work (a work account may need the organisation's admin to
-allow the app).
+The plugin asks for `Files.ReadWrite.AppFolder` (only its own app folder), `offline_access` (stay signed in) and
+`User.Read` (your name and address for the settings page). It never sees the rest of your OneDrive. Its folder is the
+**app folder** OneDrive makes for your app registration on first use: **`Apps/<your app's name>`** in your OneDrive
+(for example `Apps/Notebook sync`; the name is the one you gave the registration in step 1). You can open and browse it
+like any other folder.
+
+Personal Microsoft accounts work. Work or school accounts are less certain: Microsoft's documentation says the app folder
+works for both, but its permissions reference lists this permission for personal accounts, and a work account may need
+the organisation's admin to allow the app. If your work account refuses the sign-in, this is the likely reason.
+
+On some older OneDrive for Business libraries the change feed (`delta`) is only offered on the whole drive, which the app
+folder permission cannot read. There the plugin lists its folder file by file at every run instead: it works, but each
+run reads the whole folder, so it is slower with many files.
 
 ### 1. Register the app
 
@@ -96,20 +110,27 @@ allow the app).
 ### 3. Permissions (optional)
 
 The plugin asks for its permissions when you sign in, so nothing is needed here. If you like to list them anyway:
-**API permissions > Add a permission > Microsoft Graph > Delegated**: `Files.ReadWrite`, `offline_access`, `User.Read`.
+**API permissions > Add a permission > Microsoft Graph > Delegated**: `Files.ReadWrite.AppFolder`, `offline_access`, `User.Read`.
 No client secret is needed (and none should be created): this is a public client.
 
 ### 4. Connect in the plugin
 
 1. **Settings > Notebook > Cloud sync**: provider **OneDrive**, paste the client ID, **Connect**.
 2. The dialog shows a code and `https://microsoft.com/devicelogin`. Open it, type the code, sign in and **Accept**.
-3. The dialog finishes by itself and creates (or finds) `Notebook sync` in your OneDrive.
+3. The dialog finishes by itself; OneDrive creates (or finds) the app folder `Apps/<your app's name>`.
+
+If you connected before this change, the plugin used a `Notebook sync` folder at the top of your OneDrive. After you sign
+in again it syncs with the app folder instead: the first run there is a union (nothing is deleted), and the old folder
+stays where it is until you remove it.
 
 ---
 
 ## Disconnect
 
-**Disconnect** deletes the tokens from this device. For Google it also revokes them (Google has a revocation endpoint).
+**Disconnect** asks first. It stops a sync in progress and waits for it to end, then deletes the tokens and the sync
+state from this device; for Google the dialog can also forget the client secret typed on this device (off by default,
+so signing in again needs no typing). One device holds one account: signing in to the other service disconnects the
+current one first. For Google it also revokes the tokens (Google has a revocation endpoint).
 Microsoft has no endpoint that revokes one app's token for a public client: to cut access on the account side too, open
 <https://account.live.com/consent/Manage> (personal account) or <https://myapps.microsoft.com> (work or school account)
 and remove the app. For Google you can also check <https://myaccount.google.com/connections>.
@@ -121,7 +142,30 @@ Nothing in your Drive or OneDrive is deleted by disconnecting.
 - It never deletes a file permanently: a file removed by sync goes to the Google Drive trash or the OneDrive recycle bin.
 - It never overwrites a remote file that changed since it last saw it: it reports a conflict instead (see the sync
   settings for how conflicts are kept).
-- It never reads or writes outside the `Notebook sync` folder.
+- It never reads or writes outside its folder (`Notebook sync` on Google Drive, the app folder on OneDrive).
+- It never deletes a file in your vault permanently either: a file removed by sync goes to Obsidian's `.trash` folder,
+  whatever your *Deleted files* setting says.
+
+## How a run stays safe
+
+- **Nothing runs while Obsidian is still loading the vault** (not even *Sync now*): a file not listed yet must never read
+  as deleted. The status says so while it waits.
+- **The run at start-up and the run when you leave the app never delete.** Deletions wait for the next periodic or manual
+  run; the status shows how many wait. Periodic runs stop and ask above 10 deletions; a manual run above 20 (or 3 and
+  over 30 % of the synced files).
+- **Two cloud files with one name** (Google Drive allows it): every device follows the same one; any other version is kept
+  as a conflicted copy next to it before the extra file goes to the cloud's trash. Creating a file never makes such a
+  twin, even when a request is retried.
+- **Another device wrote at the same moment** (Google Drive cannot refuse a write the way OneDrive does): the version our
+  write replaced is downloaded from the file's history and kept as a conflicted copy.
+- **Names that cannot exist on every device** (characters such as `: * ? " < > | \`, names like `CON` or `NUL`, a
+  trailing dot or space) are skipped and listed once in a notice and in the activity log; they are never deleted on
+  either side because of it. Names that differ only by case (or by Unicode form) are never both written; a rename that
+  only changes the case is followed.
+- **On a phone or tablet**: with *Wi-Fi only* on and a network type the device does not report, the automatic runs wait
+  (*Sync now* still works, with a note). Files above *Size cap on phones* (50 MB by default) are never transferred there,
+  even when approved: a run holds a whole file in memory.
+- A conflicted copy that falls outside your *what to sync* rules stays on this device only.
 
 ## Troubleshooting
 
@@ -132,3 +176,7 @@ Nothing in your Drive or OneDrive is deleted by disconnecting.
 | *The code expired* | The code is valid for about 15 minutes (Microsoft) or 30 minutes (Google). Try again for a new one. |
 | Sign-in needed again after 7 days (Google) | The consent screen is still in *Testing*: publish it (step 3). |
 | *The sync folder is missing* | `Notebook sync` was deleted or moved to the trash on the provider's side. Restore it from the trash, or disconnect and connect again to create a new one. |
+| *Cloud sync starts once the vault has finished loading* | Obsidian is still indexing the vault after start-up. Try again in a few seconds. |
+| *Cloud sync skipped N file(s) whose names cannot exist on every device* | Rename them (see "How a run stays safe"). |
+| Automatic runs never start on the phone | *Wi-Fi only* is on and the device does not report its network type. Use *Sync now*, or turn *Wi-Fi only* off. |
+| OneDrive work account: sign-in refused | The organisation does not allow `Files.ReadWrite.AppFolder` for your app; ask its admin. |

@@ -322,7 +322,7 @@ describe("cloud sync engine, end to end with a fake provider and a fake vault (#
 		expect(remote.read("Work/b.md")).toBe("b");
 	});
 
-	it("skips two cloud files with one name instead of guessing", async () => {
+	it("two cloud files with one name that cannot be kept apart are skipped instead of guessing (review W22 S4)", async () => {
 		const { local, remote, sync } = setup();
 		remote.put("dup.md", "one");
 		const orig = remote.changes.bind(remote);
@@ -330,6 +330,7 @@ describe("cloud sync engine, end to end with a fake provider and a fake vault (#
 			const ch = await orig(c);
 			return { ...ch, upserts: [...ch.upserts, { ...ch.upserts[0]!, id: "other" }] };
 		};
+		remote.remove = () => Promise.reject(new Error("refused"));
 		const r = await sync();
 		expect(local.get("dup.md")).toBeUndefined();
 		expect(r.events).toContainEqual({ kind: "skip", path: "dup.md", detail: "duplicate" });

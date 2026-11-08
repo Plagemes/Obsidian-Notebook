@@ -1,7 +1,7 @@
 // #126 cloud connector: the OneDrive provider against a scripted Microsoft Graph (no network).
 import { describe, expect, it } from "vitest";
 import { createProvider } from "../src/sync/providers";
-import { GRAPH, isGraphUrl, ONEDRIVE_CHUNK_UNIT } from "../src/sync/providers/onedrive";
+import { GRAPH, isGraphUrl, ONEDRIVE_CHUNK_UNIT, revOf } from "../src/sync/providers/onedrive";
 import { RootMissingError } from "../src/sync/providers/tree";
 import { RemoteConflictError, TransientRemoteError } from "../src/sync/provider-types";
 import { bodyJson, bytes, FakeClock, FakeHttp, res } from "./sync-fake-http";
@@ -43,7 +43,7 @@ describe("OneDrive: listing and delta", () => {
 		const all = await p.changes(undefined);
 		expect(all).toMatchObject({ full: true, deletions: [], cursor: `od1:${D1}` });
 		expect(all.upserts.map((e) => e.path).sort()).toEqual(["A/z.png", "x.notebook"]);
-		expect(all.upserts.find((e) => e.id === "x")).toEqual({ id: "x", path: "x.notebook", size: 10, mtime: Date.parse(T0), rev: "e-x", hash: "qx-x", hashAlg: "quickXor" });
+		expect(all.upserts.find((e) => e.id === "x")).toEqual({ id: "x", path: "x.notebook", size: 10, mtime: Date.parse(T0), rev: "quickXor:qx-x", hash: "qx-x", hashAlg: "quickXor" });
 		expect(all.upserts.find((e) => e.id === "z")).toMatchObject({ hash: "abcdef", hashAlg: "sha1" });
 	});
 
@@ -51,7 +51,7 @@ describe("OneDrive: listing and delta", () => {
 		const http = fullListing(new FakeHttp())
 			.once("GET", D1, res(200, {
 				value: [
-					f("x", "x.notebook", "R", { eTag: "e-x2" }),
+					f("x", "x.notebook", "R", { eTag: "e-x2", file: { hashes: { quickXorHash: "qx-x2" } } }),
 					{ id: "z", deleted: { state: "deleted" }, parentReference: { id: "FA" } },
 					f("w", "w.md", "FA"),
 					f("v", "v.md", "R"),
@@ -66,7 +66,7 @@ describe("OneDrive: listing and delta", () => {
 		const d = await p.changes(`od1:${D1}`);
 		expect(d.full).toBe(false);
 		expect(d.cursor).toBe(`od1:${D2}`);
-		expect(d.upserts.map((e) => [e.path, e.rev]).sort()).toEqual([["A/w.md", "e-w"], ["x.notebook", "e-x2"]]);
+		expect(d.upserts.map((e) => [e.path, e.rev]).sort()).toEqual([["A/w.md", "quickXor:qx-w"], ["x.notebook", "quickXor:qx-x2"]]);
 		expect(d.deletions).toEqual(["A/z.png"]);
 		expect(http.find("GET", D1)[0]!.headers).toMatchObject({ deltaExcludeParent: "true" });
 	});
@@ -105,18 +105,24 @@ describe("OneDrive: listing and delta", () => {
 		expect(isGraphUrl("https://graph.microsoft.com/v1.0.evil.example/x")).toBe(false);
 	});
 
-	it("OneDrive for Business: when the folder delta is refused, lists the drive root's delta and keeps the sync folder", async () => {
-		const rootLink = `${GRAPH}/me/drive/root/delta?token=B1`;
+	it("S14: when the folder delta is refused (older OneDrive for Business), walks the app folder's children; never the drive root", async () => {
 		const http = new FakeHttp()
-			.once("GET", `${ITEMS}/R?`, res(200, { id: "R", folder: {} }))
+			.on("GET", `${ITEMS}/R?`, res(200, { id: "R", folder: {} }))
 			.once("GET", `${ITEMS}/R/delta?$select=`, res(400, { error: { code: "invalidRequest", message: "Delta is only supported on the root" } }))
-			.once("GET", `${GRAPH}/me/drive/root/delta?$select=`, res(200, {
-				value: [{ id: "DRIVEROOT", name: "root", folder: {}, root: {} }, f("o", "o.txt", "DRIVEROOT"), dir("R", "Notebook sync", "DRIVEROOT"), dir("OTHER", "Other", "DRIVEROOT"), f("x", "x.notebook", "R"), f("q", "q.md", "OTHER")],
-				"@odata.deltaLink": rootLink,
-			}));
-		const all = await provider(http).changes(undefined);
-		expect(all.upserts.map((e) => e.path)).toEqual(["x.notebook"]);
-		expect(all.cursor).toBe(`od1:${rootLink}`);
+			// Children pages: the parent is forced to the folder listed (children items may carry no parentReference id).
+			.on("GET", `${ITEMS}/R/children?page=2`, res(200, { value: [f("y", "y.md", "R")], "@odata.nextLink": "https://evil.example/next" }))
+			.on("GET", `${ITEMS}/R/children?`, res(200, { value: [dir("FA", "A", "?"), { ...f("x", "x.notebook", "R"), parentReference: {} }], "@odata.nextLink": `${ITEMS}/R/children?page=2` }))
+			.on("GET", `${ITEMS}/FA/children?`, res(200, { value: [f("z", "z.png", "FA")] }));
+		const p = provider(http);
+		const all = await p.changes(undefined);
+		expect(all.upserts.map((e) => e.path).sort()).toEqual(["A/z.png", "x.notebook", "y.md"]);
+		expect(all).toMatchObject({ full: true, cursor: "od1:walk" });
+		expect(http.calls.some((c) => c.url.includes("/drive/root") || c.url.includes("evil"))).toBe(false);
+		expect(http.find("GET", `${ITEMS}/R/children?`)[0]!.url).toContain("$top=1000");
+		// The next run walks again (no delta link), without asking for the refused delta a second time.
+		const again = await p.changes(all.cursor);
+		expect(again.full).toBe(true);
+		expect(http.find("GET", `${ITEMS}/R/delta`)).toHaveLength(1);
 	});
 
 	it("a deleted sync folder stops the listing", async () => {
@@ -135,7 +141,7 @@ describe("OneDrive: upload, download, remove", () => {
 			.once("POST", `${ITEMS}/R/children`, res(201, { id: "FA", name: "A", folder: {} }))
 			.once("PUT", `${ITEMS}/FA:/z%20one.md:/content?@microsoft.graph.conflictBehavior=fail`, res(201, f("n1", "z one.md", "FA")));
 		const p = provider(http);
-		expect(await p.upload("A/z one.md", bytes(3), null)).toMatchObject({ id: "n1", path: "A/z one.md", rev: "e-n1", hashAlg: "quickXor" });
+		expect(await p.upload("A/z one.md", bytes(3), null)).toMatchObject({ id: "n1", path: "A/z one.md", rev: "quickXor:qx-n1", hashAlg: "quickXor" });
 		expect(bodyJson(http.find("POST", `${ITEMS}/R/children`)[0]!)).toEqual({ name: "A", folder: {}, "@microsoft.graph.conflictBehavior": "fail" });
 		expect(http.find("PUT", ITEMS)[0]!.headers?.["If-Match"]).toBeUndefined();
 
@@ -143,22 +149,36 @@ describe("OneDrive: upload, download, remove", () => {
 		await expect(provider(h2).upload("x.notebook", bytes(3), null)).rejects.toBeInstanceOf(RemoteConflictError);
 	});
 
-	it("replace with ifRev sends If-Match; 412 or a changed eTag is a conflict", async () => {
+	it("replace with ifRev checks the content revision, then sends the eTag read with it in If-Match; 412 or other content is a conflict", async () => {
+		const qx = (h: string) => ({ hashes: { quickXorHash: h } });
 		const h1 = new FakeHttp()
-			.once("GET", `${ITEMS}/R:/x.notebook?`, res(200, { id: "x", eTag: "e-x", file: {} }))
+			.once("GET", `${ITEMS}/R:/x.notebook?`, res(200, { id: "x", eTag: "e-x", file: qx("qx-x") }))
 			.once("PUT", `${ITEMS}/R:/x.notebook:/content?@microsoft.graph.conflictBehavior=replace`, res(412, { error: { code: "preconditionFailed" } }));
-		await expect(provider(h1).upload("x.notebook", bytes(3), "e-x")).rejects.toBeInstanceOf(RemoteConflictError);
+		await expect(provider(h1).upload("x.notebook", bytes(3), "quickXor:qx-x")).rejects.toBeInstanceOf(RemoteConflictError);
 		expect(h1.find("PUT", ITEMS)[0]!.headers).toMatchObject({ "If-Match": "e-x" });
 
-		const h2 = new FakeHttp().once("GET", `${ITEMS}/R:/x.notebook?`, res(200, { id: "x", eTag: "e-new", file: {} }));
-		await expect(provider(h2).upload("x.notebook", bytes(3), "e-x")).rejects.toMatchObject({ name: "RemoteConflictError", currentRev: "e-new" });
+		const h2 = new FakeHttp().once("GET", `${ITEMS}/R:/x.notebook?`, res(200, { id: "x", eTag: "e-new", file: qx("qx-new") }));
+		await expect(provider(h2).upload("x.notebook", bytes(3), "quickXor:qx-x")).rejects.toMatchObject({ name: "RemoteConflictError", currentRev: "quickXor:qx-new" });
 		expect(h2.find("PUT", ITEMS)).toEqual([]);
 
+		// Review W22 S6: a metadata-only change (new eTag, same content) is not a conflict; If-Match carries the eTag just read.
+		const h5 = new FakeHttp()
+			.once("GET", `${ITEMS}/R:/x.notebook?`, res(200, { id: "x", eTag: "e-renamed", file: qx("qx-x") }))
+			.once("PUT", `${ITEMS}/R:/x.notebook:/content?@microsoft.graph.conflictBehavior=replace`, res(200, f("x", "x.notebook", "R", { file: qx("qx-x9") })));
+		expect((await provider(h5).upload("x.notebook", bytes(3), "quickXor:qx-x")).rev).toBe("quickXor:qx-x9");
+		expect(h5.find("PUT", ITEMS)[0]!.headers).toMatchObject({ "If-Match": "e-renamed" });
+
 		const h3 = new FakeHttp().once("GET", `${ITEMS}/R:/x.notebook?`, res(404, ""));
-		await expect(provider(h3).upload("x.notebook", bytes(3), "e-x")).rejects.toBeInstanceOf(RemoteConflictError);
+		await expect(provider(h3).upload("x.notebook", bytes(3), "quickXor:qx-x")).rejects.toBeInstanceOf(RemoteConflictError);
 
 		const h4 = new FakeHttp().once("PUT", `${ITEMS}/R:/x.notebook:/content?@microsoft.graph.conflictBehavior=replace`, res(200, f("x", "x.notebook", "R", { eTag: "e-x3" })));
-		expect((await provider(h4).upload("x.notebook", bytes(3), undefined)).rev).toBe("e-x3");
+		expect((await provider(h4).upload("x.notebook", bytes(3), undefined)).rev).toBe("quickXor:qx-x");
+	});
+
+	it("S6: the revision is the content hash (quickXor, else sha1), the eTag only when no hash is given", () => {
+		expect(revOf({ eTag: "e", file: { hashes: { quickXorHash: "Q", sha1Hash: "S" } } })).toBe("quickXor:Q");
+		expect(revOf({ eTag: "e", file: { hashes: { sha1Hash: "ABC" } } })).toBe("sha1:abc");
+		expect(revOf({ eTag: "e", file: {} })).toBe("e");
 	});
 
 	it("large files use an upload session: 320 KiB-multiple fragments, no bearer token on the fragments", async () => {
@@ -197,12 +217,22 @@ describe("OneDrive: upload, download, remove", () => {
 		await expect(provider(h3, { chunkThreshold: 10 }).upload("big.pdf", bytes(100), undefined)).rejects.toBeInstanceOf(RemoteConflictError);
 	});
 
-	it("remove is a DELETE (the recycle bin) with If-Match; 412 is a conflict, 404 is done", async () => {
-		const http = new FakeHttp().once("DELETE", `${ITEMS}/x`, res(204, "")).once("DELETE", `${ITEMS}/y`, res(412, "")).once("DELETE", `${ITEMS}/gone`, res(404, ""));
+	it("remove checks the content revision, then DELETEs (the recycle bin) with the eTag in If-Match; 412 is a conflict, 404 is done", async () => {
+		const http = new FakeHttp()
+			.once("GET", `${ITEMS}/x?`, res(200, f("x", "x.notebook", "R")))
+			.once("DELETE", `${ITEMS}/x`, res(204, ""))
+			.once("GET", `${ITEMS}/y?`, res(200, f("y", "y.md", "R")))
+			.once("DELETE", `${ITEMS}/y`, res(412, ""))
+			.once("GET", `${ITEMS}/c?`, res(200, f("c", "c.md", "R", { file: { hashes: { quickXorHash: "other" } } })))
+			.once("GET", `${ITEMS}/vanished?`, res(404, ""))
+			.once("DELETE", `${ITEMS}/gone`, res(404, ""));
 		const p = provider(http);
-		await p.remove("x", "e-x");
-		expect(http.calls[0]!.headers).toMatchObject({ "If-Match": "e-x" });
-		await expect(p.remove("y", "e-y")).rejects.toBeInstanceOf(RemoteConflictError);
+		await p.remove("x", "quickXor:qx-x");
+		expect(http.find("DELETE", `${ITEMS}/x`)[0]!.headers).toMatchObject({ "If-Match": "e-x" });
+		await expect(p.remove("y", "quickXor:qx-y")).rejects.toBeInstanceOf(RemoteConflictError);
+		await expect(p.remove("c", "quickXor:qx-c")).rejects.toMatchObject({ name: "RemoteConflictError", currentRev: "quickXor:other" });
+		expect(http.find("DELETE", `${ITEMS}/c`)).toEqual([]);
+		await p.remove("vanished", "quickXor:qx-v");
 		await p.remove("gone");
 		expect(http.calls.some((c) => c.url.includes("permanentDelete"))).toBe(false);
 	});

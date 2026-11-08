@@ -69,6 +69,15 @@ export function isTransientStatus(res: HttpResponse): boolean {
 	return false;
 }
 
+/**
+ * Review W22 S15: an error text without web addresses. A platform error may echo the request's URL, and OneDrive's upload and
+ * download addresses carry their own access token; error texts end up in notices, the activity log and local storage.
+ */
+export function withoutUrls(text: string): string {
+	// A sentence's punctuation right after the address stays.
+	return text.replace(/\b(?:https?|wss?):\/\/[^\s"'<>)\]]+/gi, (m) => `<address>${/[.,;:!?]+$/.exec(m)?.[0] ?? ""}`);
+}
+
 /** `Retry-After` in ms (seconds or an HTTP date), undefined when absent or unreadable. */
 export function retryAfterMs(res: HttpResponse, now: number): number | undefined {
 	const v = header(res, "retry-after")?.trim();
@@ -98,7 +107,7 @@ export async function sendWithRetry(http: Http, build: () => HttpRequest | Promi
 			res = await http.request(req);
 		} catch (e) {
 			if (e instanceof Error && e.name === "AbortError") throw e;
-			lastMessage = `network: ${e instanceof Error ? e.message : String(e)}`;
+			lastMessage = `network: ${withoutUrls(e instanceof Error ? e.message : String(e))}`;
 			lastAfter = undefined;
 		}
 		throwIfAborted(o.signal);

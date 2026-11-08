@@ -36,13 +36,14 @@ const GOOGLE: OAuthConfig = {
 /**
  * Microsoft identity platform v2, tenant `common` (personal Microsoft accounts and work or school accounts; the app
  * registration must allow both and have "Allow public client flows" on). `offline_access` gives the refresh token,
- * `Files.ReadWrite` the user's OneDrive, `User.Read` the account name shown in settings. There is no endpoint that revokes
- * one refresh token of a public client: Disconnect deletes the tokens on this device and links the consent page.
+ * `Files.ReadWrite.AppFolder` only the app's own folder in the user's OneDrive ("Apps/<app name>", review W22 S14: the least
+ * privilege, like Google's app-created folder), `User.Read` the account name shown in settings. There is no endpoint that
+ * revokes one refresh token of a public client: Disconnect deletes the tokens on this device and links the consent page.
  */
 const MICROSOFT: OAuthConfig = {
 	deviceUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/devicecode",
 	tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-	scope: "Files.ReadWrite offline_access User.Read",
+	scope: "Files.ReadWrite.AppFolder offline_access User.Read",
 	needsSecret: false,
 	manageUrl: "https://account.live.com/consent/Manage",
 };

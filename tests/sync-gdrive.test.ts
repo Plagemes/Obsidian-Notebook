@@ -11,6 +11,10 @@ const API = "https://www.googleapis.com/drive/v3";
 const UP = "https://www.googleapis.com/upload/drive/v3";
 const FOLDER = "application/vnd.google-apps.folder";
 const T0 = "2026-11-01T10:00:00.000Z";
+const T1 = "2026-11-01T10:05:00.000Z";
+const T2 = "2026-11-01T10:10:00.000Z";
+/** `files.generateIds` (review W22 S4). */
+const GEN = `${API}/files/generateIds?`;
 
 function provider(http: FakeHttp, chunks: { chunkThreshold?: number; chunkSize?: number } = {}) {
 	const clock = new FakeClock();
@@ -140,19 +144,22 @@ describe("Google Drive: upload, download, remove", () => {
 	it("creates missing folders and a new file (multipart, metadata first)", async () => {
 		const http = new FakeHttp()
 			.once("GET", findFolder("A", "ROOT"), res(200, { files: [] }))
+			.once("GET", GEN, res(200, { ids: ["FA"] }))
 			.once("POST", `${API}/files?fields=id`, res(200, { id: "FA" }))
 			.once("GET", findFile("it\\'s.md", "FA"), res(200, { files: [] }))
+			.once("GET", GEN, res(200, { ids: ["n1"] }))
 			.once("POST", `${UP}/files?uploadType=multipart`, res(200, file("n1", "it's.md", "FA", { size: "3" })));
 		const e = await provider(http).upload("A/it's.md", bytes(3, 65), null);
 		expect(e).toMatchObject({ id: "n1", path: "A/it's.md", size: 3, rev: "rev-n1", hash: "md5-n1", hashAlg: "md5" });
-		expect(q(http.calls[2]!)).toContain("name='it\\'s.md'");
+		expect(q(http.calls[3]!)).toContain("name='it\\'s.md'");
 		const up = http.find("POST", `${UP}/files?uploadType=multipart`)[0]!;
 		expect(up.contentType).toMatch(/^multipart\/related; boundary=/);
 		const text = new TextDecoder().decode(up.body as ArrayBuffer);
-		expect(text).toContain(JSON.stringify({ name: "it's.md", parents: ["FA"] }));
+		expect(text).toContain(JSON.stringify({ id: "n1", name: "it's.md", parents: ["FA"] }));
 		expect(text).toContain("AAA");
 		expect(text.indexOf("parents")).toBeLessThan(text.indexOf("AAA"));
-		expect(bodyJson(http.find("POST", `${API}/files?fields=id`)[0]!)).toMatchObject({ name: "A", mimeType: FOLDER, parents: ["ROOT"] });
+		expect(bodyJson(http.find("POST", `${API}/files?fields=id`)[0]!)).toMatchObject({ id: "FA", name: "A", mimeType: FOLDER, parents: ["ROOT"] });
+		expect(param(http.find("GET", GEN)[0]!, "space")).toBe("drive");
 	});
 
 	it("create-only refuses an existing file; replace checks the revision first", async () => {
@@ -164,8 +171,13 @@ describe("Google Drive: upload, download, remove", () => {
 		const h2 = new FakeHttp().on("GET", findFile("x.notebook", "ROOT"), existing);
 		await expect(provider(h2).upload("x.notebook", bytes(1), "rev-old")).rejects.toBeInstanceOf(RemoteConflictError);
 
-		const h3 = new FakeHttp().on("GET", findFile("x.notebook", "ROOT"), existing).once("PATCH", `${UP}/files/x?uploadType=multipart`, res(200, file("x", "x.notebook", "ROOT", { headRevisionId: "rev-x2" })));
-		expect((await provider(h3).upload("x.notebook", bytes(1), "rev-x")).rev).toBe("rev-x2");
+		const h3 = new FakeHttp()
+			.on("GET", findFile("x.notebook", "ROOT"), existing)
+			.once("PATCH", `${UP}/files/x?uploadType=multipart`, res(200, file("x", "x.notebook", "ROOT", { headRevisionId: "rev-x2" })))
+			.once("GET", `${API}/files/x/revisions?`, res(200, { revisions: [{ id: "rev-x", modifiedTime: T0 }, { id: "rev-x2", modifiedTime: T1 }] }));
+		const replaced = await provider(h3).upload("x.notebook", bytes(1), "rev-x");
+		expect(replaced.rev).toBe("rev-x2");
+		expect(replaced.displaced).toBeUndefined();
 		const text = new TextDecoder().decode(h3.find("PATCH", UP)[0]!.body as ArrayBuffer);
 		expect(text).toContain("\r\n{}\r\n");
 
@@ -178,6 +190,7 @@ describe("Google Drive: upload, download, remove", () => {
 		const session = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=S1";
 		const http = new FakeHttp()
 			.once("GET", findFile("big.pdf", "ROOT"), res(200, { files: [] }))
+			.once("GET", GEN, res(200, { ids: ["B"] }))
 			.once("POST", `${UP}/files?uploadType=resumable`, res(200, "", { Location: session }))
 			.once("PUT", session, res(308, "", { Range: "bytes=0-262143" }))
 			.once("PUT", session, res(308, "", { range: "bytes=0-524287" }))
@@ -186,7 +199,7 @@ describe("Google Drive: upload, download, remove", () => {
 		expect(e.size).toBe(total);
 		const init = http.find("POST", `${UP}/files?uploadType=resumable`)[0]!;
 		expect(init.headers).toMatchObject({ "X-Upload-Content-Length": String(total) });
-		expect(bodyJson(init)).toEqual({ name: "big.pdf", parents: ["ROOT"] });
+		expect(bodyJson(init)).toEqual({ id: "B", name: "big.pdf", parents: ["ROOT"] });
 		const puts = http.find("PUT", session);
 		expect(puts.map((p) => p.headers?.["Content-Range"])).toEqual([`bytes 0-262143/${total}`, `bytes 262144-524287/${total}`, `bytes 524288-${total - 1}/${total}`]);
 		expect(puts.slice(0, -1).every((p) => (p.body as ArrayBuffer).byteLength % DRIVE_CHUNK_UNIT === 0)).toBe(true);
@@ -196,6 +209,7 @@ describe("Google Drive: upload, download, remove", () => {
 		const session = "https://www.googleapis.com/upload/drive/v3/files?upload_id=S2";
 		const http = new FakeHttp()
 			.once("GET", findFile("big.pdf", "ROOT"), res(200, { files: [] }))
+			.once("GET", GEN, res(200, { ids: ["B"] }))
 			.once("POST", `${UP}/files?uploadType=resumable`, res(200, "", { location: session }))
 			.once("PUT", session, res(404, ""));
 		await expect(provider(http, { chunkThreshold: 10 }).upload("big.pdf", bytes(100), undefined)).rejects.toBeInstanceOf(TransientRemoteError);
@@ -235,5 +249,82 @@ describe("Google Drive: upload, download, remove", () => {
 		await expect(provider(http).upload("../x", bytes(1), undefined)).rejects.toThrow(/Invalid sync path/);
 		await expect(provider(http).upload("/x", bytes(1), undefined)).rejects.toThrow(/Invalid sync path/);
 		expect(http.calls).toEqual([]);
+	});
+});
+
+describe("Google Drive: review W22 fixes", () => {
+	const findFile = (name: string, parent: string) => (r: HttpRequest) => r.url.startsWith(`${API}/files?`) && q(r).startsWith(`name='${name}' and '${parent}' in parents and mimeType!=`);
+
+	it("S4: a create retried after a lost answer gets 409 and returns the file the first attempt made (no twin)", async () => {
+		const http = new FakeHttp()
+			.once("GET", findFile("n.md", "ROOT"), res(200, { files: [] }))
+			.once("GET", GEN, res(200, { ids: ["N1"] }))
+			.once("POST", `${UP}/files?uploadType=multipart`, res(409, { error: { code: 409 } }))
+			.once("GET", `${API}/files/N1?fields=`, res(200, file("N1", "n.md", "ROOT")));
+		const e = await provider(http).upload("n.md", bytes(2), null);
+		expect(e).toMatchObject({ id: "N1", path: "n.md", rev: "rev-N1" });
+		expect(http.find("POST", UP)).toHaveLength(1);
+	});
+
+	it("S4: a folder create that answers 409 uses the reserved id", async () => {
+		const http = new FakeHttp()
+			.once("GET", (r) => r.url.startsWith(`${API}/files?`) && q(r).startsWith("name='A'"), res(200, { files: [] }))
+			.once("GET", GEN, res(200, { ids: ["FA"] }))
+			.once("POST", `${API}/files?fields=id`, res(409, {}))
+			.once("GET", findFile("z.md", "FA"), res(200, { files: [] }))
+			.once("GET", GEN, res(200, { ids: ["Z"] }))
+			.once("POST", `${UP}/files?uploadType=multipart`, res(200, file("Z", "z.md", "FA")));
+		expect((await provider(http).upload("A/z.md", bytes(1), null)).id).toBe("Z");
+	});
+
+	it("S4: with two files of one name, a replace picks the one with the expected revision", async () => {
+		const twins = res(200, { files: [file("x2", "x.notebook", "ROOT"), file("x", "x.notebook", "ROOT")] });
+		const http = new FakeHttp()
+			.on("GET", findFile("x.notebook", "ROOT"), twins)
+			.once("PATCH", `${UP}/files/x?uploadType=multipart`, res(200, file("x", "x.notebook", "ROOT", { headRevisionId: "rev-x2" })))
+			.once("GET", `${API}/files/x/revisions?`, res(200, { revisions: [{ id: "rev-x", modifiedTime: T0 }, { id: "rev-x2", modifiedTime: T1 }] }));
+		expect((await provider(http).upload("x.notebook", bytes(1), "rev-x")).id).toBe("x");
+		expect(http.find("PATCH", `${UP}/files/x2`)).toEqual([]);
+	});
+
+	it("S3: a write that landed on top of another device's write returns the displaced revision's bytes", async () => {
+		const http = new FakeHttp()
+			.on("GET", findFile("x.notebook", "ROOT"), res(200, { files: [file("x", "x.notebook", "ROOT")] }))
+			.once("PATCH", `${UP}/files/x?uploadType=multipart`, res(200, file("x", "x.notebook", "ROOT", { headRevisionId: "rev-mine" })))
+			// Listed out of order on two pages: sorted by time, "rev-other" sits between the checked revision and ours.
+			.once("GET", (r) => r.url.startsWith(`${API}/files/x/revisions?`) && param(r, "pageToken") === null, res(200, { revisions: [{ id: "rev-mine", modifiedTime: T2 }, { id: "rev-x", modifiedTime: T0 }], nextPageToken: "p2" }))
+			.once("GET", (r) => r.url.startsWith(`${API}/files/x/revisions?`) && param(r, "pageToken") === "p2", res(200, { revisions: [{ id: "rev-other", modifiedTime: T1 }] }))
+			.once("GET", `${API}/files/x/revisions/rev-other?alt=media`, res(200, bytes(3, 7)));
+		const e = await provider(http).upload("x.notebook", bytes(1), "rev-x");
+		expect(e.rev).toBe("rev-mine");
+		expect(e.displaced?.map((d) => d.rev)).toEqual(["rev-other"]);
+		expect(new Uint8Array(e.displaced![0]!.data)).toEqual(new Uint8Array([7, 7, 7]));
+	});
+
+	it("S3: when the checked revision is no longer listed, the one right before ours counts as displaced", async () => {
+		const http = new FakeHttp()
+			.on("GET", findFile("x.notebook", "ROOT"), res(200, { files: [file("x", "x.notebook", "ROOT")] }))
+			.once("PATCH", `${UP}/files/x?uploadType=multipart`, res(200, file("x", "x.notebook", "ROOT", { headRevisionId: "rev-mine" })))
+			.once("GET", `${API}/files/x/revisions?`, res(200, { revisions: [{ id: "rev-other", modifiedTime: T1 }, { id: "rev-mine", modifiedTime: T2 }] }))
+			.once("GET", `${API}/files/x/revisions/rev-other?alt=media`, res(200, bytes(1)));
+		expect((await provider(http).upload("x.notebook", bytes(1), "rev-x")).displaced?.map((d) => d.rev)).toEqual(["rev-other"]);
+	});
+
+	it("S3: a trash that raced with another device's write is undone and reported as a conflict", async () => {
+		const http = new FakeHttp()
+			.once("GET", `${API}/files/x?`, res(200, file("x", "x.notebook", "ROOT")))
+			.once("PATCH", `${API}/files/x?`, res(200, file("x", "x.notebook", "ROOT", { headRevisionId: "rev-new", trashed: true })))
+			.once("PATCH", `${API}/files/x?`, res(200, { id: "x" }));
+		await expect(provider(http).remove("x", "rev-x")).rejects.toMatchObject({ name: "RemoteConflictError", currentRev: "rev-new" });
+		expect(http.find("PATCH", `${API}/files/x?`).map((c) => bodyJson(c))).toEqual([{ trashed: true }, { trashed: false }]);
+	});
+
+	it("S15: an upload session on another host is refused before the bytes (and the token) are sent there", async () => {
+		const http = new FakeHttp()
+			.once("GET", findFile("big.pdf", "ROOT"), res(200, { files: [] }))
+			.once("GET", GEN, res(200, { ids: ["B"] }))
+			.on("POST", `${UP}/files?uploadType=resumable`, res(200, "", { Location: "https://evil.example.com/upload?id=1" }));
+		await expect(provider(http, { chunkThreshold: 10 }).upload("big.pdf", bytes(100), undefined)).rejects.toThrow();
+		expect(http.calls.some((c) => c.url.startsWith("https://evil.example.com"))).toBe(false);
 	});
 });
