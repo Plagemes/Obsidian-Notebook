@@ -19783,6 +19783,19 @@ body.notebook-style-obsidian {
 	border-radius: var(--nb-radius-pill);
 }
 
+/* In the pen options every button is at least 40 px (44 on a touch screen), like the other buttons there. */
+.workspace-leaf-content .view-content.notebook-view .notebook-options .notebook-opacity-reset {
+	min-width: 40px;
+	min-height: 40px;
+}
+
+@media (pointer: coarse) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-options .notebook-opacity-reset {
+		min-width: 44px;
+		min-height: 44px;
+	}
+}
+
 .workspace-leaf-content .view-content.notebook-view .notebook-opacity-reset:hover:not(:disabled),
 .workspace-leaf-content .view-content.notebook-view .notebook-opacity-reset:focus-visible {
 	color: var(--nb-accent);
