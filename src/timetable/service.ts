@@ -244,6 +244,11 @@ export class TimetableService {
 		return out.sort((a, b) => a.localeCompare(b));
 	}
 
+	/** 0.23 (#416): the timetable as loaded, for the Library's "Active term" order (read-only use). */
+	data(): Timetable {
+		return this.timetable;
+	}
+
 	/** The timetable has at least one class (the settings tab opens its group then). */
 	hasClasses(): boolean {
 		return this.timetable.entries.length > 0;

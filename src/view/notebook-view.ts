@@ -33,6 +33,8 @@ import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layou
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
+import { trimAtPenUp } from "../ink/hook-clean";
+import { commitTrim, isTrimStep, retractCommit, type Committed } from "./commit-trim";
 import { scribbleEraseSteps } from "../ink/scribble";
 import { lineAt, TextLayoutCache, wordAt } from "../ink/words";
 import { InkBuilder } from "../ink/ink-geometry";
@@ -51,6 +53,7 @@ import { drawHeader, exportHeaderFor, headerLayout, pageTimesText, type HeaderLa
 import { pageTimes } from "../model/page-times";
 import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
 import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
+import { captureRegion, restoreRegion, type ViewRegion } from "../ink/view-region";
 import { PageMode } from "./page-mode";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
 import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
@@ -76,13 +79,16 @@ import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
 import { MakeTaskModal, runMakeTask, type TaskRequest } from "./selection-task";
 import { runInsertIntoNote } from "./selection-insert";
+import { AreaExportModal } from "./export-area";
 import { taskCropRect } from "../model/selection-task";
 import { Mentions } from "./mentions";
 import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
 import { AddToIndexModal, BookIndexModal, currentIndex, termSpellings } from "./book-index";
+import { FormulaSheetModal } from "./formula-sheet";
 import { normalizeIndexPrefix } from "../model/book-index";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { MeaningTools } from "./colour-meaning";
+import { SavedViewTools } from "./saved-views";
 import type { MeaningsStore } from "../library/meanings-store";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -156,6 +162,8 @@ import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
 import { SlideBack } from "./slide-back";
+import { WELCOME_KEY } from "../model/welcome-back";
+import { WelcomeBack } from "./welcome-back";
 import { PageRefs } from "./page-refs";
 import { SmartAddStrip } from "./smart-add";
 import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
@@ -181,6 +189,7 @@ import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
 import { AxesTools, type AxesHost } from "./axes-tools";
+import { ChemTools, holdsReaction } from "./chem-tools";
 import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
@@ -474,6 +483,8 @@ export class NotebookView extends FileView {
 	private checklist: ChecklistTools | null = null;
 	/** 0.22 (#206): instant axes (an L or a + drawn by hand, the insert). */
 	private axes: AxesTools | null = null;
+	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
+	private chem: ChemTools | null = null;
 	/** 0.20 (#39): groups and locked elements (Group, Ungroup, Lock, the Unlock chip, the list of locked elements). */
 	private groups: GroupTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
@@ -521,6 +532,8 @@ export class NotebookView extends FileView {
 	private pageOffer: PageOffer | null = null;
 	/** 0.21 (#225): the pill back to the place last written during a lecture (view/slide-back.ts). */
 	slideBack: SlideBack | null = null;
+	/** 0.23 (#420): the card offered when a notebook is reopened after a while (view/welcome-back.ts). */
+	welcomeBack: WelcomeBack | null = null;
 	pageRefs: PageRefs | null = null;
 	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
 	lectureMode: LectureModeController | null = null;
@@ -554,7 +567,7 @@ export class NotebookView extends FileView {
 	 * that continues the same contact (side button pressed while writing) spares them, and a late button signal can
 	 * retract them (`retractStroke`).
 	 */
-	private justCommitted: { ids: ReadonlySet<string>; cmd: Command } | null = null;
+	private justCommitted: Committed | null = null;
 	private lasso: Lasso | null = null;
 	/** wave 0.10 (362): the clipboard files shared between devices (made when first used). */
 	private sharedClipStore: SharedClipStore | null = null;
@@ -588,6 +601,8 @@ export class NotebookView extends FileView {
 	private heavyPageId: string | null = null;
 	/** 0.22 (#101): colours with meaning: the legend, the view filter and the digest by colour (view/colour-meaning.ts). */
 	private meaningTools: MeaningTools | null = null;
+	/** 0.23 (#264): saved views: a named page region with a zoom, recalled in one step (view/saved-views.ts; stored in the notebook, format 21). */
+	private savedViews: SavedViewTools | null = null;
 	private navCurrent = -1;
 	/** Pages whose thumbnail was drawn without all its media; redrawn when media arrives. */
 	private readonly thumbPending = new Set<string>();
@@ -727,6 +742,14 @@ export class NotebookView extends FileView {
 				};
 			},
 		});
+		this.savedViews = new SavedViewTools({
+			app: this.app,
+			doc: () => this.shownDoc(),
+			editable: () => !!this.editableDocument(),
+			execute: (cmd) => this.applyCommand(cmd),
+			capture: () => this.captureViewRegion(),
+			show: (index, region) => this.showViewRegion(index, region),
+		});
 		// 0.16 (#124): a locked page shows a small badge over the page area; a tap on it unlocks the page.
 		const badge = this.body.createEl("button", { cls: "nb-ui nb-lock-badge", attr: { type: "button", "aria-label": t("lock.badge.aria") } });
 		setIcon(badge.createSpan({ cls: "nb-lock-badge-icon", attr: { "aria-hidden": "true" } }), "lock");
@@ -766,6 +789,7 @@ export class NotebookView extends FileView {
 		this.sticky = new StickyTools(this.stickyHost());
 		this.checklist = new ChecklistTools(this.checklistHost());
 		this.axes = new AxesTools(this.axesHost());
+		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
 		this.penGestures = new PenGestureLayer({
@@ -868,6 +892,19 @@ export class NotebookView extends FileView {
 				const r = this.visibleRect();
 				return this.viewSize.height > 0 ? { top: r.minY, bottom: r.maxY } : null;
 			},
+			goTo: (index, y) => {
+				this.recordJump(index);
+				this.scrollToPage(index, y);
+			},
+		});
+		this.welcomeBack = new WelcomeBack({
+			parent: () => this.body,
+			enabled: () => this.host.settings.welcomeBack,
+			hours: () => this.host.settings.welcomeBackHours,
+			load: () => this.app.loadLocalStorage(WELCOME_KEY) as unknown,
+			save: (value) => this.app.saveLocalStorage(WELCOME_KEY, value),
+			now: () => Date.now(),
+			indexOf: (pageId) => this.session?.doc?.pages.findIndex((p) => p.id === pageId) ?? -1,
 			goTo: (index, y) => {
 				this.recordJump(index);
 				this.scrollToPage(index, y);
@@ -1154,6 +1191,7 @@ export class NotebookView extends FileView {
 		this.checklist?.destroy();
 		this.axes?.destroy();
 		this.axes = null;
+		this.chem = null;
 		this.checklist = null;
 		this.groups?.destroy();
 		this.groups = null;
@@ -1163,6 +1201,9 @@ export class NotebookView extends FileView {
 		this.pageOffer = null;
 		this.meaningTools?.destroy();
 		this.meaningTools = null;
+		this.savedViews = null;
+		this.welcomeBack?.destroy();
+		this.welcomeBack = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
 		this.pageRefs?.destroy();
@@ -1202,6 +1243,8 @@ export class NotebookView extends FileView {
 	private pendingAt: string | null = null;
 	/** wave 0.6 (v7): the next load is the first one of this file, so it may start at the stored reading position. */
 	private startPending = false;
+	/** 0.23 (#420): the welcome-back card is considered once per opening, when the complete document arrives. */
+	private welcomePending = false;
 	/** wave 0.6 (v7): when the page in view last changed, for the `pageAt` of the layout. */
 	private readonly pageClock = new PageClock();
 
@@ -1378,6 +1421,8 @@ export class NotebookView extends FileView {
 	async onLoadFile(file: TFile): Promise<void> {
 		await super.onLoadFile(file);
 		this.startPending = true;
+		this.welcomePending = true;
+		this.welcomeBack?.reset();
 		this.navFresh = true;
 		this.lastBackupPath = null;
 		this.fitMode = true;
@@ -1508,6 +1553,7 @@ export class NotebookView extends FileView {
 		// wave 0.10 (51): read-only mode belongs to the notebook being read; the next one opens editable.
 		if (this.userReadOnly) this.setReadOnlyMode(false, false);
 		this.meaningTools?.reset();
+		this.welcomeBack?.reset();
 		this.syncSafety?.closed();
 		this.resilience?.end();
 		this.history.clear();
@@ -1722,7 +1768,11 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		this.penLinks?.hideChip();
 		this.pageOffer?.cancel();
-		if (this.history.undo()) this.afterHistoryChange();
+		const undone = this.history.undo();
+		if (!undone) return;
+		this.afterHistoryChange();
+		// 0.23 (#314): the first Undo after a hook was trimmed at pen-up only gives the hook back; say so, so it does not look like nothing happened.
+		if (isTrimStep(undone)) showNotice(t("trim.undone"), 3000);
 	}
 
 	/**
@@ -1734,14 +1784,16 @@ export class NotebookView extends FileView {
 		const c = this.justCommitted;
 		this.justCommitted = null;
 		if (!c || !this.editable() || this.controller?.drawing || this.history.canRedo()) return false;
-		const steps = this.history.pending();
-		if (steps[steps.length - 1] !== c.cmd) return false;
-		this.penLinks?.hideChip();
-		this.pageOffer?.cancel();
-		if (this.history.undo() !== c.cmd) return false;
-		this.renderer?.invalidate();
-		this.afterHistoryChange();
-		return true;
+		// 0.23 (#314): a hook trimmed at pen-up is its own step after the stroke's; the contact is taken back as a whole, and the view is
+		// redrawn and saved whenever a step was undone, even if the second one is refused.
+		const r = retractCommit(this.history, c);
+		if (r.changed) {
+			this.penLinks?.hideChip();
+			this.pageOffer?.cancel();
+			this.renderer?.invalidate();
+			this.afterHistoryChange();
+		}
+		return r.ok;
 	}
 
 	redo(): void {
@@ -2108,6 +2160,27 @@ export class NotebookView extends FileView {
 		}).open();
 	}
 
+	/** 0.23 (#280): the dialog that exports the written area of the current page, or the selection, as a transparent PNG or SVG. */
+	openAreaExport(scope: "page" | "selection"): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file) return;
+		const sel = this.selection;
+		const useSel = !!sel && !this.statesTools?.ownsSelection(sel) && sel.strokes.length + sel.elements.length > 0;
+		const pageIndex = useSel && sel ? sel.pageIndex : this.currentPageIndex();
+		const shown = this.renderPagesOf(doc)[pageIndex];
+		if (!shown) return;
+		const options = this.exportOptions();
+		new AreaExportModal({
+			app: this.app, file, page: shown, pageNumber: pageIndex + 1, media: this.media, exportOptions: options,
+			selection: useSel && sel ? { strokes: sel.strokes, elements: sel.elements } : null,
+			render: {
+				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+			},
+		}, { scope: scope === "selection" && useSel ? "selection" : "page" }).open();
+	}
+
 	/** wave 0.9 (382): the dialog of the Markdown export (folder, resolution). */
 	openMarkdownExport(): void {
 		const doc = this.session?.doc;
@@ -2303,6 +2376,16 @@ export class NotebookView extends FileView {
 		}).open();
 	}
 
+	/** 0.23 (#249): the formula sheet: every equation in reading order, written to a note next to the notebook. */
+	openFormulaSheet(): void {
+		const file = this.file;
+		if (!this.shownDoc() || !file) return;
+		new FormulaSheetModal({
+			app: this.app, file, docId: this.shownDoc()?.id,
+			pages: () => this.shownDoc()?.pages ?? [], goTo: (index, y) => this.scrollToPage(index, y),
+		}).open();
+	}
+
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */
 	openMentions(): void {
 		this.mentions?.open();
@@ -2314,6 +2397,36 @@ export class NotebookView extends FileView {
 
 	openMeaningFilter(): void {
 		this.meaningTools?.openFilter();
+	}
+
+	/** 0.23 (#264): the saved views dialog; `save`: opened by "Save current view" (the name field has the focus, and it closes once saved). */
+	openSavedViews(save = false): void {
+		this.savedViews?.open(save);
+	}
+
+	/** 0.23 (#264): the region in view now and the id of the page the middle of the view is on, or null while there is nothing to measure. */
+	private captureViewRegion(): { pageId: string; region: ViewRegion } | null {
+		const layout = this.layout;
+		const doc = this.shownDoc();
+		if (!layout || !doc) return null;
+		const index = this.currentPageIndex();
+		const page = doc.pages[index];
+		const region = page ? captureRegion(this.pageMode?.enabled ? "pages" : "continuous", this.viewport, this.viewSize, layout, index) : null;
+		return page && region ? { pageId: page.id, region } : null;
+	}
+
+	/** 0.23 (#264): shows a saved view: the page region, centred, at its zoom (the same part of the page on any screen size). */
+	private showViewRegion(pageIndex: number, region: Omit<ViewRegion, "pageIndex">): void {
+		const layout = this.layout;
+		const restored = layout ? restoreRegion(region, pageIndex, this.pageMode?.enabled ? "pages" : "continuous", this.viewSize, layout) : null;
+		this.recordJump(pageIndex);
+		if (!restored) {
+			this.scrollToPage(pageIndex);
+			return;
+		}
+		this.pageMode?.goTo(restored.pageIndex);
+		this.fitMode = restored.fit;
+		this.setViewport(restored.viewport);
 	}
 
 	openMeaningDigest(): void {
@@ -2439,6 +2552,7 @@ export class NotebookView extends FileView {
 			deselect: () => this.clearSelection(),
 			pen: () => ({ color: this.tools.penColor, textSize: this.tools.textSize }),
 			inkFollows: () => this.host.settings.inkFollowsObjects,
+			dimensionHint: () => this.host.settings.dimensionHint,
 			refresh: () => this.refreshUi(),
 		};
 	}
@@ -2583,6 +2697,11 @@ export class NotebookView extends FileView {
 	/** 0.22 (#206): instant axes of this view (null before the view is open). */
 	get axesTools(): AxesTools | null {
 		return this.axes;
+	}
+
+	/** 0.23 (#294): balancing of typed chemical reactions (null before the view is open). */
+	get chemTools(): ChemTools | null {
+		return this.chem;
 	}
 
 	/** 0.19 (#103): handwritten checklists of this view (null before the view is open). */
@@ -3616,6 +3735,7 @@ export class NotebookView extends FileView {
 			elements: elements.length,
 			images: elements.filter((e) => e.type === "image").length,
 			texts: elements.filter((e) => e.type === "text").length,
+			reactions: sel.elements.filter(holdsReaction).length,
 			links: this.penLinks?.linkIn(sel.elements) ? 1 : 0,
 			// The maths actions (Edit, Convert to ink) work on the primary page's elements only (see mathTools).
 			equations: sel.elements.filter((e) => e.type === "equation").length,
@@ -4060,6 +4180,10 @@ export class NotebookView extends FileView {
 			this.pageNav?.invalidate();
 			if (this.tools.ruler) this.placeRuler();
 			this.applyStartPosition();
+			if (this.welcomePending) {
+				this.welcomePending = false;
+				this.welcomeBack?.offer(doc);
+			}
 			if (this.file) this.location.note(this.file.path, this.currentPageIndex() + 1);
 			void checkConflicts(this.reliabilityDeps(), this);
 			this.syncHooks?.loaded();
@@ -5128,6 +5252,7 @@ export class NotebookView extends FileView {
 		if (!cancelled && badgeTap === null && boxTap === null && committed) {
 			window.setTimeout(() => {
 				this.lectureMode?.wrote();
+				this.welcomeBack?.wrote();
 				this.noteWrittenForSlideBack(committed);
 			}, 0);
 		}
@@ -5243,6 +5368,7 @@ export class NotebookView extends FileView {
 			this.ink.add(active.rawX, active.rawY, active.rawP);
 			this.ink.finish();
 			const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
+			const cut = this.penUpTrim(active, stroke);
 			const snapped = this.reading?.snapStroke(page, stroke);
 			if (snapped) {
 				// Snap to text lines: straight highlights replace the hand-drawn stroke in the same undo step.
@@ -5252,8 +5378,8 @@ export class NotebookView extends FileView {
 				return;
 			}
 			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
-			this.renderer?.endWet(stroke);
-			this.addStrokes(active.pageIndex, page, [stroke]);
+			this.renderer?.endWet(cut ?? stroke);
+			this.trimCommitted(page, stroke, cut, this.addStrokes(active.pageIndex, page, [stroke], true, cut ?? undefined));
 			this.updateGhostLines(active.pageIndex, page, stroke.tool);
 			if (active.liveFallback) this.renderer?.setLive(null);
 			const box = this.layout?.boxes[active.pageIndex];
@@ -5274,8 +5400,32 @@ export class NotebookView extends FileView {
 			return;
 		}
 		const extras = active.extra.map((points) => freezeStroke({ ...active.stroke, id: createId(), points }));
-		this.addStrokes(active.pageIndex, page, [stroke, ...extras]);
+		const cut = this.penUpTrim(active, stroke);
+		this.trimCommitted(page, stroke, cut, this.addStrokes(active.pageIndex, page, [stroke, ...extras], true, cut ?? undefined));
 		this.updateGhostLines(active.pageIndex, page, stroke.tool);
+	}
+
+	/**
+	 * 0.23 (#314), setting "Trim hooks as you write": the stroke is committed exactly as written, then a tiny hook at its start or end
+	 * is cut as a step of its own (`ink/hook-clean.ts`, stricter limits than the manual clean-up). The raw points stay in the history:
+	 * one Undo gives the written stroke back, a second removes it. A snapped or recognised stroke is left as it is.
+	 */
+	private penUpTrim(active: ActiveStroke, stroke: Stroke): Stroke | null {
+		return this.host.settings.trimHooks && !active.snap && !active.recognized ? trimAtPenUp(stroke) : null;
+	}
+
+	/**
+	 * The trim is worked out before the stroke is committed, so the renderer draws the trimmed stroke at once (`addStrokes(…, cut)`) and
+	 * the step that follows holds that very object: the static layer is redrawn only if it was drawn from the raw model meanwhile
+	 * (`redrawn`) or the step was not recorded. `justCommitted` keeps both steps, so a late side-button press takes the contact back whole.
+	 */
+	private trimCommitted(page: Page, stroke: Stroke, cut: Stroke | null, redrawn: boolean): void {
+		if (!cut) return;
+		const step = commitTrim(this.history, page, stroke.id, cut, this.justCommitted);
+		if (!step || redrawn) this.renderer?.invalidate();
+		if (!step) return;
+		this.markChanged();
+		this.updateHistoryButtons();
 	}
 
 	/**
@@ -5325,7 +5475,7 @@ export class NotebookView extends FileView {
 	}
 
 	/** Commits strokes drawn on a page as one undo step; an infinite page grows in the same step. */
-	private addStrokes(pageIndex: number, page: Page, drawn: Stroke[], offerChecklist = true): void {
+	private addStrokes(pageIndex: number, page: Page, drawn: Stroke[], offerChecklist = true, shown?: Stroke): boolean {
 		// 0.14 slides (#226): ink written while a slide is beside the notes remembers it, in the same undo step. The renderer
 		// still gets the strokes it drew (`drawn`, same geometry): the wet ink hands over to exactly those objects.
 		const linked = this.session?.doc ? linkToSlide(this, this.session.doc, drawn, this.host.settings.slideInkLink) : null;
@@ -5363,12 +5513,14 @@ export class NotebookView extends FileView {
 		}
 		if (grew) {
 			this.afterHistoryChange();
-			return;
+			return true;
 		}
-		for (const s of drawn) this.renderer?.appendStroke(pageIndex, s);
+		// `shown`: the trimmed copy of the first stroke (hook trimmed at pen-up), which the next step puts in the model.
+		for (const s of drawn) this.renderer?.appendStroke(pageIndex, shown && s === drawn[0] ? shown : s);
 		this.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
+		return false;
 	}
 
 	private commitShape(shape: ShapeDrag): void {

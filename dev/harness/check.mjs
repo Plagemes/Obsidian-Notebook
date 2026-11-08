@@ -117,6 +117,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "cleanexport", theme, device, lowLatency: false });
 // 0.21 htmlexport (#164): Interactive HTML in the export dialog and its viewer (dev/harness/htmlexport-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "htmlexport", theme, device, lowLatency: false });
+// 0.23 exportarea (#280): export of the written area or the selection as transparent PNG or SVG (dev/harness/exportarea-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "exportarea", theme, device, lowLatency: false });
 // 0.20 share (#30): Share page… dialog and both branches of the share (dev/harness/share-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "share", theme, device, lowLatency: false });
 // Quick tabs (0.18, #227): the strip with pinned pages, Back, a gone page, another notebook; tablet and phone, light and dark.
@@ -143,18 +145,30 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "groups", theme, device, lowLatency: false });
 // 0.22 axes (#206): an L or a + drawn by hand offered as axes (dev/harness/axes-check.ts), tablet and phone, light and dark (dist/shots/axes-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "axes", theme, device, lowLatency: false });
+// 0.23 chembal (#294): the Balance reaction preview over typed reactions (dev/harness/chembal-check.ts), tablet and phone, light and dark (dist/shots/chembal-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "chembal", theme, device, lowLatency: false });
 // 0.21 signstamp (#154): the sign-and-date dialog, the signature pad and the placed signature (dev/harness/signstamp-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "signstamp", theme, device, lowLatency: false });
 // Minimap (0.17, #173): the overview of an infinite page, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "minimap", theme, device, lowLatency: false });
 // 0.21 slideback (#225): the pill back to the current slide (dev/harness/slideback-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "slideback", theme, device, lowLatency: false });
+// 0.23 savedviews (#264): saved views (dev/harness/savedviews-check.ts), tablet and phone, light and dark (dist/shots/savedviews-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "savedviews", theme, device, lowLatency: false });
 // 0.22 pagerefs (#179): the chip and list of pages that link here (dev/harness/pagerefs-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "pagerefs", theme, device, lowLatency: false });
 // 0.22 review fix: every floating pill at once, no overlap (dev/harness/pillstack-check.ts), tablet and phone, light and dark (dist/shots/pillstack-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "pillstack", theme, device, lowLatency: false });
+// 0.23 welcomeback (#420): the welcome-back card (dev/harness/welcomeback-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "welcomeback", theme, device, lowLatency: false });
 // 0.22 lecthead (#210): the lecture header (dev/harness/lecthead-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "lecthead", theme, device, lowLatency: false });
+// 0.23 dimcheck (#293): the units hint of the equation editor (dev/harness/dimcheck-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "dimcheck", theme, device, lowLatency: false });
+// 0.23 termorder (#416): the Library sorted by the active term (dev/harness/termorder-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "termorder", surface: "library", theme, device, lowLatency: false });
+// 0.23 hookclean (#314): clean-up of hooks and stray dots (dev/harness/hookclean-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "hookclean", theme, device, lowLatency: false });
 // Recent symbols (0.21, #212): the strip, a tapped character and a saved symbol placed pen-sized, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "symbols", theme, device, lowLatency: false });
 // 0.21 backups: scheduled zip backups and their settings rows (dev/harness/backups-check.ts), tablet and phone, dark and light.
@@ -222,6 +236,8 @@ for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"])
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "lookup", theme, device, lowLatency: false });
 // 0.21 bookindex: the back-of-book index dialog (dev/harness/bookindex-check.ts), tablet and phone, dark and light.
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "bookindex", theme, device, lowLatency: false });
+// 0.23 formulasheet: the formula sheet dialog (dev/harness/formulasheet-check.ts).
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "formulasheet", theme, device, lowLatency: false });
 // 0.14 slides: ink linked to the slide beside it (badges) and the slide strip, tablet and phone, dark and light (dist/shots/slides-*.png).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "slides", theme, device, lowLatency: false });
 // 0.15 pensets: pen sets per subject on the strip, the switcher chip and the manager, tablet and phone, dark and light (dist/shots/pensets-*.png).
@@ -359,7 +375,11 @@ async function main() {
 				else if (s.doc === "slideback") report = await cdp.evaluate("window.harness.checkSlideback()", 60000);
 				else if (s.doc === "pagerefs") report = await cdp.evaluate("window.harness.checkPagerefs()", 60000);
 				else if (s.doc === "lecthead") report = await cdp.evaluate("window.harness.checkLecthead()", 90000);
+				else if (s.doc === "dimcheck") report = await cdp.evaluate("window.harness.checkDimcheck()", 90000); // 0.23 dimcheck
+				else if (s.doc === "termorder") report = await cdp.evaluate("window.harness.checkTermOrder()", 90000);
+				else if (s.doc === "hookclean") report = await cdp.evaluate("window.harness.checkHookclean()", 90000); // 0.23 hookclean
 				else if (s.doc === "pillstack") report = await cdp.evaluate("window.harness.checkPillstack()", 90000); // 0.22 review fix: all the floating pills at once
+				else if (s.doc === "welcomeback") report = await cdp.evaluate("window.harness.checkWelcomeback()", 90000); // 0.23 welcomeback
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -373,9 +393,11 @@ async function main() {
 				else if (s.doc === "a4split") report = await cdp.evaluate("window.harness.checkA4split()", 60000);
 				else if (s.doc === "cleanexport") report = await cdp.evaluate("window.harness.checkCleanExport()", 60000);
 				else if (s.doc === "htmlexport") report = await cdp.evaluate("window.harness.checkHtmlExport()", 60000);
+				else if (s.doc === "exportarea") report = await cdp.evaluate("window.harness.checkExportArea()", 60000);
 				else if (s.doc === "ghostlines") report = await cdp.evaluate("window.harness.checkGhostlines()", 60000);
 				else if (s.doc === "pagetime") report = await cdp.evaluate("window.harness.checkPagetime()", 60000);
 				else if (s.doc === "pens") report = await cdp.evaluate("window.harness.checkPens()", 90000);
+				else if (s.doc === "savedviews") report = await cdp.evaluate("window.harness.checkSavedviews()", 90000); // 0.23 savedviews
 				else if (s.doc === "share") report = await cdp.evaluate("window.harness.checkShare()", 180000); // 0.20 share
 				// 0.18 mentions: its own check.
 				else if (s.doc === "mentions") report = await cdp.evaluate("window.harness.checkMentions()", 60000);
@@ -383,7 +405,7 @@ async function main() {
 				else if (s.doc === "synccore") report = await cdp.evaluate("window.harness.checkSynccore()", 60000); // 0.22 synccore
 				else if (s.doc === "syncprov") report = await cdp.evaluate("window.harness.checkSyncprov()", 60000); // 0.22 syncprov
 				else
-				report = await cdp.evaluate(s.doc === "dropfiles" ? "window.harness.checkDropFiles()" : s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "task" ? "window.harness.checkTask()" : s.doc === "lookup" ? "window.harness.checkLookUp()" : s.doc === "bookindex" ? "window.harness.checkBookIndex()" :s.doc === "annotate" ? "window.harness.checkAnnotate()" : s.doc === "tplnote" ? "window.harness.checkTplNote()" :s.doc === "qr" ? "window.harness.checkQr()" : s.doc === "snapshot" ? "window.harness.checkSnapshot()" : s.doc === "vdiff" ? "window.harness.checkVdiff()" :s.doc === "backups" ? "window.harness.checkBackups()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "figures" ? "window.harness.checkFigures()" :s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "colours" ? "window.harness.checkColours()" : s.doc === "coloursedit" ? "window.harness.checkColours(true)" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "signstamp" ? "window.harness.checkSignstamp()" : s.doc === "refwindow" ? "window.harness.checkRefwindow()" : s.doc === "quicktabs" ? "window.harness.checkQuicktabs()" : s.doc === "sticky" ? "window.harness.checkSticky()" : s.doc === "comments" ? "window.harness.checkComments()" : s.doc === "checklists" ? "window.harness.checkChecklists()" : s.doc === "axes" ? "window.harness.checkAxes()" : s.doc === "groups" ? "window.harness.checkGroups()" : s.doc === "minimap" ? "window.harness.checkMinimap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "planner" ? "window.harness.checkPlanner()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "dropfiles" ? "window.harness.checkDropFiles()" : s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "task" ? "window.harness.checkTask()" : s.doc === "lookup" ? "window.harness.checkLookUp()" : s.doc === "formulasheet" ? "window.harness.checkFormulaSheet()" : s.doc === "bookindex" ? "window.harness.checkBookIndex()" :s.doc === "annotate" ? "window.harness.checkAnnotate()" : s.doc === "tplnote" ? "window.harness.checkTplNote()" :s.doc === "qr" ? "window.harness.checkQr()" : s.doc === "snapshot" ? "window.harness.checkSnapshot()" : s.doc === "vdiff" ? "window.harness.checkVdiff()" :s.doc === "backups" ? "window.harness.checkBackups()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "figures" ? "window.harness.checkFigures()" :s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "colours" ? "window.harness.checkColours()" : s.doc === "coloursedit" ? "window.harness.checkColours(true)" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "signstamp" ? "window.harness.checkSignstamp()" : s.doc === "refwindow" ? "window.harness.checkRefwindow()" : s.doc === "quicktabs" ? "window.harness.checkQuicktabs()" : s.doc === "sticky" ? "window.harness.checkSticky()" : s.doc === "comments" ? "window.harness.checkComments()" : s.doc === "checklists" ? "window.harness.checkChecklists()" : s.doc === "axes" ? "window.harness.checkAxes()" : s.doc === "chembal" ? "window.harness.checkChembal()" : s.doc === "groups" ? "window.harness.checkGroups()" : s.doc === "minimap" ? "window.harness.checkMinimap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "planner" ? "window.harness.checkPlanner()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -539,6 +561,17 @@ async function main() {
 					await cdp.evaluate("window.harness.closeLinkback()");
 				}
 			}
+			// 0.23 welcomeback: a screenshot of the card.
+			if (s.doc === "welcomeback") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				try {
+					await cdp.evaluate("window.harness.welcomebackShot().then(() => true)", 60000);
+					writeFileSync(join(designDir, `welcomeback-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`welcomeback screenshot: ${e.message}`);
+				}
+			}
 			// 0.21 slideback: a screenshot of the pill while scrolled away from the written page.
 			if (s.doc === "slideback") {
 				const designDir = join(shots, "design");
@@ -560,6 +593,19 @@ async function main() {
 						writeFileSync(join(designDir, `pagerefs-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`pagerefs screenshot ${state}: ${e.message}`);
+					}
+				}
+			}
+			// 0.23 dimcheck: the units hint under the equation preview, three formulas.
+			if (s.doc === "dimcheck") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["bad", "good", "many"]) {
+					try {
+						await cdp.evaluate(`window.harness.dimcheckShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `dimcheck-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`dimcheck ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

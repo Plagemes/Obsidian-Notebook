@@ -151,6 +151,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"look-up-list": (v) => v.openLookUpList(),
 	"selection-add-to-index": (v) => v.addToIndexFromSelection(),
 	"book-index": (v) => v.openBookIndex(),
+	"formula-sheet": (v) => v.openFormulaSheet(),
 	// 0.18 (#59): the selection as a picture in a note
 	"selection-insert-note": (v) => v.insertSelectionIntoNote("png"),
 	"selection-insert-note-svg": (v) => v.insertSelectionIntoNote("svg"),
@@ -174,6 +175,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"snap-toggle": (v) => v.toggleSnap(),
 	"select-by-style": (v) => v.arrangeTools?.pickStyle(),
 	"selection-similar": (v) => v.arrangeTools?.menu("similar"),
+	"selection-cleanup": (v) => v.selectionTools?.cleanUp(),
 	// 0.15 (241): drawings with states
 	"selection-part": (v) => v.stateTools?.makePartFromSelection(),
 	"states-toggle": (v) => v.stateTools?.toggle(),
@@ -209,6 +211,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"insert-graph": (v) => v.mathTools?.insertGraph(),
 	"math-edit": (v) => v.mathTools?.editSelected(),
 	"math-convert-ink": (v) => void v.mathTools?.convertSelectedToInk(),
+	"chem-balance": (v) => v.chemTools?.balanceSelected(),
 	// 0.17 (#20): sticky notes
 	"insert-sticky": (v) => v.stickyTools?.insert(),
 	"sticky-edit": (v) => v.stickyTools?.editSelected(),
@@ -411,12 +414,18 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"meaning-filter": (v) => v.openMeaningFilter(),
 	"meaning-legend": (v) => v.openMeaningLegend(),
 	"meaning-digest": (v) => v.openMeaningDigest(),
+	// 0.23 (#264): saved views
+	"saved-view-save": (v) => v.openSavedViews(true),
+	"saved-view-go": (v) => v.openSavedViews(),
 	// 0.18 mentions (O7): the notes that link to this page
 	"mentions": (v) => v.openMentions(),
 	// 0.19 (#228): the Figures gallery
 	"figures": (v) => v.openFigures(),
 	// wave 0.10: PNG images (81) and Print (81) are choices of the same dialog; read-only mode (51)
 	"export-png": (v) => v.openExportDialog(undefined, "png"),
+	// 0.23 (#280): written area and selection as transparent pictures
+	"export-area": (v) => v.openAreaExport("page"),
+	"selection-export-area": (v) => v.openAreaExport("selection"),
 	"print": (v) => {
 		if (canPrint()) v.openExportDialog(undefined, "print");
 		else showNotice(t("export.print.unavailable"), 8000);

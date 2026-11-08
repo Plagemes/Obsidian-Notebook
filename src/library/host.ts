@@ -1,4 +1,5 @@
 import { getLanguage, loadPdfJs, normalizePath, Platform, TFolder, type App, type TFile, type WorkspaceLeaf } from "obsidian";
+import type { Timetable } from "../timetable/schedule";
 import { resolveLanguage, t } from "../i18n";
 import { resolveWeekStart } from "../model/calendar";
 import { createDocument, createId } from "../model/document";
@@ -79,6 +80,8 @@ export interface HostPlugin {
 		offer(): Promise<void>;
 		/** 0.13: the class in progress and the notebook it opens (or the folder a new one is made in). */
 		nowTarget?(): LectureTarget | null;
+		/** 0.23 (#416): the loaded timetable, for the Library's "Active term" order. */
+		data?(): Timetable;
 	};
 }
 
@@ -487,6 +490,12 @@ export class NotebookLibraryHost implements LibraryHost {
 				today: () => new Date().toISOString().slice(0, 10),
 			}, picked.map(fileSource), folder).open();
 		})();
+	}
+
+	/** 0.23 (#416): the timetable, for the "Active term" order; null without one. */
+	termTimetable(): Timetable | null {
+		const tt = this.plugin.timetable?.data?.();
+		return tt && tt.entries.length > 0 ? tt : null;
 	}
 
 	nowClass(): { course: string; room?: string } | null {

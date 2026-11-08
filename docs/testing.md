@@ -348,7 +348,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 5739 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 6093 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -3074,7 +3074,7 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 
 ### 0.21 — schema: documented format with a JSON Schema (steps 1860-1879)
 
-Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v20.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
+Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v21.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
 
 1860. **Schema agrees with a real notebook.** Copy a notebook written on the tablet (with ink, a picture, a text box and a comment) to a PC and validate it with any draft 2020-12 validator (see the end of `docs/format.md`): no errors.
 1861. **Old file.** Open a notebook that was last saved by an older plugin version and edit it once, then validate it: it validates after that save (the file is rewritten as version 19 on the first edit).
@@ -3467,3 +3467,165 @@ Manual steps (real Obsidian; nothing here is verified on Android). You need a cl
 |---|---|---|---|---|---|
 | Automatic lecture header (#210): course, lecturer, room, date and start time as two grouped text boxes at the top, one undo step | yes | slot choice (in progress, lead time, overlap, linked to another notebook, no class, nearest), fields in English and Italian, free-area search, plan, History step and locked page: `tests/lecture-header.test.ts`; view and chip: harness `doc=lecthead` | | | not tried on Android; time zones are covered by the rule that class times are local wall-clock times, not by running under other zones |
 | Setting Off / Ask / Automatic and the four fields; command *Insert lecture header* | yes | settings read: `tests/lecture-header.test.ts`; command and chip: harness `doc=lecthead` | | | |
+
+### 0.23 — savedviews: saved views, document format 21 (roadmap #264; steps 2400-2419)
+
+Implemented, not verified on hardware. **Format change: v20 → v21** (the optional notebook-level `views` list; a v20 notebook opens as before and is written as v21 the first time it is saved; a v21 notebook opens read-only in 0.22). Reference screenshots after `HARNESS_DOC=savedviews npm run harness:check`: `dev/harness/dist/shots/savedviews-*.png` (tablet and phone, light and dark).
+
+2400. **Save.** Zoom in on a part of a page. Open the palette (or the *More* sheet) and run *Save current view…*: a dialog opens with the name field focused and a free name (*View 1*) ready. Type a name, press Enter or *Save*: the dialog closes and a notice says the view was saved.
+2401. **Recall.** Scroll to another page and zoom out, run *Go to saved view…* and tap the view: the dialog closes and the same part of the page is on screen at the same zoom.
+2402. **Another screen.** Rotate the tablet (or open the notebook on the phone) and recall the view: the same part of the page is centred, at the same zoom relative to the page width.
+2403. **Save from the list.** In *Go to saved view…* type a name and tap *Save*: the list stays open and the new row is highlighted for a moment; the field offers the next free name.
+2404. **Rename.** Menu `...` of a row > *Rename*: the name becomes a field; Enter keeps it (extra spaces are removed), Escape leaves the old name.
+2405. **Reorder.** *Move up* / *Move down* change the order; the first row has no *Move up* and the last no *Move down*. The order is the same after closing and reopening the notebook.
+2406. **Update.** Go somewhere else, open the list, menu > *Update to the current view*: the row now shows the new page and zoom; its name and place in the list stay.
+2407. **Remove and Undo.** Menu > *Remove* takes the view out; close the dialog and Undo brings it back where it was. Rename, move, update and save are each one undo step too.
+2408. **Deleted page.** Delete a page that has a view: the view stays in the list as *Page missing* (dashed row). A tap on it says the page is gone and nothing moves; its menu has no *Go to*; *Remove* takes it out. Undo the page deletion: the view works again.
+2409. **Read-only.** Turn on read-only mode: the list still opens and a tap goes to a view; the field and *Save* are disabled and the menu only offers *Go to*. *Save current view…* refuses with a notice.
+2410. **Locked page.** Lock the page a view is on: saving, renaming and removing views still work (a view is not page content).
+2411. **Copies.** Duplicate a page that has a view, or copy / move pages to another notebook: no view is created for the copy and the views stay with the notebook they were saved in; pages moved out leave their views behind as *Page missing*.
+2412. **Merge.** With a conflicted copy of the notebook that has views the main one lacks, *Merge conflicted copy* lists *N saved views added*; one Undo takes them away with the rest of the merge. If the copy renamed a view the notebook also has, the summary says *N saved views differ in the copy* (this notebook's are kept; the copy's versions stay in the copy). If the notebook already has 100 views, it says *N saved views of the copy were not added* and the copy stays where it is.
+2413. **The file.** Close and reopen the notebook (and on another device with the same vault): the views, their order and their places are the same. On a notebook with more than 100 views a notice says to remove one before saving another.
+2414. **Languages.** In Italian the commands, the dialog, the row lines and the notices are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Saved views (#264): save the page, region and zoom under a name; recall; rename, update, reorder, remove, each one undo step; missing views; read-only recall | yes | model, commands, history, merge and geometry: `tests/model-v21.test.ts`; dialog and commands: harness `doc=savedviews` | | | not tried on Android |
+| Format v21: optional `views` list, migration v20 → v21 (identity plus version), lenient read, strict write, staged loading of large v20 files, repair (also from the view lines when the array itself is damaged) | yes | `tests/model-v21.test.ts`, `tests/review-w23-data.test.ts` (review V3-V6: unique names, page-id limit, merge report, line-scan repair), `tests/format-schema.test.ts` (schema `docs/schema/notebook-v21.schema.json`) | | | |
+### 0.23 — exportarea (written area and selection as transparent PNG or SVG, #280; steps 2300-2319)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook page with several pen types, a text box with a `[[link|label]]`, and a collapsed sticky note with ink.
+
+2300. **Page menu.** Open the all-actions sheet (Export & share): *Export written area…* opens the dialog. The same entry is in the notebook menu and the command palette.
+2301. **Crop.** Choose *PNG*, 2x, *Save*: a file `<notebook> p<N> area.png` appears next to the notebook. Open it: transparent background (no white, no paper), cropped to your writing with a small margin.
+2302. **Scales.** Export again at 1x and 3x: the pixel size scales; the notice names the path. A second export never overwrites the first (` 2`).
+2303. **SVG.** Choose *SVG*: the Scale row hides. The saved `.svg` opens in a browser on a transparent background, strokes are vector; the highlighter stays see-through over the pen.
+2304. **Pens.** Page with fountain pen, brush and marker strokes: each looks like on the page in the PNG and the SVG.
+2305. **Selection.** Lasso some items: the bar has *Export selection as picture* (also in the sheet). The dialog offers *The selection* and exports only those items, cropped to them.
+2306. **Collapsed note.** Select a collapsed sticky note and export: its hidden ink comes with it. On the whole page, a collapsed note does not widen the area with its hidden ink.
+2307. **Labels.** The text box with `[[Note|label]]` shows the label, not the link source.
+2308. **Empty.** On a page with nothing written, run the export: a notice says there is nothing to export and no file is written. Same for a selection of nothing drawable.
+2309. **Locked page.** Lock the page: the export still works (read-only).
+2310. **Copy.** Press *Copy*, paste into another app: the PNG arrives with a transparent background (SVG copies its source text). Where the device cannot copy pictures, a notice says to save instead.
+2311. **Library inbox.** The saved picture is not offered by the shared-files inbox as an unknown file.
+2312. **Style.** Light and dark, phone and tablet: the dialog is a normal Notebook dialog, the three buttons fit in one row.
+2313. **Italian.** Switch to Italian: all texts are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Export of the written area of a page (bounding box of visible ink and elements plus margin) as transparent PNG 1x/2x/3x or SVG, saved next to the notebook, optional copy to the clipboard | yes | bounds, margin, hidden ink, collapsed notes: `tests/export-area.test.ts`; harness `doc=exportarea` (real dialog, transparent PNG corner, SVG without sheet, empty refusal) | | | clipboard image copy depends on the WebView (`ClipboardItem`) |
+| Export of the selection as transparent PNG or SVG (selected items and pinned note ink only; groups expanded by the selection; locked items fine) | yes | selection cut: `tests/export-area.test.ts` (SVG of each pen type, highlighter and marker alpha, wikilink label) | | | |
+### 0.23 — dimcheck (dimensional analysis of formulas, #293; steps 2320-2339)
+
+Manual steps (real Obsidian; nothing here is verified on Android). The hint lives in the equation editor (*Insert > Equation*, or *Edit* on an equation); it never changes the formula and never blocks *Done*. Units are written in the formula with `\mathrm`, `\text` or `\SI`.
+
+2320. **A sum that cannot be.** Insert an equation and type `5\,\mathrm{m} + 3\,\mathrm{s}`. After a moment a quiet dashed line under the preview, with a ruler icon and the word *Units*, says that 5 m (length) and 3 s (time) cannot be added. The preview and *Done* work as always.
+2321. **Equation sides.** Type `1\,\mathrm{N} = 1\,\mathrm{kg\,m/s}`: the hint says the two sides differ (force against momentum). Fix it to `1\,\mathrm{N} = 1\,\mathrm{kg\,m/s^2}`: the line turns into a green tick and *Units are consistent.*
+2322. **Declared symbols.** Type three lines: `m = 2\,\mathrm{kg}`, `a = 3\,\mathrm{m/s^2}`, `F = m a = 6\,\mathrm{J}` (use `\` between them for a multi-line equation, or just new lines). The hint says force and energy differ. Change `J` to `N`: the tick. Declaring with `[v] = m/s` on its own line works too.
+2323. **Quiet by default.** Type `\frac{a}{b} = \sqrt{x}` or `E = m c^2` (no units anywhere): no hint at all. A symbol the editor knows nothing about never causes a warning.
+2324. **Functions and exponents.** `\sin(5\,\mathrm{m})` and `2^{3\,\mathrm{s}}`: the hint says the argument or the exponent must be dimensionless. `\sin(30^\circ)` and `\ln\frac{2\,\mathrm{m}}{4\,\mathrm{m}}` give no warning.
+2325. **Prefixes and derived units.** `3\,\mathrm{m} + 2\,\mathrm{km} + 5\,\mathrm{cm}` is fine; `1\,\mathrm{J} = 1\,\mathrm{N\,m}`, `1\,\mathrm{V} = 1\,\mathrm{W/A}`, `1\,\mathrm{\Omega} = 1\,\mathrm{V/A}` are fine; `1\,\mathrm{J} = 1\,\mathrm{W}` is flagged.
+2326. **Derivatives and integrals.** With `[x] = m`, `[t] = s` on their own lines, `v = \frac{dx}{dt} + 1\,\mathrm{m}` is flagged (velocity against length); `W = \int F\,dx` with `[F] = N` followed by `W = 3\,\mathrm{J}` is fine.
+2327. **Many problems.** Five wrong lines: two sentences and *+3 more*; nothing else grows.
+2328. **Setting.** *Settings > Writing > Check units in equations*: switched off, the hint never appears in a newly opened editor; on again, it returns.
+2329. **Languages.** Italian: the label *Unità*, the sentences and the quantity names (*lunghezza*, *tempo*, *forza*, *energia*) are in Italian.
+2330. **Layout.** Phone and tablet width, light and dark, with the on-screen keyboard open: the hint wraps inside the card, stays under the preview and above Size/Colour, and is easy to ignore; it is not a button.
+2331. **Nothing stored.** Open an existing equation, type something with a unit mistake, press *Done*: the equation is saved exactly as typed; reopen it and the hint shows again. The file format is unchanged.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Dimensional analysis (#293): SI units and prefixes, derived units, propagation through + − × ÷ ^, roots, functions, fractions, derivatives, integrals and sums, `=` and comparisons, declared symbols | yes | `tests/dimensions.test.ts` (units, sums, products, powers, functions, equations, symbols, LaTeX forms, textbook formulas, plain text, hostile input) | | | |
+| Quiet units hint in the equation editor, English and Italian, with a tick when units agree | yes | words, quantity names, cut list: `tests/dimension-hint.test.ts`; editor: harness `doc=dimcheck` | | | |
+| Setting *Check units in equations* (Writing), default on | yes | `tests/dimension-hint.test.ts` | | | |
+### 0.23 — chembal: balancing of typed chemical reactions (#294; steps 2340-2359)
+
+Implemented, not verified on hardware. No format change. Reference screenshots after `HARNESS_DOC=chembal npm run harness:check`: `dev/harness/dist/shots/chembal-*.png` (tablet and phone, light and dark).
+
+2340. **Text box.** Write the text box `CH4 + O2 -> CO2 + H2O` (type it) and select it with the lasso: the selection bar shows *Balance reaction*. Tap it: a preview shows the line before and after (`CH4 + 2 O2 -> CO2 + 2 H2O`). *Balance* replaces the text; *Cancel* changes nothing.
+2341. **Undo.** One undo gives the original text back; one redo balances it again (a single step, also for several boxes at once).
+2342. **Charges.** `MnO4^- + Fe^2+ + H^+ -> Mn^2+ + Fe^3+ + H2O` gives `MnO4^- + 5 Fe^2+ + 8 H^+ -> Mn^2+ + 5 Fe^3+ + 4 H2O`. Subscript and superscript letters (H₂O, Fe³⁺) work too and keep their look.
+2343. **Hydrate.** `CuSO4·5H2O -> CuSO4 + H2O` gives `CuSO4·5H2O -> CuSO4 + 5 H2O`.
+2344. **Several lines.** A box with a title line, two reactions and a note: only the reaction lines change; a line that cannot be balanced is listed in the preview with the reason and stays as it is.
+2345. **Impossible.** `NaCl -> Na` says Cl appears on one side only; `H2 + O2 + H2O2 -> H2O` says more than one balance is possible; a typo such as `H2 + Xx -> H2O` names the unknown element. *Balance* is off when nothing would change.
+2346. **Equation.** Insert an equation with the source `\ce{H2 + O2 -> H2O}` (or `H_2 + O_2 \rightarrow H_2O`), select it, *Balance reaction*: it becomes `\ce{2 H2 + O2 -> 2 H2O}` and is typeset again. With other maths on another line (`\ce{H2 + O2 -> H2O} \\ T_{max} = 300\,\text{K}`) only the reaction line changes: the preview also shows the whole resulting source, and the other line is kept exactly as written.
+2347. **Locked.** Lock the text box: the action says the element is locked and nothing changes. Lock the page: a notice says the page is locked.
+2348. **Not offered.** Select an ordinary text box, a picture or ink: no *Balance reaction* in the bar. The same command is in the command palette while a reaction is selected.
+2349. **Languages.** In Italian the action, preview, reasons and notices are translated.
+2350. **Style.** Light and dark theme, phone and tablet width: the preview is a narrow dialog with quiet rows; errors in the danger colour; nothing overflows.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Balancing of typed chemical reactions (#294): formulas with groups and hydrates, charges, electrons, arrows `->` `→` `⇌` `=`; exact rational nullspace, smallest whole coefficients; unbalanceable, one-sided, unused-species and ambiguous reactions are explained | yes | `tests/chem-balance.test.ts` (parsing, combustion, redox with charges, hydrates, impossible and ambiguous cases, text boxes, LaTeX, review V1: only the reaction lines of an equation are rewritten; review R4: a row of an aligned environment keeps its &) | | | |
+| "Balance reaction" in the selection bar and the palette: preview, one undo step, refuses locked elements and locked pages; text boxes and equations (`\ce{}`) | yes | `tests/chem-tools.test.ts` (review V1 and V8: mixed equation kept, whole result previewed, refusal notice names the real reason); harness `doc=chembal` | | | not tried on the tablet |
+### 0.23 — formulasheet: automatic formula sheet (#249; steps 2360-2379)
+
+Formula sheet (roadmap #249). *Formula sheet…* (page sheet, notebook menu, command *Build formula sheet*) lists every equation of the notebook in reading order (LaTeX source and a page chip that jumps) and writes them into `<Notebook> — Formulas.md` next to the notebook: a heading with a link per page and a `$$…$$` block per formula (`\tag{n}` for a numbered one). Only the region between the `notebook-formulas` markers is rewritten; the notebook file is never written and the document format does not change. Implemented, not verified on hardware.
+
+2360. In a notebook with equations on three pages (one numbered, two on the same row), open *Formula sheet…*. Expect: the formulas in reading order (rows top to bottom, then left to right), a chip per page with formulas; a chip closes the dialog and goes to that page.
+2361. Tap *Build formula sheet*. Expect: a notice with the path and count; `<Notebook> — Formulas.md` next to the notebook, rendering each formula as maths in Obsidian, with a working link to each page.
+2362. Add text above and below the generated region in that note, add an equation in the notebook, build again. Expect: the new formula appears; your text above and below is unchanged.
+2363. Delete one of the two `notebook-formulas` marker lines in the note and build again. Expect: that note is not changed; the sheet is written to `<Notebook> — Formulas (2).md`.
+2364. Create a note with the same name and no markers (or with only one marker line), then build. Expect: your note is unchanged and the sheet is written to `<Notebook> — Formulas (2).md` (a notice with that path); building again updates the `(2)` note.
+2365. Open the notebook with no equations. Expect: the dialog says there are none and no note is created.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Formula sheet (#249): equations collected in reading order into `<Notebook> — Formulas.md` (`$$` blocks, link to each page, `\tag{n}` for numbered ones); owner marker with path and document id, only the region is rewritten inside `vault.process`, a note without markers, with an unpaired marker or recording another notebook is never rewritten, recorded in plugin-written | yes | collection order, escaping of `$` (also after a double-backslash line break, review V9), `-->` and blank lines, section, marker safety and note-name choice (a same-name note of the user's goes to `Formulas (2)`, review V10): `tests/formula-sheet.test.ts`; dialog and vault side: harness `doc=formulasheet` | | | one notebook at a time (no course/folder-wide sheet yet); formulas are written as LaTeX, typeset by Obsidian |
+### 0.23 — welcomeback: welcome-back card (roadmap #420; steps 2380-2399)
+
+Settings, Study, Timetable: *Welcome back card* (on by default) and *Offer it after* (hours, default 8). Implemented, not verified on hardware. Use a notebook with several pages, some question and gap markers (not resolved) and, for the slide case, an annotated PDF.
+
+2380. **First time.** Open a notebook you never opened on this device: no card.
+2381. **Quick return.** Close it and reopen it within the threshold: no card.
+2382. **After a while.** With *Offer it after* at 1 hour, wait an hour (or set the clock) and reopen: a quiet card at the top centre says *Welcome back* and how long ago the notebook was last open.
+2383. **Way back.** The first row reads *Continue on page N* (or *Continue at slide N* on a page that shows a PDF page). Tap it: the view goes to the page where you stopped; the card goes.
+2384. **Questions and gaps.** Rows *Question, p. N* and *Gap, p. N* list the first two open ones of each, with their label when they have one; resolved ones are not listed; *and N more* is text, not a button. Tap one: the view goes to that marker.
+2385. **Nothing to offer.** A notebook stopped on its first page with no open marker shows no card.
+2386. **Pen.** Write the first stroke while the card is showing: the card goes and the stroke is drawn normally; the card never takes pen input.
+2387. **Close.** The cross closes it; it does not return until the next opening after the threshold.
+2388. **Stacking.** With the symbols strip on, a *Back to slide* pill showing and a *Referenced on* chip, the card sits below all of them, without covering any. Open the *Referenced on* list: the card steps aside.
+2389. **Settings.** Turn the card off: nothing appears. Raise *Offer it after* above the time away: nothing appears.
+2390. **Nothing written.** The notebook file is not modified by the card (no new revision, no sync traffic from it).
+2391. **Italian, light, dark, phone.** The texts are in Italian with the plugin in Italian; the card reads in light and dark and fits a phone's width.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Welcome-back card (#420): after a configurable absence (per device, local storage, bounded), the way back to the stored position (slide N for a PDF page) and the first open questions and gaps as links; once per opening; hides on the first stroke | yes | threshold, first time, nothing to offer, resume and slide, open markers in reading order, shortening, bounded and corrupt store, away text: `tests/welcome-back.test.ts`; view, rows, stroke, close, settings, stacking: harness `doc=welcomeback` and `doc=pillstack` | | | not tried on Android; the look-up list and unchecked checkboxes are not part of the card yet |
+| Settings *Welcome back card* and *Offer it after* | yes | settings read and range: `tests/welcome-back.test.ts` (hours) | | | |
+### 0.23 — termorder (notebooks ordered by the active term, #416; steps 2420-2439)
+
+Manual steps (real Obsidian; nothing here is verified on Android). You need a timetable with classes linked to notebooks or course folders, at least one with *From* and *To* dates around today.
+
+2420. **Default.** With a class whose dates include today and no sort ever chosen, open the Library: the sort menu shows *Active term* checked, and the notebooks of the courses of the term come first, the course whose next class is soonest at the top.
+2421. **Order.** Then come the notebooks of classes whose term is over (or not started), then the notebooks linked to no course. Inside each group the most recently changed first.
+2422. **Your choice wins.** Pick *Last modified*, close and reopen the Library: it stays on *Last modified*. Pick *Active term* again: the term order returns.
+2423. **No timetable.** Delete the timetable (or empty it): the sort menu has no *Active term* entry and the Library is by last change. A saved *Active term* choice falls back to last change.
+2424. **Undated classes.** With only classes without dates, the default stays *Last modified*; *Active term* is in the menu and puts the linked notebooks first.
+2425. **Manual order.** From the term order, drag a notebook: the order switches to *Manual order* as shown, nothing else changes.
+2426. **Search and Italian.** A search is ordered the same way; in Italian the entry reads *Semestre in corso*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Library sort *Active term* (courses of the term by next class, other courses, the rest); hidden without a timetable; default only with a dated term and no chosen sort | yes | pure ordering: `tests/term-order.test.ts`; order, menu and fallback: harness `doc=termorder` | | | |
+### 0.23 — hookclean: clean-up of hooks and stray dots (#314; steps 2440-2459)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen). The synthetic strokes of the automated tests are perfect; the point of these steps is to see how real pen noise behaves.
+
+2440. **Hooks.** With the pen, write a few lines and words quickly, lifting the pen as you normally do, until some of them end (or start) with a tiny tick. Lasso them and tap *Clean up strokes* in the bar: the ticks disappear, the lines are otherwise as written, and a notice counts hooks and dots. One *Undo* brings every tick back.
+2441. **Real corners stay.** Write an L, a check mark, an arrow drawn in one stroke, a Z, a W, a circle and a cursive word, select them and run *Clean up strokes*: nothing changes and the notice says there was nothing to clean up. If a deliberate flick of yours is cut, note which pen and width it was (the rules are in `src/ink/hook-clean.ts`, `HOOK_RULES`).
+2442. **Stray dots.** Tap the pen on the paper right after lifting it from the end of a line, so that a dot touches the end of the line. Select both and clean up: the dot goes. Write an *i* with its dot and a sentence with a full stop: they stay.
+2443. **Other pens.** Repeat with the fountain pen (the nib angle is kept) and the brush; the highlighter and the marker are not touched.
+2444. **Groups and locks.** Group a hooked line with another item and select only the line: the whole group is cleaned. Lock the page, select the ink and run the action: the lock notice appears and nothing changes. Unlock and run it again.
+2445. **Hidden ink.** Collapse a sticky note that holds ink with a hook, select the note and clean up: the ink the note hides is never changed (review fix); open the note and the hook is still there.
+2446. **Several pages.** Lasso across a page break and clean up: both pages are cleaned and one *Undo* undoes both.
+2447. **Command and sheet.** *Clean up the selected strokes* in the command palette and *Clean up strokes* in the All actions sheet (Selection) do the same; without ink selected they are not offered.
+2448. **Trim as you write.** Turn on *Settings > Writing > Trim hooks as you write*. Write many words: the little ticks at the end of the lines (a near reversal of a few points) are gone a moment after the pen lifts, the text still looks like your writing, and the pen feels no different (no extra lag). The exit tails of printed a, d and u stay. Press *Undo* once: the stroke you wrote comes back untrimmed and a notice says "Hook put back. Undo again to remove the stroke."; a second *Undo* removes it. Turn the setting off again: the ticks stay on new strokes. Strokes already written are never changed by the setting.
+2449. **Languages and looks.** Switch the plugin to Italian: the action, the notice and the setting are translated. Light and dark theme, phone and tablet width: the action sits in the bar like the other selection actions.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Hook detection at the start and end of a stroke (sharp turn, short, straight run before it); real corners, arrows, circles, curves untouched | yes | `tests/hook-clean.test.ts` (synthetic strokes) | | | thresholds (`HOOK_RULES`) are tuned on synthetic strokes only |
+| Stray-dot detection (single tiny mark, same style as the neighbour stroke, touching its end); i/j dots and full stops kept | yes | `tests/hook-clean.test.ts` | | | |
+| Clean up strokes: one undo step, keeps ids, order, groups, nib; refuses a locked page; selection follows | yes | `tests/hook-clean.test.ts` (History: execute, undo, redo, locked page); harness `doc=hookclean` | | | |
+| Selection action, palette command and sheet entry (`selection-cleanup`) | yes | registry tests (`tests/ui-registry.test.ts`); harness `doc=hookclean` | | | |
+| Setting *Trim hooks as you write* (off by default): the stroke is committed as written and the trim is its own undo step (Undo gives the written stroke back, a second Undo removes it); stricter limits than the manual clean-up (near reversal, very short hook), so letter tails stay; live input and rendering untouched | yes | `tests/hook-clean.test.ts` (review V2: raw stroke kept in the history, page times, locked page, limits), `tests/commit-trim.test.ts` (the pen-up wiring the view calls: trim step after the commit, locked page, late side-button take-back of both steps, partial take-back), the first-Undo notice and the real pen path: harness `doc=hookclean`; settings read: `tests/hook-clean-settings.test.ts`; golden hashes unchanged: `tests/pens-golden.test.ts`; harness `doc=hookclean` | | yes | needs real pen data to judge |

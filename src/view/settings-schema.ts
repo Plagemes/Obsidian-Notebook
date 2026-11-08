@@ -23,6 +23,7 @@ import { defaultDailyPath } from "../library/daily-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP } from "./reading-settings";
 import { INSERT_WIDTH_MAX, INSERT_WIDTH_MIN, INSERT_WIDTH_STEP } from "../model/note-insert";
 import { LOOKUP_WIDTH_MAX, LOOKUP_WIDTH_MIN, LOOKUP_WIDTH_STEP } from "../model/look-up";
+import { WELCOME_HOURS_MAX, WELCOME_HOURS_MIN } from "../model/welcome-back";
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 import { SYMBOL_COUNT_MAX, SYMBOL_COUNT_MIN } from "../ui/symbol-rank";
@@ -206,9 +207,13 @@ const WRITING: SettingSpec[] = [
 	{ id: "axesTicks", section: "writing", order: 58.6, name: "settings.axesTicks", desc: "settings.axesTicks.desc", control: { type: "toggle" } },
 	{ id: "axesLabels", section: "writing", order: 58.7, name: "settings.axesLabels", desc: "settings.axesLabels.desc", control: { type: "toggle" }, parent: "axesTicks", visible: (s) => s.axesTicks },
 	{ id: "autoLineBreak", section: "writing", order: 60, name: "settings.autoLineBreak", desc: "settings.autoLineBreak.desc", control: { type: "toggle" } },
+	// 0.23 hookclean (#314)
+	{ id: "trimHooks", section: "writing", order: 61, name: "settings.trimHooks", desc: "settings.trimHooks.desc", keywords: "hook tick tail flick clean pen lift uncino coda penna", control: { type: "toggle" } },
 	// 0.21 symbols
 	{ id: "symbolStrip", section: "writing", order: 62, name: "settings.symbolStrip", desc: "settings.symbolStrip.desc", keywords: "symbols maths math formula greek simboli matematica", control: { type: "toggle" } },
 	{ id: "symbolCount", section: "writing", order: 63, name: "settings.symbolCount", desc: "settings.symbolCount.desc", control: { type: "slider", min: SYMBOL_COUNT_MIN, max: SYMBOL_COUNT_MAX, step: 1 }, parent: "symbolStrip", visible: (s) => s.symbolStrip },
+	// 0.23 dimcheck (#293): the units hint of the equation editor
+	{ id: "dimensionHint", section: "writing", order: 63.5, name: "settings.dimensionHint", desc: "settings.dimensionHint.desc", keywords: "units dimensional analysis equation formula physics check unità dimensioni equazione fisica", control: { type: "toggle" } },
 	// 0.15 pen sets: named pens per subject, loaded with the notebook (view/pen-sets.ts)
 	{
 		id: "penSets", section: "writing", order: 70, name: "settings.penSets", desc: "settings.penSets.desc", keywords: "pens subject maths languages science favourites penne materia",
@@ -550,6 +555,9 @@ const STUDY: SettingSpec[] = [
 	},
 	// 0.21 slideback (#225): the pill back to where you last wrote during a lecture.
 	{ id: "slideBack", section: "study", group: "timetable", order: 31, name: "settings.slideBack", desc: "settings.slideBack.desc", control: { type: "toggle" }, keywords: "lecture slide back return current page lezione diapositiva torna" },
+	// 0.23 welcomeback (#420): the card with the way back, open questions and gaps when a notebook is reopened after a while.
+	{ id: "welcomeBack", section: "study", group: "timetable", order: 33, name: "settings.welcomeBack", desc: "settings.welcomeBack.desc", control: { type: "toggle" }, keywords: "welcome back reopen resume where i left questions gaps bentornato riprendi domande lacune" },
+	{ id: "welcomeBackHours", section: "study", group: "timetable", order: 34, name: "settings.welcomeBackHours", desc: "settings.welcomeBackHours.desc", control: { type: "slider", min: WELCOME_HOURS_MIN, max: WELCOME_HOURS_MAX, step: 1, format: suffix("h") }, parent: "welcomeBack", visible: (s) => s.welcomeBack },
 	// 0.22 lecthead (#210): the header of the class (course, lecturer, room, date, time) on the page you write on.
 	{
 		id: "lectureHeader", section: "study", group: "timetable", order: 32, name: "settings.lectureHeader", desc: "settings.lectureHeader.desc", keywords: "lecture header course lecturer room date time intestazione lezione corso docente aula",

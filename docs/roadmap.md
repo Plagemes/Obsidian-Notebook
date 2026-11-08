@@ -352,7 +352,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - Conflict-free by design: every stroke has a unique id, so concurrent edits never clash; at the end everything lands in the host's notebook with the author of each stroke.
     - Asynchronous too: people without Obsidian annotate in the web viewer (#164) and send back an annotation package that is imported with one tap; or the notebook is shared on Drive with conflict merging (#122).
 166. **P3** InkML export (open standard for digital ink).
-167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20.)
+167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20; 0.23: `notebook-v21.schema.json` for format 21.)
 
 ### E. Automation
 168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.
@@ -482,7 +482,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 246. **P2** Leader-line labels, auto-aligned, for annotated figures (anatomy, diagrams).
 247. **P2** Numbered markers on a figure (1, 2, 3) with an automatically generated legend.
 248. **P2** Figure captions and numbering ("Fig. 3") with references that update themselves.
-249. **P2** Automatic course formula sheet: collects every formula element (#110) into one page.
+249. **P2** 🧪 Automatic course formula sheet: collects every formula element (#110) into one page.
 250. **P3** Pattern fills (hatching, dots).
 251. **P3** Duplicate in series: copies on a grid or along a path.
 252. **P3** Tree diagrams (probability, decisions) with automatic layout.
@@ -501,7 +501,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 261. **P2** Sketch inside a Markdown note: a small handwriting block inside the note.
 262. **P2** Turn a region into an atomic note (Zettelkasten style), with the ink image and a link back. — superseded by the Zettelkasten system (Z1–Z12) below.
 263. **P2** Links to a precise region of a page, not only to the page.
-264. **P2** Saved views: a named region + zoom, recalled instantly.
+264. **P2** 🧪 Saved views: a named region + zoom, recalled instantly. (0.23, format v21: the optional notebook-level `views` list; *Save current view…* and *Go to saved view…* from the sheet, the notebook menu and the palette; rename, reorder, update, remove, all undoable; a view of a deleted page is shown as missing.)
 265. **P2** Global bookmarks: pages from different notebooks in one list.
 266. **P2** Planner pages showing Obsidian tasks and due dates on top.
 267. **P2** Linked images: if the file in the vault changes (e.g. a plot exported from Python), the image on the page updates.
@@ -521,7 +521,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### Paper ↔ digital and exports
 278. **P2** Paper round trip: print pages with a code, write on paper, scan it and it returns to the right page of the notebook.
 279. **P2** Custom paper editor: spacing, colours, margins, header area, combinations.
-280. **P2** Export only the written area, or the selection, as transparent PNG or SVG.
+280. **P2** 🧪 Export only the written area, or the selection, as transparent PNG or SVG.
 281. **P3** Poster printing over several sheets.
 282. **P3** Export optimised for e-ink readers.
 283. **P3** Export to LaTeX/Overleaf for theses and reports.
@@ -561,8 +561,8 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### STEM tools (no AI)
 292. ~~**P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.~~ — dropped (user decision, 2026-10-29)
-293. **P2** Dimensional analysis of formulas: flags inconsistent units.
-294. **P2** Balancing of typed chemical reactions.
+293. **P2** 🧪 Dimensional analysis of formulas: flags inconsistent units. (0.23: pure engine `src/math/dimensions.ts` reads SI units, prefixes and common derived units written in an equation (`5\,\mathrm{m}`), propagates dimensions through + − × ÷ ^, roots, functions, fractions, derivatives, integrals and sums, and compares both sides of `=`; symbols take their dimension from a value or a `[v] = m/s` line. The equation editor shows a quiet hint under the preview (setting *Check units in equations*, Writing); no format change.)
+294. **P2** 🧪 Balancing of typed chemical reactions. (0.23: `src/math/chem-balance.ts`, "Balance reaction" in the selection bar; waiting for hardware verification.)
 295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart.
 296. **P3** Step-by-step linear systems and matrices shown on the page.
 297. ~~**P3** Basic vector maps as backgrounds for geography and history (public-domain data).~~ — dropped (user decision, 2026-10-29)
@@ -601,7 +601,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### Writing and pen
 313. **P2** Automatic joining of broken strokes caused by tiny pen dropouts.
-314. **P2** Cleanup of hooks and stray dots at the start and end of strokes.
+314. **P2** 🧪 Cleanup of hooks and stray dots at the start and end of strokes.
 315. **P2** Thumb bar: a finger of the free hand switches tools while the pen keeps writing.
 316. **P2** Editable Bézier curves with handles, for precise drawings.
 317. **P3** Freehand arrows: any drawn curve can get an arrowhead.
@@ -743,13 +743,13 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 
 ### Library
 415. **P1** 🧪 Dynamic sections: Now, To complete, Changed on another device, Recent. (0.14: the first three are library dashboard panels, places, sidebar items with counts and Home chips; Recent is Home's Recent notes and the Recent filter; waiting for hardware verification)
-416. **P2** Notebooks ordered by the active term.
+416. **P2** 🧪 Notebooks ordered by the active term. (0.23: Library sort *Active term*, default only with a dated term around today and no chosen sort; uses the timetable link; waiting for hardware verification)
 
 ### PDF and lecture
 417. **P1** 🧪 Slide strip: for each slide, the exercise page after it, the margin note and the question on this slide.
 418. **P2** PDF search with suggested terms (from the outline, headings and your own text).
 419. **P2** Filtered view of marked pages only (bookmarks, markers, questions).
-420. **P2** Welcome-back banner when reopening: last slide, open questions and gaps.
+420. **P2** 🧪 Welcome-back banner when reopening: last slide, open questions and gaps. (0.23: a card after a configurable absence with the way back, the open questions and gaps; look-up list and checkboxes not included.)
 
 ### Obsidian
 421. **P2** Dynamic gallery block in notes: pages selected by tag, bookmark or course.

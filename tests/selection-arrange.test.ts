@@ -449,11 +449,11 @@ describe("registry and bar placement (wave 0.10)", () => {
 	const idsOf = (c: UiContext, kind: "all" | "page" = "all") =>
 		buildSheet(c, { kind, usage: {}, now: 0, label: (a) => a.id }).flatMap((s) => s.actions.map((a) => a.id));
 
-	it("puts select similar, align and transform on the second row of a selection bar, within the width", () => {
+	it("puts select similar, align, clean up (0.23) and transform on the second row of a selection bar, within the width", () => {
 		for (const width of [360, 800, 1280]) {
 			const bar = contextBar(sel(3, 1), width, {}, 0)!;
 			expect(bar.kind).toBe("selection");
-			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-transform-menu"]);
+			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-transform-menu"]);
 			// The first row keeps its basics (the layer moves stay where wave 0.9 put them).
 			expect(bar.actions).toContain("selection-copy");
 		}
@@ -461,11 +461,24 @@ describe("registry and bar placement (wave 0.10)", () => {
 	});
 
 	it("offers only what applies: align needs two things, similar needs ink, transform needs a selection", () => {
-		expect(contextBar(sel(1), 800, {}, 0)!.second).toEqual(["selection-similar", "selection-transform-menu"]);
+		expect(contextBar(sel(1), 800, {}, 0)!.second).toEqual(["selection-similar", "selection-cleanup", "selection-transform-menu"]);
 		expect(contextBar(sel(0, 1, 1), 800, {}, 0)!.second).toEqual(["selection-transform-menu"]);
 		expect(contextBar(sel(0, 2, 2), 800, {}, 0)!.second).toEqual(["selection-align-menu", "selection-transform-menu"]);
 		// Nothing selected: no second row at all.
 		expect(contextBar(baseContext({ tool: "lasso" }), 800, {}, 0)).not.toHaveProperty("second");
+	});
+
+	it("keeps chem balance (0.23, first row) and clean up (0.23, second row) together, each only when it applies", () => {
+		const withReaction = baseContext({ tool: "lasso", selection: { strokes: 3, elements: 1, images: 0, reactions: 1 } });
+		for (const width of [360, 800, 1280]) {
+			const bar = contextBar(withReaction, width, {}, 0)!;
+			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-transform-menu"]);
+			// On a narrow bar the chem action overflows into the sheet (priority 57); from tablet width it sits on the first row.
+			if (width >= 800) expect(bar.actions, String(width)).toContain("chem-balance");
+			expect(bar.second).not.toContain("chem-balance");
+		}
+		expect(contextBar(sel(3, 1), 800, {}, 0)!.actions).not.toContain("chem-balance");
+		expect(contextBar(sel(0, 1, 1), 800, {}, 0)!.second).not.toContain("selection-cleanup");
 	});
 
 	it("lists every operation in the All actions sheet with a selection, and none of them without one", () => {

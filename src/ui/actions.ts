@@ -48,6 +48,7 @@ export interface UiContext {
 		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
 		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
 		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
+		/** 0.23 (#294): selected text boxes and equations that hold a typed chemical reaction (optional, 0 when absent). */ reactions?: number;
 		/** 0.17 (#20): selected sticky notes, and how many of them are collapsed (optional, 0 when absent). */ stickies?: number; stickiesCollapsed?: number;
 		/** 0.19 (#103): selected checkboxes, and how many of them are linked to a task (optional, 0 when absent). */ checkboxes?: number; checkboxesLinked?: number;
 		/** 0.20 (#39): the selected items can be made one group (two or more, not already exactly one group), and how many of them are in a group now (optional, false and 0 when absent). */ canGroup?: boolean; grouped?: number;
@@ -208,6 +209,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// wave 0.9: math — edit the selected equation or graph, turn equations into ink.
 	{ id: "math-edit", label: "math.edit", icon: "square-function", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", command: "math.command.edit", when: oneMath },
 	{ id: "math-convert-ink", label: "math.convertInk", icon: "pen-line", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 58, scope: "view", command: "math.command.convertInk", when: (c) => (c.selection?.equations ?? 0) > 0 },
+	// 0.23 (#294): balance the chemical reaction typed in the selected text boxes and equations.
+	{ id: "chem-balance", label: "chem.balance", icon: "flask-conical", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 57, scope: "view", command: "chem.command.balance", when: (c) => (c.selection?.reactions ?? 0) > 0, keywords: "chemistry reaction balance equation stoichiometry chimica reazione bilancia" },
 	// v10: anchored excerpts (#105). With a selection they excerpt its region; with nothing selected the next drag on a page
 	// outlines the region (lasso bar, All actions sheet). "Go to source" when an excerpt is selected.
 	{ id: "excerpt-open-source", label: "excerpt.openSource", icon: "corner-up-left", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 93, scope: "view", command: "excerpt.command.openSource", readOnly: true, when: (c) => (c.selection?.excerpts ?? 0) > 0, keywords: "excerpt source back jump origin estratto fonte" },
@@ -229,6 +232,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "select-rectangle", label: "select.rectangle", icon: "box-select", group: "selection", surfaces: ["context", "sheet"], contexts: ["lasso"], priority: 66, scope: "view", command: "command.selectRectangle", when: lassoOrSelection, checked: (c) => !!c.toggles.selectRectangle, keywords: "lasso freehand box marquee mode" },
 	{ id: "select-by-style", label: "select.byStyle", icon: "palette", group: "selection", surfaces: ["context", "sheet"], contexts: ["lasso"], priority: 64, scope: "view", command: "command.selectByStyle", when: lassoOrSelection, keywords: "colour color tool pen highlighter same similar all page" },
 	{ id: "selection-similar", label: "select.similar", icon: "check-check", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 62, scope: "view", when: hasInk },
+	// 0.23 (#314): hooks at the ends of strokes and stray dots, cleaned in one undo step.
+	{ id: "selection-cleanup", label: "cleanup.action", icon: "sparkles", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 58, scope: "view", command: "command.cleanUp", when: hasInk, keywords: "clean tidy hook tick dot bounce stray trim pulisci uncino puntino" },
 	// 0.15 states (#241): the selected ink becomes a part of the drawing, which the states of the page move together (view/states-tools.ts).
 	{ id: "selection-part", label: "states.makePart", icon: "group", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.makePart", when: hasInk, keywords: "states part group figure physics stati parte gruppo" },
 	{ id: "select-same-colour", label: "select.sameColour", icon: "palette", group: "selection", surfaces: ["sheet"], priority: 48, scope: "view", command: "command.selectSameColour", when: hasInk, keywords: "similar color all" },
@@ -425,6 +430,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "fit-width", label: "tool.fit", icon: "move-horizontal", group: "view", surfaces: ["quick", "sheet"], priority: 38, scope: "view", command: "command.fit", readOnly: true, keywords: "zoom" },
 	{ id: "next-page", label: "command.nextPage", icon: "chevron-down", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "previous-page", label: "command.prevPage", icon: "chevron-up", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	// 0.23 (#264): saved views: a named page region with a zoom, recalled in one step. Saving needs an editable notebook; going to one works on a read-only one too.
+	{ id: "saved-view-save", label: "views.save.menu", icon: "frame", group: "view", surfaces: ["sheet", "notebook"], priority: 33, scope: "view", command: "command.savedViewSave", keywords: "saved views place zoom region name save viste salvate zona salva" },
+	{ id: "saved-view-go", label: "views.go.menu", icon: "scan-eye", group: "view", surfaces: ["sheet", "notebook"], priority: 32, scope: "view", command: "command.savedViewGo", readOnly: true, keywords: "saved views go recall place zoom region viste salvate vai richiama zona" },
 
 	// --- export and share.
 	{ id: "share-copy-link", label: "share.copyLink", icon: "link", group: "share", surfaces: ["page"], priority: 40, scope: "view", readOnly: true },
@@ -456,6 +464,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "figures", label: "figures.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 23, scope: "view", command: "command.figures", readOnly: true, keywords: "figures photos pictures images crops gallery section immagini foto figure galleria ritagli" },
 	// wave 0.10 (81): the same dialog started on PNG images (a vault folder, a scale, a page range) or on Print (desktop only).
 	{ id: "export-png", label: "export.png.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 27, scope: "view", command: "command.exportPng", readOnly: true, keywords: "png images pictures pages folder scale range esporta immagini" },
+	// 0.23 (#280): the written area of the page, or the selection, as a transparent PNG or SVG
+	{ id: "export-area", label: "exportArea.menu", icon: "crop", group: "share", surfaces: ["sheet", "notebook"], priority: 26.5, scope: "view", command: "command.exportArea", readOnly: true, keywords: "export written area crop transparent png svg esporta area scritta ritaglia trasparente" },
+	{ id: "selection-export-area", label: "exportArea.selection", icon: "crop", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40.3, scope: "view", command: true, readOnly: true, when: hasSelection, keywords: "export selection transparent png svg esporta selezione trasparente" },
 	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
 
 	// --- notebooks: the library, the ribbon and the palette.
@@ -540,6 +551,7 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.21 (#187): back-of-book index.
 	{ id: "selection-add-to-index", label: "bookindex.action", icon: "book-a", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 38, scope: "view", command: true, when: hasSelection, keywords: "index back of book term glossary indice analitico termine" },
 	{ id: "book-index", label: "bookindex.menu", icon: "book-a", group: "share", surfaces: ["sheet", "notebook"], priority: 22, scope: "view", command: "command.bookIndex", readOnly: true, keywords: "index back of book terms pages glossary indice analitico termini pagine" },
+	{ id: "formula-sheet", label: "formulasheet.menu", icon: "sigma", group: "share", surfaces: ["sheet", "notebook"], priority: 21, scope: "view", command: "command.formulaSheet", readOnly: true, keywords: "formula sheet equations latex maths collect formulario formule equazioni raccolta" },
 	// 0.18 (#86): margin comments: a comment anchored to the selection's region, or to a rectangle drawn on the page; the side panel lists them.
 	{ id: "comment-selection", label: "comments.action", icon: "message-square-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40, scope: "view", command: "comments.command.selection", when: hasSelection, enabled: pageOpen, keywords: "comment note margin review annotation commento nota margine revisione" },
 	{ id: "comment-region", label: "comments.region", icon: "square-dashed", group: "insert", surfaces: ["sheet", "palette"], priority: 46, scope: "view", command: true, enabled: pageOpen, keywords: "comment region rectangle margin note review commento regione rettangolo margine" },
