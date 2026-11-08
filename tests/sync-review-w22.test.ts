@@ -64,14 +64,99 @@ describe("review W22 S4: two cloud files with one name", () => {
 			return { ...ch, upserts: ch.upserts.map((u) => (u.path === "dup2.md" ? { ...u, path: "dup.md", hash: "other" } : u)) };
 		};
 		const r = await sync();
-		expect(local.get("dup.md")).toBe("one");
+		// Review round 2 (R2-4): the newest twin ("two", written last) is followed; the older one becomes the copy.
+		expect(local.get("dup.md")).toBe("two");
 		const [copy] = copies(local, "dup");
 		expect(copy).toBeDefined();
-		expect(local.get(copy!)).toBe("two");
-		expect(remote.read(copy!)).toBe("two");
-		expect(remote.files.has("dup2.md")).toBe(false);
-		expect(remote.trash.map((t) => t.data)).toContain("two");
+		expect(local.get(copy!)).toBe("one");
+		expect(remote.read(copy!)).toBe("one");
+		expect(remote.files.has("dup.md")).toBe(false);
+		expect(remote.trash.map((t) => t.data)).toContain("one");
 		expect(r.counts.conflicts).toBe(1);
+	});
+});
+
+describe("review W22 round 2", () => {
+	const twinSetup = () => {
+		const s = setup();
+		s.remote.put("dup.md", "one");
+		s.remote.put("dup2.md", "two, much longer");
+		const orig = s.remote.changes.bind(s.remote);
+		s.remote.changes = async (c) => {
+			const ch: RemoteChanges = await orig(c);
+			return { ...ch, upserts: ch.upserts.map((u) => (u.path === "dup2.md" ? { ...u, path: "dup.md", hash: "other", mtime: 0 } : u)) };
+		};
+		return s;
+	};
+
+	it("R2-1: a kept file whose copy back is above the size cap is never deleted by a later run (cloud side)", async () => {
+		const { local, remote, sync } = setup();
+		local.put("big.pdf", "0123456789");
+		local.put("a.md", "a");
+		await sync();
+		local.files.delete("big.pdf");
+		// "Keep them" on a phone with a 5-byte cap: the download back is too large.
+		const kept = await sync({ deletions: "restore", hardMaxBytes: 5 });
+		expect(kept.tooLarge.map((x) => x.path)).toEqual(["big.pdf"]);
+		const later = await sync({ hardMaxBytes: 5 });
+		expect(remote.read("big.pdf")).toBe("0123456789");
+		expect(remote.trash).toEqual([]);
+		expect(later.counts.delRemote).toBe(0);
+		// On a device without the cap the file simply comes back.
+		await sync();
+		expect(local.get("big.pdf")).toBe("0123456789");
+	});
+
+	it("R2-1: the same on this side: a kept local file is never trashed later", async () => {
+		const { local, remote, sync } = setup();
+		local.put("big.pdf", "0123456789");
+		await sync();
+		remote.del("big.pdf");
+		await sync({ deletions: "restore", large: "skip", largeBytes: 5 });
+		await sync({ large: "skip", largeBytes: 5 });
+		expect(local.get("big.pdf")).toBe("0123456789");
+		expect(local.trashed).toEqual([]);
+	});
+
+	it("R2-7: a twin above the size cap is left in the cloud, not read into memory", async () => {
+		const { local, remote, sync } = twinSetup();
+		const r = await sync({ hardMaxBytes: 10 });
+		expect(local.get("dup.md")).toBe("one");
+		expect(copies(local, "dup")).toEqual([]);
+		expect(remote.files.has("dup2.md")).toBe(true);
+		expect(remote.calls.some((c) => c.startsWith("remove"))).toBe(false);
+		expect(r.events).toContainEqual({ kind: "skip", path: "dup.md", detail: "too-large" });
+	});
+
+	it("R2-3 / R2-7: a replaced version that could not be checked, or is too large here, is reported", async () => {
+		const { local, remote, sync } = setup();
+		local.put("a.md", "v1");
+		await sync();
+		const orig = remote.upload.bind(remote);
+		remote.upload = async (path, data, ifRev) => ({ ...(await orig(path, data, ifRev)), displacedUnknown: true, displaced: [{ rev: "r-big", size: 999 }] });
+		local.put("a.md", "v2");
+		const r = await sync();
+		expect(remote.read("a.md")).toBe("v2");
+		expect(copies(local, "a")).toEqual([]);
+		expect(r.counts.errors).toBe(2);
+		expect(r.events.filter((e) => e.kind === "error").map((e) => e.detail)).toEqual([expect.stringContaining("could not be checked"), expect.stringContaining("r-big")]);
+	});
+
+	it("R2-9: a local file renamed outside Obsidian to a name the sync skips is not deleted in the cloud", async () => {
+		const { local, remote, sync } = setup();
+		local.put("a.md", "content");
+		await sync();
+		local.files.delete("a.md");
+		local.put("a?.md", "content");
+		const r = await sync();
+		expect(remote.read("a.md")).toBe("content");
+		expect(remote.trash).toEqual([]);
+		expect(r.events).toContainEqual({ kind: "skip", path: "a.md", detail: "name" });
+		expect(r.unsyncable).toEqual(["a?.md"]);
+		// A real deletion is still one.
+		local.files.delete("a?.md");
+		await sync();
+		expect(remote.read("a.md")).toBeUndefined();
 	});
 });
 

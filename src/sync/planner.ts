@@ -88,6 +88,11 @@ export interface Plan {
 	tooLarge: SyncAction[];
 	/** Deletions left for a later run (`deletions: "defer"`). */
 	deferred: SyncAction[];
+	/**
+	 * Review round 2 (R2-1): kept files ("Keep them") whose copy back cannot run now (size cap, large-file rule). Their base must be
+	 * dropped, so no later run reads the missing side as a deletion: the file is then simply new on one side.
+	 */
+	unbase: string[];
 	/** Paths that have a base (the files tracked), for the guard's percentage. */
 	tracked: number;
 }
@@ -168,8 +173,15 @@ export function plan(facts: readonly PathFacts[], o: PlanOptions): Plan {
 	const allowed = o.allowedDeletes ?? new Set<string>();
 	const unconfirmed = (a: SyncAction) => isDelete(a) && !allowed.has(a.path);
 	const deletes = actions.filter(unconfirmed);
+	const restored = new Set<string>();
 	if (deletes.length > 0) {
-		if (o.deletions === "restore") actions = actions.map((a) => (unconfirmed(a) ? restoreOf(a, byPath) : a));
+		if (o.deletions === "restore") {
+			actions = actions.map((a) => {
+				if (!unconfirmed(a)) return a;
+				restored.add(a.path);
+				return restoreOf(a, byPath);
+			});
+		}
 		else if (o.deletions === "defer") {
 			deferred = deletes;
 			actions = actions.filter((a) => !unconfirmed(a));
@@ -197,5 +209,6 @@ export function plan(facts: readonly PathFacts[], o: PlanOptions): Plan {
 		});
 	}
 	actions.sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-	return { actions, heldDeletes, askLarge, skippedLarge, tooLarge, deferred, tracked };
+	const unbase = [...tooLarge, ...askLarge, ...skippedLarge].filter((a) => restored.has(a.path)).map((a) => a.path);
+	return { actions, heldDeletes, askLarge, skippedLarge, tooLarge, deferred, tracked, unbase };
 }

@@ -51,7 +51,7 @@ export function createProvider(auth: StoredAuth | ProviderAuth, http: Http, opts
 		account: () => (inner ?? make("")).account(),
 		changes: async (cursor, signal) => bound().changes(cursor, signal),
 		download: async (id, signal) => bound().download(id, signal),
-		upload: async (path, data, ifRev, signal) => bound().upload(path, data, ifRev, signal),
+		upload: async (path, data, ifRev, signal, limits) => bound().upload(path, data, ifRev, signal, limits),
 		remove: async (id, ifRev, signal) => bound().remove(id, ifRev, signal),
 		prepareRoot: async (name, signal) => {
 			const root = auth.provider === "gdrive" ? await prepareDriveRoot(api, name, signal) : await prepareOneDriveRoot(api, name, signal);

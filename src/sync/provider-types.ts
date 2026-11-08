@@ -34,12 +34,25 @@ export interface RemoteEntry {
  */
 export interface DisplacedRevision {
 	rev: string;
-	data: ArrayBuffer;
+	/** The bytes; absent when the revision is above the caller's `maxBytes` (review round 2 R2-7: left in the version history). */
+	data?: ArrayBuffer;
+	size?: number;
 }
 
 /** What `upload` returns: the new entry, plus any revision the write replaced without being able to refuse it. */
 export interface UploadedEntry extends RemoteEntry {
 	displaced?: DisplacedRevision[];
+	/**
+	 * Review round 2 (R2-3): the write succeeded, but whether it replaced another device's version could not be checked (the
+	 * revision list or a download failed). The engine reports it; the version stays in the provider's history.
+	 */
+	displacedUnknown?: boolean;
+}
+
+/** Limits of one upload call. */
+export interface UploadLimits {
+	/** Displaced revisions larger than this are not downloaded (0 or absent: no limit). */
+	maxBytes?: number;
 }
 
 /** Result of a delta listing: everything that changed since `cursor`, or a full listing when `cursor` was undefined. */
@@ -100,7 +113,7 @@ export interface CloudProvider {
 	 * With `ifRev`, replaces only if the remote revision still equals it, otherwise throws RemoteConflictError.
 	 * With `ifRev === null`, creates only if no file exists at `path`, otherwise throws RemoteConflictError.
 	 */
-	upload(path: string, data: ArrayBuffer, ifRev: string | null | undefined, signal?: AbortSignal): Promise<UploadedEntry>;
+	upload(path: string, data: ArrayBuffer, ifRev: string | null | undefined, signal?: AbortSignal, limits?: UploadLimits): Promise<UploadedEntry>;
 	/** Moves the file to the remote trash. With `ifRev`, only if unchanged (else RemoteConflictError). */
 	remove(id: string, ifRev?: string, signal?: AbortSignal): Promise<void>;
 }

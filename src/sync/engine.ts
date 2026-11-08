@@ -200,7 +200,7 @@ export interface AppliedChanges {
 
 /**
  * Applies a listing to the remote index of `state` (only paths in scope are kept).
- *  - Two cloud files at one path: the one with the smallest id is followed (every device picks the same), the others are
+ *  - Two cloud files at one path: the newest (then the smallest id) is followed (every device picks the same), the others are
  *    returned as twins for the engine to keep as conflicted copies.
  *  - A cloud file renamed to a name that cannot exist here: its old path forgets its base, so the local file is never deleted
  *    for it (it goes up again under its old name), and the new name is reported as unsyncable.
@@ -235,7 +235,9 @@ export function applyChanges(state: SyncState, changes: RemoteChanges, keep: (pa
 	const main = new Map<string, RemoteEntry>();
 	const twins = new Map<string, RemoteEntry[]>();
 	for (const [p, ids] of byPath) {
-		const list = [...ids.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+		// Review round 2 (R2-4): the newest is followed (the device's current content stays, the older twin becomes the copy); ties
+		// go to the smallest id. The same listing gives the same pick on every device.
+		const list = [...ids.values()].sort((a, b) => b.mtime - a.mtime || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 		const first = list[0]!;
 		main.set(p, first);
 		if (list.length > 1) twins.set(p, list.slice(1));
@@ -436,6 +438,15 @@ class Run {
 			trusted: this.state.trusted, deletions: this.o.deletions, largeBytes: this.o.largeBytes, large: this.o.large, approvedLarge: this.o.approvedLarge,
 			declinedLarge: this.o.declinedLarge, allowedDeletes: this.o.allowedDeletes, massDeleteMax: this.o.massDeleteMax, hardMaxBytes: this.o.hardMaxBytes,
 		});
+		// Review round 2 (R2-1): a kept file whose copy back cannot run now loses its base, so no later run reads it as deleted.
+		for (const p of planned.unbase) if (this.state.paths.get(p)?.b) setRecord(this.state, p, { b: null });
+		// Review round 2 (R2-9): a file renamed here (outside Obsidian) to a name the sync skips is not a deletion in the cloud.
+		const renamedAway = await this.renamedToSkippedNames(planned.actions.concat(planned.heldDeletes), paths);
+		if (renamedAway.size > 0) {
+			planned.actions = planned.actions.filter((a) => !renamedAway.has(a.path));
+			planned.heldDeletes = planned.heldDeletes.filter((a) => !renamedAway.has(a.path));
+			if (first) for (const p of renamedAway) this.skip(p, "name");
+		}
 		if (first) {
 			this.result.heldDeletes = planned.heldDeletes.map((a) => ({ path: a.path, side: a.kind === "delete-local" ? "local" : "remote" }));
 			this.result.askLarge = planned.askLarge.map((a) => ({ path: a.path, size: sizeOf(a) }));
@@ -467,6 +478,41 @@ class Run {
 			this.p.progress?.(++done, total);
 			await this.save();
 		}
+	}
+
+	/**
+	 * Review round 2 (R2-9): the paths among `actions`' cloud deletions whose file is still here under a name the sync skips (a
+	 * rename made outside Obsidian): same size and the same content hash as at the last sync.
+	 */
+	private async renamedToSkippedNames(actions: readonly SyncAction[], paths: ReadonlySet<string>): Promise<Set<string>> {
+		const out = new Set<string>();
+		const deletions = actions.filter((a) => a.kind === "delete-remote");
+		if (deletions.length === 0) return out;
+		const skipped = [...paths].filter((p) => !syncablePath(p)).map((p) => this.local.get(p)).filter((f): f is LocalFile => !!f);
+		if (skipped.length === 0) return out;
+		const hashes = new Map<string, string | null>();
+		const hashOf = async (path: string): Promise<string | null> => {
+			if (!hashes.has(path)) {
+				try {
+					hashes.set(path, await this.p.hash(await this.p.local.read(path)));
+				} catch {
+					hashes.set(path, null);
+				}
+			}
+			return hashes.get(path) ?? null;
+		};
+		for (const a of deletions) {
+			const base = this.state.paths.get(a.path)?.b;
+			if (!base) continue;
+			for (const f of skipped) {
+				if (f.size !== base.ls) continue;
+				if ((await hashOf(f.path)) === base.lh) {
+					out.add(a.path);
+					break;
+				}
+			}
+		}
+		return out;
 	}
 
 	/** A path skipped because its name cannot exist on every device: noted once per run, never deleted on either side. */
@@ -512,11 +558,17 @@ class Run {
 	/**
 	 * Review W22 S4: the extra cloud files listed at `path` (Drive allows two files with one name). Each is kept: a copy with the
 	 * same content as the followed one is just moved to the cloud's trash; any other is written next to the file as a conflicted
-	 * copy (and uploaded under that name), then moved to the cloud's trash. Every device follows the same file (smallest id).
+	 * copy (and uploaded under that name), then moved to the cloud's trash. Every device follows the same file (newest, then
+	 * smallest id). A twin above this device's size cap is left alone in the cloud (review round 2 R2-7).
 	 */
 	private async resolveTwins(path: string, main: RemoteEntry, twins: RemoteEntry[]): Promise<void> {
+		const cap = this.o.hardMaxBytes ?? 0;
 		for (const t of twins) {
 			const same = !!t.hash && !!main.hash && t.hashAlg === main.hashAlg && t.hash === main.hash && t.size === main.size;
+			if (!same && cap > 0 && t.size > cap) {
+				this.skip(path, "too-large");
+				continue;
+			}
 			if (!same) {
 				const data = await this.remote(() => this.p.remote.download(t.id, this.p.signal));
 				const hash = await this.p.hash(data);
@@ -596,7 +648,7 @@ class Run {
 			setRecord(this.state, path, { b: { ...base, lm: got.stat.mtime, ls: got.stat.size } });
 			return;
 		}
-		const entry = await this.remote(() => this.p.remote.upload(path, got.data, ifRev, this.p.signal));
+		const entry = await this.remote(() => this.p.remote.upload(path, got.data, ifRev, this.p.signal, { maxBytes: this.o.hardMaxBytes ?? 0 }));
 		const meta = metaOf(entry);
 		setRecord(this.state, path, { r: meta, b: { lm: got.stat.mtime, ls: got.stat.size, lh: got.hash, rr: meta.rev } });
 		this.result.counts.up++;
@@ -609,10 +661,23 @@ class Run {
 	 * Google Drive). Each is kept as a conflicted copy, here and in the cloud.
 	 */
 	private async keepDisplaced(path: string, entry: UploadedEntry): Promise<void> {
+		if (entry.displacedUnknown) {
+			// Review round 2 (R2-3): our write is in the cloud, but whether it replaced another device's version is unknown: said, so
+			// the user can look at the file's version history in the cloud.
+			this.result.counts.errors++;
+			this.event("error", path, "uploaded, but a version written at the same moment by another device could not be checked: see the file's version history in the cloud");
+		}
 		for (const d of entry.displaced ?? []) {
+			if (!d.data) {
+				// Review round 2 (R2-7): above this device's size cap; it stays in the cloud's version history.
+				this.result.counts.errors++;
+				this.event("error", path, `the replaced cloud version ${d.rev} is too large to keep on this device: it is in the file's version history in the cloud`);
+				continue;
+			}
+			const data = d.data;
 			try {
-				const copy = await this.writeCopy(path, d.data);
-				await this.uploadCopy(copy, d.data, await this.p.hash(d.data));
+				const copy = await this.writeCopy(path, data);
+				await this.uploadCopy(copy, data, await this.p.hash(data));
 			} catch (e) {
 				if (e instanceof Stop) throw e;
 				this.result.counts.errors++;
@@ -669,7 +734,7 @@ class Run {
 				setRecord(this.state, path, { r: remote, b: { ...base, rr: remote.rev } });
 				return;
 			}
-			const up = await this.remote(() => this.p.remote.upload(path, local.data, remote.rev, this.p.signal));
+			const up = await this.remote(() => this.p.remote.upload(path, local.data, remote.rev, this.p.signal, { maxBytes: this.o.hardMaxBytes ?? 0 }));
 			const meta = metaOf(up);
 			setRecord(this.state, path, { r: meta, b: { lm: local.stat.mtime, ls: local.stat.size, lh: local.hash, rr: meta.rev } });
 			this.result.counts.up++;
@@ -684,7 +749,7 @@ class Run {
 		setRecord(this.state, path, { r: remote, b: theirs });
 		await this.uploadCopy(copy, data, hash);
 		if (!local) return;
-		const up = await this.remote(() => this.p.remote.upload(path, local.data, remote.rev, this.p.signal));
+		const up = await this.remote(() => this.p.remote.upload(path, local.data, remote.rev, this.p.signal, { maxBytes: this.o.hardMaxBytes ?? 0 }));
 		const meta = metaOf(up);
 		setRecord(this.state, path, { r: meta, b: { lm: local.stat.mtime, ls: local.stat.size, lh: local.hash, rr: meta.rev } });
 		this.result.counts.up++;
