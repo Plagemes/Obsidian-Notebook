@@ -4,7 +4,7 @@ import { MIGRATIONS } from "../src/model/migrations";
 import { freezeStroke, parse, serialize, serializeChecked } from "../src/model/serialize";
 import { stressDocument } from "../src/model/stress";
 import {
-	CURRENT_VERSION, FORMAT_ID, RENDER_FREEHAND, RENDER_INK, RENDER_VERSIONS, TOOLS,
+	CURRENT_VERSION, FORMAT_ID, RENDER_FREEHAND, RENDER_INK, RENDER_VERSIONS, TOOLS, isNewPen,
 	type NotebookDocument, type Point, type RenderVersion,
 } from "../src/model/types";
 import { delAt, getAt, parseRaw, pushAt, setAt, type Raw } from "./raw-json";
@@ -26,11 +26,14 @@ function oldDoc(version: number): Raw {
 	};
 }
 
+/** The tools of formats before v20: the new pens exist only with render 2 (see tests/model-v20.test.ts). */
+const OLD_TOOLS = TOOLS.filter((t) => !isNewPen(t));
+
 function mixedDoc(): NotebookDocument {
 	const doc = createDocument(new Date(stamp));
 	const pts: Point[] = [[1, 2, 0.5], [3, 4, 0.6]];
 	let n = 0;
-	for (const tool of TOOLS) {
+	for (const tool of OLD_TOOLS) {
 		for (const render of RENDER_VERSIONS) {
 			const s = createStroke("#112233", 2, pts.map((p) => [...p] as Point), tool, render);
 			s.id = `s${n++}`;
@@ -104,7 +107,7 @@ describe("format v5: per-stroke render", () => {
 		const r = parsed(text);
 		expect(r.migratedFrom).toBeNull();
 		expect(r.doc.pages[0]!.strokes.map((s) => [s.tool, s.render])).toEqual(
-			TOOLS.flatMap((t) => RENDER_VERSIONS.map((v) => [t, v])),
+			OLD_TOOLS.flatMap((t) => RENDER_VERSIONS.map((v) => [t, v])),
 		);
 		expect(serialize(r.doc)).toBe(text);
 	});

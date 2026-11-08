@@ -161,9 +161,9 @@ export function lodPolygon(points: readonly Point[], width: number, tool: Tool, 
  * null when the exact path should be used. The error of a node is its distance from the chord between the kept
  * neighbours plus the difference of its radius from the chord's: the outline of the discs moves by no more.
  */
-export function lodNodes(points: readonly Point[], width: number, tool: Tool, level: number): number[] | null {
+export function lodNodes(points: readonly Point[], width: number, tool: Tool, level: number, nib?: number): number[] | null {
 	if (level <= 0 || points.length < LOD_MIN_POINTS) return null;
-	const g = InkBuilder.fromPoints(points, width, tool, scratch);
+	const g = InkBuilder.fromPoints(points, width, tool, scratch, nib);
 	const n = g.nodeCount;
 	if (n < 3) return null;
 	const { nx, ny, nr } = g;
@@ -237,9 +237,9 @@ export function polygonSvgPath(xy: readonly number[]): string {
  * SVG path of a stroke for LOD `level` at `width` (for one-off drawing such as thumbnails, where the width can
  * differ from the stroke's); the exact path when there is nothing to simplify.
  */
-export function lodSvgPath(stroke: Pick<Stroke, "points" | "width" | "tool" | "render">, width: number, level: number): string {
+export function lodSvgPath(stroke: Pick<Stroke, "points" | "width" | "tool" | "render"> & { nib?: number }, width: number, level: number): string {
 	if (stroke.render === RENDER_INK) {
-		const nodes = lodNodes(stroke.points, width, stroke.tool, level);
+		const nodes = lodNodes(stroke.points, width, stroke.tool, level, stroke.nib);
 		if (!nodes) return strokeSvgPath({ ...stroke, width });
 		const sink = new SvgPathSink();
 		addLodNodesPath(sink, nodes);

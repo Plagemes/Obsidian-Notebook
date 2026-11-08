@@ -1,4 +1,5 @@
 import type { Stroke } from "../model/types";
+import { inkReach } from "./ink-geometry";
 
 export interface BBox {
 	minX: number;
@@ -7,7 +8,7 @@ export interface BBox {
 	maxY: number;
 }
 
-/** Stroke bounding box, grown by half the stroke width. */
+/** Stroke bounding box, grown by half the stroke width (v20: by the largest disc of a fountain pen or a brush, which can be wider than that). */
 export function strokeBounds(stroke: Stroke): BBox {
 	let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 	for (const [x, y] of stroke.points) {
@@ -16,7 +17,7 @@ export function strokeBounds(stroke: Stroke): BBox {
 		if (x > maxX) maxX = x;
 		if (y > maxY) maxY = y;
 	}
-	const pad = stroke.width / 2;
+	const pad = inkReach(stroke.tool, stroke.width);
 	return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
@@ -57,7 +58,7 @@ export function segmentDistance(
 export function strokeHit(
 	stroke: Stroke, ax: number, ay: number, bx: number, by: number, radius: number, bounds = strokeBounds(stroke),
 ): boolean {
-	const reach = radius + stroke.width / 2;
+	const reach = radius + inkReach(stroke.tool, stroke.width);
 	if (Math.max(ax, bx) + radius < bounds.minX || Math.min(ax, bx) - radius > bounds.maxX) return false;
 	if (Math.max(ay, by) + radius < bounds.minY || Math.min(ay, by) - radius > bounds.maxY) return false;
 	const pts = stroke.points;

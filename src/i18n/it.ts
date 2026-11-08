@@ -3953,4 +3953,18 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"backup.status.failed": "Ultimo backup non riuscito ({time}): {error}",
 	"backup.status.next": "Prossimo backup dopo {time}.",
 	"backup.status.dueNow": "Il prossimo backup è dovuto.",
+	// 0.22 pens
+	"tool.fountain": "Stilografica",
+	"tool.brush": "Pennello",
+	"tool.marker": "Pennarello",
+	"practice.tool.fountain": "Stilografica",
+	"practice.tool.brush": "Pennello",
+	"practice.tool.marker": "Pennarello",
+	"tool.penKind": "Tipo di penna",
+	"tool.nib": "Angolo della punta",
+	"tool.nib.value": "Angolo della punta {angle} gradi",
+	"settings.defaultPenKind": "Tipo di penna",
+	"settings.defaultPenKind.desc": "La penna con cui parte lo strumento penna. Si cambia nelle opzioni della penna.",
+	"settings.defaultNibAngle": "Angolo della punta",
+	"settings.defaultNibAngle.desc": "Le linee lungo la punta sono sottili, di traverso spesse. Salvato nel tratto.",
 };

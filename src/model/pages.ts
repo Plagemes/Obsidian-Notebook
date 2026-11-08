@@ -38,6 +38,8 @@ export function copyStroke(s: Stroke, id: string = s.id, slide?: string | null, 
 	if (ref !== undefined) copy.slide = ref;
 	const g = group === undefined ? s.group : group ?? undefined;
 	if (g !== undefined) copy.group = g;
+	// v20: the nib angle of a fountain pen or a marker.
+	if (s.nib !== undefined) copy.nib = s.nib;
 	return freezeStroke(copy);
 }
 

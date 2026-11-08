@@ -89,7 +89,6 @@ describe("parse rejects corrupt files", () => {
 		["stroke without points", (d) => { setAt(d, ["pages", 0, "strokes", 0, "points"], []); }],
 		["bad colour", (d) => { setAt(d, ["pages", 0, "strokes", 0, "color"], "red"); }],
 		["zero width", (d) => { setAt(d, ["pages", 0, "strokes", 0, "width"], 0); }],
-		["unknown tool", (d) => { setAt(d, ["pages", 0, "strokes", 0, "tool"], "laser"); }],
 		["duplicate stroke id", (d) => { setAt(d, ["pages", 0, "strokes", 1, "id"], getAt(d, ["pages", 0, "strokes", 0, "id"])); }],
 		["unknown paper", (d) => { setAt(d, ["pages", 0, "paper"], { kind: "dots" }); }],
 		["missing id", (d) => { delAt(d, ["id"]); }],
@@ -99,6 +98,17 @@ describe("parse rejects corrupt files", () => {
 		const d = valid();
 		mutate(d);
 		expect(reason(JSON.stringify(d))).not.toBe("ok");
+	});
+	// v20: an unknown tool name is no longer fatal when reading: the stroke is read as a pen and counted (the strict check still fails).
+	it("unknown tool: read as a pen and counted, never silently", () => {
+		const d = valid();
+		setAt(d, ["pages", 0, "strokes", 0, "tool"], "laser");
+		const r = parse(JSON.stringify(d));
+		expect(r.ok).toBe(true);
+		if (r.ok) {
+			expect(r.dropped).toBe(1);
+			expect(r.doc.pages[0]!.strokes[0]!.tool).toBe("pen");
+		}
 	});
 });
 

@@ -45,7 +45,7 @@ export interface RedoChoice {
 
 type Mode = "all" | "some" | "region";
 
-const TOOL_KEYS = { pen: "practice.tool.pen", highlighter: "practice.tool.highlighter", shape: "practice.tool.shape" } as const;
+const TOOL_KEYS = { pen: "practice.tool.pen", highlighter: "practice.tool.highlighter", shape: "practice.tool.shape", fountain: "practice.tool.fountain", brush: "practice.tool.brush", marker: "practice.tool.marker" } as const;
 
 /** Asks what to hide and where the practice copy goes. Null when cancelled. */
 export function askRedo(app: App, req: RedoRequest): Promise<RedoChoice | null> {

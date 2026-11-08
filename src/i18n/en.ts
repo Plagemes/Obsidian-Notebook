@@ -3951,6 +3951,20 @@ export const en = {
 	"backup.status.failed": "Last backup failed ({time}): {error}",
 	"backup.status.next": "Next backup after {time}.",
 	"backup.status.dueNow": "The next backup is due.",
+	// 0.22 pens
+	"tool.fountain": "Fountain pen",
+	"tool.brush": "Brush",
+	"tool.marker": "Marker",
+	"practice.tool.fountain": "Fountain pen",
+	"practice.tool.brush": "Brush",
+	"practice.tool.marker": "Marker",
+	"tool.penKind": "Pen type",
+	"tool.nib": "Nib angle",
+	"tool.nib.value": "Nib angle {angle} degrees",
+	"settings.defaultPenKind": "Pen type",
+	"settings.defaultPenKind.desc": "The pen the pen tool starts with. You can change it in the pen options.",
+	"settings.defaultNibAngle": "Nib angle",
+	"settings.defaultNibAngle.desc": "Lines along the nib are thin, across it thick. Saved with each stroke.",
 } as const;
 
 export type MessageKey = keyof typeof en;

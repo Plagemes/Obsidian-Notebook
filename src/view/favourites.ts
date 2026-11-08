@@ -1,12 +1,20 @@
 // Favourite pens and eraser size: pure logic (no 'obsidian'), unit-tested.
+import { kindHasNib, isPenKind, normaliseNib, type PenKind } from "../ink/pen-kinds";
+import { NIB_DEFAULT } from "../model/types";
+import type { MessageKey } from "../i18n/en";
 
 export type FavouriteTool = "pen" | "highlighter";
 
-/** One saved pen: tool + colour + width (pt). */
+/**
+ * One saved pen: tool + colour + width (pt). 0.22 (#35): a pen of the *pen* tool may be a fountain pen, a brush or a marker (`kind`, absent =
+ * ballpoint) and the nib pens keep their nib angle (`nib`, absent = 45). Older settings have neither and read as ballpoint pens.
+ */
 export interface FavouritePen {
 	tool: FavouriteTool;
 	color: string;
 	width: number;
+	kind?: Exclude<PenKind, "pen">;
+	nib?: number;
 }
 
 export const FAVOURITE_SLOTS = 6;
@@ -27,17 +35,29 @@ export interface PenState {
 	penWidth: number;
 	highlighterColor: string;
 	highlighterWidth: number;
+	/** 0.22 (#35): the kind of pen and its nib angle (absent: a ballpoint pen). */
+	penKind?: PenKind;
+	nibAngle?: number;
 }
 
 const COLOR = /^#[0-9a-f]{6}$/i;
 
-function validPen(v: unknown): FavouritePen | null {
+/** A saved pen read from settings; anything invalid is null. A kind or nib angle that does not fit is left out (a ballpoint pen). */
+export function validPen(v: unknown): FavouritePen | null {
 	if (typeof v !== "object" || v === null) return null;
 	const o = v as Record<string, unknown>;
 	if (o.tool !== "pen" && o.tool !== "highlighter") return null;
 	if (typeof o.color !== "string" || !COLOR.test(o.color)) return null;
 	if (typeof o.width !== "number" || !Number.isFinite(o.width) || o.width <= 0 || o.width > 100) return null;
-	return { tool: o.tool, color: o.color.toLowerCase(), width: o.width };
+	const pen: FavouritePen = { tool: o.tool, color: o.color.toLowerCase(), width: o.width };
+	if (o.tool === "pen" && isPenKind(o.kind) && o.kind !== "pen") {
+		pen.kind = o.kind;
+		if (kindHasNib(o.kind) && typeof o.nib === "number") {
+			const nib = normaliseNib(o.nib);
+			if (nib !== NIB_DEFAULT) pen.nib = nib;
+		}
+	}
+	return pen;
 }
 
 /** Always returns exactly FAVOURITE_SLOTS pens; bad or missing entries fall back to the default of their slot. */
@@ -46,22 +66,33 @@ export function normaliseFavourites(data: unknown): FavouritePen[] {
 	return DEFAULT_FAVOURITES.map((fallback, i) => validPen(list[i]) ?? { ...fallback });
 }
 
-/** The pen that is selected right now (a highlighter, or else the pen colour and width). */
+/** The pen that is selected right now (a highlighter, or else the pen colour and width and, for a new kind of pen, the kind and nib). */
 export function captureFavourite(s: PenState): FavouritePen {
-	return s.tool === "highlighter"
-		? { tool: "highlighter", color: s.highlighterColor.toLowerCase(), width: s.highlighterWidth }
-		: { tool: "pen", color: s.penColor.toLowerCase(), width: s.penWidth };
+	if (s.tool === "highlighter") return { tool: "highlighter", color: s.highlighterColor.toLowerCase(), width: s.highlighterWidth };
+	const pen: FavouritePen = { tool: "pen", color: s.penColor.toLowerCase(), width: s.penWidth };
+	if (s.penKind && s.penKind !== "pen") {
+		pen.kind = s.penKind;
+		if (kindHasNib(s.penKind) && normaliseNib(s.nibAngle) !== NIB_DEFAULT) pen.nib = normaliseNib(s.nibAngle);
+	}
+	return pen;
 }
 
 /** The toolbar patch that selects a favourite. */
 export function favouritePatch(fav: FavouritePen): Partial<PenState> {
 	return fav.tool === "highlighter"
 		? { tool: "highlighter", highlighterColor: fav.color, highlighterWidth: fav.width }
-		: { tool: "pen", penColor: fav.color, penWidth: fav.width };
+		: { tool: "pen", penColor: fav.color, penWidth: fav.width, penKind: fav.kind ?? "pen", nibAngle: fav.nib ?? NIB_DEFAULT };
+}
+
+/** The name (i18n key) of the pen a favourite holds: the ballpoint pen, the highlighter or one of the new pens. */
+export function favouriteToolKey(fav: FavouritePen): MessageKey {
+	if (fav.tool === "highlighter") return "tool.highlighter";
+	return fav.kind ? (`tool.${fav.kind}` as const) : "tool.pen";
 }
 
 export function sameFavourite(a: FavouritePen, b: FavouritePen): boolean {
-	return a.tool === b.tool && a.color.toLowerCase() === b.color.toLowerCase() && a.width === b.width;
+	return a.tool === b.tool && a.color.toLowerCase() === b.color.toLowerCase() && a.width === b.width
+		&& (a.kind ?? "pen") === (b.kind ?? "pen") && (a.nib ?? NIB_DEFAULT) === (b.nib ?? NIB_DEFAULT);
 }
 
 /** Index of the slot holding the pen that is selected now, or -1. */

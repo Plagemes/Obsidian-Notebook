@@ -202,6 +202,15 @@ const WRITING: SettingSpec[] = [
 		id: "penSets", section: "writing", order: 70, name: "settings.penSets", desc: "settings.penSets.desc", keywords: "pens subject maths languages science favourites penne materia",
 		control: { type: "action", run: "pen-sets", button: "settings.open" }, edits: ["penSets", "penSetFolders", "penSetNotebooks"],
 	},
+	// 0.22 pens (#35): the pen the pen tool starts with, and the nib angle of new fountain pen and marker strokes
+	{
+		id: "defaultPenKind", section: "writing", order: 71, name: "settings.defaultPenKind", desc: "settings.defaultPenKind.desc", keywords: "pen fountain brush marker nib calligraphy stilografica pennello pennarello penna",
+		control: { type: "dropdown", options: options([["pen", "tool.pen"], ["fountain", "tool.fountain"], ["brush", "tool.brush"], ["marker", "tool.marker"]]) },
+	},
+	{
+		id: "defaultNibAngle", section: "writing", order: 72, name: "settings.defaultNibAngle", desc: "settings.defaultNibAngle.desc", keywords: "nib angle fountain marker calligraphy punta angolo",
+		control: { type: "slider", min: 0, max: 175, step: 5, format: suffix("°") }, parent: "defaultPenKind", visible: (s) => s.defaultPenKind === "fountain" || s.defaultPenKind === "marker",
+	},
 	{ id: "eraseAreaElements", section: "writing", group: ADVANCED, order: 10, name: "settings.eraseAreaElements", desc: "settings.eraseAreaElements.desc", control: { type: "toggle" } },
 	{ id: "dateStampFormat", section: "writing", group: ADVANCED, order: 20, name: "settings.dateStamp", desc: "settings.dateStamp.desc", control: { type: "text", placeholder: DEFAULT_SETTINGS.dateStampFormat } },
 	{ id: "signDateMode", section: "writing", group: ADVANCED, order: 21, name: "settings.signDateMode", desc: "settings.signDateMode.desc", control: { type: "dropdown", options: (tr) => ({ locale: tr("settings.signDateMode.locale"), iso: tr("settings.signDateMode.iso"), custom: tr("settings.signDateMode.custom") }) }, keywords: "signature date sign firma data" },

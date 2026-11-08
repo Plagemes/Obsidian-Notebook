@@ -13,7 +13,7 @@ import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkP
 import { layerFlags, type ExportLayers } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
-import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
+import { HIGHLIGHTER_ALPHA, MARKER_ALPHA, strokeSvgPath } from "./stroke-shape";
 import { LINK_COLOR, lineRuns, shownText } from "./link-text";
 
 /** Line widths of the paper pattern, pt. Shared with the PDF exporter. */
@@ -164,7 +164,9 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 		out.push(
 			stroke.tool === "highlighter"
 				? `<path d="${d}" fill="${fill}" fill-opacity="${HIGHLIGHTER_ALPHA}" style="mix-blend-mode:multiply"${clipped}/>`
-				: `<path d="${d}" fill="${fill}"${clipped}/>`,
+				: stroke.tool === "marker"
+					? `<path d="${d}" fill="${fill}" fill-opacity="${MARKER_ALPHA}"${clipped}/>`
+					: `<path d="${d}" fill="${fill}"${clipped}/>`,
 		);
 	}
 	for (const el of page.elements ?? []) if (el.type === "marker") out.push(markerTag(el));

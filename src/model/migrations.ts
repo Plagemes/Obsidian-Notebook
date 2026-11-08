@@ -1,5 +1,5 @@
 import { createId, quantizePoint } from "./document";
-import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND } from "./types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND, TOOLS_V20 } from "./types";
 
 export type RawObject = Record<string, unknown>;
 
@@ -437,6 +437,28 @@ function v18ToV19(raw: RawObject): RawObject {
 	return out;
 }
 
+/**
+ * v20 adds the tools "fountain", "brush" and "marker" and the optional stroke field `nib` (new pens, #35). Every valid v19 document is a
+ * valid v20 document. The new tools did not exist before v20, so a v19 file that contains one was not written by any version of this
+ * plugin: it is refused rather than guessed at (like "shape" in v3 -> v4; the caller never overwrites a file it could not read). A v19
+ * reader ignored unknown stroke fields, so a `nib` key in a v19 file was never ours and never meant anything: it is dropped, not
+ * interpreted (like `group` in v17 -> v18). The refusal is also made stroke by stroke as each page is read (StagedParse), so a large
+ * v19 file can still be read page by page.
+ */
+function v19ToV20(raw: RawObject): RawObject {
+	const out: RawObject = { ...raw, version: 20 };
+	if (!Array.isArray(raw.pages)) return out;
+	out.pages = (raw.pages as unknown[]).map((page, index) => {
+		if (!isRaw(page) || !Array.isArray(page.strokes)) return page;
+		for (const s of page.strokes as unknown[]) {
+			const tool = isRaw(s) ? s.tool : undefined;
+			if (typeof tool === "string" && (TOOLS_V20 as readonly string[]).includes(tool)) throw new MigrationError(`v19: tool '${tool}' (page ${index + 1}) exists only from v20`);
+		}
+		return (page.strokes as unknown[]).some((s) => isRaw(s) && "nib" in s) ? { ...page, strokes: (page.strokes as unknown[]).map((s) => withoutKeys(s, ["nib"])) } : page;
+	});
+	return out;
+}
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -470,6 +492,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	16: v16ToV17,
 	17: v17ToV18,
 	18: v18ToV19,
+	19: v19ToV20,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

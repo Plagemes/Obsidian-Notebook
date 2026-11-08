@@ -134,7 +134,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 34. **P3** Optional compression of very large notebooks (compatible with the planned Markdown container).
 
 ### Advanced writing
-35. **P1** New pen types: fountain pen (angle-dependent width), brush, marker.
+35. **P1** 🧪 New pen types: fountain pen (angle-dependent width), brush, marker. (0.22: pen type row and nib angle in the pen options, format v20; marker is 85% opaque, in stroke order.)
 36. **P1** 🧪 Auto-scroll while writing near the bottom of the screen.
 37. **P2** Filled shapes and dashed or dotted lines.
 38. **P2** 🧪 Align and distribute the selection.
@@ -352,7 +352,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - Conflict-free by design: every stroke has a unique id, so concurrent edits never clash; at the end everything lands in the host's notebook with the author of each stroke.
     - Asynchronous too: people without Obsidian annotate in the web viewer (#164) and send back an annotation package that is imported with one tap; or the notebook is shared on Drive with conflict merging (#122).
 166. **P3** InkML export (open standard for digital ink).
-167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; no format change.)
+167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v20.schema.json` and `docs/format.md`; no format change.)
 
 ### E. Automation
 168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.

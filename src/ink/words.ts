@@ -1,4 +1,4 @@
-import type { Stroke } from "../model/types";
+import { isWritingPen, type Stroke } from "../model/types";
 import type { BBox } from "./hit-test";
 
 /**
@@ -184,7 +184,7 @@ export function segmentText(strokes: readonly Stroke[], options: Partial<TextOpt
 	const ignored: string[] = [];
 	const cand: Item[] = [];
 	for (const s of strokes) {
-		const f = s.tool === "pen" ? featOf(s) : null;
+		const f = isWritingPen(s.tool) ? featOf(s) : null;
 		if (!f) { ignored.push(s.id); continue; }
 		cand.push({ id: s.id, f, cx: (f.minX + f.maxX) / 2, cy: (f.minY + f.maxY) / 2, h: f.maxY - f.minY, tiny: false });
 	}

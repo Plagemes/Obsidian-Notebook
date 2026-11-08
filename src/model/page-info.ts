@@ -5,7 +5,7 @@
  */
 import { elementAssetId } from "./excerpts";
 import { pageTimes, type PageTimes } from "./page-times";
-import { MARKER_KINDS, PAGE_SIZES, type MarkerKind, type NotebookDocument, type Page, type PageSizeName, type Tool } from "./types";
+import { MARKER_KINDS, PAGE_SIZES, type MarkerKind, type NotebookDocument, type Page, type PageSizeName } from "./types";
 
 export interface PageInfo {
 	/** 1-based position and the number of pages. */
@@ -18,7 +18,7 @@ export interface PageInfo {
 	infinite: boolean;
 	paper: string;
 	background: "none" | "pdf" | "image";
-	strokes: { total: number; byTool: Record<Tool, number>; /** Invisible-ink strokes (they are in the total). */ hidden: number };
+	strokes: { total: number; byTool: Record<"pen" | "highlighter" | "shape", number>; /** Invisible-ink strokes (they are in the total). */ hidden: number };
 	/** Points of all strokes. */
 	points: number;
 	elements: { total: number; text: number; image: number; marker: number; box: number; /** v9 */ equation: number; graph: number; /** v10 */ excerpt: number; /** v15 */ sticky: number; /** v17 */ checkbox: number };
@@ -62,11 +62,12 @@ function validDate(iso: string | undefined): string | null {
 export function pageInfo(doc: NotebookDocument, index: number, editedHere: number | null = null): PageInfo | null {
 	const page = doc.pages[index];
 	if (!page) return null;
-	const byTool: Record<Tool, number> = { pen: 0, highlighter: 0, shape: 0 };
+	const byTool: Record<"pen" | "highlighter" | "shape", number> = { pen: 0, highlighter: 0, shape: 0 };
 	let points = 0;
 	let hidden = 0;
 	for (const s of page.strokes) {
-		byTool[s.tool]++;
+		// v20: the new pens (fountain, brush, marker) count with the pen.
+		byTool[s.tool === "highlighter" || s.tool === "shape" ? s.tool : "pen"]++;
 		points += s.points.length;
 		if (s.hidden) hidden++;
 	}

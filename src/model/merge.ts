@@ -129,8 +129,12 @@ export interface MergePlan {
 }
 
 export function strokeContentKey(s: Stroke): string {
+	const key: unknown[] = [s.tool, s.color, s.width, s.render, s.points];
 	// v8: hidden ink differs from the same ink shown.
-	return s.hidden ? JSON.stringify([s.tool, s.color, s.width, s.render, s.points, true]) : JSON.stringify([s.tool, s.color, s.width, s.render, s.points]);
+	if (s.hidden) key.push(true);
+	// v20: a nib angle differs (a stroke without one is the same as one at the default angle only when the angle is absent on both).
+	if (s.nib !== undefined) key.push(`nib${s.nib}`);
+	return JSON.stringify(key);
 }
 
 export function elementContentKey(e: PageElement): string {

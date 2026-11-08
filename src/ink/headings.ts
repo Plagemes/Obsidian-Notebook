@@ -6,7 +6,7 @@
  */
 import type { BBox } from "./hit-test";
 import { segmentText, type TextLayout, type TextLine } from "./words";
-import type { Stroke } from "../model/types";
+import { isWritingPen, type Stroke } from "../model/types";
 
 export interface HeadingOptions {
 	/** A line is a heading when its letters are at least this × the usual letter height. */
@@ -117,7 +117,7 @@ export interface Rule {
 export function underlineCandidates(strokes: readonly Stroke[], minLength: number): Rule[] {
 	const out: Rule[] = [];
 	for (const s of strokes) {
-		if (s.hidden || (s.tool !== "pen" && s.tool !== "shape")) continue;
+		if (s.hidden || (!isWritingPen(s.tool) && s.tool !== "shape")) continue;
 		const pts = s.points;
 		if (pts.length < 2) continue;
 		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, path = 0;

@@ -1,5 +1,5 @@
 import type { Tool } from "../model/types";
-import { addCapsule, addTrapezoid, inkRadius, type InkBuilder } from "./ink-geometry";
+import { addCapsule, addTrapezoid, type InkBuilder } from "./ink-geometry";
 
 /** Integer device-pixel rectangle, `x1`/`y1` exclusive; empty when x1 <= x0 or y1 <= y0. */
 export interface DeviceRect {
@@ -232,7 +232,7 @@ export class WetInk {
 		}
 		this.extra[i] = x;
 		this.extra[i + 1] = y;
-		this.extra[i + 2] = inkRadius(g.tool, g.width, pressure);
+		this.extra[i + 2] = g.tipRadius(pressure);
 		this.extraCount++;
 	}
 
@@ -285,7 +285,7 @@ export class WetInk {
 			this.tr = g.nr[last]!;
 			this.tipAny = false;
 			ctx.beginPath();
-			for (let k = g.finalPoint + 1; k < g.count; k++) this.tipStep(g.px[k]!, g.py[k]!, inkRadius(g.tool, g.width, g.pp[k]!), cw, ch);
+			for (let k = g.finalPoint + 1; k < g.count; k++) this.tipStep(g.px[k]!, g.py[k]!, g.pr[k]!, cw, ch);
 			for (let k = 0; k < this.extraCount; k++) this.tipStep(this.extra[k * 3]!, this.extra[k * 3 + 1]!, this.extra[k * 3 + 2]!, cw, ch);
 			if (this.tipAny) ctx.fill();
 			unionInto(this.inkRect, this.tipRect);

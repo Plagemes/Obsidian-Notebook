@@ -35,6 +35,7 @@ import { backupFolderConflict, DEFAULT_BACKUP_FOLDER, DEFAULT_BACKUP_SETTINGS, r
 import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 import { normalizeIndexPrefix } from "./model/book-index";
 import { clampSymbolCount } from "./ui/symbol-rank";
+import { isPenKind, normaliseNib, type PenKind } from "./ink/pen-kinds";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
 /** DESIGN.md §2.2: *Notebook* (its own tokens, the default) or *Follow Obsidian theme*. */
@@ -246,6 +247,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	/** 0.21 (212): the strip of recent symbols, and how many buttons it has. */
 	symbolStrip: boolean;
 	symbolCount: number;
+	/** 0.22 (#35): the pen the pen tool starts with (ballpoint, fountain pen, brush or marker) and the nib angle (degrees) of new fountain pen and marker strokes. */
+	defaultPenKind: PenKind;
+	defaultNibAngle: number;
 	/** Format of the quick date and time stamp (356): tokens YYYY MM DD HH mm ss and so on, text in [brackets]. */
 	dateStampFormat: string;
 	// 0.21 signstamp
@@ -380,6 +384,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	minimapMode: "auto",
 	symbolStrip: true,
 	symbolCount: 6,
+	defaultPenKind: "pen",
+	defaultNibAngle: 45,
 	appearanceStyle: "notebook",
 	userName: "",
 	hintsEnabled: true,
@@ -517,6 +523,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
 	if (typeof d.symbolStrip === "boolean") s.symbolStrip = d.symbolStrip;
 	s.symbolCount = clampSymbolCount(d.symbolCount);
+	if (isPenKind(d.defaultPenKind)) s.defaultPenKind = d.defaultPenKind;
+	s.defaultNibAngle = normaliseNib(d.defaultNibAngle);
 	if (isMinimapMode(d.minimapMode)) s.minimapMode = d.minimapMode;
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
