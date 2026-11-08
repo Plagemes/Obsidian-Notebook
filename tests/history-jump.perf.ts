@@ -46,5 +46,5 @@ it("a 500-step jump to Start: in one go and in slices", () => {
 		expect(longest).toBeLessThan(SLICE_MS + 500);
 		rows.push(`${strokes} strokes, ${pages} pages: ${total.toFixed(0)} ms in one go; ${slices} slices of at most ${longest.toFixed(0)} ms`);
 	}
-	console.log(rows.join("\n"));
+	console.debug(`\n${rows.join("\n")}\n`);
 });
