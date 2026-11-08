@@ -14,7 +14,7 @@
  * - Merging a conflicted copy (`planMerge`) unites the views by id; the main notebook's view wins when both have one with that id.
  */
 import type { Command } from "./history";
-import { VIEWS_MAX, VIEW_COORD_LIMIT, VIEW_NAME_MAX, VIEW_ZOOM_MAX, VIEW_ZOOM_MIN, type NotebookDocument, type SavedView } from "./types";
+import { VIEWS_MAX, VIEW_COORD_LIMIT, VIEW_NAME_MAX, VIEW_PAGE_ID_MAX, VIEW_ZOOM_MAX, VIEW_ZOOM_MIN, type NotebookDocument, type SavedView } from "./types";
 
 const ID_CHARS = "0123456789abcdefghijklmnopqrstuvwxyz";
 const ID_LENGTH = 8;
@@ -57,13 +57,19 @@ export function uniqueViewName(views: readonly SavedView[], base: string): strin
 	if (!taken.has(root.toLowerCase())) return root;
 	for (let n = 2; ; n++) {
 		const suffix = ` ${n}`;
-		const cut = Array.from(root).slice(0, Math.max(1, VIEW_NAME_MAX - suffix.length)).join("");
+		// The cut may end on a space (the name is then not a stored name): drop it before the number.
+		const cut = Array.from(root).slice(0, Math.max(1, VIEW_NAME_MAX - suffix.length)).join("").trimEnd();
 		const name = `${cut}${suffix}`;
 		if (!taken.has(name.toLowerCase())) return name;
 	}
 }
 
 const finite = (n: number): boolean => Number.isFinite(n);
+
+/** A page id a stored view can name: not empty and at most `VIEW_PAGE_ID_MAX` characters (the strict reader refuses longer ones). */
+export function isUsableViewPage(id: string): boolean {
+	return id !== "" && id.length <= VIEW_PAGE_ID_MAX;
+}
 
 /** The numbers of a region and a zoom are all usable (finite, in range, a region with a size). */
 export function validRegion(r: { x: number; y: number; width: number; height: number; zoom: number }): boolean {
@@ -97,7 +103,7 @@ export interface ViewInput {
  */
 export function makeView(input: ViewInput, taken: ReadonlySet<string>, random?: () => number): SavedView | null {
 	const name = normalizeViewName(input.name);
-	if (name === "" || input.page === "" || !validRegion(input)) return null;
+	if (name === "" || !isUsableViewPage(input.page) || !validRegion(input)) return null;
 	const r = rounded(input);
 	if (!validRegion(r)) return null;
 	return Object.freeze({ id: newViewId(taken, random), name, page: input.page, ...r });
@@ -141,7 +147,7 @@ export function withViewMoved(views: readonly SavedView[], id: string, to: numbe
 /** The views with the view `id` pointing at `place` instead (its name and position in the list stay). The same list when it is unusable or unchanged. */
 export function withViewReplaced(views: readonly SavedView[], id: string, place: Pick<ViewInput, "page" | "x" | "y" | "width" | "height" | "zoom">): readonly SavedView[] {
 	const at = views.findIndex((v) => v.id === id);
-	if (at < 0 || place.page === "" || !validRegion(place)) return views;
+	if (at < 0 || !isUsableViewPage(place.page) || !validRegion(place)) return views;
 	const r = rounded(place);
 	if (!validRegion(r)) return views;
 	const old = views[at]!;
@@ -201,4 +207,30 @@ function put(doc: NotebookDocument, views: readonly SavedView[]): void {
 export function setViews(doc: NotebookDocument, next: readonly SavedView[], label: string): SetViews | null {
 	const before = viewsOf(doc);
 	return next === before || sameViews(before, next) ? null : new SetViews(before, next, label);
+}
+
+export interface ViewsMergeReport {
+	/** Views of the copy (on pages the result has) whose id the main notebook has with other contents: the main notebook's stays. */
+	differ: number;
+	/** Views of the copy (on pages the result has) that were not added because the list is full. */
+	full: number;
+}
+
+/**
+ * What `mergedViews` left out of the copy, for the merge summary: views whose id the main list has with other contents (the main one
+ * won) and views that did not fit (`VIEWS_MAX`). `united` is what `mergedViews` returned for the same arguments.
+ */
+export function viewsMergeReport(main: readonly SavedView[], other: readonly SavedView[], united: readonly SavedView[], pageIds: ReadonlySet<string>): ViewsMergeReport {
+	const mine = new Map(main.map((v) => [v.id, v]));
+	const have = new Set(united.map((v) => v.id));
+	let differ = 0;
+	let full = 0;
+	for (const v of other) {
+		if (!pageIds.has(v.page)) continue;
+		const own = mine.get(v.id);
+		if (own) {
+			if (!sameViews([own], [v])) differ++;
+		} else if (!have.has(v.id)) full++;
+	}
+	return { differ, full };
 }

@@ -6,7 +6,7 @@ import type { ViewRegion } from "../ink/view-region";
 import type { Command } from "../model/history";
 import { VIEWS_MAX, type NotebookDocument, type SavedView } from "../model/types";
 import {
-	makeView, setViews, uniqueViewName, viewsOf, withViewAdded, withViewMoved, withViewRemoved, withViewRenamed, withViewReplaced,
+	isUsableViewPage, makeView, setViews, uniqueViewName, viewsOf, withViewAdded, withViewMoved, withViewRemoved, withViewRenamed, withViewReplaced,
 } from "../model/views";
 import { showNotice } from "./notice";
 import { findView, viewRows, zoomPercent, type ViewRow } from "./saved-views-logic";
@@ -84,7 +84,11 @@ export class SavedViewTools implements SavedViewsApi {
 	update(id: string): boolean {
 		const cap = this.host.capture();
 		if (!cap) return false;
-		const place = { page: cap.pageId, x: cap.region.x, y: cap.region.y, width: cap.region.width, height: cap.region.height, zoom: cap.region.zoom };
+		if (!isUsableViewPage(cap.pageId)) {
+			showNotice(t("views.notice.failed"), 5000);
+			return false;
+		}
+		const place ={ page: cap.pageId, x: cap.region.x, y: cap.region.y, width: cap.region.width, height: cap.region.height, zoom: cap.region.zoom };
 		const doc = this.host.doc();
 		const name = doc ? findView(doc, id)?.name : undefined;
 		if (!this.change(id, (views) => withViewReplaced(views, id, place), "Update view")) return false;

@@ -119,6 +119,8 @@ interface Scanned {
 	assets: RawObject;
 	/** v12 slide table entries found as lines. */
 	slides: unknown[];
+	/** v21 saved view lines (same layout as a slide line: two tabs, the content on the line). */
+	views: unknown[];
 	pages: ScannedPage[];
 	/** Stroke and element lines found before any page start. */
 	orphans: { strokes: unknown[]; elements: unknown[]; comments: unknown[] };
@@ -142,7 +144,7 @@ const ITEM_LINE = /^\t\t\t\t(\{.*\}),?$/;
 
 /** Reads the line layout of `serialize()`; lines that are damaged are skipped. */
 function scanLines(text: string): Scanned {
-	const out: Scanned = { header: {}, assets: {}, slides: [], pages: [], orphans: { strokes: [], elements: [], comments: [] } };
+	const out: Scanned = { header: {}, assets: {}, slides: [], views: [], pages: [], orphans: { strokes: [], elements: [], comments: [] } };
 	let page: ScannedPage | null = null;
 	for (const rawLine of text.split("\n")) {
 		const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
@@ -172,6 +174,7 @@ function scanLines(text: string): Scanned {
 		if (m) {
 			const v = jsonOrUndefined(m[1]!);
 			if (isObj(v) && typeof v.source === "string") out.slides.push(v);
+			else if (isObj(v) && typeof v.name === "string" && typeof v.page === "string" && typeof v.zoom === "number") out.views.push(v);
 			continue;
 		}
 		m = ASSET_LINE.exec(line);
@@ -219,6 +222,20 @@ function combine(primary: unknown, scan: Scanned, incomplete: WeakSet<object>): 
 			}
 		}
 		doc.slides = table;
+	}
+
+	// v21: the saved views read from the lines are added by id too (the lenient reading may have lost the array or part of it).
+	if (scan.views.length > 0) {
+		const list: unknown[] = Array.isArray(doc.views) ? [...(doc.views as unknown[])] : [];
+		const have = new Set(list.map(idOf));
+		for (const e of scan.views) {
+			const id = idOf(e);
+			if (id !== null && !have.has(id)) {
+				have.add(id);
+				list.push(e);
+			}
+		}
+		doc.views = list;
 	}
 
 	const pages: unknown[] = Array.isArray(doc.pages) ? [...(doc.pages as unknown[])] : [];

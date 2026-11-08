@@ -66,7 +66,7 @@ import { commentCovered, copyComments, mergeComments, SetPageComments, shiftComm
 import { exemptFromLocks, SetPageLocked } from "./page-lock";
 import { mergedTimes, pageTimes, putPageTimes, sameTimes, SetPageTimes } from "./page-times";
 import { slideMerger } from "./slide-links";
-import { mergedViews, SetViews, viewsOf } from "./views";
+import { mergedViews, SetViews, viewsMergeReport, viewsOf } from "./views";
 import { remapStates, SetPageStates } from "./states";
 import { boxBounds, markerBounds } from "./markers";
 import { stableStringify } from "./math-elements";
@@ -123,6 +123,10 @@ export interface MergeSummary {
 	timesUpdated: number;
 	/** v21: saved views of the copy that the main notebook does not have (by id), added to its list. */
 	viewsAdded: number;
+	/** v21: saved views of the copy on pages the result has, whose id the main notebook has with other contents (its view stays; the copy's is only in the backup). Not a change to merge. */
+	viewsDiffer: number;
+	/** v21: saved views of the copy that were not added because the main notebook already has the most (the copy stays in place). Not a change to merge. */
+	viewsFull: number;
 }
 
 export interface MergePlan {
@@ -332,7 +336,7 @@ function carriedInk(e: PageElement, strokeMap: ReadonlyMap<string, string>, adde
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0, timesUpdated: 0, viewsAdded: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0, timesUpdated: 0, viewsAdded: 0, viewsDiffer: 0, viewsFull: 0,
 	};
 	const commands: Command[] = [];
 	// v12: the copy's slide ids in the main notebook's table.
@@ -687,7 +691,11 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 
 	// v21: the saved views of the copy the main notebook lacks (by id), on pages the result has.
 	const mainViews = viewsOf(main);
-	const unitedViews = mergedViews(mainViews, viewsOf(other), new Set(order));
+	const viewPages = new Set(order);
+	const unitedViews = mergedViews(mainViews, viewsOf(other), viewPages);
+	const viewReport = viewsMergeReport(mainViews, viewsOf(other), unitedViews, viewPages);
+	summary.viewsDiffer = viewReport.differ;
+	summary.viewsFull = viewReport.full;
 	if (unitedViews !== mainViews) {
 		summary.viewsAdded = unitedViews.length - mainViews.length;
 		commands.push(new SetViews(mainViews, unitedViews, "Merge saved views"));

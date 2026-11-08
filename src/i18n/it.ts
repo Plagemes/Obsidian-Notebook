@@ -4327,6 +4327,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"views.notice.readOnly": "Questo quaderno è in sola lettura: le sue viste non si possono modificare.",
 	"views.notice.failed": "Non è stato possibile salvare la vista.",
 	"merge.summary.views": "{count} viste salvate aggiunte",
+	"merge.summary.viewsDiffer": "{count} viste salvate sono diverse nella copia: si tengono quelle di questo quaderno, quelle della copia restano nel backup",
+	"merge.summary.viewsFull": "{count} viste salvate della copia non sono state aggiunte: questo quaderno ne ha già il massimo. La copia resta dov'è",
 	// 0.23 exportarea
 	"exportArea.menu": "Esporta area scritta…",
 	"command.exportArea": "Esporta l'area scritta come immagine trasparente…",

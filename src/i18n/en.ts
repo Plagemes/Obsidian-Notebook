@@ -4325,6 +4325,8 @@ export const en = {
 	"views.notice.readOnly": "This notebook is read-only: its views cannot be changed.",
 	"views.notice.failed": "The view could not be saved.",
 	"merge.summary.views": "{count} saved views added",
+	"merge.summary.viewsDiffer": "{count} saved views differ in the copy: this notebook's are kept, the copy's stay in the backup",
+	"merge.summary.viewsFull": "{count} saved views of the copy were not added: this notebook already keeps the most. The copy stays where it is",
 	// 0.23 exportarea
 	"exportArea.menu": "Export written area…",
 	"command.exportArea": "Export the written area as a transparent picture…",

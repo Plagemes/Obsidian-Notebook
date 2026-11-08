@@ -282,7 +282,7 @@ async function findConflictCopies(app: App, file: TFile, docId: string): Promise
 }
 
 export function describeMerge(s: MergeSummary): string[] {
-	if (mergeChangeCount(s) === 0) return [t("merge.summary.nothing")];
+	if (mergeChangeCount(s) === 0 && s.viewsDiffer === 0 && s.viewsFull === 0) return [t("merge.summary.nothing")];
 	const lines: string[] = [];
 	const add = (n: number, key: Parameters<typeof t>[0]) => {
 		if (n > 0) lines.push(t(key, { count: String(n) }));
@@ -304,6 +304,8 @@ export function describeMerge(s: MergeSummary): string[] {
 	add(s.flagsUpdated, "merge.summary.flags");
 	add(s.timesUpdated, "merge.summary.times");
 	add(s.viewsAdded, "merge.summary.views");
+	add(s.viewsDiffer, "merge.summary.viewsDiffer");
+	add(s.viewsFull, "merge.summary.viewsFull");
 	add(s.onlyInMain, "merge.summary.onlyMain");
 	return lines;
 }
