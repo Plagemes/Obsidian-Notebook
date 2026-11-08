@@ -4,7 +4,7 @@
  * (`$$…$$`) under a heading per page with a link back. The sheet is derived data: nothing is added to the document format and the
  * notebook file is never written. The Markdown sits between two owner markers (`<!-- notebook-formulas:start for=<path> id=<doc id> -->`
  * … `<!-- notebook-formulas:end -->`) and only that region is replaced on a rebuild, with the same ownership rules as the back-of-book
- * index (`src/model/book-index.ts`): a note that lost a marker is "unsafe", a note without markers is "appended" (the caller asks),
+ * index (`src/model/book-index.ts`): a note that lost a marker is "unsafe", a note without markers is "appended" (the caller refuses; `pickFormulaNote` sends the sheet to the next free name),
  * a region that records another notebook is "other".
  */
 import { escapeSearchText } from "./companion-search";
@@ -58,11 +58,12 @@ function isEquation(e: unknown): e is EquationElement {
 
 /**
  * The LaTeX of an equation made safe to sit alone between `$$` lines: line ends normalised, blank lines dropped (a blank line ends
- * Obsidian's maths block), every `$` escaped (`\$` stays), `-->` cut so it cannot close the region, long sources cut at a line end.
+ * Obsidian's maths block), every `$` escaped (`\$` stays; so is the `$` after a `\\` line break), `-->` cut so it cannot close the region, long sources cut at a line end.
  */
 export function formulaLatex(raw: string): string {
 	let s = raw.replace(/\r\n?/g, "\n").split("\n").map((l) => l.replace(/\s+$/u, "")).filter((l) => l.trim() !== "").join("\n").trim();
-	s = s.replace(/\\\$|\$/g, (m) => (m === "$" ? "\\$" : m)).replace(/-->/g, "-- >").replace(/<!--/g, "<! --");
+	// A backslash and the character after it are read as a pair: `\$` stays, but the `$` after a line break `\\` is escaped.
+	s = s.replace(/\\[\s\S]|\$/g, (m) => (m === "$" ? "\\$" : m)).replace(/-->/g, "-- >").replace(/<!--/g, "<! --");
 	if (s.length > FORMULA_LATEX_MAX) {
 		const cut = s.slice(0, FORMULA_LATEX_MAX);
 		const nl = cut.lastIndexOf("\n");
@@ -159,18 +160,17 @@ export const FORMULA_NOTE_TRIES = 20;
 
 /**
  * Which numbered name the formula note of the notebook at `notebookPath` should use (1 = plain), or null when none is usable.
- * Same rules as `pickIndexNote`: free, or this notebook's own note, or (first name only) a note with no region of ours (the caller reports it).
+ * A name is usable when it is free, when it is this notebook's own note, or (first name only) when its region has the plain marker with no
+ * owner. A folder, a note of the user's with no complete region of ours (no markers, or one marker missing) and a note of another notebook
+ * are skipped, so the sheet goes to the next free name (`Formulas (2)`): the note is never written to and the build is never a dead end.
  */
 export async function pickFormulaNote(probe: (n: number) => Promise<IndexNoteSlot>, notebookPath: string, docId?: string): Promise<number | null> {
 	for (let n = 1; n <= FORMULA_NOTE_TRIES; n++) {
 		const slot = await probe(n);
 		if (!slot.exists) return n;
-		if (slot.folder) {
-			if (n === 1) return n;
-			continue;
-		}
+		if (slot.folder) continue;
 		if (typeof slot.owner === "string" && indexNoteIsMine({ owner: slot.owner, ownerId: slot.ownerId, ownerGone: slot.ownerGone }, notebookPath, docId)) return n;
-		if (n === 1 && (slot.owner === undefined || slot.owner === null)) return n;
+		if (n === 1 && slot.owner === null) return n;
 	}
 	return null;
 }

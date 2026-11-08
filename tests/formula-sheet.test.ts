@@ -136,3 +136,38 @@ describe("marker safety", () => {
 function other(): string {
 	return "Other/Nb2.notebook";
 }
+
+describe("review V9: every dollar sign is escaped, also after a line break", () => {
+	it("escapes the dollar that follows a double backslash", () => {
+		expect(formulaLatex("a \\\\$ b")).toBe("a \\\\\\$ b");
+		expect(formulaLatex("x \\\\\n$y$")).toBe("x \\\\\n\\$y\\$");
+	});
+	it("keeps a dollar that is escaped already, with an odd run of backslashes", () => {
+		expect(formulaLatex("cost \\$5")).toBe("cost \\$5");
+		expect(formulaLatex("a \\\\\\$ b")).toBe("a \\\\\\$ b");
+	});
+	it("escapes a plain dollar and leaves other commands alone", () => {
+		expect(formulaLatex("$x$ \\frac{a}{b} \\\\ c")).toBe("\\$x\\$ \\frac{a}{b} \\\\ c");
+	});
+	it("no dollar that is left unescaped can close the block", () => {
+		for (const src of ["a\\\\$$b", "\\\\\\\\$ $", "x\\\\$\\\\$"]) {
+			const out = formulaLatex(src);
+			expect(/(^|[^\\])(\\\\)*\$/.test(out)).toBe(false);
+		}
+	});
+});
+
+describe("review V10: a note of the user's with the same name is never a dead end", () => {
+	const me = "Maths/Nb.notebook";
+	it("skips a note with text and no region of ours, a half-marked one and a folder, and takes the next free name", async () => {
+		const slots: Array<{ exists: boolean; folder?: boolean; owner?: string | null }> = [{ exists: true, owner: undefined }, { exists: true, folder: true }, { exists: true, owner: undefined }, { exists: false }];
+		expect(await pickFormulaNote(async (i) => slots[i - 1] ?? { exists: false }, me, "doc1")).toBe(4);
+	});
+	it("still takes its own note at any number, and a plain-marker note at the first name", async () => {
+		expect(await pickFormulaNote(async (i) => (i === 1 ? { exists: true, owner: undefined } : { exists: true, owner: me, ownerId: "doc1" }), me, "doc1")).toBe(2);
+		expect(await pickFormulaNote(async () => ({ exists: true, owner: null }), me, "doc1")).toBe(1);
+	});
+	it("gives up only when every name is taken by something that is not ours", async () => {
+		expect(await pickFormulaNote(async () => ({ exists: true, owner: undefined }), me, "doc1")).toBeNull();
+	});
+});

@@ -1,7 +1,8 @@
 // 0.23 (#249) Formula sheet: the dialog and the vault side. "Build formula sheet" collects every equation element of the notebook in reading
 // order and writes them as Markdown maths (with a link back to each page) into the note "<Notebook> — Formulas.md" next to the notebook.
 // The note is derived data: only the part between the formula markers is rewritten (vault.process, re-read inside it); a note of the user's
-// with that name and no markers is never touched, and a region that records another notebook is never rewritten (the name gets " (2)").
+// with that name and no markers (or one marker missing) is never touched, and neither is a region that records another notebook: the sheet
+// goes to the next free name (" (2)"), so a build is never a dead end.
 // The notebook file is never written.
 import { Modal, TFile, normalizePath, type App } from "obsidian";
 import { t } from "../i18n";
@@ -32,7 +33,10 @@ export async function resolveFormulaNotePath(app: App, notebook: TFile, docId?: 
 		const found = app.vault.getAbstractFileByPath(formulaNotePath(notebook, i));
 		if (!found) return { exists: false };
 		if (!(found instanceof TFile)) return { exists: true, folder: true };
-		const region = formulaRegionOf(await app.vault.cachedRead(found));
+		const text = await app.vault.cachedRead(found);
+		// An empty note is free to use (the writer fills it); one with text of the user's and no complete region of ours is skipped.
+		if (text.trim() === "") return { exists: false };
+		const region = formulaRegionOf(text);
 		if (!region) return { exists: true, owner: undefined };
 		return { exists: true, owner: region.path, ownerId: region.id, ownerGone: region.path !== null && app.vault.getAbstractFileByPath(region.path) === null };
 	}, notebook.path, docId);
