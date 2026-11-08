@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { planSmooth, smoothedPoints, straightenedPoints, SMOOTH_LABEL, STRAIGHTEN_LABEL } from "../src/ink/smooth";
 import { createArea } from "../src/model/area";
-import { createDocument, createPage, createStroke } from "../src/model/document";
+import { createDocument, createPage, createStroke, quantizePoint } from "../src/model/document";
 import { History } from "../src/model/history";
 import { pageTimes } from "../src/model/page-times";
 import { freezeElement, freezeStroke, parse, serialize } from "../src/model/serialize";
@@ -126,10 +126,26 @@ describe("Straighten (0.26, #66)", () => {
 		expect(out[0]).toEqual(a);
 		expect(out[out.length - 1]).toEqual(b);
 		const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-		for (const p of out) expect(Math.abs((p[0] - a[0]) * (b[1] - a[1]) - (p[1] - a[1]) * (b[0] - a[0])) / len).toBeLessThan(1e-9);
+		// On the line within the rounding of the file (0.01 pt per coordinate).
+		for (const p of out) expect(Math.abs((p[0] - a[0]) * (b[1] - a[1]) - (p[1] - a[1]) * (b[0] - a[0])) / len).toBeLessThan(0.0075);
 		out.forEach((p, i) => expect(p[2]).toBe(wobbly[i]![2]));
 		// In order along the line.
 		for (let i = 1; i < out.length; i++) expect(out[i]![0]).toBeGreaterThanOrEqual(out[i - 1]![0]);
+	});
+
+	it("rounds the reshaped points like every other edit, so the stroke takes no more room in the file", () => {
+		const rounded = wobbly.map(([x, y, p]) => quantizePoint(x, y, p));
+		const out = straightenedPoints(stroke(rounded))!;
+		const curve = jittery(circle, 80, 0.5).map(([x, y, p]) => quantizePoint(x, y, p));
+		const smooth = smoothedPoints(stroke(curve))!;
+		expect(out).not.toBeNull();
+		expect(smooth).not.toBeNull();
+		for (const p of [...out, ...smooth]) {
+			expect(Math.round(p[0] * 100) / 100).toBe(p[0]);
+			expect(Math.round(p[1] * 100) / 100).toBe(p[1]);
+		}
+		expect(JSON.stringify(out).length).toBeLessThanOrEqual(JSON.stringify(rounded).length * 1.1);
+		expect(JSON.stringify(smooth).length).toBeLessThanOrEqual(JSON.stringify(curve).length * 1.1);
 	});
 
 	it("is idempotent: a second run changes nothing", () => {

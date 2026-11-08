@@ -15,7 +15,8 @@ export function zoomedWidth(chosen: number, scale: number, follow: boolean, high
 	if (!follow || !(chosen > 0) || !Number.isFinite(scale) || scale <= 0) return chosen;
 	const w = chosen / scale;
 	const max = highlighter ? ZOOM_WIDTH_MAX_HIGHLIGHTER : ZOOM_WIDTH_MAX;
-	return Math.min(max, Math.max(ZOOM_WIDTH_MIN, w));
+	// Rounded to 0.01 like every other stored width (transformStroke), after the clamp, so the file holds no long floats.
+	return Math.round(Math.min(max, Math.max(ZOOM_WIDTH_MIN, w)) * 100) / 100;
 }
 
 /** How wide a stored width looks on screen, CSS px. */

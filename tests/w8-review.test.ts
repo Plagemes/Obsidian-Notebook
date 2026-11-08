@@ -139,6 +139,18 @@ describe("pen gestures and hidden ink", () => {
 		expect(page.strokes).toEqual(solution);
 	});
 
+	it("the stroke a gesture leaves as ink after one Undo carries the pen's opacity (and no key at full strength)", () => {
+		const inkOf = (opacity: number | undefined): Stroke => {
+			const { doc } = docWith(word(150, 100));
+			const executed: unknown[][] = [];
+			const v = { ...gestureView(doc, false, executed), penStyle: () => ({ color: "#1e1e1e", width: 2, opacity }) };
+			runGesture(v, { type: "builtin", id: "delete" } as never, trail);
+			return (executed[0]![0] as { stroke: Stroke }).stroke;
+		};
+		expect(inkOf(0.3).opacity).toBe(0.3);
+		expect("opacity" in inkOf(undefined)).toBe(false);
+	});
+
 	it("hidden ink alone is no target of the delete or the circle-select gesture", () => {
 		const { doc } = docWith(word(150, 100).map(hidden));
 		const shut = gestureView(doc, false, []);

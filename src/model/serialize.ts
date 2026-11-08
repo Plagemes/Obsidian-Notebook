@@ -10,7 +10,7 @@ import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement,
 import { isStoredViewName, normalizeViewName, validRegion } from "./views";
 import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE, CHECKBOX_PATH_MAX, cleanCheckboxLabel, isOurBlockId } from "./checklist";
 import { AREA_MAX_SIDE, AREA_MIN_SIDE } from "./area";
-import { isOpacity, OPACITY_MAX, OPACITY_MIN } from "./opacity";
+import { isOpacity, normaliseOpacity, OPACITY_MAX, OPACITY_MIN } from "./opacity";
 import { commentLine, normalizeComments, readComments } from "./comments-format";
 import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
 import { normalizePageTags } from "./page-tags";
@@ -601,7 +601,8 @@ function readOpacity(v: RawObject, path: string, drop: Dropped | null): number |
 	if (isOpacity(v.opacity)) return v.opacity;
 	if (!drop) fail(`${path}.opacity`, `expected a number from ${OPACITY_MIN} to ${OPACITY_MAX}`);
 	drop.count++;
-	return typeof v.opacity === "number" && Number.isFinite(v.opacity) ? Math.min(OPACITY_MAX, Math.max(OPACITY_MIN, v.opacity)) : undefined;
+	// Above 1 clamps to full strength, which is no key at all (the app never writes an opacity of 1; an exact 1 in a file stays valid and is read as it is).
+	return normaliseOpacity(v.opacity);
 }
 
 /**

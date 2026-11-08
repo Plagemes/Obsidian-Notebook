@@ -116,6 +116,9 @@ function median(values: readonly number[]): number {
 const pad = (b: BBox, p: number): BBox => ({ minX: b.minX - p, minY: b.minY - p, maxX: b.maxX + p, maxY: b.maxY + p });
 const touches = (a: BBox, b: BBox): boolean => a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY && a.maxY > b.minY;
 
+const overlapArea = (a: BBox, b: BBox): number =>
+	Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX)) * Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY));
+
 /** A stroke as it will be after the moves so far (the stroke itself when it has not moved). */
 function shifted(s: Stroke, o: TidyShift | undefined): Stroke {
 	if (!o) return s;
@@ -231,10 +234,11 @@ export function analyseTidy(page: Page, req: TidyRequest, options: TidyOptions =
 	for (const row of rows) for (const s of row.strokes) moving.add(s);
 	const lines = rows.length;
 
-	// What is in the way: every visible stroke that is not part of a line that moves, and every element.
+	// What is in the way: every stroke that is not part of a line that moves, and every element. Invisible ink and the ink a collapsed note
+	// keeps hidden never move here but are there once revealed or expanded, so a line must not be moved onto them either.
 	const obstacles: BBox[] = [];
 	for (const s of page.strokes) {
-		if (s.hidden === true || hidden.has(s) || s.points.length === 0 || moving.has(s)) continue;
+		if (s.points.length === 0 || moving.has(s)) continue;
 		obstacles.push(strokeBounds(shifted(s, moves.get(s))));
 	}
 	for (const e of pageElements) obstacles.push(elementBounds(e, estimateMeasure));
@@ -248,6 +252,15 @@ export function analyseTidy(page: Page, req: TidyRequest, options: TidyOptions =
 			if (other === self || !(swept.minX < other.box.maxX && swept.maxX > other.box.minX)) continue;
 			const overlap = Math.min(swept.maxY, other.box.maxY) - Math.max(swept.minY, other.box.minY);
 			if (overlap > 0.5 * Math.min(swept.maxY - swept.minY, other.box.maxY - other.box.minY)) return true;
+		}
+		return false;
+	};
+	/** Whether `after` (where a line would end up) overlaps the box of another line more than the line does where it is now: two lines never end on top of each other. */
+	const crowds = (self: Row, before: BBox, after: BBox, boxOf: (other: Row) => BBox): boolean => {
+		for (const other of rows) {
+			if (other === self) continue;
+			const o = boxOf(other);
+			if (overlapArea(after, o) > overlapArea(before, o) + 0.01) return true;
 		}
 		return false;
 	};
@@ -287,7 +300,8 @@ export function analyseTidy(page: Page, req: TidyRequest, options: TidyOptions =
 				const dx = target - row.box.minX;
 				if (Math.abs(dx) < R.minMove) continue;
 				const swept: BBox = { minX: Math.min(row.box.minX, row.box.minX + dx), maxX: Math.max(row.box.maxX, row.box.maxX + dx), minY: row.box.minY, maxY: row.box.maxY };
-				if (blocked(row, swept, true)) continue;
+				const landed: BBox = { ...row.box, minX: row.box.minX + dx, maxX: row.box.maxX + dx };
+				if (blocked(row, swept, true) || crowds(row, row.box, landed, (o) => o.box)) continue;
 				moveRow(row, dx, 0);
 				aligned++;
 			}
@@ -343,6 +357,15 @@ export function analyseTidy(page: Page, req: TidyRequest, options: TidyOptions =
 			if (spacing > 0 && s < 0) s = Math.ceil(s / spacing - 1e-6) * spacing;
 			if (s > -R.minMove) s = 0;
 			if (s < 0 && blocked(row, { minX: row.box.minX, maxX: row.box.maxX, minY: row.box.minY + s, maxY: row.box.maxY }, false)) s = 0;
+			// Another line that moves, whatever its horizontal overlap with this one, is where it will be (lines above are decided already; the others have not moved yet).
+			if (s < 0) {
+				const landed: BBox = { ...row.box, minY: row.box.minY + s, maxY: row.box.maxY + s };
+				const final = (o: Row): BBox => {
+					const d = shift.get(o) ?? 0;
+					return d === 0 ? o.box : { ...o.box, minY: o.box.minY + d, maxY: o.box.maxY + d };
+				};
+				if (crowds(row, row.box, landed, final)) s = 0;
+			}
 			shift.set(row, s);
 			if (s < follow - R.minMove) tightened++;
 			if (-s > saved) saved = -s;

@@ -14,7 +14,15 @@ describe("zoomedWidth", () => {
 		expect(zoomedWidth(1.2, 0.5, true)).toBeCloseTo(2.4);
 	});
 	it("looks the chosen width on screen when not clamped", () => {
-		for (const s of [0.5, 1, 1.5, 3, 5]) expect(effectiveScreenWidth(2, s, true)).toBeCloseTo(2);
+		for (const s of [0.5, 1, 1.5, 3, 5]) expect(effectiveScreenWidth(2, s, true)).toBeCloseTo(2, 1); // within the 0.01 rounding of the stored width
+	});
+	it("stores a width rounded to 0.01 like every other stored width, never a long float", () => {
+		expect(zoomedWidth(2, 1.5, true)).toBe(1.33);
+		expect(zoomedWidth(3.2, 3, true)).toBe(1.07);
+		for (const s of [0.37, 0.8, 1.3, 2.7, 6.1]) {
+			const w = zoomedWidth(1.7, s, true);
+			expect(Math.round(w * 100) / 100).toBe(w);
+		}
 	});
 	it("clamps at the extremes of the zoom range", () => {
 		expect(zoomedWidth(0.8, MAX_SCALE, true)).toBe(ZOOM_WIDTH_MIN);

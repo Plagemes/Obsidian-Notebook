@@ -33,12 +33,19 @@ class PageDirectory {
 
 	constructor(private readonly app: App, private readonly host: QuickNavHost) {}
 
-	refresh(progress: (done: number, total: number) => void): Promise<void> {
-		this.running ??= this.run(progress).finally(() => (this.running = null));
+	/** Entries read without being saved (a read-only refresh): the next refresh that may save writes them with its own. */
+	private pending: LibraryEntry[] = [];
+
+	/**
+	 * Brings the index up to date. With `save: false` (the Related pages panel) nothing is written anywhere: what was read stays in memory
+	 * and is saved by the next refresh that saves (the quick switcher), so opening a panel never writes a file.
+	 */
+	refresh(progress: (done: number, total: number) => void, options: { save?: boolean } = {}): Promise<void> {
+		this.running ??= this.run(progress, options.save !== false).finally(() => (this.running = null));
 		return this.running;
 	}
 
-	private async run(progress: (done: number, total: number) => void): Promise<void> {
+	private async run(progress: (done: number, total: number) => void, save: boolean): Promise<void> {
 		if (!this.loaded) {
 			this.loaded = true;
 			try {
@@ -61,7 +68,13 @@ class PageDirectory {
 			progress(++done, todo.length);
 			await new Promise<void>((r) => window.setTimeout(r, 0));
 		}
-		if (updated.length > 0) await this.save(updated);
+		if (!save) {
+			this.pending.push(...updated);
+			return;
+		}
+		const toSave = [...this.pending, ...updated];
+		this.pending = [];
+		if (toSave.length > 0) await this.save(toSave);
 	}
 
 	/**
