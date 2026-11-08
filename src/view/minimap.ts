@@ -1,5 +1,6 @@
 import { setIcon } from "obsidian";
 import { t } from "../i18n";
+import { MAP_BL_VAR, mapOffset, publish, watchBox } from "../ui/dock-metrics";
 import type { Size, Viewport } from "../ink/viewport";
 import { PAGE_MARGIN } from "../ink/viewport";
 import type { PageBox } from "../ink/layout";
@@ -62,6 +63,7 @@ export class Minimap {
 	private last: { x: number; y: number; w: number; h: number } | null = null;
 	private lastMap: MapSize | null = null;
 	private lastPageId = "";
+	private stopWatch: (() => void) | null = null;
 
 	constructor(parent: HTMLElement, private readonly host: MinimapHost) {
 		this.prefs = normaliseMinimapPrefs(safe(() => host.loadPrefs()));
@@ -83,6 +85,8 @@ export class Minimap {
 		setIcon(this.pill.createSpan({ attr: { "aria-hidden": "true" } }), "map");
 
 		this.applyPrefs();
+		// The colour-filter pill and the lecture-header chip start to the right of a map parked at the bottom left (dock-metrics.ts).
+		this.stopWatch = watchBox(this.el, () => this.publishDock());
 
 		this.collapseBtn.addEventListener("click", () => this.setCollapsed(true));
 		this.pill.addEventListener("click", () => this.setCollapsed(false));
@@ -109,6 +113,8 @@ export class Minimap {
 	destroy(): void {
 		if (this.timer !== null) window.clearTimeout(this.timer);
 		this.timer = null;
+		this.stopWatch?.();
+		publish(this.el.parentElement, MAP_BL_VAR, 0);
 		this.el.remove();
 	}
 
@@ -266,6 +272,11 @@ export class Minimap {
 	private applyPrefs(): void {
 		this.el.dataset.corner = this.prefs.corner;
 		this.el.toggleClass("is-collapsed", this.prefs.collapsed);
+		this.publishDock();
+	}
+
+	private publishDock(): void {
+		publish(this.el.parentElement, MAP_BL_VAR, mapOffset(this.prefs.corner, !this.el.hasClass("notebook-hidden"), this.el.offsetWidth));
 	}
 
 	private persist(): void {
