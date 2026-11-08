@@ -18513,3 +18513,23 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-page-refs-list {
 	top: 104px;
 }
+
+/* ===== 0.22 axes ===== */
+/* The chip offered next to an L or a + drawn by hand: "Make axes". It floats over the page, just under the corner of the axes. */
+.nb-ui.nb-axes-offer {
+	position: absolute;
+	left: var(--nb-axes-x, 0);
+	top: var(--nb-axes-y, 0);
+	z-index: 25;
+	transform: translateX(-50%);
+	display: flex;
+	padding: 4px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-l);
+	background: var(--nb-panel);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.nb-ui.nb-axes-offer .nb-chip {
+	min-height: 40px;
+}

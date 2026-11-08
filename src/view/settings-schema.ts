@@ -198,6 +198,13 @@ const WRITING: SettingSpec[] = [
 		id: "checklistDraw", section: "writing", order: 58, name: "settings.checklistDraw", desc: "settings.checklistDraw.desc", keywords: "checklist checkbox square draw tick todo task lista casella quadrato spunta",
 		control: { type: "dropdown", options: options([["offer", "settings.checklistDraw.offer"], ["auto", "settings.checklistDraw.auto"], ["off", "settings.checklistDraw.off"]]) },
 	},
+	// 0.22 axes (#206): an L or a + drawn with the pen
+	{
+		id: "axesDraw", section: "writing", order: 58.5, name: "settings.axesDraw", desc: "settings.axesDraw.desc", keywords: "axes axis graph cartesian plot ticks assi grafico cartesiano",
+		control: { type: "dropdown", options: options([["offer", "settings.axesDraw.offer"], ["auto", "settings.axesDraw.auto"], ["off", "settings.axesDraw.off"]]) },
+	},
+	{ id: "axesTicks", section: "writing", order: 58.6, name: "settings.axesTicks", desc: "settings.axesTicks.desc", control: { type: "toggle" } },
+	{ id: "axesLabels", section: "writing", order: 58.7, name: "settings.axesLabels", desc: "settings.axesLabels.desc", control: { type: "toggle" }, parent: "axesTicks", visible: (s) => s.axesTicks },
 	{ id: "autoLineBreak", section: "writing", order: 60, name: "settings.autoLineBreak", desc: "settings.autoLineBreak.desc", control: { type: "toggle" } },
 	// 0.21 symbols
 	{ id: "symbolStrip", section: "writing", order: 62, name: "settings.symbolStrip", desc: "settings.symbolStrip.desc", keywords: "symbols maths math formula greek simboli matematica", control: { type: "toggle" } },

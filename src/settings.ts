@@ -132,6 +132,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	tasksNote: string;
 	/** 0.19 (#103): a small square drawn with the pen: "offer" a checkbox (a chip near it), turn it into one at once ("auto"), or leave it as ink ("off"). */
 	checklistDraw: "off" | "offer" | "auto";
+	/** 0.22 axes (#206): an "L" or a "+" drawn with the pen: "offer" Cartesian axes (a chip), make them at once ("auto"), or leave ink ("off"); ticks and number labels. */
+	axesDraw: "off" | "offer" | "auto";
+	axesTicks: boolean;
+	axesLabels: boolean;
 	/** 0.18 (#59): "Insert into note": display width (px) of the picture, its background and whether a link back to the page follows it. */
 	noteInsertWidth: number;
 	noteInsertBackground: "transparent" | "paper";
@@ -333,6 +337,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	taskDueEmoji: true,
 	tasksNote: "",
 	checklistDraw: "offer",
+	axesDraw: "offer", // 0.22 axes
+	axesTicks: true,
+	axesLabels: true,
 	noteInsertWidth: INSERT_WIDTH_DEFAULT,
 	noteInsertBackground: "transparent",
 	noteInsertLinkBack: true,
@@ -479,6 +486,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.taskDueEmoji === "boolean") s.taskDueEmoji = d.taskDueEmoji;
 	if (typeof d.tasksNote === "string") s.tasksNote = d.tasksNote.trim();
 	if (d.checklistDraw === "off" || d.checklistDraw === "offer" || d.checklistDraw === "auto") s.checklistDraw = d.checklistDraw;
+	if (d.axesDraw === "off" || d.axesDraw === "offer" || d.axesDraw === "auto") s.axesDraw = d.axesDraw; // 0.22 axes
+	if (typeof d.axesTicks === "boolean") s.axesTicks = d.axesTicks;
+	if (typeof d.axesLabels === "boolean") s.axesLabels = d.axesLabels;
 	if (typeof d.noteInsertWidth === "number") s.noteInsertWidth = clampInsertWidth(d.noteInsertWidth);
 	if (isInsertBackground(d.noteInsertBackground)) s.noteInsertBackground = d.noteInsertBackground;
 	if (typeof d.noteInsertLinkBack === "boolean") s.noteInsertLinkBack = d.noteInsertLinkBack;

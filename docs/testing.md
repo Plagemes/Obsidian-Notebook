@@ -3369,3 +3369,21 @@ Roadmap #179. Settings, Pages, Outline: *Show pages that link here* (on by defau
 | Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
 |---|---|---|---|---|---|
 | Two-way page references (#179): a chip "Referenced on p. 3, p. 12" on a page that other pages of the notebook link to (text boxes and sticky notes; by page id, so reordering keeps them), a list with a jump to each, setting to hide it; derived, nothing stored | yes | index by id, reorder, deleted pages, self links, many links, slices: `tests/page-refs.test.ts`; harness `doc=pagerefs` | | | links from other notebooks are not listed; no "Referenced" filter in the notebook map; not tried on a tablet |
+
+### 0.22 — axes: instant axes (steps 2140-2159)
+
+Implemented, not verified on hardware. No format change. Reference screenshots after `HARNESS_DOC=axes npm run harness:check`: `dev/harness/dist/shots/axes-*.png` (tablet and phone, light and dark).
+
+2140. **L.** With the pen, draw an L about 4 cm tall and 5 cm wide (up, then right). A *Make axes* chip appears under the corner for nine seconds; tap it: the L is replaced by two arrows with ticks following the page grid and small numbers beside every second tick.
+2141. **Undo.** One undo gives your L back, with no axes left; one redo makes the axes again.
+2142. **Group.** Lasso the axes: they select together (one group); move them and the numbers follow.
+2143. **+.** Draw a horizontal line, then a vertical one crossing it near the middle of both: the chip appears after the second line; taking it gives four-quadrant axes with negative numbers left and below.
+2144. **Not axes.** A handwritten letter L or t, a T-shaped pair of lines, a curve and a short + give no chip.
+2145. **Settings.** *Settings > Writing > L or + drawn as axes*: *Make axes* turns the gesture into axes by itself after a moment; *Leave it as ink* does nothing. *Ticks on axes* off gives plain arrows; *Numbers on axes* off keeps the ticks only.
+2146. **Insert.** In the insert sheet choose *Axes*: four-quadrant axes appear where the pen last wrote on the page (the centre of the view if nothing was written), selected; one undo removes them.
+2147. **Pen button.** Neither the side-button tap (radial menu) nor the drag (eraser) is affected; hold-to-snap lines still snap.
+2148. **Languages.** In Italian the chip, setting and insert entry are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Instant axes (#206): an L or a + (two lines) offered as axes, ticks from the page spacing, number labels, one group, one undo step; insert from the sheet; settings | yes | `tests/axes.test.ts` (L / + classification, tick placement, labels, group ids); harness scenario `axes` | | | offer after a real S Pen stroke on hardware |

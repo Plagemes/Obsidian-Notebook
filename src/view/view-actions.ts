@@ -216,6 +216,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"sticky-expand": (v) => v.stickyTools?.setCollapsed(false),
 	// 0.19 (#103): handwritten checklists
 	"insert-checkbox": (v) => v.checklistTools?.insert(),
+	"insert-axes": (v) => v.axesTools?.insert(),
 	"checkbox-toggle": (v) => v.checklistTools?.toggleSelected(),
 	"checkbox-select-label": (v) => v.checklistTools?.selectWithLabel(),
 	"checkbox-label": (v) => v.checklistTools?.editLabel(),
