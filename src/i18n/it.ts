@@ -4469,5 +4469,5 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"tagSuggest.title": "Suggeriti",
 	"tagSuggest.add": "Aggiungi il tag {tag}",
 	"settings.tagSuggestions": "Suggerisci i tag",
-	"settings.tagSuggestions.desc": "Quando modifichi i tag, ne propone alcuni dal corso, dai quaderni vicini, dal testo e dai segni.",
+	"settings.tagSuggestions.desc": "Propone tag dal corso, dai quaderni vicini, dal testo e dai segni.",
 };

@@ -4467,7 +4467,7 @@ export const en = {
 	"tagSuggest.title": "Suggested",
 	"tagSuggest.add": "Add tag {tag}",
 	"settings.tagSuggestions": "Suggest tags",
-	"settings.tagSuggestions.desc": "While editing tags, offer a few from the course, nearby notebooks, the text and the markers.",
+	"settings.tagSuggestions.desc": "Offer tags from the course, nearby notebooks, text and markers.",
 } as const;
 
 export type MessageKey = keyof typeof en;
