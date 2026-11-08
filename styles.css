@@ -18878,3 +18878,57 @@ body.notebook-style-obsidian {
 	font-size: var(--nb-fs-meta);
 	line-height: 1.4;
 }
+
+/* ===== 0.23 formulasheet ===== */
+.nb-ui.notebook-formulasheet-modal .nb-formulasheet-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.nb-ui .nb-formulasheet-page {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--nb-border);
+}
+
+.nb-ui .nb-formulasheet-ref {
+	min-width: 44px;
+	min-height: 36px;
+	padding: 2px 12px;
+	border-radius: 999px;
+	border: 0;
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui .nb-formulasheet-ref:hover,
+.nb-ui .nb-formulasheet-ref:focus-visible {
+	background: var(--nb-accent);
+	color: var(--nb-on-accent, #fff);
+}
+
+.nb-ui .nb-formulasheet-codes {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: 100%;
+}
+
+.nb-ui .nb-formulasheet-code {
+	display: block;
+	padding: 6px 10px;
+	border-radius: var(--nb-radius-sm, 8px);
+	background: var(--nb-surface-2, var(--nb-accent-bg));
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}

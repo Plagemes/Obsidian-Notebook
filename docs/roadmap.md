@@ -482,7 +482,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 246. **P2** Leader-line labels, auto-aligned, for annotated figures (anatomy, diagrams).
 247. **P2** Numbered markers on a figure (1, 2, 3) with an automatically generated legend.
 248. **P2** Figure captions and numbering ("Fig. 3") with references that update themselves.
-249. **P2** Automatic course formula sheet: collects every formula element (#110) into one page.
+249. **P2** 🧪 Automatic course formula sheet: collects every formula element (#110) into one page.
 250. **P3** Pattern fills (hatching, dots).
 251. **P3** Duplicate in series: copies on a grid or along a path.
 252. **P3** Tree diagrams (probability, decisions) with automatic layout.

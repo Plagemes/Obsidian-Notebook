@@ -151,6 +151,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"look-up-list": (v) => v.openLookUpList(),
 	"selection-add-to-index": (v) => v.addToIndexFromSelection(),
 	"book-index": (v) => v.openBookIndex(),
+	"formula-sheet": (v) => v.openFormulaSheet(),
 	// 0.18 (#59): the selection as a picture in a note
 	"selection-insert-note": (v) => v.insertSelectionIntoNote("png"),
 	"selection-insert-note-svg": (v) => v.insertSelectionIntoNote("svg"),

@@ -4418,6 +4418,24 @@ export const en = {
 	"chem.err.unbalanceable": "Cannot be balanced with these species ({detail}).",
 	"chem.err.unused-species": "{detail} cannot take part. Remove it or check its formula.",
 	"chem.err.ambiguous": "More than one balance is possible ({count} independent equations). Remove a species or split the reaction.",
+	// 0.23 formulasheet
+	"formulasheet.menu": "Formula sheet…",
+	"command.formulaSheet": "Build formula sheet: every equation of the notebook…",
+	"formulasheet.title": "Formulas",
+	"formulasheet.subtitle": "Every equation of the notebook, in reading order.",
+	"formulasheet.summary": "{n} formulas on {pages} pages",
+	"formulasheet.empty": "No equations yet. Insert one with the equation tool.",
+	"formulasheet.goto": "Go to page {n}",
+	"formulasheet.close": "Close",
+	"formulasheet.write": "Build formula sheet",
+	"formulasheet.page": "p. {n}",
+	"formulasheet.intro": "Formulas of {link}: {n} on {pages} pages. This list is generated; edit the equations in the notebook, not the list.",
+	"formulasheet.none": "There are no equations to write.",
+	"formulasheet.done": "Formula sheet written to {path} ({n} formulas).",
+	"formulasheet.failed": "Could not write the formula sheet: {error}",
+	"formulasheet.unsafe": "{path} has an unpaired formula marker; it was left untouched.",
+	"formulasheet.foreign": "{path} already exists and is not a formula sheet; it was left untouched. Rename or move it, then try again.",
+	"formulasheet.other": "{path} is the formula sheet of another notebook; it was left untouched. Try again to use a separate note.",
 } as const;
 
 export type MessageKey = keyof typeof en;

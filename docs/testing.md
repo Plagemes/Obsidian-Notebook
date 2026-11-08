@@ -3557,3 +3557,17 @@ Implemented, not verified on hardware. No format change. Reference screenshots a
 |---|---|---|---|---|---|
 | Balancing of typed chemical reactions (#294): formulas with groups and hydrates, charges, electrons, arrows `->` `→` `⇌` `=`; exact rational nullspace, smallest whole coefficients; unbalanceable, one-sided, unused-species and ambiguous reactions are explained | yes | `tests/chem-balance.test.ts` (parsing, combustion, redox with charges, hydrates, impossible and ambiguous cases, text boxes, LaTeX) | | | |
 | "Balance reaction" in the selection bar and the palette: preview, one undo step, refuses locked elements and locked pages; text boxes and equations (`\ce{}`) | yes | pure part tested; harness `doc=chembal` | | | not tried on the tablet |
+### 0.23 — formulasheet: automatic formula sheet (#249; steps 2360-2379)
+
+Formula sheet (roadmap #249). *Formula sheet…* (page sheet, notebook menu, command *Build formula sheet*) lists every equation of the notebook in reading order (LaTeX source and a page chip that jumps) and writes them into `<Notebook> — Formulas.md` next to the notebook: a heading with a link per page and a `$$…$$` block per formula (`\tag{n}` for a numbered one). Only the region between the `notebook-formulas` markers is rewritten; the notebook file is never written and the document format does not change. Implemented, not verified on hardware.
+
+2360. In a notebook with equations on three pages (one numbered, two on the same row), open *Formula sheet…*. Expect: the formulas in reading order (rows top to bottom, then left to right), a chip per page with formulas; a chip closes the dialog and goes to that page.
+2361. Tap *Build formula sheet*. Expect: a notice with the path and count; `<Notebook> — Formulas.md` next to the notebook, rendering each formula as maths in Obsidian, with a working link to each page.
+2362. Add text above and below the generated region in that note, add an equation in the notebook, build again. Expect: the new formula appears; your text above and below is unchanged.
+2363. Delete one of the two `notebook-formulas` marker lines in the note and build again. Expect: a notice that the note was left untouched; the note is not changed.
+2364. Create a note with the same name and no markers, then build. Expect: a notice that it is not a formula sheet; the note is unchanged.
+2365. Open the notebook with no equations. Expect: the dialog says there are none and no note is created.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Formula sheet (#249): equations collected in reading order into `<Notebook> — Formulas.md` (`$$` blocks, link to each page, `\tag{n}` for numbered ones); owner marker with path and document id, only the region is rewritten inside `vault.process`, a note without markers, with an unpaired marker or recording another notebook is never rewritten, recorded in plugin-written | yes | collection order, escaping of `$`, `-->` and blank lines, section, marker safety and note-name choice: `tests/formula-sheet.test.ts`; dialog and vault side: harness `doc=formulasheet` | | | one notebook at a time (no course/folder-wide sheet yet); formulas are written as LaTeX, typeset by Obsidian |
