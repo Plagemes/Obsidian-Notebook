@@ -92,6 +92,7 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	// selection
 	"Restyle selection": ["histpanel.t.restyle", "palette"],
 	"Shape style": ["histpanel.t.shapeRestyled", "shapes"],
+	"Opacity": ["histpanel.t.opacity", "droplet"],
 	"Transform selection": ["histpanel.t.transform", "move"],
 	"Move selection": ["histpanel.t.transform", "move"],
 	"Delete selection": ["histpanel.t.deleteSelection", "trash-2"],

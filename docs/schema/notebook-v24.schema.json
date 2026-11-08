@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v23.schema.json",
-  "title": "Notebook document, format version 23",
-  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 23). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
+  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v24.schema.json",
+  "title": "Notebook document, format version 24",
+  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 24). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
   "type": "object",
   "required": ["format", "version", "id", "createdAt", "modifiedAt", "meta", "assets", "pages"],
   "properties": {
     "format": { "const": "obsidian-notebook", "description": "Always this string. Distinguishes the file from any other JSON." },
-    "version": { "const": 23, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
+    "version": { "const": 24, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
     "id": { "type": "string", "minLength": 1, "description": "Document id (a UUID when available). Survives renames and copies made with 'Make a copy'." },
     "createdAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time the notebook was created." },
     "modifiedAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time of the last content save." },
@@ -54,6 +54,7 @@
     "positive": { "type": "number", "exclusiveMinimum": 0 },
     "timeMs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Milliseconds since 1970-01-01T00:00:00Z." },
     "true": { "const": true, "description": "Written only when true; absent means false." },
+    "opacity": { "type": "number", "minimum": 0.05, "maximum": 1, "description": "v24: how strongly the item is drawn. It multiplies the look the item has without it (the highlighter's 35 %, the marker's 85 %, a tint fill, an area's highlighter look); absent means full strength, the look of every earlier version. The plugin writes it only below 1." },
 
     "meta": {
       "type": "object",
@@ -277,6 +278,7 @@
         "fill": { "$ref": "#/$defs/color", "description": "v22: the colour a closed shape is filled with (only the shape tool). An open shape that has one is simply not filled." },
         "fillTint": { "$ref": "#/$defs/true", "description": "v22: the fill is a translucent tint of `fill` instead of the solid colour. Needs `fill`." },
         "dash": { "enum": ["dashed", "dotted"], "description": "v22: the line of a shape is dashed or dotted (absent = solid). Only the shape tool." },
+        "opacity": { "$ref": "#/$defs/opacity", "description": "v24: any pen. Multiplies the pen's own translucency, and the fill of a shape." },
         "points": {
           "type": "array",
           "minItems": 1,
@@ -352,7 +354,8 @@
         "y": { "type": "number" },
         "width": { "$ref": "#/$defs/positive" },
         "height": { "$ref": "#/$defs/positive" },
-        "rotation": { "type": "number" }
+        "rotation": { "type": "number" },
+        "opacity": { "$ref": "#/$defs/opacity", "description": "v24: how strongly the picture is drawn; absent means opaque." }
       }
     },
 
@@ -616,7 +619,7 @@
     },
 
     "areaElement": {
-      "description": "v23 area highlighter: a translucent axis-aligned rectangle (x, y is the top-left corner) in a highlighter colour, drawn above the page background and below all the ink, with the look of a highlighter stroke (the opacity is not stored).",
+      "description": "v23 area highlighter: a translucent axis-aligned rectangle (x, y is the top-left corner) in a highlighter colour, drawn above the page background and below all the ink, with the look of a highlighter stroke (v24: multiplied by `opacity` when present).",
       "allOf": [{ "$ref": "#/$defs/elementFlags" }],
       "type": "object",
       "required": ["id", "type", "x", "y", "width", "height", "color"],
@@ -627,7 +630,8 @@
         "y": { "type": "number" },
         "width": { "type": "number", "minimum": 2, "maximum": 20000 },
         "height": { "type": "number", "minimum": 2, "maximum": 20000 },
-        "color": { "$ref": "#/$defs/color" }
+        "color": { "$ref": "#/$defs/color" },
+        "opacity": { "$ref": "#/$defs/opacity", "description": "v24: multiplies the highlighter's translucency; absent means the highlighter's own look." }
       }
     },
 

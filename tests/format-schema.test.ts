@@ -1,7 +1,7 @@
-// docs/schema/notebook-v23.schema.json against what the serializer really writes (roadmap #167).
+// docs/schema/notebook-v24.schema.json against what the serializer really writes (roadmap #167).
 // The schema is a published contract for other tools: a document the plugin writes must always satisfy it, and a document that
 // breaks one of the writer's rules must not. The validator is a small dependency-free one (tests/json-schema-lite.ts).
-import schemaText from "../docs/schema/notebook-v23.schema.json?raw";
+import schemaText from "../docs/schema/notebook-v24.schema.json?raw";
 import guide from "../docs/format.md?raw";
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
@@ -67,13 +67,13 @@ function fullDocument(): NotebookDocument {
 	// Page 1: ink of every tool and render version, flags, groups, every element type.
 	const strokes: Stroke[] = [
 		stroke("st-pen", { slide: "s1", group: "g1" }),
-		stroke("st-hl", { tool: "highlighter", color: "#facc15", width: 14, render: 2, group: "g1" }),
+		stroke("st-hl", { tool: "highlighter", color: "#facc15", width: 14, render: 2, group: "g1", opacity: 0.5 }),
 		stroke("st-shape", { tool: "shape", render: 2, hidden: true, slide: "s2" }),
 		// v20: the new pens (always render 2) and the nib angle.
-		stroke("st-fountain", { tool: "fountain", render: 2, nib: 120 }), stroke("st-brush", { tool: "brush", render: 2, width: 6 }), stroke("st-marker", { tool: "marker", render: 2, width: 10, nib: 0 }),
+		stroke("st-fountain", { tool: "fountain", render: 2, nib: 120 }), stroke("st-brush", { tool: "brush", render: 2, width: 6 }), stroke("st-marker", { tool: "marker", render: 2, width: 10, nib: 0, opacity: 0.05 }),
 		stroke("st-a"), stroke("st-b"), stroke("st-c"),
 		// v22: a filled and dashed shape, a solid-filled dotted one (strokes 9 and 10 of page 1).
-		stroke("st-shape-tint", { tool: "shape", render: 1, fill: "#2563eb", fillTint: true, dash: "dashed" }), stroke("st-shape-solid", { tool: "shape", render: 1, fill: "#ff0000", dash: "dotted" }),
+		stroke("st-shape-tint", { tool: "shape", render: 1, fill: "#2563eb", fillTint: true, dash: "dashed", opacity: 0.6 }), stroke("st-shape-solid", { tool: "shape", render: 1, fill: "#ff0000", dash: "dotted" }),
 	];
 	const graph: GraphElement = {
 		id: "el-graph", type: "graph", x: 40, y: 400, width: 300, height: 200,
@@ -92,7 +92,7 @@ function fullDocument(): NotebookDocument {
 	};
 	const elements: PageElement[] = [
 		{ id: "el-text", type: "text", x: 10, y: 20, width: 200, text: "Hello\nworld", fontSize: 14, color: "#000000", group: "g2" },
-		{ id: "el-image", type: "image", asset: hex2, x: 10, y: 100, width: 120, height: 80, rotation: 0.5 },
+		{ id: "el-image", type: "image", asset: hex2, x: 10, y: 100, width: 120, height: 80, rotation: 0.5, opacity: 0.4 },
 		{ id: "el-m-min", type: "marker", kind: "star", x: 5, y: 5 },
 		{ id: "el-m-full", type: "marker", kind: "homework", x: 5, y: 40, width: 100, height: 30, at: "2026-10-29T10:00:00.000Z", done: true, slide: 2, due: "2026-11-02", text: "Exercise 4" },
 		{ id: "el-box", type: "box", kind: "theorem", x: 20, y: 200, width: 300, height: 90, title: "Pythagoras" },
@@ -106,7 +106,7 @@ function fullDocument(): NotebookDocument {
 		{ id: "el-cb", type: "checkbox", x: 30, y: 650, size: 20, color: "#1f2430", checked: true, at: 1_700_000_000_001, taskAt: 1_700_000_000_002, label: "Read chapter 2", task: { path: "Notes/Tasks.md", block: "nb-abc123" } },
 		{ id: "el-cb-min", type: "checkbox", x: 30, y: 690, size: 20, color: "#1f2430" },
 		// v23: the area highlighter (the second one is locked).
-		{ id: "el-area", type: "area", x: 30, y: 730, width: 200, height: 24, color: "#facc15" },
+		{ id: "el-area", type: "area", x: 30, y: 730, width: 200, height: 24, color: "#facc15", opacity: 0.7 },
 		{ id: "el-area-locked", type: "area", x: 250, y: 730, width: 120.5, height: 24.25, color: "#4ADE80", locked: true, lockAt: 1_700_000_000_003 },
 	];
 	const page1: Page = {
@@ -147,7 +147,7 @@ function fullDocument(): NotebookDocument {
 	return doc;
 }
 
-describe("notebook-v23.schema.json: what the serializer writes validates", () => {
+describe("notebook-v24.schema.json: what the serializer writes validates", () => {
 	it("is a well-formed draft 2020-12 schema for the current format version", () => {
 		expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
 		expect((getAt(schema as Raw, ["properties", "version", "const"]))).toBe(CURRENT_VERSION);
@@ -177,7 +177,7 @@ describe("notebook-v23.schema.json: what the serializer writes validates", () =>
 		for (const key of [
 			'"bookmarkInfo"', '"description"', '"coverArt"', '"position"', '"slides"', '"views"', '"tags"', '"background"', '"margins"', '"infinite"', '"locked"',
 			'"states"', '"comments"', '"hidden"', '"slide"', '"group"', '"lockAt"', '"outline"', '"taskAt"', '"sketch"', '"resolved"', '"inline"', '"numbered"',
-			'"startAt"', '"endAt"', '"collapsed"', '"ink"', '"table"', '"params"', '"axes"', '"degrees"',
+			'"startAt"', '"endAt"', '"collapsed"', '"ink"', '"table"', '"params"', '"axes"', '"degrees"', '"opacity"',
 		]) expect(text, key).toContain(key);
 		// ... and the writer keeps it (round trip), so the schema describes what is read back too.
 		const back = parse(text);
@@ -192,7 +192,7 @@ describe("notebook-v23.schema.json: what the serializer writes validates", () =>
 	});
 });
 
-describe("notebook-v23.schema.json: invalid documents are refused", () => {
+describe("notebook-v24.schema.json: invalid documents are refused", () => {
 	const base = (): Raw => parseRaw(written(fullDocument()));
 	const bad = (name: string, edit: (raw: Raw) => void): void => {
 		it(name, () => {
@@ -336,6 +336,13 @@ describe("notebook-v23.schema.json: invalid documents are refused", () => {
 	bad("area without a colour", del(["pages", 0, "elements", 14, "color"]));
 	bad("area with a colour name", set(["pages", 0, "elements", 14, "color"], "yellow"));
 	bad("area without a size", del(["pages", 0, "elements", 14, "width"]));
+	// v24: the opacity of ink, pictures and areas.
+	bad("opacity 0 on a pen", set(["pages", 0, "strokes", 0, "opacity"], 0));
+	bad("opacity below 5 %", set(["pages", 0, "strokes", 1, "opacity"], 0.04));
+	bad("opacity above 1", set(["pages", 0, "strokes", 1, "opacity"], 1.5));
+	bad("opacity as a string", set(["pages", 0, "strokes", 5, "opacity"], "half"));
+	bad("opacity 0 on a picture", set(["pages", 0, "elements", 1, "opacity"], 0));
+	bad("opacity on an area above 1", set(["pages", 0, "elements", 14, "opacity"], 2));
 	bad("element lockAt as a string", set(["pages", 0, "elements", 7, "lockAt"], "now"));
 	bad("element locked false", set(["pages", 0, "elements", 7, "locked"], false));
 	// States.
@@ -385,7 +392,7 @@ describe("docs/format.md", () => {
 	});
 
 	it("names the schema file and the version it describes", () => {
-		expect(guide).toContain("schema/notebook-v23.schema.json");
+		expect(guide).toContain("schema/notebook-v24.schema.json");
 		expect(guide).toContain(`version ${CURRENT_VERSION}`);
 	});
 });

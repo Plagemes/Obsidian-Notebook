@@ -167,7 +167,7 @@ function extent(pts: readonly Point[]): number {
 }
 
 function sameStyle(a: Stroke, b: Stroke): boolean {
-	return a.tool === b.tool && a.color.toLowerCase() === b.color.toLowerCase() && Math.abs(a.width - b.width) < 0.01 && (a.nib ?? -1) === (b.nib ?? -1);
+	return a.tool === b.tool && a.color.toLowerCase() === b.color.toLowerCase() && Math.abs(a.width - b.width) < 0.01 && (a.nib ?? -1) === (b.nib ?? -1) && (a.opacity ?? 1) === (b.opacity ?? 1);
 }
 
 /** Whether `stroke` is a pen-bounce dot that touches an end of `neighbour` (the stroke written just before or after it). */

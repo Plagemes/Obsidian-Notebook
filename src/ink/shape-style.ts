@@ -1,5 +1,6 @@
 import type { Point, ShapeDash, Stroke } from "../model/types";
 import { isShapeTool } from "../model/types";
+import { opacityOf } from "../model/opacity";
 
 /**
  * Filled shapes and dashed or dotted lines (format v22, roadmap #37). Pure geometry shared by the canvas, the PNG, the SVG, the PDF and the
@@ -88,8 +89,9 @@ export function isFilled(stroke: Pick<Stroke, "tool" | "fill"> & { points: reado
 }
 
 /** Opacity of the fill of `stroke` in the day look: solid, or the tint. */
-export function fillAlpha(stroke: Pick<Stroke, "fillTint">): number {
-	return stroke.fillTint === true ? FILL_TINT_ALPHA : 1;
+export function fillAlpha(stroke: Pick<Stroke, "fillTint"> & { opacity?: number }): number {
+	// v24 (#358): the opacity of the stroke scales its fill too (the fill is part of the shape).
+	return (stroke.fillTint === true ? FILL_TINT_ALPHA : 1) * (stroke.opacity === undefined ? 1 : opacityOf(stroke));
 }
 
 /** SVG path (nonzero) of the polygon through the points of a closed shape: the area its fill covers. */

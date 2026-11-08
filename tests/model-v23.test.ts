@@ -80,9 +80,9 @@ describe("format v23: the fields", () => {
 	});
 
 	it("is a document of the current version", () => {
-		expect(CURRENT_VERSION).toBe(23);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(23);
 		expect(ELEMENT_TYPES_V23).toEqual(["area"]);
-		expect(parsed(serialize(docWith([area("a")]))).doc.version).toBe(23);
+		expect(parsed(serialize(docWith([area("a")]))).doc.version).toBe(CURRENT_VERSION);
 	});
 
 	it("refuses to write a malformed one (strict)", () => {
@@ -125,7 +125,7 @@ describe("format v23: migration from v22", () => {
 		expect(r.migratedFrom).toBe(22);
 		expect(r.dropped).toBeUndefined();
 		expect(r.doc.version).toBe(CURRENT_VERSION);
-		expect(getAt(parseRaw(serialize(r.doc)), ["version"])).toBe(23);
+		expect(getAt(parseRaw(serialize(r.doc)), ["version"])).toBe(CURRENT_VERSION);
 	});
 
 	it("opens a file of a newer format read-only (it is not parsed, so it is never rewritten)", () => {

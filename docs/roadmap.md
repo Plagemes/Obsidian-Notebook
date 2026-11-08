@@ -661,7 +661,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 
 ### Objects and selection
 357. **P2** 🧪 Layer order: bring to front, send to back.
-358. **P2** Opacity slider for ink, highlighter and images.
+358. **P2** 🧪 Opacity slider for ink, highlighter and images.
 359. **P2** 🧪 Lasso selection across page boundaries.
 360. **P3** Code text box: monospace with syntax colours.
 361. **P2** 🧪 Find and replace in the text boxes of a notebook.

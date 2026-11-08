@@ -67,6 +67,7 @@ import {
 } from "../model/history";
 import { pageContentCommand } from "../model/page-content";
 import { checkContent, freezeStroke } from "../model/serialize";
+import { normaliseOpacity } from "../model/opacity";
 import {
 	DEFAULT_META, isLinePen, isNewPen, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
@@ -4079,6 +4080,8 @@ export class NotebookView extends FileView {
 			strokes: parts.reduce((n, p) => n + p.strokes.length, 0),
 			elements: elements.length,
 			images: elements.filter((e) => e.type === "image").length,
+			// 0.26 (#358): area highlighters take an opacity like ink and pictures.
+			areas: elements.filter((e) => e.type === "area").length,
 			texts: elements.filter((e) => e.type === "text").length,
 			reactions: sel.elements.filter(holdsReaction).length,
 			links: this.penLinks?.linkIn(sel.elements) ? 1 : 0,
@@ -4112,6 +4115,13 @@ export class NotebookView extends FileView {
 	/** 0.25 (#99): switches the highlighter between marking strokes and marking rectangles (area highlighter), and takes the highlighter in hand. */
 	toggleHighlighterArea(): void {
 		if (this.editable()) this.toolbar.update({ tool: "highlighter", highlighterArea: !this.tools.highlighterArea });
+	}
+
+	/** 0.26 (#358): the "Opacity" action: the opacity slider of the selection when there is one, else the one of the pen in hand (its options open). */
+	revealOpacity(): void {
+		if (!this.editable()) return;
+		if (this.selectionActions?.revealOpacity()) return;
+		this.toolbar.revealOpacity();
 	}
 
 	/** The selection's copy, cut, paste, duplicate and white-to-transparent (contextual bar). */
@@ -5361,13 +5371,16 @@ export class NotebookView extends FileView {
 		const nib = strokeNib(inkTool, this.tools.nibAngle);
 		const color = highlighter ? this.tools.highlighterColor : this.tools.penColor;
 		const width = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
+		// 0.26 (#358): the opacity chosen for this pen (absent at full strength, so ordinary ink is stored exactly as before).
+		const opacity = normaliseOpacity(highlighter ? this.tools.highlighterOpacity : this.tools.penOpacity);
+		const own = opacity === undefined ? {} : { opacity };
 		this.ink.reset(inkTool, width, nib);
 		this.ink.add(start[0], start[1], p);
 		this.active = {
 			pageIndex,
 			stroke: this.markers?.invisibleInk && !highlighter
-				? { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), hidden: true }
-				: { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }) },
+				? { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own, hidden: true }
+				: { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own },
 			wet: true,
 			liveFallback: false,
 			rawX: start[0],
@@ -5384,7 +5397,7 @@ export class NotebookView extends FileView {
 		this.startHold();
 		this.armDwell(sample, eraserButton, !!held, inkTool);
 		// The first point shows as a dot right away.
-		const painted = !!this.renderer?.beginWet(pageIndex, this.ink, inkTool, color) && this.renderer.paintWet();
+		const painted = !!this.renderer?.beginWet(pageIndex, this.ink, inkTool, color, opacity) && this.renderer.paintWet();
 		if (!painted) this.showLiveFallback(this.active);
 		return true;
 	}
@@ -5561,7 +5574,7 @@ export class NotebookView extends FileView {
 		const points = this.ink.toPoints();
 		points.push([active.rawX, active.rawY, active.rawP]);
 		const { tool, color, width } = active.stroke;
-		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, nib: active.stroke.nib, points, predicted: [] });
+		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, nib: active.stroke.nib, ...(active.stroke.opacity === undefined ? {} : { opacity: active.stroke.opacity }), points, predicted: [] });
 	}
 
 	/**
@@ -5885,7 +5898,7 @@ export class NotebookView extends FileView {
 	 * be a rectangle is a stray touch and adds nothing). It goes on top of the page's elements, so it is drawn above the older areas.
 	 */
 	private commitArea(shape: ShapeDrag, page: Page): void {
-		const area = createArea(shape.a, shape.b, page, this.tools.highlighterColor);
+		const area = createArea(shape.a, shape.b, page, this.tools.highlighterColor, this.tools.highlighterOpacity);
 		if (!area) return;
 		if (!this.history.execute(new AddElement(page.id, area, page.elements?.length ?? 0))) return;
 		this.afterHistoryChange();
@@ -5901,7 +5914,12 @@ export class NotebookView extends FileView {
 		}
 		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.tools.penWidth, this.shiftDown);
 		if (points.length < 2) return;
-		const stroke = freezeStroke({ ...createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"), ...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine) });
+		const shapeOpacity = normaliseOpacity(this.tools.penOpacity);
+		const stroke = freezeStroke({
+			...createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"),
+			...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine),
+			...(shapeOpacity === undefined ? {} : { opacity: shapeOpacity }),
+		});
 		this.addStrokes(shape.pageIndex, page, [stroke], false);
 	}
 
@@ -5910,6 +5928,7 @@ export class NotebookView extends FileView {
 		if (!a) return;
 		this.renderer?.setLive({
 			pageIndex: a.pageIndex, tool: a.stroke.tool, color: a.stroke.color, width: a.stroke.width,
+			...(a.stroke.opacity === undefined ? {} : { opacity: a.stroke.opacity }),
 			points: a.stroke.points, predicted: [],
 		});
 	}
@@ -5920,13 +5939,14 @@ export class NotebookView extends FileView {
 		if (s.area) {
 			// v23 (#99): the rectangle being dragged, with the look it will have (nothing is drawn until the drag is big enough to be one).
 			const page = this.pageAtIndex(s.pageIndex);
-			const area = page ? createArea(s.a, s.b, page, this.tools.highlighterColor) : null;
+			const area = page ? createArea(s.a, s.b, page, this.tools.highlighterColor, this.tools.highlighterOpacity) : null;
 			this.renderer?.setAreaPreview(area ? { pageIndex: s.pageIndex, area } : null);
 			return;
 		}
 		const points = shapePoints(this.tools.shapeKind, s.a, s.b, this.tools.penWidth, this.shiftDown);
 		this.renderer?.setLive({
 			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.tools.penWidth, points, predicted: [],
+			...(normaliseOpacity(this.tools.penOpacity) === undefined ? {} : { opacity: normaliseOpacity(this.tools.penOpacity) }),
 			...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine),
 		});
 	}

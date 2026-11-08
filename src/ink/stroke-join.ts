@@ -82,7 +82,7 @@ function endSpacing(pts: readonly Point[], atEnd: boolean): number {
 
 function sameStyle(a: Stroke, b: Stroke): boolean {
 	return a.tool === b.tool && a.color.toLowerCase() === b.color.toLowerCase() && Math.abs(a.width - b.width) < 0.01
-		&& (a.nib ?? -1) === (b.nib ?? -1) && a.render === b.render && a.slide === b.slide
+		&& (a.nib ?? -1) === (b.nib ?? -1) && (a.opacity ?? 1) === (b.opacity ?? 1) && a.render === b.render && a.slide === b.slide
 		// Ink bound to a graph (id prefix) moves and is clipped with that graph: never join it with ink of another graph or with free ink.
 		&& boundGraphId(a) === boundGraphId(b);
 }

@@ -10,7 +10,8 @@ import { planJoin, type JoinPlan } from "../ink/stroke-join";
 import { planBaseline, type BaselinePlan } from "../ink/baseline";
 import { selectableItems } from "../model/groups";
 import type { PageBox } from "../ink/layout";
-import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
+import { commonOpacity, commonStyle, opacityAbility, planOpacity, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
+import { createOpacityRow, type OpacityRow } from "./opacity-row";
 import { batchShapeStyle, commonShapeStyle, planShapeStyle, shapeAbilities, type ShapeStyleRequest } from "../ink/shape-restyle";
 import { renderShapeStyle } from "./shape-style-row";
 import { AddAsset, AddElement, AddPage, Batch, ReplaceElement, type Command } from "../model/history";
@@ -88,6 +89,8 @@ const MAX_TRANSPARENT_SIDE = 2048;
 export class SelectionActions {
 	readonly el: HTMLElement;
 	private readonly styleRows: HTMLElement;
+	/** 0.26 (#358): the opacity slider of the current selection (null when the selection has nothing that takes one). */
+	private opacity: OpacityRow | null = null;
 	private busy = false;
 
 	/** `parent`: the contextual bar's extra slot (ui redesign); copy, cut, paste… are actions of the registry there. */
@@ -106,6 +109,7 @@ export class SelectionActions {
 	update(): void {
 		const sel = this.host.selection();
 		this.styleRows.empty();
+		this.opacity = null;
 		if (!sel || this.host.ownedByStates?.(sel)) {
 			this.el.toggleClass("notebook-hidden", true);
 			delete this.el.dataset.kind;
@@ -123,6 +127,8 @@ export class SelectionActions {
 		if (ability.highlighterColor) this.styleRow(sel, "highlighter", true, ability.highlighterWidth);
 		// 0.24 (#37): the fill and the line style of the shapes in the selection.
 		this.shapeRow(all.strokes);
+		// 0.26 (#358): the opacity of the ink, pictures and area highlighters in the selection.
+		this.opacityRow(all.strokes, all.elements);
 		this.el.toggleClass("notebook-hidden", !this.host.editable() || this.styleRows.childElementCount === 0);
 	}
 
@@ -168,6 +174,57 @@ export class SelectionActions {
 			setFillColor: (fillColor) => this.restyleShape({ fillColor }),
 			setLine: (line) => this.restyleShape({ line }),
 		});
+	}
+
+	/** 0.26 (#358): the opacity slider; nothing for a selection without ink, picture or area. A mixed selection shows no value until the slider is moved. */
+	private opacityRow(strokes: readonly Stroke[], elements: readonly PageElement[]): void {
+		if (!opacityAbility(strokes, elements)) return;
+		const row = createOpacityRow(this.styleRows, { commit: (value) => this.applyOpacity(value) }, "notebook-sel-opacity");
+		row.set(commonOpacity(strokes, elements), this.host.editable());
+		this.opacity = row;
+	}
+
+	/** The "Opacity" action: puts the focus on the selection's slider. False when the selection has none. */
+	revealOpacity(): boolean {
+		if (!this.opacity || this.el.hasClass("notebook-hidden")) return false;
+		this.opacity.slider.focus();
+		return true;
+	}
+
+	/**
+	 * Sets the opacity of the selected ink, pictures and area highlighters as ONE undo step (every page of a selection that crossed pages), keeping the
+	 * selection. Groups come whole; a locked element and the elements that take no opacity are left alone; a locked page refuses the step in the history.
+	 */
+	private applyOpacity(opacity: number): void {
+		const sel = this.host.selection();
+		const doc = this.host.doc();
+		if (!sel || !doc || !this.host.editable()) return;
+		const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])];
+		const plans = parts.flatMap((part) => {
+			const page = doc.pages[part.pageIndex];
+			if (!page) return [];
+			// The items as they are on the page now, found by id (an undo or redo since the selection was made replaced the objects).
+			const strokeById = new Map(page.strokes.map((s) => [s.id, s]));
+			const elementById = new Map((page.elements ?? []).map((e) => [e.id, e]));
+			const picked = selectableItems(page, {
+				strokes: part.strokes.flatMap((s) => strokeById.get(s.id) ?? []),
+				elements: part.elements.flatMap((e) => elementById.get(e.id) ?? []),
+			});
+			const plan = planOpacity(page, picked.strokes, picked.elements, opacity);
+			return plan ? [{ part, plan }] : [];
+		});
+		if (plans.length === 0) return;
+		const command = plans.length === 1 ? plans[0]!.plan.command : new Batch("Opacity", plans.map((p) => p.plan.command));
+		if (!this.host.execute(command)) return;
+		const next = (part: PagePart): PagePart => {
+			const found = plans.find((p) => p.part === part);
+			if (!found) return part;
+			const strokes = new Map(found.plan.strokes.map((s) => [s.id, s]));
+			const elements = new Map(found.plan.elements.map((e) => [e.id, e]));
+			return { pageIndex: part.pageIndex, strokes: part.strokes.map((s) => strokes.get(s.id) ?? s), elements: part.elements.map((e) => elements.get(e.id) ?? e) };
+		};
+		const [first, ...rest] = parts.map(next) as [PagePart, ...PagePart[]];
+		this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
 	}
 
 	/** Applies a shape style to the selected shapes as ONE undo step (every page of a selection that crossed pages), keeping the selection. */

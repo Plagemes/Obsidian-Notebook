@@ -4865,4 +4865,13 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"navMarked.clear": "Mostra tutte le pagine",
 	"navMarked.empty": "Qui non c'è ancora niente di segnato.",
 	"help.navMarked": "Mostra solo le pagine che hai segnato: segnalibri, segnaposto e domande, colori con significato, caselle da spuntare ed etichette di pagina. Ogni pagina mantiene il suo numero e indica perché è segnata. Nel menu scegli quali tipi contano.",
+	// 0.26 opacity (#358)
+	"opacity.title": "Opacità",
+	"opacity.reset": "Opacità: torna al 100%",
+	"opacity.mixed": "Valori diversi",
+	"opacity.value": "Opacità {percent}%",
+	"opacity.action": "Opacità",
+	"command.opacity": "Opacità della selezione o della penna",
+	"help.opacity": "Quanto si vede l'inchiostro, l'immagine o l'evidenziatore: 100% è l'aspetto normale, più basso lascia trasparire la pagina. Nelle opzioni della penna vale per ciò che scrivi dopo; con una selezione cambia l'inchiostro, le immagini e le aree evidenziate selezionate. Tocca per riportarla al 100%.",
+	"histpanel.t.opacity": "Opacità cambiata",
 };

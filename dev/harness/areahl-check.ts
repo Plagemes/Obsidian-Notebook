@@ -149,7 +149,7 @@ export async function checkAreahl(api: AreahlCheckApi): Promise<{ ok: boolean; r
 	// --- writer and reader ---
 	const text = serialize(v.document);
 	const back = parse(text);
-	add("the writer and the reader keep the areas", back.ok && areasOf(back.doc.pages[v.currentPage()]!).length === 2 && back.dropped === undefined && back.doc.version === 23);
+	add("the writer and the reader keep the areas", back.ok && areasOf(back.doc.pages[v.currentPage()]!).length === 2 && back.dropped === undefined && back.doc.version >= 23);
 
 	// --- the specimen for the screenshot ---
 	const cols = ["#facc15", "#4ade80", "#f472b6", "#60a5fa", "#fb923c"];

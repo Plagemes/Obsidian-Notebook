@@ -19760,3 +19760,68 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-navigator-mark.is-meaning .notebook-navigator-mark-text {
 	max-width: 14em;
 }
+
+/* ===== 0.26 opacity ===== */
+/* Opacity slider (#358): a reset button, the label, the slider and the value in percent. One row for the pen options and for the selection bar. */
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-row {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-3, 10px);
+	padding: 0 4px;
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-row.notebook-hidden {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-reset {
+	flex: 0 0 auto;
+	min-width: 32px;
+	min-height: 32px;
+	color: var(--nb-text-muted);
+	border-radius: var(--nb-radius-pill);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-reset:hover:not(:disabled),
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-reset:focus-visible {
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-label {
+	flex: 0 0 auto;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-slider {
+	flex: 1 1 auto;
+	min-width: 80px;
+	min-height: 32px;
+	accent-color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-value {
+	flex: 0 0 auto;
+	min-width: 3.2em;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text);
+}
+
+/* In the selection bar the row is a pill of its own, like the shape style row. */
+.workspace-leaf-content .view-content.notebook-view .notebook-selection-styles > .notebook-opacity-row {
+	justify-content: center;
+	max-width: 100%;
+	padding: 4px 12px 4px 6px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface-raised);
+	box-shadow: var(--nb-shadow-2);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-selection-styles > .notebook-opacity-row .notebook-opacity-slider {
+	flex: 0 1 160px;
+	min-width: 96px;
+}
