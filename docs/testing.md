@@ -3913,7 +3913,7 @@ Manual steps (real Obsidian; nothing here is verified on Android). Use a page of
 2681. **Lecture.** Chip, Lecture: the strip shows thin ballpoint pens, the chip says Lecture and is highlighted. Settings > Writing: Stabilization is 1; Default paper is Ruled. Create a new notebook: it starts on ruled paper.
 2682. **Study.** Chip, Study: fountain pens on the strip, Stabilization 6, Default paper Grid. Write: lines are visibly smoother than with Lecture.
 2683. **Nothing else changes.** Switch profiles on a notebook with writing: strokes, paper of existing pages and the page count do not change; undo history is unaffected. It also works on a read-only notebook.
-2684. **Own profile.** Set pens, stabilization and paper as you like, chip > "Save current setup as a profile...", name it. Switch to Lecture, then back to your profile: everything returns. Chip > Update (with it active) and Delete work; Lecture and Study have no Update or Delete.
+2684. **Own profile.** Set pens, stabilization and paper as you like, chip > "Save current setup as a profile...", name it. Switch to Lecture, then back to your profile: everything returns. Chip > Update (with it active) and Delete work; Lecture and Study have no Update or Delete. Delete a profile, then save a new one right away: the new one shows the pens you saved, never the deleted profile's (ids are never reused). Deleting a profile also deletes the pen set it made; if a notebook, a folder or another profile still uses that set it stays and the notice says so. With all pen sets in use (24), switching to a profile that needs a new set says the pens did not change (the smoothing and the paper did).
 2685. **Drift.** Move the Stabilization slider after switching: the chip goes back to "No profile".
 2686. **Commands.** Command palette and All actions: "Writing profile: Lecture", "...: Study", "...: next" (cycles Lecture, Study, your own). During a class "Lecture" is at the top of "For this page".
 2687. **Lecture mode.** Settings > Writing, "Lecture profile in lecture mode" on: start a lecture (manual or automatic): the profile becomes Lecture. Off: nothing switches.
@@ -3923,7 +3923,7 @@ Manual steps (real Obsidian; nothing here is verified on Android). Use a page of
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
-| Built-in Lecture and Study profiles, own profiles saved from the current setup (pens, stabilization, paper), apply, update, delete | yes | `tests/writing-profiles.test.ts` (apply, save, limits, lenient reader, cycling); harness `doc=profiles` | | | optional toolbar density per profile |
+| Built-in Lecture and Study profiles, own profiles saved from the current setup (pens, stabilization, paper), apply, update, delete (the pen set it made goes with it unless in use; ids never reused; a full pen set list is reported) | yes | `tests/writing-profiles.test.ts` (apply, save, limits, lenient reader, cycling, ids, set cleanup, notices); harness `doc=profiles` | | | optional toolbar density per profile |
 | Chip on the pen options, commands, long-press help, context rank | yes | `tests/writing-profiles.test.ts` (actions, help, rank); harness `doc=profiles` (chip, switching, document untouched) | | | |
 | Lecture mode switches to the Lecture profile (setting, off by default) | yes | `tests/writing-profiles.test.ts` (`switchOnLecture`); harness `doc=profiles` | | | |
 ### 0.25 — clipimage
@@ -3933,7 +3933,7 @@ Roadmap #277: Copy as image. Needs a real device; the harness (`doc=clipimage`) 
 2700. **Selection bar.** Select some ink with the lasso on a tablet. The second row ends with *Copy as image*. Tap it: a notice says the picture was copied. Paste into a chat or mail app: the selection appears on a white background.
 2701. **Page menu.** From the notebook menu or the All actions sheet choose *Copy written area as image* with nothing selected: the written area of the page (with a small margin, no paper) is on the clipboard. Paste it.
 2702. **Setting.** Settings, Integration, *Background of copied pictures*: set it to Transparent and copy again; paste into an app that shows transparency (e.g. a note app with a dark page): the ink has no white box. Back to White: it has.
-2703. **No image clipboard.** On a device or WebView that cannot copy pictures, the same action opens the system share sheet with the PNG, after a notice. Close the sheet without sharing: a notice says nothing was copied and no file is written.
+2703. **No image clipboard.** On a device or WebView that cannot copy pictures, the same action opens the system share sheet with the PNG, after a notice. Close the sheet without sharing: a notice says nothing was copied and no file is written. If the share sheet refuses because the tap is too old, one notice asks you to tap Copy as image again and no PNG is saved; the second tap shares.
 2704. **No clipboard and no share sheet.** A PNG is saved next to the notebook and the notice gives its path.
 2705. **Large area.** Select a very large area (several A4 pages tall on an infinite page): the picture is still copied, drawn a little smaller, and the notice says so.
 2706. **Empty.** On an empty page the action says there is nothing written, and copies nothing.
@@ -3943,7 +3943,7 @@ Roadmap #277: Copy as image. Needs a real device; the harness (`doc=clipimage`) 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Copy as image: written area / selection to the system clipboard as a PNG (2x, size capped), white or transparent background (setting, default white) | yes | size cap, routes and fallback order, action registry: `tests/clip-image.test.ts`, `tests/selection-arrange.test.ts`; harness `doc=clipimage` (stand-in clipboard: opaque and transparent corner) | | | image clipboard depends on the WebView (`ClipboardItem`) |
-| Fallback when the device has no image clipboard: share sheet with the PNG, then a saved PNG, always with a notice | yes | route order: `tests/clip-image.test.ts`; harness `doc=clipimage` (share, refused clipboard, saved copy, closed share sheet) | | | share sheet depends on the WebView |
+| Fallback when the device has no image clipboard: share sheet with the PNG, then a saved PNG, always with exactly one notice (a share that needs a new tap asks for one instead of saving) | yes | route order and the notice per outcome: `tests/clip-image.test.ts`; harness `doc=clipimage` (share, refused clipboard, saved copy, closed share sheet) | | | share sheet depends on the WebView |
 ### 0.25 — papersuggest: suggested paper for a new page (roadmap #409; steps 2740-2759)
 
 Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook you can freely add pages to, and for the course steps a timetable with a class in progress linked to that notebook.
