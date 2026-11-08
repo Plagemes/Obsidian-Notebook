@@ -15,7 +15,7 @@ import { strokePieces } from "../src/model/groups";
 import { CURRENT_VERSION, FORMAT_ID, type NotebookDocument, type Point, type Stroke } from "../src/model/types";
 import { rectPoints, linePoints } from "../src/ink/shapes";
 import { batchShapeStyle, commonShapeStyle, planShapeStyle, shapeAbilities, styleShape } from "../src/ink/shape-restyle";
-import { newShapeStyle } from "../src/ink/shape-style";
+import { isClosedShape, newShapeStyle } from "../src/ink/shape-style";
 import { delAt, getAt, parseRaw, setAt } from "./raw-json";
 
 const stamp = "2026-11-08T10:00:00.000Z";
@@ -263,6 +263,44 @@ describe("format v22: restyling a selection", () => {
 		expect(page.strokes[1]).toBe(line);
 		history.redo();
 		expect(page.strokes[0]).toMatchObject({ fill: "#1e1e1e", dash: "dashed" });
+	});
+
+	it("redo after a non-history upkeep replaced the stroke keeps the upkeep's change (W3)", () => {
+		const { doc, page, rect } = setup();
+		const history = new History(() => doc, 500, checkContent);
+		const plan = planShapeStyle(page, [rect], { fill: "solid", line: "dashed" })!;
+		expect(history.execute(plan.command)).toBe(true);
+		history.undo();
+		expect(page.strokes[0]).toBe(rect);
+		// An upkeep (slide relink, margin upkeep) swaps the object for one that differs, outside the history.
+		const upkept = Object.freeze({ ...rect, color: "#ff0000" });
+		page.strokes[0] = upkept;
+		history.redo();
+		expect(page.strokes[0]).toMatchObject({ id: "r", color: "#ff0000", fill: "#ff0000", dash: "dashed" });
+	});
+
+	it("redo on the untouched stroke puts the very object the plan handed out back (selection identity)", () => {
+		const { doc, page, rect } = setup();
+		const history = new History(() => doc, 500, checkContent);
+		const plan = planShapeStyle(page, [rect], { line: "dotted" })!;
+		history.execute(plan.command);
+		expect(page.strokes[0]).toBe(plan.strokes[0]);
+		history.undo();
+		history.redo();
+		expect(page.strokes[0]).toBe(plan.strokes[0]);
+	});
+
+	it("a filled outline whose ends are only close is closed exactly, so a later scale keeps the fill (W5)", () => {
+		const ajar: Point[] = [[10, 10, 0.5], [60, 10, 0.5], [60, 40, 0.5], [10, 40, 0.5], [10.6, 10.4, 0.5]];
+		const s = shape("a", {}, ajar);
+		const filled = styleShape(s, { fill: "solid" });
+		const pts = filled.points;
+		expect([pts[pts.length - 1]![0], pts[pts.length - 1]![1]]).toEqual([10, 10]);
+		expect(filled.fill).toBe("#1e1e1e");
+		// scaled by 4 around the origin, the gap would have been 2.4 pt: not closed any more without the join
+		const scaled = pts.map((p) => [p[0] * 4, p[1] * 4, p[2]] as Point);
+		expect(isClosedShape(scaled)).toBe(true);
+		expect(styleShape(s, { line: "dashed" }).points).toBe(s.points);
 	});
 
 	it("does nothing when nothing would change, and is refused on a locked page", () => {

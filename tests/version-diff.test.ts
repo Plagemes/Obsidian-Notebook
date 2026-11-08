@@ -50,6 +50,15 @@ describe("compareStroke", () => {
 		expect(compareStroke(stroke("a"), { ...stroke("a"), tool: "highlighter" })).toBe("changed");
 		expect(compareStroke(stroke("a"), { ...stroke("a"), hidden: true })).toBe("changed");
 	});
+	it("is changed when only the fill, its tint, the dash or the nib differ", () => {
+		const shape = { ...stroke("a"), tool: "shape" as const };
+		expect(compareStroke(shape, { ...shape })).toBe("same");
+		expect(compareStroke(shape, { ...shape, fill: "#2563eb" })).toBe("changed");
+		expect(compareStroke({ ...shape, fill: "#2563eb" }, { ...shape, fill: "#2563eb", fillTint: true })).toBe("changed");
+		expect(compareStroke(shape, { ...shape, dash: "dashed" })).toBe("changed");
+		expect(compareStroke({ ...shape, dash: "dashed" }, { ...shape, dash: "dotted" })).toBe("changed");
+		expect(compareStroke(stroke("a"), { ...stroke("a"), nib: 90 })).toBe("changed");
+	});
 	it("is changed when the point count differs, or when shifted and reshaped", () => {
 		expect(compareStroke(stroke("a"), stroke("a", [[10, 10, 0.5]]))).toBe("changed");
 		expect(compareStroke(stroke("a"), stroke("a", [[15, 15, 0.5], [30, 25, 0.5]]))).toBe("changed");

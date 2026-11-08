@@ -1,7 +1,7 @@
 import { UpdateItems, type PageItem } from "../model/groups";
 import { Batch, type Command } from "../model/history";
 import { freezeStroke } from "../model/serialize";
-import type { Page, ShapeDash, Stroke } from "../model/types";
+import type { Page, Point, ShapeDash, Stroke } from "../model/types";
 import { isShapeTool } from "../model/types";
 import { isClosedShape } from "./shape-style";
 
@@ -74,7 +74,17 @@ export function commonShapeStyle(strokes: readonly Stroke[]): { fill: FillMode |
 	};
 }
 
-/** A copy of `stroke` with the requested fill and line style (same id and points); `stroke` itself when nothing changes. */
+const endsMeet = (pts: readonly Point[]): boolean => pts[0]![0] === pts[pts.length - 1]![0] && pts[0]![1] === pts[pts.length - 1]![1];
+
+/** `pts` with the last point moved onto the first (its pressure kept): the outline closes exactly. */
+function joinEnds(pts: readonly Point[]): Point[] {
+	const first = pts[0]!;
+	const out = pts.slice();
+	out[out.length - 1] = [first[0], first[1], pts[pts.length - 1]![2]];
+	return out;
+}
+
+/** A copy of `stroke` with the requested fill and line style (same id; the points too, except that a filled outline is closed exactly); `stroke` itself when nothing changes. */
 export function styleShape(stroke: Stroke, req: ShapeStyleRequest): Stroke {
 	if (!isShapeTool(stroke.tool)) return stroke;
 	let { fill, fillTint, dash } = stroke;
@@ -90,12 +100,14 @@ export function styleShape(stroke: Stroke, req: ShapeStyleRequest): Stroke {
 			fillTint = mode === "tint" ? true : undefined;
 		}
 	}
-	if (fill === stroke.fill && fillTint === stroke.fillTint && dash === stroke.dash) return stroke;
+	// A fill needs an outline that really closes: ends that are only within the tolerance are joined, so scaling the shape later keeps the fill visible.
+	const points = fill !== undefined && isClosedShape(stroke.points) && !endsMeet(stroke.points) ? joinEnds(stroke.points) : stroke.points;
+	if (fill === stroke.fill && fillTint === stroke.fillTint && dash === stroke.dash && points === stroke.points) return stroke;
 	const { fill: _f, fillTint: _t, dash: _d, ...rest } = stroke;
 	void _f;
 	void _t;
 	void _d;
-	const next: Stroke = { ...rest, points: stroke.points };
+	const next: Stroke = { ...rest, points };
 	if (fill !== undefined) next.fill = fill;
 	if (fillTint !== undefined) next.fillTint = fillTint;
 	if (dash !== undefined) next.dash = dash;
@@ -112,14 +124,25 @@ export interface ShapeStylePlan {
 export function planShapeStyle(page: Page, strokes: readonly Stroke[], req: ShapeStyleRequest): ShapeStylePlan | null {
 	const onPage = new Set(page.strokes.map((s) => s.id));
 	const next = new Map<string, Stroke>();
+	const before = new Map<string, Stroke>();
 	const after = strokes.map((s) => {
 		if (!onPage.has(s.id)) return s;
 		const styled = styleShape(s, req);
-		if (styled !== s) next.set(s.id, styled);
+		if (styled !== s) {
+			next.set(s.id, styled);
+			before.set(s.id, s);
+		}
 		return styled;
 	});
 	if (next.size === 0) return null;
-	const command = new UpdateItems(page.id, new Set(next.keys()), (item: PageItem) => next.get(item.id) ?? item, "Shape style");
+	// A pure function of the CURRENT item: the planned copy when the stroke is still the planned one (so the selection keeps pointing at the object
+	// in the page), otherwise the item as it is now, restyled (a non-history upkeep replaced it since: its change is kept, never reverted).
+	const change = (item: PageItem): PageItem => {
+		const planned = next.get(item.id);
+		if (!planned || "type" in item) return item;
+		return item === before.get(item.id) ? planned : styleShape(item, req);
+	};
+	const command = new UpdateItems(page.id, new Set(next.keys()), change, "Shape style");
 	return { command, strokes: after };
 }
 
