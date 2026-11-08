@@ -286,7 +286,7 @@ hidden in place). Both read what to show from one function, `settingsView`, so t
 | 3 | **Pages & navigation** | Scrolling, fast scrollbar, add a page at the bottom, scroll up near the bottom, page-turner keys |
 | 4 | **PDF & reading** | Snap highlighter to text, dim backgrounds and strength, crop PDF margins |
 | 5 | **Library & files** | Notebooks folder, trash retention, version history (backups). Advanced: loose sheet location, templates folder |
-| 6 | **Sync & safety** | Device name, check sync safety (only when the sync safety service runs) |
+| 6 | **Sync & safety** | Device name, check sync safety (only when the sync safety service runs). 0.22: the *Cloud sync* group (collapsed while off; service, client ID and Google client secret, account, *Sync now* with the status line, scope, triggers, Wi-Fi only, large files, activity log) |
 | 7 | **Export** | Export settings, when there are any (the section is hidden while it is empty) |
 | 8 | **Obsidian integration** | Tabs of open notebooks, companion notes and their options |
 | 9 | **Study** | Groups *Class timetable* (edit, offer the current class, open without asking, start early) and *Zettelkasten* |

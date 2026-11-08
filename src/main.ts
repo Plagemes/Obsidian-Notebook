@@ -61,6 +61,8 @@ import { registerResilience, type ResilienceServices } from "./view/resilience";
 import { PdfCopyService } from "./storage/pdf-copy-service";
 import { PdfCopyStore } from "./storage/pdf-copy-store";
 import { BackupService } from "./storage/backup-service";
+import { CloudSyncService } from "./sync/sync-service";
+import { CloudDeletesModal, CloudLargeModal } from "./view/cloud-sync-modals";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -95,6 +97,8 @@ export default class NotebookPlugin extends Plugin {
 	pdfCopy?: PdfCopyService;
 	/** 0.21 (#127): scheduled zip backups into a vault folder (storage/backup-service.ts). */
 	backups?: BackupService;
+	/** 0.22 synccore (#126): the optional cloud sync (sync/sync-service.ts); off until a service is chosen and signed in. */
+	cloudSync?: CloudSyncService;
 	/** wave 0.10 (362): the clipboard shared between devices; one store (one write queue) for every view. */
 	private sharedClipStore: SharedClipStore | null = null;
 
@@ -179,6 +183,24 @@ export default class NotebookPlugin extends Plugin {
 			this.backups = new BackupService({ app: this.app, settings: () => this.settings, flush: () => this.flushAll() });
 			this.backups.register(this);
 		});
+		// 0.22 synccore (#126): the optional Google Drive / OneDrive sync. The providers' sign-in is plugged in with `setAuth`.
+		this.step("cloud sync", () => {
+			this.cloudSync = new CloudSyncService({
+				app: this.app,
+				pluginId: this.manifest.id,
+				deviceId: sidecarDeviceId(this.app),
+				settings: () => this.settings,
+				flushAll: () => this.flushAll(),
+				settle: async (path) => {
+					const view = this.views().find((v) => v.file?.path === path);
+					return view ? view.flushNow() : true;
+				},
+				deviceName: () => this.syncSafety?.presence.device().name ?? "",
+				confirmDeletes: (items, decide) => new CloudDeletesModal(this.app, items, decide).open(),
+				confirmLarge: (items, limit, decide) => new CloudLargeModal(this.app, items, limit, decide).open(),
+			});
+			this.cloudSync.register(this);
+		});
 		// 0.17 (#23): the PDF copy of a notebook, kept up to date in the background when the reader asks for it.
 		this.step("pdf copy", () => {
 			const store = new PdfCopyStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
@@ -251,6 +273,7 @@ export default class NotebookPlugin extends Plugin {
 			"library-check": () => this.host.checkLibrary(),
 			"storage-manager": () => this.host.openStorage(),
 			"backup-now": () => void this.backups?.backUpNow(),
+			"cloud-sync-now": () => void this.cloudSync?.syncNow(),
 			"zettel-inbox": () => void openInbox(this.app),
 			"zettel-inbox-process": () => void processNextInbox(this.app),
 			"benchmark": () => this.openBenchmark(),

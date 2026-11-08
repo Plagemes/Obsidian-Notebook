@@ -479,6 +479,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	global("storage-manager", "command.storage", "database", "app", ["notebook", "library", "palette"], 15),
 	// 0.21 backups (#127): a zip of every notebook, its assets and sidecars in the backup folder.
 	global("backup-now", "command.backupNow", "archive", "app", ["palette"], 15),
+	// 0.22 synccore (#126): the optional cloud sync, on demand.
+	global("cloud-sync-now", "command.cloudSyncNow", "cloud", "app", ["palette"], 15),
 
 	// --- diagnostics: settings tab and palette.
 	global("pen-button-test", "command.penTest", "pen-tool", "dev", ["palette"], 5),
