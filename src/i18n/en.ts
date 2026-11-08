@@ -4461,7 +4461,7 @@ export const en = {
 	"cleanup.done": "Cleaned up: {hooks} hooks trimmed, {dots} stray dots removed.",
 	"cleanup.nothing": "Nothing to clean up in the selection.",
 	"settings.trimHooks": "Trim hooks as you write",
-	"settings.trimHooks.desc": "Cuts the tiny tick at the start or end of a line when the pen lifts. Corners stay. The first Undo gives the hook back.",
+	"settings.trimHooks.desc": "Cuts the tiny tick at the start or end of a line when the pen lifts. Corners stay.",
 	"trim.undone": "Hook put back. Undo again to remove the stroke.",
 } as const;
 

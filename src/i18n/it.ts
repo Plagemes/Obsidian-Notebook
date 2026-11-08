@@ -4463,6 +4463,6 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"cleanup.done": "Pulizia fatta: {hooks} uncini tolti, {dots} puntini isolati rimossi.",
 	"cleanup.nothing": "Niente da pulire nella selezione.",
 	"settings.trimHooks": "Taglia gli uncini mentre scrivi",
-	"settings.trimHooks.desc": "Toglie il minuscolo uncino a inizio o fine linea quando alzi la penna. Gli angoli restano. Il primo Annulla rimette l'uncino.",
+	"settings.trimHooks.desc": "Toglie il minuscolo uncino a inizio o fine linea quando alzi la penna. Gli angoli restano.",
 	"trim.undone": "Uncino rimesso. Annulla ancora per togliere il tratto.",
 };
