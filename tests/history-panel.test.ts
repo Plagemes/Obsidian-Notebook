@@ -15,7 +15,7 @@ import {
 	ReplaceStroke, SetMeta, SetPageBackground, SetPageInfinite, SetPageMargins, SetPageSize, SetPaper, type Command,
 } from "../src/model/history";
 import { describeCommand, LABELS, leavesOf, titleForLabel } from "../src/model/history-describe";
-import { jumpHistory, planJump } from "../src/model/history-jump";
+import { finishJump, jumpHistory, JumpRunner, planJump } from "../src/model/history-jump";
 import { SetMarkerDone } from "../src/model/marker-commands";
 import { SetPageContent } from "../src/model/page-content";
 import { exemptFromLocks, SetPageLocked } from "../src/model/page-lock";
@@ -339,6 +339,96 @@ describe("jumping to a point", () => {
 		readOnly = true;
 		expect(jumpHistory(history, { kind: "start" })).toMatchObject({ wanted: 2, done: 0 });
 		expect(page.strokes.length).toBe(2);
+	});
+
+	describe("a long jump in slices (review fix)", () => {
+		/** A history with a guard that counts its calls, and `n` strokes; `badAt` makes the undo of that step leave a document the guard refuses. */
+		function counted(n: number, badAt = -1) {
+			const doc = sampleDocument(0);
+			const page = doc.pages[0]!;
+			let calls = 0;
+			const refused: Array<string | undefined> = [];
+			const history = new History(() => doc, 500, (d) => (++calls, d.pages[0]!.width === 999 ? "bad width" : null), (_m, step) => void refused.push(step));
+			for (let i = 0; i < n; i++) {
+				history.execute(new AddStroke(page.id, line(0, i, 50, i), i));
+				if (i === badAt) {
+					history.execute({ label: "bad", apply: (d) => void (d.pages[0]!.width = 222), revert: (d) => void (d.pages[0]!.width = 999) });
+				}
+			}
+			calls = 0;
+			return { doc, page, history, refused, calls: () => calls };
+		}
+
+		it("takes the same steps as a jump in one go, and the guard runs after every step", async () => {
+			const one = counted(40);
+			const plain = counted(40);
+			for (let i = 0; i < 40; i++) plain.history.undo();
+			const sliced = counted(40);
+			const whole = jumpHistory(one.history, { kind: "start" });
+			const runner = new JumpRunner(sliced.history, { kind: "start" });
+			let yields = 0;
+			let clock = 0;
+			// A clock that moves one tick per reading: each slice takes about three steps.
+			const result = await finishJump(runner, { budgetMs: 3, now: () => clock++, yieldToUi: async () => void yields++ });
+			expect(result).toEqual(whole);
+			expect(yields).toBeGreaterThan(3);
+			expect(sliced.page.strokes.length).toBe(0);
+			expect(sliced.history.depth()).toEqual(one.history.depth());
+			// Every step checks the document after it; the check before it is the one the step before already made.
+			expect(sliced.calls()).toBeLessThan(plain.calls());
+			expect(one.calls()).toBe(41);
+			expect(sliced.calls()).toBeGreaterThanOrEqual(40);
+		});
+
+		it("stops at a refused step exactly where one go stops, whatever the slices", async () => {
+			const one = counted(12, 5);
+			const sliced = counted(12, 5);
+			const whole = jumpHistory(one.history, { kind: "start" });
+			const runner = new JumpRunner(sliced.history, { kind: "start" });
+			const result = await finishJump(runner, { budgetMs: 0, yieldToUi: async () => undefined });
+			expect(result).toEqual(whole);
+			expect(result.done).toBeLessThan(result.wanted);
+			expect(sliced.refused).toEqual(one.refused);
+			expect(sliced.page.width).toBe(one.page.width);
+			expect(sliced.page.strokes.length).toBe(one.page.strokes.length);
+			expect(sliced.history.depth()).toEqual(one.history.depth());
+		});
+
+		it("keeps a document that already failed the guard before the step (the step is not blamed), also inside a run", () => {
+			const doc = sampleDocument(0);
+			const page = doc.pages[0]!;
+			const refused: unknown[] = [];
+			const history = new History(() => doc, 500, (d) => (d.pages[0]!.width === 999 ? "bad width" : null), (m) => void refused.push(m));
+			const made = [new AddStroke(page.id, line(0, 0, 10, 0), 0), new AddStroke(page.id, line(0, 10, 10, 10), 1), new AddStroke(page.id, line(0, 20, 10, 20), 2)];
+			for (const c of made) history.execute(c);
+			page.width = 999; // a change outside the history
+			expect(jumpHistory(history, { kind: "start" })).toMatchObject({ wanted: 3, done: 3 });
+			expect(refused).toEqual([]);
+			expect(page.strokes.length).toBe(0);
+		});
+
+		it("a run forgets what it knew when it ends, and stops when asked to", async () => {
+			const t = counted(10);
+			const runner = new JumpRunner(t.history, { kind: "start" });
+			let slices = 0;
+			const result = await finishJump(runner, { budgetMs: 0, yieldToUi: async () => void slices++, keepGoing: () => slices < 3 });
+			expect(result.done).toBeGreaterThan(0);
+			expect(result.done).toBeLessThan(10);
+			expect(t.page.strokes.length).toBe(10 - result.done);
+			const before = t.calls();
+			t.history.undo(); // an ordinary undo afterwards asks the guard before and after, as always
+			expect(t.calls() - before).toBe(2);
+		});
+
+		it("a jump with nowhere to go is over at once, and a missing step is reported", () => {
+			const { history, made } = setup(3);
+			const here = new JumpRunner(history, { kind: "step", cmd: made[2]! });
+			expect(here.advance(10)).toBe(true);
+			expect(here.result()).toEqual({ direction: null, wanted: 0, done: 0, gone: false });
+			const gone = new JumpRunner(history, { kind: "step", cmd: new AddStroke("p", line(0, 0, 1, 1), 0) });
+			expect(gone.finished).toBe(true);
+			expect(gone.result().gone).toBe(true);
+		});
 	});
 });
 

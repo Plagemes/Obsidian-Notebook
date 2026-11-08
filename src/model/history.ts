@@ -838,6 +838,9 @@ export class History {
 	private redoStack: Command[] = [];
 	/** 0.25 (#84): when each step was recorded (for the history panel only: nothing else reads it, and a step without a time is fine). */
 	private readonly madeAt = new WeakMap<Command, number>();
+	/** 0.25: inside `runSteps`, and the guard result the last step ended with (null: not known). */
+	private stepsRun = false;
+	private knownBad: boolean | null = null;
 
 	constructor(
 		private readonly doc: () => NotebookDocument, readonly limit = 500,
@@ -934,6 +937,38 @@ export class History {
 	}
 
 	/**
+	 * 0.25 (#84): runs `fn`, which takes many undo / redo steps in a row (a jump in the history panel), and lets each step reuse the
+	 * guard result the step before it ended with: the document is the same between two steps, so "did it already fail the guard?" is
+	 * the answer the last step gave. Every step still checks the document after it, as always; only the repeated check before it is
+	 * saved. A step that is refused, fails or is not run leaves the answer unknown, and the next one asks again. Nothing may change the
+	 * document between steps inside `fn`.
+	 */
+	runSteps<T>(fn: () => T): T {
+		const was = this.stepsRun;
+		this.stepsRun = true;
+		this.knownBad = null;
+		try {
+			return fn();
+		} finally {
+			this.stepsRun = was;
+			this.knownBad = null;
+		}
+	}
+
+	/** The guard result the previous step of a `runSteps` run ended with (true: the document failed it), taken: the next step sets it again. */
+	private takeKnown(): boolean | null {
+		const known = this.stepsRun ? this.knownBad : null;
+		this.knownBad = null;
+		return known;
+	}
+
+	/** Did the document already fail the guard before the step? (The previous step's answer when it is known.) */
+	private badBefore(doc: NotebookDocument, snapshot: Shot[] | null, known: boolean | null): boolean {
+		if (snapshot === null) return false;
+		return known ?? (this.guard?.(doc) ?? null) !== null;
+	}
+
+	/**
 	 * 0.19 backstop: after an undo or a redo the document must still be one the writer saves (the guard, as for every edit). When it
 	 * is not, the document is put back exactly as it was before the step (`snapshot`), the step is dropped from the history (doing it
 	 * again would do the same) and it is said. True when the step was refused.
@@ -942,7 +977,10 @@ export class History {
 		// A document that already failed the guard before the step (a change outside the history) is not the step's doing: it is kept.
 		if (!snapshot || !this.guard || wasBad) return false;
 		const problem = this.guard(doc);
-		if (problem === null) return false;
+		if (problem === null) {
+			if (this.stepsRun) this.knownBad = false;
+			return false;
+		}
 		this.dropStep(snapshot, problem, step);
 		return true;
 	}
@@ -980,12 +1018,13 @@ export class History {
 
 	undo(): Command | null {
 		if (this.locked?.()) return null;
+		const known = this.takeKnown();
 		const cmd = this.undoStack.pop();
 		if (!cmd) return null;
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		const snapshot = this.guard ? snapshotDocument(doc) : null;
-		const wasBad = snapshot !== null && (this.guard?.(doc) ?? null) !== null;
+		const wasBad = this.badBefore(doc, snapshot, known);
 		if (!this.ran(() => cmd.revert(doc), snapshot, "undo")) return null;
 		if (locks) {
 			// An older edit of a page that has been locked since (a synced change, a lock set later and left on): the undo
@@ -1006,12 +1045,13 @@ export class History {
 
 	redo(): Command | null {
 		if (this.locked?.()) return null;
+		const known = this.takeKnown();
 		const cmd = this.redoStack.pop();
 		if (!cmd) return null;
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		const snapshot = this.guard ? snapshotDocument(doc) : null;
-		const wasBad = snapshot !== null && (this.guard?.(doc) ?? null) !== null;
+		const wasBad = this.badBefore(doc, snapshot, known);
 		if (!this.ran(() => cmd.apply(doc), snapshot, "redo")) return null;
 		if (locks) {
 			const hit = lockedChanges(doc, locks);

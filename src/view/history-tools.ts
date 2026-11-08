@@ -22,10 +22,13 @@ export interface HistoryHost {
 	/** How many steps the history keeps at most. */
 	limit: number;
 	/** Goes to the point (through the history, step by step); null when the view cannot now (a stroke is being drawn). */
-	jump(target: JumpTarget): JumpResult | null;
+	jump(target: JumpTarget, progress: (done: number, wanted: number) => void): JumpResult | Promise<JumpResult> | null;
 }
 
 export class HistoryTools implements HistoryPanelApi {
+	/** A long jump that is going on (steps taken, steps wanted), or null. */
+	private working: { done: number; wanted: number } | null = null;
+
 	constructor(private readonly host: HistoryHost) {}
 
 	open(): void {
@@ -46,12 +49,36 @@ export class HistoryTools implements HistoryPanelApi {
 		return this.host.editable();
 	}
 
-	jump(target: JumpTarget): void {
-		const result = this.host.jump(target);
-		if (!result) {
+	progress(): { done: number; wanted: number } | null {
+		return this.working;
+	}
+
+	jump(target: JumpTarget, onProgress: () => void): Promise<void> | void {
+		const outcome = this.host.jump(target, (done, wanted) => {
+			this.working = { done, wanted };
+			onProgress();
+		});
+		if (!outcome) {
 			showNotice(t("histpanel.notice.busy"), 3000);
 			return;
 		}
+		if (outcome instanceof Promise) {
+			// A long jump goes on slice by slice: the panel shows progress and takes no tap until it ends, then says the outcome.
+			return outcome.then(
+				(result) => {
+					this.working = null;
+					this.say(result);
+				},
+				(e: unknown) => {
+					this.working = null;
+					throw e;
+				},
+			);
+		}
+		this.say(outcome);
+	}
+
+	private say(result: JumpResult): void {
 		const message = jumpNotice(result);
 		if (message) showNotice(message, result.done < result.wanted ? 6000 : 2500);
 	}

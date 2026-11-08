@@ -4684,6 +4684,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"histpanel.notice.stopped": "Fermato dopo {done} passi su {total}: il passo successivo è stato rifiutato.",
 	"histpanel.notice.gone": "Quel passo non è più nello storico.",
 	"histpanel.notice.busy": "Finisci prima ciò che stai disegnando.",
+	"histpanel.working": "Vado a quel passo: {done} di {total}. Attendi.",
 	"histpanel.t.stroke": "Tratto scritto",
 	"histpanel.t.strokes": "Tratti aggiunti",
 	"histpanel.t.erased": "Cancellato",

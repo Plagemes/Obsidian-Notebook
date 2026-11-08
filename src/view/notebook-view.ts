@@ -96,7 +96,7 @@ import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./high
 import { MeaningTools } from "./colour-meaning";
 import { SavedViewTools } from "./saved-views";
 import { HistoryTools } from "./history-tools";
-import { jumpHistory, type JumpResult, type JumpTarget } from "../model/history-jump";
+import { finishJump, JumpRunner, type JumpResult, type JumpTarget } from "../model/history-jump";
 import type { MeaningsStore } from "../library/meanings-store";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -253,6 +253,8 @@ const PAGE_TOLERANCE = 8;
 const HOLD_MS = 600;
 /** ...within this radius (CSS px). */
 const HOLD_RADIUS_PX = 4;
+/** 0.25 (#84): how long one slice of a long history jump may run (ms) before the screen is given back; a jump shorter than this is taken in one go. */
+const JUMP_SLICE_MS = 60;
 /** A pen stroke that starts this close to the ruler edge (CSS px) is projected onto it. */
 const RULER_SNAP_PX = 14;
 /** Pen samples closer than this (CSS px) to the last stored point are not stored. */
@@ -592,6 +594,8 @@ export class NotebookView extends FileView {
 
 	private active: ActiveStroke | null = null;
 	private erasing: ActiveErase | null = null;
+	/** A long jump in the history panel that is going on slice by slice (the notebook is locked against edits until it ends). */
+	private jumping: JumpRunner | null = null;
 	/**
 	 * The strokes the last pen gesture committed and the undo step that holds them, until the next gesture: the eraser
 	 * that continues the same contact (side button pressed while writing) spares them, and a late button signal can
@@ -807,7 +811,7 @@ export class NotebookView extends FileView {
 			entries: () => this.history.entries(),
 			editable: () => !!this.session?.doc && this.editable(),
 			limit: this.history.limit,
-			jump: (target) => this.jumpHistoryTo(target),
+			jump: (target, progress) => this.jumpHistoryTo(target, progress),
 		});
 		// 0.16 (#124): a locked page shows a small badge over the page area; a tap on it unlocks the page.
 		const badge = this.body.createEl("button", { cls: "nb-ui nb-lock-badge", attr: { type: "button", "aria-label": t("lock.badge.aria") } });
@@ -1184,6 +1188,7 @@ export class NotebookView extends FileView {
 	}
 
 	async onClose(): Promise<void> {
+		this.jumping = null;
 		this.location.flush();
 		try {
 			await this.closeSession();
@@ -1895,14 +1900,43 @@ export class NotebookView extends FileView {
 	 * refused step stops the jump, and the result says how far it got). Null while a stroke is being drawn or the notebook cannot be
 	 * edited. Saves and redraws once, if any step was taken.
 	 */
-	private jumpHistoryTo(target: JumpTarget): JumpResult | null {
+	private jumpHistoryTo(target: JumpTarget, progress?: (done: number, wanted: number) => void): JumpResult | Promise<JumpResult> | null {
 		if (!this.editable() || this.controller?.drawing) return null;
 		this.commitText();
 		this.clearSelection();
 		this.penLinks?.hideChip();
 		this.pageOffer?.cancel();
-		const result = jumpHistory(this.history, target);
+		// A short jump is over inside the first slice and is exactly the jump it always was. A long one on a large notebook (every step checks the
+		// whole document) goes on slice by slice, with the screen free between them, the notebook locked against edits and the panel showing progress.
+		const runner = new JumpRunner(this.history, target);
+		if (!runner.advance(JUMP_SLICE_MS)) return this.continueJump(runner, progress);
+		const result = runner.result();
 		// A step the history refused leaves the document as it was, but may have left the stacks changed: the buttons follow either way.
+		if (result.done > 0) this.afterHistoryChange();
+		else this.updateHistoryButtons();
+		return result;
+	}
+
+	/** The rest of a long jump (see `jumpHistoryTo`); a notebook that is closed or replaced meanwhile stops it where it is. */
+	private async continueJump(runner: JumpRunner, progress?: (done: number, wanted: number) => void): Promise<JumpResult> {
+		this.jumping = runner;
+		this.updateHistoryButtons();
+		const result = await finishJump(runner, {
+			budgetMs: JUMP_SLICE_MS,
+			yieldToUi: () => new Promise<void>((resolve) => window.setTimeout(resolve, 0)),
+			// The document changed under the view between two slices: lay the pages out again so a frame drawn meanwhile never meets a page that is gone.
+			progress: (done, wanted) => {
+				this.refreshLayout();
+				progress?.(done, wanted);
+			},
+			keepGoing: () => this.jumping === runner,
+		});
+		if (this.jumping !== runner) {
+			// Closed or replaced: whatever was taken stays in the document, which the session saves with it.
+			if (result.done > 0 && !this.userReadOnly) this.session?.markChanged();
+			return result;
+		}
+		this.jumping = null;
 		if (result.done > 0) this.afterHistoryChange();
 		else this.updateHistoryButtons();
 		return result;
@@ -4326,7 +4360,7 @@ export class NotebookView extends FileView {
 	}
 
 	private editable(): boolean {
-		return this.session?.mode === "ok" && !!this.session.doc && !this.reading?.annotationsHidden && !this.syncSafety?.readOnly && !this.userReadOnly;
+		return this.session?.mode === "ok" && !!this.session.doc && !this.reading?.annotationsHidden && !this.syncSafety?.readOnly && !this.userReadOnly && this.jumping === null;
 	}
 
 	private pageAtIndex(i: number): Page | null {
@@ -4411,6 +4445,7 @@ export class NotebookView extends FileView {
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
 		this.headingWarm.touch(8000);
 		this.active = null;
+		this.jumping = null;
 		this.erasing = null;
 		this.lasso = null;
 		this.spaceDrag = null;

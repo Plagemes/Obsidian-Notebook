@@ -15,8 +15,13 @@ export interface HistoryPanelApi {
 	counts(): { undo: number; redo: number; max: number };
 	/** The notebook can go to a step (false: read-only mode, a document still loading). The list can always be read. */
 	canJump(): boolean;
-	/** Goes to the point the row stands for; the view says the outcome (a refused step, a step that is gone). */
-	jump(target: JumpTarget): void;
+	/** A long jump that is going on (steps taken, steps wanted), or null. */
+	progress(): { done: number; wanted: number } | null;
+	/**
+	 * Goes to the point the row stands for; the view says the outcome (a refused step, a step that is gone). A long jump returns a promise
+	 * that settles when it ends; `onProgress` is called after every slice of it.
+	 */
+	jump(target: JumpTarget, onProgress: () => void): Promise<void> | void;
 }
 
 /** Row to target: a step row goes just after its command, the start row before the oldest step. */
@@ -28,6 +33,9 @@ function targetOf(row: HistoryRow): JumpTarget | null {
 export class HistoryPanelModal extends Modal {
 	/** The first draw scrolls the current row to the middle; the later ones keep the place. */
 	private firstDraw = true;
+	/** The note that shows the progress of a long jump (updated in place: the list is not drawn again for every slice). */
+	private workingEl: HTMLElement | null = null;
+	private closed = false;
 
 	constructor(app: App, private readonly api: HistoryPanelApi) {
 		super(app);
@@ -40,10 +48,12 @@ export class HistoryPanelModal extends Modal {
 	private render(): void {
 		const kept = this.firstDraw ? 0 : (this.contentEl.querySelector<HTMLElement>(".nb-modal-body")?.scrollTop ?? 0);
 		const rows = this.api.rows();
-		const can = this.api.canJump();
+		const working = this.api.progress();
+		const can = this.api.canJump() && working === null;
 		const counts = this.api.counts();
 		const shell = modalShell(this, { title: t("histpanel.title"), subtitle: t("histpanel.subtitle"), icon: "history", size: "narrow", cls: "nb-hist-modal" });
-		if (!can) shellNote(shell.body, t("histpanel.readOnly"));
+		this.workingEl = working ? shellNote(shell.body, this.workingText(working)) : null;
+		if (!can && !working) shellNote(shell.body, t("histpanel.readOnly"));
 		if (rows.length === 0) {
 			shellNote(shell.body, t("histpanel.empty"));
 		} else {
@@ -86,12 +96,34 @@ export class HistoryPanelModal extends Modal {
 		button.disabled = row.current || !can || target === null;
 		button.addEventListener("click", () => {
 			if (target === null || button.disabled) return;
-			this.api.jump(target);
+			const pending = this.api.jump(target, () => this.showProgress());
 			this.render();
+			if (pending) {
+				void pending.then(() => this.settled(), (e: unknown) => {
+					console.error("[notebook] history jump failed", e);
+					this.settled();
+				});
+			}
 		});
 	}
 
+	private workingText(working: { done: number; wanted: number }): string {
+		return t("histpanel.working", { done: String(working.done), total: String(working.wanted) });
+	}
+
+	/** One slice of a long jump is done: the note says how far it got (the list is drawn again when the jump ends). */
+	private showProgress(): void {
+		const working = this.api.progress();
+		if (working && this.workingEl?.isConnected) this.workingEl.setText(this.workingText(working));
+	}
+
+	/** The long jump ended (or failed): the list as it is now. */
+	private settled(): void {
+		if (!this.closed) this.render();
+	}
+
 	onClose(): void {
+		this.closed = true;
 		this.contentEl.empty();
 	}
 }
