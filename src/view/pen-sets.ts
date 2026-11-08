@@ -3,7 +3,7 @@
 // nearest folder above it that has one, then the default favourite pens (the user's own `favouritePens`, never touched
 // by a set). The set definitions live in the plugin settings; so do the assignments (folder path -> set id and
 // document id -> set id), bounded and read leniently. No document format change.
-import { DEFAULT_FAVOURITES, FAVOURITE_SLOTS, normaliseFavourites, type FavouritePen } from "./favourites";
+import { DEFAULT_FAVOURITES, FAVOURITE_SLOTS, normaliseFavourites, validPen, type FavouritePen } from "./favourites";
 
 export interface PenSet {
 	/** Stable id (`starter-maths` for a built-in one, `set-<n>` otherwise). */
@@ -44,16 +44,6 @@ export function defaultPenSets(): PenSet[] {
 	return STARTER_SETS.map(cloneSet);
 }
 
-const COLOR = /^#[0-9a-f]{6}$/i;
-
-function validPen(v: unknown): FavouritePen | null {
-	if (typeof v !== "object" || v === null) return null;
-	const o = v as Record<string, unknown>;
-	if (o.tool !== "pen" && o.tool !== "highlighter") return null;
-	if (typeof o.color !== "string" || !COLOR.test(o.color)) return null;
-	if (typeof o.width !== "number" || !Number.isFinite(o.width) || o.width <= 0 || o.width > 100) return null;
-	return { tool: o.tool, color: o.color.toLowerCase(), width: o.width };
-}
 
 /** Trims, collapses whitespace and cuts a name; an empty result is "". */
 export function cleanSetName(v: unknown): string {

@@ -62,7 +62,7 @@ import {
 import { pageContentCommand } from "../model/page-content";
 import { checkContent, freezeStroke } from "../model/serialize";
 import {
-	DEFAULT_META, PAPER_SPACING,
+	DEFAULT_META, isNewPen, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
 	type PaperKind, type Point, type Stroke, type TextElement, type Tool, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
@@ -196,6 +196,7 @@ import { ViewUi } from "./view-ui";
 import { pageKindOf } from "../ui/page-kind";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
+import { kindTool, strokeNib } from "../ink/pen-kinds";
 import { hint } from "../ui/hints";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
 import { actionLabel } from "../ui/action-sheet";
@@ -599,7 +600,7 @@ export class NotebookView extends FileView {
 		super(leaf);
 		const s = host.settings;
 		this.policy = new InputPolicy(policySettings(s));
-		this.tools = { ...this.tools, eraserSize: s.eraserSize };
+		this.tools = { ...this.tools, eraserSize: s.eraserSize, penKind: s.defaultPenKind, nibAngle: s.defaultNibAngle };
 		this.pressure = new PressureModel(s.pressureMode);
 		this.filter.params = stabilizationParams(s.stabilization);
 	}
@@ -4742,16 +4743,18 @@ export class NotebookView extends FileView {
 		const p = this.pressure.sample(sample.pointerType, sample.pressure, sample.x, sample.y, sample.t);
 		const highlighter = tool === "highlighter";
 		if (highlighter && page) this.reading?.prefetch(page);
-		const inkTool = highlighter ? "highlighter" : "pen";
+		// 0.22 (#35): the pen tool writes with the kind of pen chosen in its options (the ballpoint pen, a fountain pen, a brush or a marker).
+		const inkTool: Tool = highlighter ? "highlighter" : kindTool(this.tools.penKind);
+		const nib = strokeNib(inkTool, this.tools.nibAngle);
 		const color = highlighter ? this.tools.highlighterColor : this.tools.penColor;
 		const width = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
-		this.ink.reset(inkTool, width);
+		this.ink.reset(inkTool, width, nib);
 		this.ink.add(start[0], start[1], p);
 		this.active = {
 			pageIndex,
-			stroke: this.markers?.invisibleInk && inkTool === "pen"
-				? { ...createStroke(color, width, [], inkTool, RENDER_INK), hidden: true }
-				: createStroke(color, width, [], inkTool, RENDER_INK),
+			stroke: this.markers?.invisibleInk && !highlighter
+				? { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), hidden: true }
+				: { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }) },
 			wet: true,
 			liveFallback: false,
 			rawX: start[0],
@@ -4945,7 +4948,7 @@ export class NotebookView extends FileView {
 		const points = this.ink.toPoints();
 		points.push([active.rawX, active.rawY, active.rawP]);
 		const { tool, color, width } = active.stroke;
-		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, points, predicted: [] });
+		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, nib: active.stroke.nib, points, predicted: [] });
 	}
 
 	/**
@@ -5281,7 +5284,10 @@ export class NotebookView extends FileView {
 		if (!shape || !first || first.length < 2) return;
 		// Highlighter shapes stay highlighter strokes (translucent); pen shapes become constant-width "shape" ink.
 		// Shapes keep the perfect-freehand geometry (render 1), drawn whole on the live layer.
-		a.stroke = { ...a.stroke, tool: a.stroke.tool === "highlighter" ? "highlighter" : "shape", points: first, render: RENDER_FREEHAND };
+		// A recognised shape of a new pen (fountain, brush, marker) is a plain shape: those pens have no outline of the old geometry and no nib in a shape.
+		const { nib: _nib, ...flat } = a.stroke;
+		void _nib;
+		a.stroke = { ...flat, tool: a.stroke.tool === "highlighter" ? "highlighter" : "shape", points: first, render: RENDER_FREEHAND };
 		a.extra = shape.points.slice(1);
 		a.wet = false;
 		a.recognized = true;
@@ -5449,7 +5455,7 @@ export class NotebookView extends FileView {
 		this.clearDwell();
 		if (!dwellMayStart({
 			enabled: this.host.settings.penGestureLongPress, pointerType: sample.pointerType, eraser, held,
-			modeOn: this.penGestures?.mode === true, inking: inkTool === "pen" || inkTool === "highlighter",
+			modeOn: this.penGestures?.mode === true, inking: inkTool === "pen" || inkTool === "highlighter" || isNewPen(inkTool as Tool),
 		})) return;
 		const tracker = new DwellTracker();
 		tracker.begin(sample.x, sample.y, performance.now());

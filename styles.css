@@ -17806,3 +17806,111 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-slide-back {
 	top: 66px;
 }
+
+/* ===== 0.22 pens ===== */
+/* New pens (#35): the pen kinds row and the nib angle row of the pen options, the shape of the pen dots, and the marker's wet canvas.
+   Scoped under the view; tokens only, light and dark. */
+.workspace-leaf-content .view-content.notebook-view .notebook-pen-kinds {
+	display: flex;
+	flex-wrap: wrap;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-pen-kinds > .notebook-kind-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--nb-space-2, 6px);
+	padding: 0 12px;
+	min-height: 40px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-kind-icon {
+	display: inline-flex;
+	align-items: center;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-kind-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-nib-row {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-3, 10px);
+	padding: 0 4px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-nib-label {
+	flex: 0 0 auto;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-nib-preview {
+	position: relative;
+	flex: 0 0 auto;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	background: var(--nb-tile);
+	border: 1px solid var(--nb-border);
+}
+
+/* The little bar leans like the nib: thin lines drawn along it, thick lines across it. */
+.workspace-leaf-content .view-content.notebook-view .notebook-nib-bar {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 18px;
+	height: 3px;
+	margin: -1.5px 0 0 -9px;
+	border-radius: 2px;
+	background: var(--nb-accent);
+	transform: rotate(var(--notebook-nib-angle, -45deg));
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-nib-slider {
+	flex: 1 1 auto;
+	min-width: 80px;
+	accent-color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-nib-value {
+	flex: 0 0 auto;
+	min-width: 3.2em;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text);
+}
+
+/* Pen dots (current pen, favourites, radial dial, pen sets): a ballpoint is round, a highlighter a chisel, and the new pens have their own shape. */
+.workspace-leaf-content .view-content.notebook-view .notebook-chip-dot.is-kind-fountain,
+.workspace-leaf-content .view-content.notebook-view .notebook-fav-dot.is-kind-fountain,
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-dot.is-kind-fountain,
+.nb-ui .nb-penset-dot.is-kind-fountain {
+	border-radius: 50% 0 50% 0;
+	transform: rotate(-45deg);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chip-dot.is-kind-brush,
+.workspace-leaf-content .view-content.notebook-view .notebook-fav-dot.is-kind-brush,
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-dot.is-kind-brush,
+.nb-ui .nb-penset-dot.is-kind-brush {
+	border-radius: 50% 50% 50% 8%;
+	transform: rotate(-45deg);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-chip-dot.is-kind-marker,
+.workspace-leaf-content .view-content.notebook-view .notebook-fav-dot.is-kind-marker,
+.workspace-leaf-content .view-content.notebook-view .notebook-dial-dot.is-kind-marker,
+.nb-ui .nb-penset-dot.is-kind-marker {
+	border-radius: 2px;
+	transform: rotate(-20deg);
+}
+
+/* The marker's wet canvas holds opaque ink and gets MARKER_ALPHA (src/ink/stroke-shape.ts) here, like the committed stroke: source-over, so no blend mode. */
+.workspace-leaf-content .view-content.notebook-view .notebook-canvas-wet.is-marker {
+	opacity: 0.85;
+}

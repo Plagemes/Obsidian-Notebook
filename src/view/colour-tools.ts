@@ -215,7 +215,7 @@ export class ColourTools {
 		const style = styleOfStroke(stroke);
 		this.host.apply(style);
 		this.host.notify(t("colour.styleTaken", {
-			tool: t(style.tool === "pen" ? "tool.pen" : "tool.highlighter"),
+			tool: t(style.tool === "pen" ? (style.penKind ? (`tool.${style.penKind}` as const) : "tool.pen") : "tool.highlighter"),
 			color: style.tool === "pen" ? style.penColor : style.highlighterColor,
 			width: String(style.tool === "pen" ? style.penWidth : style.highlighterWidth),
 		}));
