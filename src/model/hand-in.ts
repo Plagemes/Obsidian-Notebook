@@ -95,7 +95,7 @@ function elementRect(e: PageElement): { minX: number; minY: number; maxX: number
 	switch (e.type) {
 		case "text": return { minX: e.x, minY: e.y, maxX: e.x + e.width, maxY: e.y + e.fontSize * 1.25 };
 		case "checkbox": return { minX: e.x, minY: e.y, maxX: e.x + e.size, maxY: e.y + e.size };
-		case "image": case "equation": case "graph": case "excerpt": case "sticky": return { minX: e.x, minY: e.y, maxX: e.x + e.width, maxY: e.y + e.height };
+		case "image": case "equation": case "graph": case "excerpt": case "sticky": case "area": return { minX: e.x, minY: e.y, maxX: e.x + e.width, maxY: e.y + e.height };
 		default: return null;
 	}
 }
