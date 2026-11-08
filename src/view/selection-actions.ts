@@ -10,6 +10,7 @@ import { planJoin, type JoinPlan } from "../ink/stroke-join";
 import { planBaseline, type BaselinePlan } from "../ink/baseline";
 import { analyseTidy, planTidy, type TidyOptions, type TidyPlan } from "../ink/tidy";
 import { loadTidyOptions, TidyModal, type TidySummary } from "./tidy-modal";
+import { planSmooth, SMOOTH_LABEL, STRAIGHTEN_LABEL, type SmoothMode, type SmoothPlan } from "../ink/smooth";
 import { selectableItems } from "../model/groups";
 import type { PageBox } from "../ink/layout";
 import { commonOpacity, commonStyle, opacityAbility, planOpacity, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
@@ -483,6 +484,47 @@ export class SelectionActions {
 		}
 		const sum = (pick: (a: TidyPlan["analysis"]) => number): number => plans.reduce((n, p) => n + pick(p.plan.analysis), 0);
 		showNotice(t("tidy.done", { words: String(sum((a) => a.words)), lines: String(sum((a) => a.aligned)), gaps: String(sum((a) => a.tightened)) }));
+	}
+
+	// --- smooth / straighten handwriting (0.26, #66) ---
+
+	/**
+	 * Smooths the jitter out of the handwriting of the selection, or straightens its almost-straight lines, as ONE undo step; the strokes only
+	 * change their points (`planSmooth`: ends, point count and pressure stay). Groups come whole (`selectableItems`, and only a wholly selected
+	 * group without a locked element is touched), the ink a collapsed note keeps hidden is never touched, and a locked page refuses the step in
+	 * the history, which says so. The page times are not touched. The selection stays on the reshaped strokes.
+	 */
+	reshape(mode: SmoothMode): void {
+		const sel = this.host.selection();
+		const doc = this.host.doc();
+		if (!sel || !doc || !this.host.editable()) return;
+		const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])];
+		const plans: Array<{ part: PagePart; plan: SmoothPlan }> = [];
+		for (const part of parts) {
+			const page = doc.pages[part.pageIndex];
+			if (!page) continue;
+			const onPage = new Set(page.strokes);
+			const elements = part.elements.filter((e) => page.elements?.includes(e));
+			const picked = selectableItems(page, { strokes: part.strokes.filter((s) => onPage.has(s)), elements });
+			const plan = planSmooth(page, picked.strokes, picked.elements, mode);
+			if (plan) plans.push({ part, plan });
+		}
+		const base = mode === "smooth" ? "smooth" : "straighten";
+		if (plans.length === 0) {
+			showNotice(t(`${base}.nothing`));
+			return;
+		}
+		const label = mode === "smooth" ? SMOOTH_LABEL : STRAIGHTEN_LABEL;
+		const cmd = plans.length === 1 ? plans[0]!.plan.command : new Batch(label, plans.map((p) => p.plan.command));
+		if (!this.host.execute(cmd)) return;
+		const next = (part: PagePart): PagePart => {
+			const found = plans.find((p) => p.part === part);
+			if (!found) return part;
+			return { pageIndex: part.pageIndex, strokes: part.strokes.map((s) => found.plan.changes.get(s) ?? s), elements: part.elements };
+		};
+		const [first, ...rest] = parts.map(next) as [PagePart, ...PagePart[]];
+		this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
+		showNotice(t(`${base}.done`, { n: String(plans.reduce((n, p) => n + p.plan.count, 0)) }));
 	}
 
 	// --- copy, cut, duplicate ---

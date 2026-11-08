@@ -181,7 +181,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 63. **P2** 🧪 Rectangle selection in addition to the lasso.
 64. **P2** 🧪 Select by colour or tool (e.g. all highlighter strokes on this page).
 65. **P2** 🧪 Rotate by 90°, mirror and exact size for the selection.
-66. **P2** Smooth or straighten selected strokes.
+66. **P2** 🧪 Smooth or straighten selected strokes: two actions in the All actions sheet take the jitter out of handwriting or turn almost-straight lines into clean ones, one undo step each.
 67. **P2** Textured pens: graphite pencil and gel.
 68. **P2** 🧪 Style eyedropper: take colour, width and tool from an existing stroke.
 69. **P2** Smart connectors between shapes (diagrams).

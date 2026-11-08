@@ -4897,6 +4897,19 @@ export const en = {
 	"tidy.undoHint": "One undo puts everything back.",
 	"histpanel.t.tidy": "Page tidied up",
 	"help.tidy": "Straighten the words, line up the starts of the lines and close oversized gaps between them, in one step. It works on the selection, or on the whole page when nothing is selected, and shows what will change before it does anything. Undo puts everything back.",
+	// 0.26 smooth (#66)
+	"smooth.action": "Smooth strokes",
+	"command.smooth": "Smooth the handwriting of the selection (take the jitter out, keep the shape)",
+	"smooth.done": "Smoothed {n} strokes.",
+	"smooth.nothing": "No handwriting to smooth in the selection.",
+	"help.smooth": "Take the wobble out of selected handwriting. The shape, the ends of each line and the pressure stay as they are. Undo puts it back.",
+	"straighten.action": "Straighten strokes",
+	"command.straighten": "Straighten the almost-straight lines of the selection into clean lines",
+	"straighten.done": "Straightened {n} strokes.",
+	"straighten.nothing": "No almost-straight lines to straighten in the selection.",
+	"help.straighten": "Turn lines that are nearly straight into clean straight lines between their ends. Curves are left alone. Undo puts them back.",
+	"histpanel.t.smooth": "Strokes smoothed",
+	"histpanel.t.straighten": "Strokes straightened",
 } as const;
 
 export type MessageKey = keyof typeof en;

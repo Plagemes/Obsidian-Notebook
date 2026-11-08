@@ -197,6 +197,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "areahl", theme, device, lowLatency: false });
 // 0.26 opacity (#358): the opacity of ink, pictures and areas (dev/harness/opacity-check.ts), tablet and phone, light and dark (dist/shots/opacity-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "opacity", theme, device, lowLatency: false });
+// 0.26 smooth (#66): Smooth and Straighten strokes (dev/harness/smooth-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "smooth", theme, device, lowLatency: false });
 // 0.25 baseline (#93): Align to baseline (dev/harness/baseline-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "baseline", theme, device, lowLatency: false });
 // 0.25 papersuggest (#409): suggested paper in the "+" strip (dev/harness/papersuggest-check.ts).
@@ -426,6 +428,7 @@ async function main() {
 				else if (s.doc === "iconhelp") report = await cdp.evaluate("window.harness.checkIconhelp()", 90000); // 0.24 iconhelp
 				else if (s.doc === "toolfade") report = await cdp.evaluate("window.harness.checkToolfade()", 120000); // 0.25 toolfade
 				else if (s.doc === "navadapt") report = await cdp.evaluate("window.harness.checkNavadapt()", 90000); // 0.24 navadapt
+				else if (s.doc === "smooth") report = await cdp.evaluate("window.harness.checkSmooth()", 90000); // 0.26 smooth
 				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
 				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
@@ -626,6 +629,19 @@ async function main() {
 						problems.push(`linkback ${state} screenshot: ${e.message}`);
 					}
 					await cdp.evaluate("window.harness.closeLinkback()");
+				}
+			}
+			// 0.26 smooth: screenshots of shaky handwriting (selected), smoothed and straightened.
+			if (s.doc === "smooth") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["before", "smooth", "straighten"]) {
+					try {
+						await cdp.evaluate(`window.harness.smoothShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `smooth-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`smooth ${state} screenshot: ${e.message}`);
+					}
 				}
 			}
 			// 0.25 baseline: screenshots of crooked words (selected), aligned, and aligned on ruled paper.

@@ -65,6 +65,9 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	// 0.26 tidy
 	"selection-tidy": "help.tidy",
 	"page-tidy": "help.tidy",
+	// 0.26 smooth (#66)
+	"selection-smooth": "help.smooth",
+	"selection-straighten": "help.straighten",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

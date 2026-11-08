@@ -4899,4 +4899,17 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"tidy.undoHint": "Un solo annulla rimette tutto com'era.",
 	"histpanel.t.tidy": "Pagina riordinata",
 	"help.tidy": "Raddrizza le parole, allinea l'inizio delle righe e chiude gli spazi troppo grandi tra di esse, in un solo passaggio. Agisce sulla selezione, o su tutta la pagina se non c'è niente di selezionato, e mostra cosa cambierà prima di fare qualcosa. Annulla rimette tutto com'era.",
+	// 0.26 smooth (#66)
+	"smooth.action": "Leviga i tratti",
+	"command.smooth": "Leviga la scrittura a mano della selezione (toglie il tremolio, mantiene la forma)",
+	"smooth.done": "Levigati {n} tratti.",
+	"smooth.nothing": "Nessuna scrittura da levigare nella selezione.",
+	"help.smooth": "Toglie il tremolio dalla scrittura a mano selezionata. La forma, gli estremi di ogni linea e la pressione restano come sono. Annulla la rimette com'era.",
+	"straighten.action": "Raddrizza i tratti",
+	"command.straighten": "Raddrizza le linee quasi dritte della selezione in linee pulite",
+	"straighten.done": "Raddrizzati {n} tratti.",
+	"straighten.nothing": "Nessuna linea quasi dritta da raddrizzare nella selezione.",
+	"help.straighten": "Trasforma le linee quasi dritte in linee dritte e pulite tra i loro estremi. Le curve restano com'erano. Annulla le rimette com'erano.",
+	"histpanel.t.smooth": "Tratti levigati",
+	"histpanel.t.straighten": "Tratti raddrizzati",
 };

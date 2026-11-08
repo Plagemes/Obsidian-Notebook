@@ -83,6 +83,8 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Join broken strokes": ["histpanel.t.join", "link"],
 	"Align to baseline": ["histpanel.t.baseline", "baseline"],
 	"Tidy up page": ["histpanel.t.tidy", "align-left"],
+	"Smooth strokes": ["histpanel.t.smooth", "sparkles"],
+	"Straighten strokes": ["histpanel.t.straighten", "minus"],
 	"Make axes": ["histpanel.t.axes", "activity"],
 	"Convert equation to ink": ["histpanel.t.eqInk", "pencil"],
 	"Balance reaction": ["histpanel.t.balance", "flask-conical"],

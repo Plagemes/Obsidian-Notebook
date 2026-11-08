@@ -77,6 +77,9 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.26 (#238): the tidy-up fits writing: a good many strokes selected, and a page of handwriting (ruled, grid or plain paper) when nothing is.
 	if (a.id === "selection-tidy" && (c.selection?.strokes ?? 0) >= 12) boost += 8;
 	if (a.id === "page-tidy" && !hasSelection && (c.page?.kind === "ruled" || c.page?.kind === "grid" || c.page?.kind === "plain")) boost += c.page.kind === "ruled" ? 16 : 14;
+	// 0.26 (#66): reshaping handwriting fits a selection of strokes; a long wobbly line (underline, ruler line) on grid or plain paper is likelier meant straight.
+	if (a.id === "selection-smooth" && hasSelection) boost += 4;
+	if (a.id === "selection-straighten" && hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 6;
 	return boost;
 }
 

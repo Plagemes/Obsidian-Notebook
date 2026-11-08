@@ -4034,3 +4034,33 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 |---|---|---|---|---|---|
 | Tidy-up engine: words onto a baseline (existing engine), line starts onto a common margin (paper margin on ruled paper), oversized gaps closed with paragraph breaks kept, whole rules on ruled paper, rigid moves only, one undo step, no page-time change, no format change | yes | `tests/tidy.test.ts`: two paragraphs, crooked lines, big gaps, ruled paper, a locked box in the way, groups, hidden ink, areas, second run, one undo, page times, locked page | | yes | thresholds tuned on synthetic writing only |
 | Sheet with the three steps, counts, summary, remembered choices, cancellable; selection bar (second row from tablet width) and sheet entry, page menu entry, command, long-press help, context ranking, history title | yes | `tests/tidy.test.ts` (registry, texts, ranking), `tests/selection-arrange.test.ts`; harness `doc=tidy` | | yes | not tried on Android; a line cut in two by the line finder is joined back by position only |
+
+### 0.26 — smooth: smooth and straighten selected strokes (roadmap #66; steps 2800-2819)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use your own shaky handwriting: a few words, a wobbly underline drawn freehand, an L or a check mark, a loop, and a highlighter stroke.
+
+2800. **Where.** Select the handwriting with the lasso, open the All actions sheet (Selection): *Smooth strokes* and *Straighten strokes* are there (and in the command palette: *Smooth the handwriting of the selection*, *Straighten the almost-straight lines of the selection*). With only text, pictures or an area highlight selected they are not offered.
+2801. **Smooth.** Run *Smooth strokes*: the tremor of the lines is gone, but the letters keep their shape, no line moves visibly away from where it was, the two ends of every stroke stay put, and a notice counts the strokes. The selection stays on the smoothed strokes.
+2802. **Corners.** The foot of an L, the tip of a check mark and the corner of a printed letter stay sharp (they are not rounded off).
+2803. **Pressure.** Strokes written with a pen that reports pressure keep their thick and thin parts exactly where they were.
+2804. **Twice.** Run Smooth again on the same strokes: it changes them only a little more, never the shape; when nothing is left to smooth the notice says so.
+2805. **Straighten.** Select a wobbly underline and a hand-drawn ruler line and run *Straighten strokes*: each becomes a clean straight line between its two ends. A curve, a loop, a zig-zag, a letter and a very short mark are left exactly as they were. The notice counts the straightened strokes.
+2806. **Twice (straighten).** Run it again: nothing changes and the notice says so.
+2807. **Left alone.** The highlighter, shapes (line, rectangle, ellipse), the marker, invisible ink, text boxes, pictures and area highlights are never changed, even when selected together with handwriting.
+2808. **Groups and locks.** Group two strokes and select only one: nothing happens to them. Select the whole group: both are reshaped. A group that holds a locked element is left alone.
+2809. **Sticky note.** Collapse a sticky note that holds ink: its hidden ink is not reshaped.
+2810. **Undo and redo.** One undo puts every stroke back exactly (the history panel names the step *Strokes smoothed* or *Strokes straightened*); one redo does it again.
+2811. **Several pages.** Select strokes on two pages (a lasso across a page boundary) and run it: both pages are reshaped, in one undo step.
+2812. **Locked page.** Lock the page and try again: it refuses and says so.
+2813. **Page time.** The page time in the navigator does not change after reshaping (the ink was edited, not written).
+2814. **Saving.** Close and reopen the notebook: the reshaped strokes are as they were left.
+2815. **Help.** Long-press each action in the sheet: the explanation appears and nothing happens until you tap again. Italian: all texts, the notice and the history title are translated.
+2816. **Ranking.** With strokes selected the two actions come near the top of the sheet's *For this page*; on grid or plain paper Straighten is a little higher.
+2817. **Looks.** Light and dark theme, phone and tablet width, Italian: the sheet rows look like their neighbours.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Smooth strokes (#66): Taubin smoothing of line-pen strokes, ends, point count and pressure kept, sharp corners held, bounded move per point, one undo step | yes | `tests/smooth.test.ts` (shape kept, ends fixed, corners, bounded re-runs, tools skipped); harness `doc=smooth` | | | the strength is fixed (no slider); tuned on synthetic jitter only, not on a real S Pen |
+| Straighten strokes (#66): almost-straight strokes (bend under 7% of the chord, length under 1.12x the chord, no doubling back) become a line between their ends; idempotent | yes | `tests/smooth.test.ts`; harness `doc=smooth` | | | the thresholds are a guess; a very gentle curve may count as a line |
+| Selection rules: whole groups only, locked elements, pinned sticky ink, hidden ink, graph-bound ink, shapes, highlighter and marker skipped; locked page refuses; page times untouched | yes | `tests/smooth.test.ts`; harness `doc=smooth` | | | |
+| Sheet and command entries, long-press help, context ranking, history title (English and Italian) | yes | `tests/selection-arrange.test.ts` | | | the selection bar rows are full, so both actions are in the sheet and the command palette only |
