@@ -111,6 +111,39 @@ describe("lecture header service: undo and redo are never a new page", () => {
 		expect(history.canRedo()).toBe(true);
 	});
 
+	it("review round 2 (R2-5): pages are known from the open, even when the first change deletes one (no edit context at open)", () => {
+		const doc = createDocument(new Date(2026, 9, 26), { width: 595, height: 842 });
+		doc.pages.push(createPage({ width: 595, height: 842 }));
+		const victim = doc.pages[1]!;
+		const history = new History(() => doc, 500, checkContent);
+		let editable = false;
+		const ctx = { doc, measure: estimateMeasure, currentPage: () => 0, execute: (cmd: Command) => history.execute(cmd) } as unknown as EditContext;
+		const cls = lectureClassOf(entry, mon(9, 30));
+		const service = new LectureHeaderService({
+			parent: () => ({ createDiv: () => { throw new Error("no chip expected"); } }) as unknown as HTMLElement,
+			path: () => "Notebooks/a.notebook",
+			settings: () => ({ lectureHeader: "auto", lectureHeaderLecturer: true, lectureHeaderRoom: true, lectureHeaderDate: true, lectureHeaderTime: true }),
+			classFor: () => cls,
+			editContext: () => (editable ? ctx : null),
+			document: () => doc,
+			busy: () => false,
+			locale: () => "en",
+			now: () => mon(9, 30),
+		});
+		// Opened read-only (or mid-stroke): no edit context yet.
+		service.opened();
+		service.pagesChanged();
+		editable = true;
+		history.execute(new DeletePage(victim, 1));
+		service.pagesChanged();
+		history.undo();
+		service.pagesChanged();
+		settle();
+		expect(doc.pages).toContain(victim);
+		expect(victim.elements ?? []).toHaveLength(0);
+		expect(history.canRedo()).toBe(true);
+	});
+
 	it("a brand new page after an undo is still new", () => {
 		const { doc, history, service } = scene();
 		history.execute(new AddPage(createPage({ width: 595, height: 842 }), 1));

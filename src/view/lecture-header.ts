@@ -30,6 +30,8 @@ export interface LectureHeaderHost {
 	/** The class in progress for the notebook; with `nearest`, else the closest of today. */
 	classFor(path: string, nearest: boolean): LectureClass | null;
 	editContext(): EditContext | null;
+	/** The document shown, even while it cannot be edited (read-only, mid-stroke); null before one is loaded. */
+	document?(): { pages: readonly { id: string }[] } | null;
 	/** The view is in the middle of a stroke or gesture. */
 	busy(): boolean;
 	locale(): string;
@@ -82,16 +84,28 @@ export class LectureHeaderService {
 		this.knownDoc = null;
 		this.hideChip();
 		this.settled.clear();
+		// Review round 2 (R2-5): the pages are seeded from the loaded document now, not at the first change (which may already have
+		// deleted a page that an undo then brings back, read-only or mid-stroke views give no edit context).
+		const doc = this.document();
+		if (doc) this.seed(doc);
+	}
+
+	/** The document shown, also when it cannot be edited right now. */
+	private document(): { pages: readonly { id: string }[] } | null {
+		return this.host.document?.() ?? this.host.editContext()?.doc ?? null;
+	}
+
+	private seed(doc: { pages: readonly { id: string }[] }): void {
+		this.known = new Set(doc.pages.map((p) => p.id));
+		this.knownDoc = doc;
 	}
 
 	/** The pages may have changed (after a History step): a page that appeared while a class is on gets the header. */
 	pagesChanged(): void {
-		const ctx = this.host.editContext();
-		const doc = ctx?.doc;
+		const doc = this.document();
 		if (!doc) return;
 		if (this.known === null || this.knownDoc !== doc) {
-			this.known = new Set(doc.pages.map((p) => p.id));
-			this.knownDoc = doc;
+			this.seed(doc);
 			return;
 		}
 		// Review fix (D1): `known` only grows. A page that comes back (undo of a delete, redo of an add) was seen before, so it is

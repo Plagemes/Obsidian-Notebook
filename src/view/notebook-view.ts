@@ -831,6 +831,7 @@ export class NotebookView extends FileView {
 			settings: () => this.host.settings,
 			classFor: (path, nearest) => this.host.lectureHeaderClassFor?.(path, nearest) ?? null,
 			editContext: () => this.editContext(),
+			document: () => this.session?.doc ?? null,
 			busy: () => this.inContact(),
 			locale: () => getLanguage(),
 		} satisfies LectureHeaderHost);
