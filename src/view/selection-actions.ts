@@ -8,6 +8,8 @@ import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
 import { planCleanup, type CleanupPlan } from "../ink/hook-clean";
 import { planJoin, type JoinPlan } from "../ink/stroke-join";
 import { planBaseline, type BaselinePlan } from "../ink/baseline";
+import { analyseTidy, planTidy, type TidyOptions, type TidyPlan } from "../ink/tidy";
+import { loadTidyOptions, TidyModal, type TidySummary } from "./tidy-modal";
 import { selectableItems } from "../model/groups";
 import type { PageBox } from "../ink/layout";
 import { commonOpacity, commonStyle, opacityAbility, planOpacity, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
@@ -415,6 +417,72 @@ export class SelectionActions {
 		this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
 		const words = plans.reduce((n, p) => n + p.plan.words, 0);
 		showNotice(t(plans.some((p) => p.plan.ruled) ? "baseline.doneRuled" : "baseline.done", { n: String(words) }));
+	}
+
+	// --- tidy up (0.26, #238) ---
+
+	/**
+	 * "Tidy up": a sheet with the three steps (words onto a baseline, line starts onto a margin, oversized gaps closed) and what each
+	 * would change, then ONE undo step (`planTidy`, rigid moves only). Works on the selection, or on the page `pageIndex` (the page in
+	 * view when nothing is selected) as a whole. Locked elements, groups that are not whole, hidden ink and everything that is not
+	 * handwriting stay where they are; a locked page refuses the step. The selection stays on the moved strokes.
+	 */
+	tidy(pageIndex?: number): void {
+		const doc = this.host.doc();
+		if (!doc || !this.host.editable()) return;
+		const sel = this.host.selection();
+		const selected = sel && pageIndex === undefined ? [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])] : [];
+		const wholePage = selected.every((p) => p.strokes.length + p.elements.length === 0);
+		const index = pageIndex ?? this.host.pasteTarget()?.pageIndex ?? 0;
+		const parts: PagePart[] = wholePage ? [{ pageIndex: index, strokes: [...(doc.pages[index]?.strokes ?? [])], elements: [...(doc.pages[index]?.elements ?? [])] }] : selected;
+		const requests = (): Array<{ part: PagePart; page: Page; strokes: Stroke[]; elements: PageElement[] }> => parts.flatMap((part) => {
+			const page = doc.pages[part.pageIndex];
+			if (!page) return [];
+			const onPage = new Set(page.strokes);
+			return [{ part, page, strokes: part.strokes.filter((s) => onPage.has(s)), elements: part.elements.filter((e) => page.elements?.includes(e)) }];
+		});
+		const preview = (options: TidyOptions): TidySummary => {
+			const sums: TidySummary = { words: 0, aligned: 0, tightened: 0, saved: 0, locked: true };
+			for (const r of requests()) {
+				const a = analyseTidy(r.page, { strokes: r.strokes, elements: r.elements }, options);
+				sums.words += a.words;
+				sums.aligned += a.aligned;
+				sums.tightened += a.tightened;
+				sums.saved = Math.max(sums.saved, a.saved);
+				if (!a.locked) sums.locked = false;
+			}
+			return sums;
+		};
+		const count = requests().reduce((n, r) => n + r.strokes.length, 0);
+		new TidyModal(this.host.app, {
+			kind: wholePage ? "page" : "selection", strokes: count, options: loadTidyOptions(this.host.app), preview,
+			onApply: (options) => this.runTidy(doc, requests(), options, !wholePage),
+		}).open();
+	}
+
+	private runTidy(doc: NotebookDocument, requests: Array<{ part: PagePart; page: Page; strokes: Stroke[]; elements: PageElement[] }>, options: TidyOptions, reselect: boolean): void {
+		if (!this.host.stillHere(doc)) return;
+		const plans: Array<{ part: PagePart; plan: TidyPlan }> = [];
+		for (const r of requests) {
+			const plan = planTidy(r.page, { strokes: r.strokes, elements: r.elements }, options);
+			if (plan) plans.push({ part: r.part, plan });
+		}
+		if (plans.length === 0) {
+			showNotice(t("tidy.none"));
+			return;
+		}
+		const cmd = plans.length === 1 ? plans[0]!.plan.command : new Batch("Tidy up page", plans.map((p) => p.plan.command));
+		if (!this.host.execute(cmd)) return;
+		if (reselect) {
+			const next = (part: PagePart): PagePart => {
+				const found = plans.find((p) => p.part === part);
+				return found ? { pageIndex: part.pageIndex, strokes: part.strokes.map((s) => found.plan.changes.get(s) ?? s), elements: part.elements } : part;
+			};
+			const [first, ...rest] = requests.map((r) => next(r.part)) as [PagePart, ...PagePart[]];
+			this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
+		}
+		const sum = (pick: (a: TidyPlan["analysis"]) => number): number => plans.reduce((n, p) => n + pick(p.plan.analysis), 0);
+		showNotice(t("tidy.done", { words: String(sum((a) => a.words)), lines: String(sum((a) => a.aligned)), gaps: String(sum((a) => a.tightened)) }));
 	}
 
 	// --- copy, cut, duplicate ---

@@ -74,6 +74,9 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.26 (#358): the opacity fits a selection of ink, pictures or areas best, then the highlighter or a shape in hand (both enough for "For this page");
 	// with the plain pen in hand (always, nearly) it only leans forward in the list, so it does not crowd "For this page".
 	if (a.id === "opacity" && canOpacity(c)) boost += hasSelection ? HERE_MIN_BOOST + 8 : c.tool === "highlighter" || c.tool === "shape" ? HERE_MIN_BOOST : 10;
+	// 0.26 (#238): the tidy-up fits writing: a good many strokes selected, and a page of handwriting (ruled, grid or plain paper) when nothing is.
+	if (a.id === "selection-tidy" && (c.selection?.strokes ?? 0) >= 12) boost += 8;
+	if (a.id === "page-tidy" && !hasSelection && (c.page?.kind === "ruled" || c.page?.kind === "grid" || c.page?.kind === "plain")) boost += c.page.kind === "ruled" ? 16 : 14;
 	return boost;
 }
 

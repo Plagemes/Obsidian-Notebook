@@ -62,6 +62,9 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"selection-baseline": "help.alignBaseline",
 	// 0.26 opacity (#358)
 	"opacity": "help.opacity",
+	// 0.26 tidy
+	"selection-tidy": "help.tidy",
+	"page-tidy": "help.tidy",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */
