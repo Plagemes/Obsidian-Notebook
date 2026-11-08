@@ -118,6 +118,8 @@ export interface MergeSummary {
 	checkboxesUpdated: number;
 	/** v18: items both have whose group or lock is taken from the copy (a group they were not in, a later lock or unlock). */
 	flagsUpdated: number;
+	/** v19: common pages whose start or end time is widened to the copy's (counted only when the page brings no ink: a times-only difference is still a change to merge). */
+	timesUpdated: number;
 }
 
 export interface MergePlan {
@@ -323,7 +325,7 @@ function carriedInk(e: PageElement, strokeMap: ReadonlyMap<string, string>, adde
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0, timesUpdated: 0,
 	};
 	const commands: Command[] = [];
 	// v12: the copy's slide ids in the main notebook's table.
@@ -603,6 +605,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			const spanned = mergedTimes(mainTimes, pageTimes(page));
 			const bringsContent = commands.slice(commandsBefore).some((c) => c instanceof AddStroke || c instanceof AddElement);
 			if (!sameTimes(spanned, mainTimes) || bringsContent) commands.push(new SetPageTimes(target.id, spanned));
+			if (!sameTimes(spanned, mainTimes) && !bringsContent) summary.timesUpdated++;
 			anchor = page.id;
 			continue;
 		}
@@ -743,7 +746,7 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
 	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded
-		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated + s.flagsUpdated;
+		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated + s.flagsUpdated + s.timesUpdated;
 }
 
 /**

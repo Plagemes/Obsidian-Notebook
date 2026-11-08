@@ -3640,6 +3640,7 @@ export const en = {
 	"groups.kind.sticky": "Sticky note",
 	"groups.kind.checkbox": "Checkbox",
 	"merge.summary.flags": "{count} groups or locks taken from the copy",
+	"merge.summary.times": "{count} page times widened to the copy's",
 	// 0.20 vdiff (#121): compare versions
 	"command.compareVersion": "Compare this notebook with a previous version",
 	"command.compareVersions": "Compare two previous versions",

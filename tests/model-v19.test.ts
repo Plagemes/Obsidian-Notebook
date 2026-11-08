@@ -3,16 +3,19 @@
  * strict write, staged loading, repair, the history stamp (upkeep: no undo step, Undo / Redo never move it), copies (duplicate and template
  * clear them, a moved page keeps them), merge of a conflicted copy (earliest start, latest end), the closed-notebook edit and the shown text.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { pageTimesText, headerLayout, headerText, type HeaderNotebook, type HeaderSettings } from "../src/ink/page-header";
 import { createDocument, createPage, createStroke } from "../src/model/document";
 import { AddElement, AddPage, AddStroke, Batch, collectAdds, EraseStrokes, History, ReplaceElement, RemoveElement } from "../src/model/history";
-import { mergeCovers, planMerge } from "../src/model/merge";
+import { mergeChangeCount, mergeCovers, planMerge } from "../src/model/merge";
+import { combineCandidates } from "../src/storage/recovery";
+import { en } from "../src/i18n/en";
+import { it as itMessages } from "../src/i18n/it";
 import { MIGRATIONS } from "../src/model/migrations";
 import { notebookFromTemplate, templateFromNotebook } from "../src/model/notebook-template";
 import { pageInfo } from "../src/model/page-info";
 import { SetPageLocked } from "../src/model/page-lock";
-import { mergedTimes, pageTimes, pageTimesProblem, SetPageTimes, stampPage, stampPages } from "../src/model/page-times";
+import { elementTextChanged, mergedTimes, pageTimes, pageTimesProblem, SetPageTimes, stampPage, stampPages } from "../src/model/page-times";
 import { duplicatePage } from "../src/model/pages";
 import { planPageRestore } from "../src/model/page-restore";
 import { repairNotebookText } from "../src/model/repair";
@@ -671,5 +674,138 @@ describe("page type", () => {
 	it("a Page can be typed with the new fields", () => {
 		const page: Page = { id: "x", width: 1, height: 1, paper: { kind: "blank", spacing: 1 }, strokes: [], startAt: 1, endAt: 2 };
 		expect(pageTimes(page)).toEqual({ startAt: 1, endAt: 2 });
+	});
+});
+
+describe("review fixes (page times)", () => {
+	function textBox(id: string, text: string, x = 10) {
+		return freezeElement({ id, type: "text", x, y: 10, width: 100, text, fontSize: 14, color: "#111111" });
+	}
+
+	it("P1: merge, write, undo twice, redo twice leaves the end at or after the written ink", () => {
+		const main = timedDoc();
+		const other = parsed(serialize(main)).doc;
+		other.pages[0]!.endAt = T0 + 200_000;
+		other.pages[0]!.strokes.push(stroke("s9", 200, 200));
+		const plan = planMerge(main, other);
+		let now = T0 + 1000;
+		const history = new History(() => main, 500, checkContent, null, null, null, () => now);
+		history.execute(plan.command!);
+		now = T0 + 900_000;
+		history.execute(new AddStroke("p1", stroke("n1", 5, 5), main.pages[0]!.strokes.length));
+		expect(pageTimes(main.pages[0]!)).toEqual({ startAt: T0, endAt: T0 + 900_000 });
+		history.undo();
+		history.undo();
+		history.redo();
+		history.redo();
+		expect(main.pages[0]!.strokes.map((s) => s.id)).toContain("n1");
+		expect(pageTimes(main.pages[0]!)!.endAt).toBeGreaterThanOrEqual(T0 + 900_000);
+		expect(serializeChecked(main, true).ok).toBe(true);
+	});
+
+	it("P1: undoing a SetPageTimes puts the old times back only while they are still what it set; redo widens", () => {
+		const doc = timedDoc();
+		const cmd = new SetPageTimes("p1", { startAt: T0 - 5, endAt: T0 + 100_000 });
+		cmd.apply(doc);
+		expect(stampPage(doc.pages[0]!, T0 + 500_000)).toBe(true);
+		cmd.revert(doc);
+		expect(pageTimes(doc.pages[0]!)).toEqual({ startAt: T0 - 5, endAt: T0 + 500_000 });
+		cmd.apply(doc);
+		expect(pageTimes(doc.pages[0]!)).toEqual({ startAt: T0 - 5, endAt: T0 + 500_000 });
+		cmd.revert(doc);
+		expect(pageTimes(doc.pages[0]!)).toEqual({ startAt: T0 - 5, endAt: T0 + 500_000 });
+		// untouched in between: exact both ways
+		const clean = timedDoc();
+		const exact = new SetPageTimes("p1", { startAt: T0 - 5, endAt: T0 + 100_000 });
+		exact.apply(clean);
+		exact.revert(clean);
+		expect(pageTimes(clean.pages[0]!)).toEqual({ startAt: T0, endAt: T0 + 90_000 });
+		exact.apply(clean);
+		expect(pageTimes(clean.pages[0]!)).toEqual({ startAt: T0 - 5, endAt: T0 + 100_000 });
+	});
+
+	it("P2: a times-only difference is a change to merge, counted and described", () => {
+		const main = timedDoc();
+		const other = parsed(serialize(main)).doc;
+		other.pages[0]!.endAt = T0 + 300_000;
+		const plan = planMerge(main, other);
+		expect(plan.command).not.toBeNull();
+		expect(plan.summary.timesUpdated).toBe(1);
+		expect(mergeChangeCount(plan.summary)).toBe(1);
+		expect(en["merge.summary.times"]).toContain("{count}");
+		expect(itMessages["merge.summary.times"]).toContain("{count}");
+		// ink plus times counts the ink, not the times twice
+		other.pages[0]!.strokes.push(stroke("s9", 200, 200));
+		expect(planMerge(main, other).summary.timesUpdated).toBe(0);
+	});
+
+	it("P2: recovery keeps the widest span of a times-only union", () => {
+		const first = timedDoc();
+		const second = parsed(serialize(first)).doc;
+		second.pages[0]!.endAt = T0 + 400_000;
+		const text = serialize(first);
+		const cand = (doc: NotebookDocument, body: string) => ({ doc, text: body }) as unknown as Parameters<typeof combineCandidates>[0];
+		const out = combineCandidates(cand(first, text), cand(second, serialize(second)));
+		expect(out).not.toBeNull();
+		expect(pageTimes(out!.doc.pages[0]!)).toEqual({ startAt: T0, endAt: T0 + 400_000 });
+	});
+
+	it("P3: clock readings outside 2015..2100 are ignored and never widen the span", () => {
+		const doc = baseDoc();
+		expect(stampPage(doc.pages[0]!, 5_000)).toBe(false);
+		expect(stampPage(doc.pages[0]!, Date.UTC(2014, 11, 31))).toBe(false);
+		expect(stampPage(doc.pages[0]!, Date.UTC(2100, 0, 2))).toBe(false);
+		expect(pageTimes(doc.pages[0]!)).toBeNull();
+		expect(stampPage(doc.pages[0]!, T0)).toBe(true);
+		expect(stampPage(doc.pages[0]!, 5_000)).toBe(false);
+		expect(stampPage(doc.pages[0]!, Date.UTC(2150, 0, 1))).toBe(false);
+		expect(pageTimes(doc.pages[0]!)).toEqual({ startAt: T0, endAt: T0 });
+		const { history } = historyWith(doc, () => 1_000);
+		history.execute(new AddStroke("p1", stroke("n1", 5, 5), 2));
+		expect(pageTimes(doc.pages[0]!)).toEqual({ startAt: T0, endAt: T0 });
+	});
+
+	it("P4: changing the text of an element stamps the end; a move or a restyle does not", () => {
+		const doc = timedDoc();
+		const page = doc.pages[0]!;
+		page.elements = [textBox("t1", "hello")];
+		const { history } = historyWith(doc, () => T0 + 700_000);
+		history.execute(new ReplaceElement("p1", page.elements[0]!, textBox("t1", "hello", 80)));
+		expect(pageTimes(page)).toEqual({ startAt: T0, endAt: T0 + 90_000 });
+		history.execute(new ReplaceElement("p1", page.elements[0]!, freezeElement({ ...(page.elements[0] as object), color: "#ff0000" } as never)));
+		expect(pageTimes(page)).toEqual({ startAt: T0, endAt: T0 + 90_000 });
+		history.execute(new ReplaceElement("p1", page.elements[0]!, freezeElement({ ...(page.elements[0] as object), text: "hello world" } as never)));
+		expect(pageTimes(page)).toEqual({ startAt: T0, endAt: T0 + 700_000 });
+		history.undo();
+		expect(pageTimes(page)).toEqual({ startAt: T0, endAt: T0 + 700_000 });
+	});
+
+	it("P4: elementTextChanged reads text, labels and titles only", () => {
+		expect(elementTextChanged(textBox("a", "x"), textBox("a", "y"))).toBe(true);
+		expect(elementTextChanged(textBox("a", "x"), textBox("a", "x", 50))).toBe(false);
+		expect(elementTextChanged(box("b"), freezeElement({ ...box("b"), title: "T" }))).toBe(true);
+		expect(elementTextChanged(box("b"), freezeElement({ ...box("b"), x: 5 }))).toBe(false);
+	});
+
+	it("P4: ink moved in from another page (or made from an equation) does not stamp the page it lands on", () => {
+		const doc = baseDoc();
+		const { history } = historyWith(doc, () => T0 + 10);
+		history.execute(new Batch("move", [new AddStroke("p2", stroke("m1", 5, 5), 0, false), new AddElement("p2", box("mb"), 0, false)]));
+		expect(pageTimes(doc.pages[1]!)).toBeNull();
+		history.execute(new AddStroke("p2", stroke("m2", 9, 9), 1));
+		expect(pageTimes(doc.pages[1]!)).toEqual({ startAt: T0 + 10, endAt: T0 + 10 });
+	});
+
+	it("P5: a clock that throws never costs the undo step", () => {
+		const doc = baseDoc();
+		const { history } = historyWith(doc, () => {
+			throw new Error("no clock");
+		});
+		const quiet = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		expect(history.execute(new AddStroke("p2", stroke("n1", 5, 5), 0))).toBe(true);
+		quiet.mockRestore();
+		expect(doc.pages[1]!.strokes).toHaveLength(1);
+		expect(history.undo()).not.toBeNull();
+		expect(doc.pages[1]!.strokes).toHaveLength(0);
 	});
 });
