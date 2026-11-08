@@ -430,7 +430,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 216. **P1** 🧪 "New lecture" command: creates a section with date and title in the course notebook.
 217. **P2** 🧪 Start and end time on every page (also the basis for audio in M5). (0.21, format v19: optional `startAt` / `endAt` on pages, stamped when ink or an element is added, no undo step; shown in the header line, the notebook map and *Page information*; setting *Show when a page was written*.)
 218. ~~**P2** Automatic new-lecture suggestion after a long pause since the last writing.~~ — dropped (user decision, 2026-10-29)
-219. **P2** "Lecture" and "study" profiles: one tap switches pens, paper and stabilization for fast or careful writing.
+219. **P2** 🧪 "Lecture" and "study" profiles: one tap switches pens, paper and stabilization for fast or careful writing.
 220. **P2** End-of-lecture summary: three guided lines (Cornell style), also saved in the companion note.
 221. **P2** 🧪 Lecture log in the daily note.
 222. **P2** 🧪 Automatic snapshot at the end of the lecture (version history).
