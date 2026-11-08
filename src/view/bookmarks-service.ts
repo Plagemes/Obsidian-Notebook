@@ -8,6 +8,7 @@ import { t } from "../i18n";
 import { openNotebookAtPage } from "../integration/open";
 import { RenameBatcher } from "../library/quicktabs";
 import { resolveBookmark, type GlobalBookmark } from "../library/bookmarks";
+import { BookmarkResolver } from "../library/bookmark-resolve";
 import type { NotebookDocument } from "../model/types";
 import { BookmarksBlockedError, type BookmarksStore } from "../library/bookmarks-store";
 import { listNotebooks } from "../storage/notebooks";
@@ -100,6 +101,24 @@ export class BookmarksService {
 		return this.deps.store.list().length;
 	}
 
+	/** Whether a notebook file is at `path` (a bookmark whose path is gone can still be found by the notebook's id). */
+	private readonly pathExists = (path: string): boolean => {
+		const f = this.deps.app.vault.getFileByPath(path);
+		return !!f && isNotebookFile(f);
+	};
+
+	/** One look-up session (a dialog open, one tap): each notebook's id is read at most once, whatever the number of bookmarks. */
+	newResolver(): BookmarkResolver<TFile> {
+		return new BookmarkResolver<TFile>({
+			fileAt: (path) => {
+				const f = this.deps.app.vault.getFileByPath(path);
+				return f && isNotebookFile(f) ? f : null;
+			},
+			notebooks: () => listNotebooks(this.deps.app, this.deps.notebooksFolder()),
+			idOf: (file) => this.deps.readNotebookId(file),
+		});
+	}
+
 	private ref(view: BookmarksViewApi, pageId: string): { docId: string; path: string; pageId: string } | null {
 		const path = view.path();
 		return path ? { docId: view.docId() ?? "", path, pageId } : null;
@@ -109,7 +128,7 @@ export class BookmarksService {
 	isBookmarkedAt(view: BookmarksViewApi, index: number): boolean {
 		const id = view.pageIds()[index];
 		const ref = id ? this.ref(view, id) : null;
-		return !!ref && this.deps.store.find(ref) !== null;
+		return !!ref && this.deps.store.find(ref, this.pathExists) !== null;
 	}
 
 	/** Bookmarks the page in view, or removes its bookmark when it has one. */
@@ -117,13 +136,13 @@ export class BookmarksService {
 		const cur = view.current();
 		const ref = cur ? this.ref(view, cur.pageId) : null;
 		if (!cur || !ref) return;
-		const there = this.deps.store.find(ref);
+		const there = this.deps.store.find(ref, this.pathExists);
 		try {
 			if (there) {
 				await this.deps.store.remove(there.id);
 				showNotice(t("gbm.removed"));
 			} else {
-				await this.deps.store.add({ ...ref, num: cur.index + 1, label: cur.title });
+				await this.deps.store.add({ ...ref, num: cur.index + 1, label: cur.title }, this.pathExists);
 				showNotice(t("gbm.added"));
 			}
 		} catch (e) {
@@ -144,28 +163,15 @@ export class BookmarksService {
 	}
 
 	/**
-	 * The notebook file of a bookmark: the file at its path, else (a notebook moved where no rename was seen, e.g. by
-	 * another app or on another device before it synced) the notebook with the same id.
+	 * What each bookmark points at now: the page (with its number and title), a notebook whose page is gone, or no notebook. Only looks: it never
+	 * moves a bookmark (a notebook that has not synced yet must not lose its bookmarks to a copy). Pass the same `resolver` for the whole dialog session
+	 * so the notebooks are read once, not at every refresh.
 	 */
-	async fileOf(b: GlobalBookmark): Promise<TFile | null> {
-		const direct = this.deps.app.vault.getFileByPath(b.path);
-		if (direct && isNotebookFile(direct)) return direct;
-		if (!b.docId) return null;
-		for (const file of listNotebooks(this.deps.app, this.deps.notebooksFolder())) {
-			if ((await this.deps.readNotebookId(file).catch(() => null)) === b.docId) {
-				void this.deps.store.retarget(b.path, file.path).catch((e) => this.fail(e));
-				return file;
-			}
-		}
-		return null;
-	}
-
-	/** What each bookmark points at now: the page (with its number and title), a notebook whose page is gone, or no notebook. */
-	async inspect(list: readonly GlobalBookmark[]): Promise<Map<string, BookmarkStatus>> {
+	async inspect(list: readonly GlobalBookmark[], resolver: BookmarkResolver<TFile> = this.newResolver()): Promise<Map<string, BookmarkStatus>> {
 		const out = new Map<string, BookmarkStatus>();
 		const docs = new Map<string, NotebookDocument | null>();
 		for (const b of list) {
-			const file = await this.fileOf(b);
+			const file = (await resolver.resolve(b))?.file ?? null;
 			if (!file) {
 				out.set(b.id, { kind: "notebook-gone" });
 				continue;
@@ -183,13 +189,18 @@ export class BookmarksService {
 		return out;
 	}
 
-	/** A tap on a bookmark: opens its notebook at its page (the nearest page when the page is gone). */
+	/**
+	 * A tap on a bookmark: opens its notebook at its page (the nearest page when the page is gone). A notebook found by its id (its path is out of date) is
+	 * followed by the bookmark, but only when exactly one notebook carries that id: with a copy around there is no telling which one is the notebook.
+	 */
 	async open(b: GlobalBookmark): Promise<void> {
-		const file = await this.fileOf(b);
-		if (!file) {
+		const found = await this.newResolver().resolve(b);
+		if (!found) {
 			showNotice(t("gbm.missing", { path: b.path }), 6000);
 			return;
 		}
+		const file = found.file;
+		if (found.byId && found.unique) void this.deps.store.retarget(b.path, file.path).catch((e) => this.fail(e));
 		await (this.deps.openAt ? this.deps.openAt(file, b.num, b.pageId) : openNotebookAtPage(this.deps.app, file, b.num, null, b.pageId));
 	}
 

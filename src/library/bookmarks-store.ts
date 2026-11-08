@@ -15,7 +15,7 @@
 import { deviceFileName, ensureFolderPath, keepUnreadableCopy, listDeviceFiles, type DeviceFileAdapter } from "../storage/device-files";
 import { linksFolder } from "../storage/pdf-links-store";
 import {
-	applyBookmarkOps, bookmarkOrderAtEnd, BOOKMARKS_PREFIX, emptyBookmarks, findBookmark, liveBookmarks, mergeBookmarkFiles, newBookmarkId, parseBookmarks,
+	applyBookmarkOps, bookmarkOrderAtEnd, bookmarkTwins, BOOKMARKS_PREFIX, emptyBookmarks, findBookmark, liveBookmarks, mergeBookmarkFiles, newBookmarkId, parseBookmarks,
 	planBookmarkMove, pruneBookmarkTombstones, serializeBookmarks, type BookmarkOp, type BookmarksFile, type BookmarksMap, type GlobalBookmark,
 } from "./bookmarks";
 
@@ -73,8 +73,8 @@ export class BookmarksStore {
 	}
 
 	/** The bookmark of this page, if any. */
-	find(ref: { docId: string; path: string; pageId: string }): GlobalBookmark | null {
-		return findBookmark(this.cache, ref);
+	find(ref: { docId: string; path: string; pageId: string }, pathExists?: (path: string) => boolean): GlobalBookmark | null {
+		return findBookmark(this.cache, ref, pathExists);
 	}
 
 	/** Runs `fn` after the bookmarks changed. Returns the unsubscribe function. */
@@ -91,11 +91,11 @@ export class BookmarksStore {
 	}
 
 	/** Adds a page at the end of the list; returns the id (of the existing bookmark when the page is bookmarked already). */
-	add(r: AddBookmarkRequest): Promise<string> {
+	add(r: AddBookmarkRequest, pathExists?: (path: string) => boolean): Promise<string> {
 		return this.enqueue(async () => {
 			const own = await this.readOwn();
 			const { merged, others } = await this.readAll();
-			const there = findBookmark(merged, r);
+			const there = findBookmark(merged, r, pathExists);
 			if (there) return there.id;
 			const id = newBookmarkId(new Set(merged.keys()), this.random);
 			await this.writeOps(own, merged, others, [{ kind: "add", id, ...r, order: bookmarkOrderAtEnd(liveBookmarks(merged)) }]);
@@ -105,7 +105,8 @@ export class BookmarksStore {
 
 	/** Removes a bookmark (the page it points at is never touched). */
 	remove(id: string): Promise<void> {
-		return this.change(() => [{ kind: "remove", id }]);
+		// The same page bookmarked on two devices before they synced is one row with two ids: both go.
+		return this.change((merged) => bookmarkTwins(merged, id).map((twin) => ({ kind: "remove" as const, id: twin })));
 	}
 
 	/** Gives the bookmark a name (empty: back to the default "<notebook> p. N"). */

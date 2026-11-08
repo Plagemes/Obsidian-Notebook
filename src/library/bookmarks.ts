@@ -42,6 +42,11 @@ export interface GlobalBookmark {
 
 export interface StoredBookmark extends GlobalBookmark {
 	deleted?: boolean;
+	/**
+	 * What the file said for `docId`, `num` or `label` when this version had to normalise it to show it (a label cut to 60 characters, a
+	 * fractional or out-of-range page number): written back as it was until this version changes that field itself.
+	 */
+	rawKept?: Record<string, unknown>;
 }
 
 export interface BookmarksFile {
@@ -50,6 +55,8 @@ export interface BookmarksFile {
 	items: StoredBookmark[];
 	/** Entries this version does not understand: kept and written back as they were. */
 	unknown: unknown[];
+	/** Top-level members of the file this version does not know: kept and written back. */
+	extra?: Record<string, unknown>;
 }
 
 export type BookmarksParse =
@@ -76,6 +83,7 @@ export function newBookmarkId(taken: ReadonlySet<string>, random: () => number =
 	}
 }
 
+const KNOWN_FILE = new Set(["format", "version", "device", "items"]);
 const KNOWN_ITEM = new Set(["id", "docId", "path", "pageId", "num", "label", "order", "at", "deleted"]);
 
 function readItem(v: unknown): StoredBookmark | null {
@@ -90,6 +98,12 @@ function readItem(v: unknown): StoredBookmark | null {
 	const label = typeof v.label === "string" ? cleanBookmarkLabel(v.label) : "";
 	if (label) item.label = label;
 	if (v.deleted === true) item.deleted = true;
+	// A field this version only normalised to show it keeps what the file said (a later plugin may use it as it is).
+	const rawKept: Record<string, unknown> = {};
+	if ("docId" in v && v.docId !== item.docId) rawKept.docId = v.docId;
+	if ("num" in v && v.num !== item.num) rawKept.num = v.num;
+	if ("label" in v && v.label !== (item.label ?? "")) rawKept.label = v.label;
+	if (Object.keys(rawKept).length > 0) item.rawKept = rawKept;
 	if (Object.keys(extra).length > 0) item.extra = extra;
 	return item;
 }
@@ -118,19 +132,25 @@ export function parseBookmarks(text: string, device: string): BookmarksParse {
 		}
 	}
 	const named = typeof raw.device === "string" && /^[0-9a-f]{8}$/.test(raw.device) ? raw.device : device;
-	return { ok: true, data: { version: BOOKMARKS_VERSION, device: named, items: [...byId.values()], unknown } };
+	const extra: Record<string, unknown> = {};
+	for (const [k, x] of Object.entries(raw)) if (!KNOWN_FILE.has(k)) extra[k] = x;
+	const data: BookmarksFile = { version: BOOKMARKS_VERSION, device: named, items: [...byId.values()], unknown };
+	if (Object.keys(extra).length > 0) data.extra = extra;
+	return { ok: true, data };
 }
 
 function itemJson(i: StoredBookmark): string {
 	const o: Record<string, unknown> = { ...(i.extra ?? {}), id: i.id, docId: i.docId, path: i.path, pageId: i.pageId, num: i.num, order: i.order, at: i.at };
 	if (i.label) o.label = i.label;
 	if (i.deleted) o.deleted = true;
+	if (i.rawKept) Object.assign(o, i.rawKept);
 	return JSON.stringify(o);
 }
 
 /** Deterministic text: one bookmark per line, sorted by id. */
 export function serializeBookmarks(data: BookmarksFile): string {
-	const head = `{"format":${JSON.stringify(BOOKMARKS_FORMAT)},"version":${BOOKMARKS_VERSION},"device":${JSON.stringify(data.device)},"items":[`;
+	const extra = Object.entries(data.extra ?? {}).filter(([k]) => !KNOWN_FILE.has(k)).map(([k, v]) => `,${JSON.stringify(k)}:${JSON.stringify(v)}`).join("");
+	const head = `{"format":${JSON.stringify(BOOKMARKS_FORMAT)},"version":${BOOKMARKS_VERSION},"device":${JSON.stringify(data.device)}${extra},"items":[`;
 	const lines = [
 		...[...data.items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map(itemJson),
 		...data.unknown.map((u) => JSON.stringify(u)),
@@ -154,14 +174,42 @@ export function mergeBookmarkFiles(files: readonly BookmarksFile[]): Map<string,
 
 const byOrder = (a: GlobalBookmark, b: GlobalBookmark): number => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
-/** Every live bookmark, in list order. */
+/** The same page of the same notebook at the same path: what makes two rows one bookmark. */
+const pageKey = (b: Pick<GlobalBookmark, "docId" | "path" | "pageId">): string => `${b.docId}\u0000${b.path}\u0000${b.pageId}`;
+
+/**
+ * Every live bookmark, in list order. The same page bookmarked on two devices before their files synced has two ids: it is one row (the one first in
+ * list order, the same on every device); `bookmarkTwins` finds the others when the bookmark is removed.
+ */
 export function liveBookmarks(map: BookmarksMap): GlobalBookmark[] {
-	return [...map.values()].filter((b) => !b.deleted).map(({ deleted: _d, ...b }) => b).sort(byOrder);
+	const live = [...map.values()].filter((b) => !b.deleted).map(({ deleted: _d, rawKept: _r, ...b }) => b).sort(byOrder);
+	const seen = new Set<string>();
+	return live.filter((b) => {
+		const key = pageKey(b);
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
 }
 
-/** The live bookmark of this page of this notebook (by id when the notebook has one, else by path), if any. */
-export function findBookmark(map: BookmarksMap, ref: { docId: string; path: string; pageId: string }): GlobalBookmark | null {
-	return liveBookmarks(map).find((b) => b.pageId === ref.pageId && (ref.docId ? b.docId === ref.docId : b.path === ref.path)) ?? null;
+/** The ids of every live bookmark that is the same page as the bookmark `id` (itself included): removing one removes them all. */
+export function bookmarkTwins(map: BookmarksMap, id: string): string[] {
+	const one = map.get(id);
+	if (!one || one.deleted) return [];
+	const key = pageKey(one);
+	return [...map.values()].filter((b) => !b.deleted && pageKey(b) === key).map((b) => b.id);
+}
+
+/**
+ * The live bookmark of this page of this notebook, if any. A notebook with an id is found by it AND its path, so a copy of a notebook (same id, same
+ * page ids) is not mistaken for the original; a bookmark whose path no longer exists (`pathExists` says so: the notebook was renamed where no rename
+ * was seen) still matches by id alone. Without an id the path decides.
+ */
+export function findBookmark(map: BookmarksMap, ref: { docId: string; path: string; pageId: string }, pathExists?: (path: string) => boolean): GlobalBookmark | null {
+	const onPage = liveBookmarks(map).filter((b) => b.pageId === ref.pageId);
+	if (!ref.docId) return onPage.find((b) => b.path === ref.path) ?? null;
+	const sameId = onPage.filter((b) => b.docId === ref.docId);
+	return sameId.find((b) => b.path === ref.path) ?? sameId.find((b) => !pathExists || !pathExists(b.path)) ?? null;
 }
 
 /** `file` without the tombstones older than `TOMBSTONE_DAYS` (same rule as the quick tabs: see `pruneQuickTabTombstones`). */
@@ -257,6 +305,13 @@ export function applyBookmarkOps(ownFile: BookmarksFile, merged: BookmarksMap, o
 	const put = (base: StoredBookmark, change: Partial<StoredBookmark>): void => {
 		const at = Math.max(now, (merged.get(base.id)?.at ?? 0) + 1, (items.get(base.id)?.at ?? 0) + 1);
 		const next: StoredBookmark = { ...base, ...change, at };
+		// A field this version sets itself no longer keeps what an older file said for it.
+		if (next.rawKept && ("label" in change || "docId" in change || "num" in change)) {
+			const kept = { ...next.rawKept };
+			for (const k of ["label", "docId", "num"] as const) if (k in change) delete kept[k];
+			if (Object.keys(kept).length > 0) next.rawKept = kept;
+			else delete next.rawKept;
+		}
 		if (!next.label) delete next.label;
 		if (!next.deleted) delete next.deleted;
 		items.set(base.id, next);

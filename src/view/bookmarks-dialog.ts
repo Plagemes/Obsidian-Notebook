@@ -27,6 +27,8 @@ export class BookmarksModal extends Modal {
 	private checked = false;
 	private off: (() => void) | null = null;
 	private token = 0;
+	/** One look-up session for as long as the dialog is open: each notebook is read once, not at every refresh. */
+	private lookup: ReturnType<BookmarksService["newResolver"]> | null = null;
 
 	constructor(app: App, private readonly service: BookmarksService) {
 		super(app);
@@ -36,6 +38,7 @@ export class BookmarksModal extends Modal {
 		const shell = modalShell(this, { title: t("gbm.title"), subtitle: t("gbm.subtitle"), icon: "bookmark", size: "medium", cls: "nb-gbm-modal" });
 		this.body = shell.body;
 		shellButton(shell.foot, "secondary", t("gbm.done"), () => this.close());
+		this.lookup = this.service.newResolver();
 		this.off = this.service.onChange(() => this.refresh());
 		this.draw();
 		void this.check();
@@ -44,6 +47,7 @@ export class BookmarksModal extends Modal {
 	onClose(): void {
 		this.off?.();
 		this.off = null;
+		this.lookup = null;
 		this.token++;
 		this.contentEl.empty();
 	}
@@ -58,7 +62,7 @@ export class BookmarksModal extends Modal {
 	private async check(): Promise<void> {
 		const mine = ++this.token;
 		const list = this.service.list();
-		const status = await this.service.inspect(list);
+		const status = await this.service.inspect(list, this.lookup ?? undefined);
 		if (mine !== this.token) return;
 		this.status = status;
 		this.checked = true;
