@@ -413,3 +413,17 @@ describe("new pens: the cost of a point", () => {
 		expect(fresh).toBeLessThanOrEqual(2);
 	}, 60_000);
 });
+
+describe("new pens: interactive HTML export", () => {
+	it("embeds the same SVG, with the marker 85% opaque", async () => {
+		const { htmlPage } = await import("../src/ink/export-html");
+		const page = createPage();
+		page.strokes.push({ ...createStroke("#15803d", 8, handwriting(80, 2), "marker", RENDER_INK), nib: 30 });
+		page.strokes.push(createStroke("#1d4ed8", 4, handwriting(80, 3), "brush", RENDER_INK));
+		const svg = pageToSvg(page);
+		const html = htmlPage(0, 1, svg, "p");
+		expect(html).toContain(strokeSvgPath(page.strokes[0]!));
+		expect(html).toContain(strokeSvgPath(page.strokes[1]!));
+		expect(html).toContain(`fill-opacity="${MARKER_ALPHA}"`);
+	});
+});

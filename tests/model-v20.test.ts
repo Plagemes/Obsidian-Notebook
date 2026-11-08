@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
 import { MIGRATIONS } from "../src/model/migrations";
-import { mergeChangeCount, planMerge, strokeContentKey } from "../src/model/merge";
+import { planMerge, strokeContentKey } from "../src/model/merge";
 import { pageInfo } from "../src/model/page-info";
 import { copyStroke, duplicatePage } from "../src/model/pages";
 import { repairNotebookText } from "../src/model/repair";
