@@ -359,7 +359,7 @@ describe("format v20: copies, merge and information", () => {
 		const h = new History(() => doc, 500, checkContent);
 		h.execute(new AddStroke("p1", pen("new", "marker", { nib: 99 }), doc.pages[0]!.strokes.length));
 		const r = parsed(serialize(doc));
-		expect(r.doc.pages[0]!.strokes.at(-1)).toMatchObject({ id: "new", tool: "marker", nib: 99 });
+		expect(r.doc.pages[0]!.strokes[r.doc.pages[0]!.strokes.length - 1]).toMatchObject({ id: "new", tool: "marker", nib: 99 });
 	});
 
 	it("the page information counts the new pens with the pen", () => {

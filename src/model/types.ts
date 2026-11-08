@@ -58,6 +58,11 @@ export function isNewPen(tool: Tool): boolean {
 export function isNibPen(tool: Tool): boolean {
 	return tool === "fountain" || tool === "marker";
 }
+
+/** v20: the pens people write with (the pen and the new pens); the highlighter and the shape tool are not handwriting. */
+export function isWritingPen(tool: Tool): boolean {
+	return tool === "pen" || tool === "fountain" || tool === "brush" || tool === "marker";
+}
 /** v20: nib angle, whole degrees in [0, 179] (the nib is a line: 180° is the same as 0°), counter-clockwise on the page; absent = 45. */
 export const NIB_DEFAULT = 45;
 export const NIB_MAX = 179;

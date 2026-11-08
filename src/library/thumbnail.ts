@@ -1,6 +1,6 @@
 /** Page thumbnails for the library cards. Runs in the browser (canvas). */
 import { lodLevel, lodSvgPath } from "../ink/lod";
-import { HIGHLIGHTER_ALPHA } from "../ink/stroke-shape";
+import { inkAlpha, inkBlend } from "../ink/stroke-shape";
 import { minorVisible, PAPER_COLORS, paperPattern } from "../ink/paper";
 import { hiddenStickyInk } from "../model/sticky";
 import type { Page } from "../model/types";
@@ -92,8 +92,8 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 		if (++drawn % 64 === 0 && performance.now() - started > TIME_BUDGET_MS) break;
 		const highlighter = stroke.tool === "highlighter";
 		ctx.fillStyle = stroke.color;
-		ctx.globalAlpha = highlighter ? HIGHLIGHTER_ALPHA : 1;
-		ctx.globalCompositeOperation = highlighter ? "multiply" : "source-over";
+		ctx.globalAlpha = inkAlpha(stroke.tool);
+		ctx.globalCompositeOperation = inkBlend(stroke.tool);
 		const w = highlighter ? stroke.width : Math.max(stroke.width, MIN_STROKE_PX / scale);
 		// Same geometry as the notebook (old strokes: perfect-freehand, new ones: the ink engine).
 		ctx.fill(new Path2D(lodSvgPath(stroke, w, lod)));

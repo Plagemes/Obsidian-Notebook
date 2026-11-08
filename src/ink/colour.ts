@@ -2,6 +2,7 @@
 // Colours are "#rrggbb" strings everywhere (the document format and the settings store nothing else).
 import type { Stroke } from "../model/types";
 import { pointSegmentDistance } from "./hit-test";
+import { inkReach } from "./ink-geometry";
 
 export interface Rgb {
 	r: number;
@@ -133,7 +134,7 @@ export function pickStrokeAt(strokes: readonly Stroke[], x: number, y: number, t
 	let bestGap = Infinity;
 	for (const s of strokes) {
 		const d = strokeDistance(s, x, y);
-		const half = s.width / 2;
+		const half = inkReach(s.tool, s.width);
 		if (!(d <= half + Math.max(0, tolerance))) continue;
 		const covered = d <= half;
 		const gap = Math.max(0, d - half);

@@ -1,5 +1,5 @@
 import type { ExcerptElement, Page, PageElement, Point, Stroke, TextElement, Tool } from "../model/types";
-import { MM, RENDER_INK } from "../model/types";
+import { isNewPen, MM, RENDER_INK } from "../model/types";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
@@ -18,7 +18,7 @@ import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
 import { visiblePages, type Layout, type PageBox } from "./layout";
 import { rulerEdge, rulerTicks, type Ruler } from "./ruler";
 import { inkPath, type InkBuilder } from "./ink-geometry";
-import { HIGHLIGHTER_ALPHA, strokePath } from "./stroke-shape";
+import { HIGHLIGHTER_ALPHA, MARKER_ALPHA, strokePath } from "./stroke-shape";
 import { addLodNodesPath, lodLevel, lodNodes, lodPolygon } from "./lod";
 import { WetInk, type PageTransform } from "./wet-ink";
 import { ErrorOnce } from "./errors";
@@ -153,6 +153,8 @@ export interface LiveStroke {
 	tool: Tool;
 	color: string;
 	width: number;
+	/** Format v20: the nib angle of a fountain pen or a marker (absent = 45). */
+	nib?: number;
 	points: readonly Point[];
 	predicted: readonly Point[];
 }
@@ -335,6 +337,8 @@ export class Renderer {
 	private readonly faulted = new Set<CanvasRenderingContext2D>();
 	/** Wet ink of the highlighter (created on first use): a regular canvas, see releaseWet(). */
 	private wetHl: WetInk | null = null;
+	/** Wet ink of the marker (format v20), created on first use: 85% opaque like the committed stroke, see markerWet(). */
+	private wetMk: WetInk | null = null;
 	/** The canvas showing the stroke in progress. */
 	private wet: WetInk | null = null;
 	private wetPage = -1;
@@ -416,7 +420,7 @@ export class Renderer {
 		this.width = width;
 		this.height = height;
 		this.dpr = dpr;
-		for (const c of [this.staticCanvas, this.liveCanvas, this.wetCanvas, this.wetHl?.canvas]) {
+		for (const c of [this.staticCanvas, this.liveCanvas, this.wetCanvas, this.wetHl?.canvas, this.wetMk?.canvas]) {
 			if (!c) continue;
 			c.width = Math.max(1, Math.round(width * dpr));
 			c.height = Math.max(1, Math.round(height * dpr));
@@ -576,7 +580,7 @@ export class Renderer {
 		if (!t) return false;
 		this.cancelWet();
 		try {
-			const wet = tool === "highlighter" ? this.highlighterWet() : this.wetPen;
+			const wet = tool === "highlighter" ? this.highlighterWet() : tool === "marker" ? this.markerWet() : this.wetPen;
 			// A previous stroke still waiting to be cleared from this canvas: make sure the static layer
 			// shows it (a full redraw may still be pending) before it leaves the wet canvas.
 			for (let i = this.wetRelease.length - 1; i >= 0; i--) {
@@ -652,7 +656,7 @@ export class Renderer {
 		this.wetFailed = true;
 		this.cancelWet();
 		this.wetRelease.length = 0;
-		for (const w of [this.wetPen, this.wetHl]) {
+		for (const w of [this.wetPen, this.wetHl, this.wetMk]) {
 			if (!w) continue;
 			this.errors.run("wet clear", () => {
 				w.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -689,6 +693,19 @@ export class Renderer {
 		if (!ctx) throw new Error("Canvas 2D is not available");
 		this.wetHl = new WetInk(canvas, ctx);
 		return this.wetHl;
+	}
+
+	/** Like highlighterWet(): the marker's wet canvas holds opaque ink and gets its 85% from CSS (`.is-marker`), so overlaps never darken twice. */
+	private markerWet(): WetInk {
+		if (this.wetMk) return this.wetMk;
+		const canvas = this.container.createEl("canvas", { cls: "notebook-canvas notebook-canvas-live notebook-canvas-wet is-marker" });
+		this.wetCanvas.after(canvas);
+		canvas.width = this.wetCanvas.width;
+		canvas.height = this.wetCanvas.height;
+		const ctx = canvas.getContext("2d");
+		if (!ctx) throw new Error("Canvas 2D is not available");
+		this.wetMk = new WetInk(canvas, ctx);
+		return this.wetMk;
 	}
 
 	/** Page to device pixel transform of a page in the current view. */
@@ -1239,7 +1256,12 @@ export class Renderer {
 			this.beginPage(ctx, boxes[live.pageIndex]!);
 			const points = live.predicted.length ? [...live.points, ...live.predicted] : live.points;
 			this.setInk(ctx, live.tool, live.color);
-			ctx.fill(new Path2D(strokePath(points, live.width, false, live.tool)));
+			if (isNewPen(live.tool)) {
+				// The new pens have no perfect-freehand outline: the same geometry as the wet ink, rebuilt from the points.
+				const path = new Path2D();
+				inkPath(path, points, live.width, live.tool, live.nib);
+				ctx.fill(path);
+			} else ctx.fill(new Path2D(strokePath(points, live.width, false, live.tool)));
 			ctx.restore();
 		});
 	}
@@ -1411,6 +1433,10 @@ export class Renderer {
 			// Night mode: "multiply" would vanish on the dark paper, "screen" lights it.
 			ctx.globalAlpha = this.night ? NIGHT_HIGHLIGHTER_ALPHA : HIGHLIGHTER_ALPHA;
 			ctx.globalCompositeOperation = this.night ? "screen" : "multiply";
+		} else if (tool === "marker") {
+			// Format v20: 85% opaque in stroke order, in the day and the night (the ink colour is already the night one).
+			ctx.globalAlpha = MARKER_ALPHA;
+			ctx.globalCompositeOperation = "source-over";
 		} else {
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = "source-over";
@@ -1422,7 +1448,7 @@ export class Renderer {
 		const path = (lod > 0 ? this.lodPath(stroke, lod) : null) ?? this.exactPath(stroke);
 		this.setInk(ctx, stroke.tool, stroke.color);
 		ctx.fill(path);
-		if (stroke.tool === "highlighter") this.setInk(ctx, "pen", stroke.color);
+		if (stroke.tool === "highlighter" || stroke.tool === "marker") this.setInk(ctx, "pen", stroke.color);
 	}
 
 	private exactPath(stroke: Stroke): Path2D {
@@ -1448,7 +1474,7 @@ export class Renderer {
 
 	private buildLodPath(stroke: Stroke, lod: number): Path2D | null {
 		if (stroke.render === RENDER_INK) {
-			const nodes = lodNodes(stroke.points, stroke.width, stroke.tool, lod);
+			const nodes = lodNodes(stroke.points, stroke.width, stroke.tool, lod, stroke.nib);
 			if (!nodes) return null;
 			const path = new Path2D();
 			addLodNodesPath(path, nodes);
@@ -1466,7 +1492,7 @@ export class Renderer {
 	private buildPath(stroke: Stroke, points: readonly Point[]): Path2D {
 		if (stroke.render === RENDER_INK) {
 			const path = new Path2D();
-			inkPath(path, points, stroke.width, stroke.tool);
+			inkPath(path, points, stroke.width, stroke.tool, stroke.nib);
 			return path;
 		}
 		return new Path2D(strokePath(points, stroke.width, true, stroke.tool));

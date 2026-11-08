@@ -16,7 +16,7 @@ import { drawSticky } from "./sticky-render";
 import { drawCheckbox } from "./checkbox-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
-import { HIGHLIGHTER_ALPHA, strokeSvgPath } from "./stroke-shape";
+import { inkAlpha, inkBlend, strokeSvgPath } from "./stroke-shape";
 
 export interface RasterInputs {
 	/** The PDF page or picture under the page, already drawn at a suitable size; null when there is none or it failed. */
@@ -91,10 +91,9 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 			if ((stroke.hidden && !inputs.hiddenInk) || noteInk?.has(stroke.id)) continue;
 			const path = strokePath2D(stroke, inputs.paths);
 			if (!path) continue;
-			const highlighter = stroke.tool === "highlighter";
 			ctx.fillStyle = stroke.color;
-			ctx.globalAlpha = highlighter ? HIGHLIGHTER_ALPHA : 1;
-			ctx.globalCompositeOperation = highlighter ? "multiply" : "source-over";
+			ctx.globalAlpha = inkAlpha(stroke.tool);
+			ctx.globalCompositeOperation = inkBlend(stroke.tool);
 			// v9: ink bound to a graph is clipped to its frame, as on screen.
 			const clip = strokeClip(stroke, clips);
 			if (clip) {
