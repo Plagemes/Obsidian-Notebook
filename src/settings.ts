@@ -32,6 +32,7 @@ import { DEFAULT_SNAP_SETTINGS, readSnapSettings, type SnapSettings } from "./vi
 import { DEFAULT_GHOST_SETTINGS, readGhostSettings, type GhostSettings } from "./view/ghost-settings";
 import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
 import { backupFolderConflict, DEFAULT_BACKUP_FOLDER, DEFAULT_BACKUP_SETTINGS, readBackupSettings, type BackupSettings } from "./storage/backup-logic";
+import { DEFAULT_CLOUD_SYNC_SETTINGS, readCloudSyncSettings, type CloudSyncSettings } from "./sync/settings";
 import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 import { normalizeIndexPrefix } from "./model/book-index";
 import { clampSymbolCount } from "./ui/symbol-rank";
@@ -41,7 +42,7 @@ import { clampSymbolCount } from "./ui/symbol-rank";
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, GhostSettings, PdfCopySettings, BackupSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, GhostSettings, PdfCopySettings, BackupSettings, CloudSyncSettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -408,6 +409,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	pdfCopyNotebooks: {},
 	// 0.21 backups
 	...DEFAULT_BACKUP_SETTINGS,
+	// 0.22 synccore (#126): cloud sync, off by default
+	...DEFAULT_CLOUD_SYNC_SETTINGS,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -542,6 +545,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readBoardSettings(d));
 	Object.assign(s, readPdfCopySettings(d));
 	Object.assign(s, readBackupSettings(d)); // 0.21 backups
+	Object.assign(s, readCloudSyncSettings(d)); // 0.22 synccore (#126)
 	// A backup folder that overlaps the notebooks or the templates would hide them (review W21 D2): back to the default.
 	if (backupFolderConflict(s.zipBackupFolder, { notebooksFolder: s.folder, templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder }) !== null) s.zipBackupFolder = DEFAULT_BACKUP_FOLDER;
 	return s;

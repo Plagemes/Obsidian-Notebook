@@ -7,18 +7,32 @@
  */
 import type { CloudProvider, ProviderId } from "./provider-types";
 
+/** The user's own OAuth client: the id (same on every device) and, for Google, the secret (device-local). */
+export interface CloudClient {
+	clientId: string;
+	clientSecret?: string;
+}
+
+export interface SignOutResult {
+	revoked: boolean;
+	manageUrl?: string;
+}
+
 export interface SyncAuthUI {
 	/** Whether sign-in for `provider` exists in this build (false: the settings say so and offer no button). */
 	available(provider: ProviderId): boolean;
 	/** Whether this device holds a sign-in for `provider` (tokens in device-local storage). */
 	isSignedIn(provider: ProviderId): boolean;
 	/**
-	 * Runs the whole sign-in flow for `provider` on this device (client id, consent, the choice of the root folder). Resolves true
-	 * once signed in; false when cancelled or failed (the flow shows its own message). Never throws.
+	 * Runs the whole sign-in flow for `provider` on this device with the user's own OAuth client (consent, then the remote root).
+	 * Resolves true once signed in; false when cancelled or failed (the flow shows its own message). Never throws.
 	 */
-	signIn(provider: ProviderId): Promise<boolean>;
-	/** Forgets this device's sign-in for `provider` (tokens). Never throws. */
-	signOut(provider: ProviderId): Promise<void>;
+	signIn(provider: ProviderId, client: CloudClient): Promise<boolean>;
+	/**
+	 * Forgets this device's sign-in for `provider` (tokens) and tries to revoke it. Never throws. When the revocation did not
+	 * happen, `manageUrl` is where the user can remove the access by hand (the settings say so).
+	 */
+	signOut(provider: ProviderId): Promise<SignOutResult | void>;
 	/** Account label for the settings (e-mail or name), or null when unknown. */
 	accountLabel(provider: ProviderId): string | null;
 	/** Display path of the chosen root folder, or null. */

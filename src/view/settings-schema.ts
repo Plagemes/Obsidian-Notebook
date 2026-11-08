@@ -26,6 +26,7 @@ import { LOOKUP_WIDTH_MAX, LOOKUP_WIDTH_MIN, LOOKUP_WIDTH_STEP } from "../model/
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 import { SYMBOL_COUNT_MAX, SYMBOL_COUNT_MIN } from "../ui/symbol-rank";
+import { CLOUD_INTERVAL_MAX, CLOUD_LARGE_MAX_MB } from "../sync/settings";
 
 export type SettingKey = keyof NotebookSettings;
 
@@ -63,6 +64,8 @@ export interface SettingsContext {
 	sync: boolean;
 	/** The backup service is running (the "Back up now" row). */
 	backups?: boolean;
+	/** 0.22 synccore (#126): the cloud sync service is running. */
+	cloudSync?: boolean;
 	/** The timetable service is running. */
 	timetable: boolean;
 	/** The timetable has at least one class. */
@@ -99,12 +102,14 @@ export const GROUPS: readonly GroupSpec[] = [
 	{ id: "outline", section: "pages", title: "settings.outline", open: (s) => !(s.outlineBookmarks && s.outlineSlides && s.outlineHeadings && s.outlineMarkers) || s.outlinePdf === "off" },
 	{ id: "timetable", section: "study", title: "settings.timetable", open: (_s, ctx) => ctx.timetableInUse },
 	{ id: "zettel", section: "study", title: "settings.zettel", open: (s) => s.zettelSlipBoxes.length > 0 },
+	// 0.22 synccore (#126): the optional cloud connector, open once a service is chosen.
+	{ id: "cloudSync", section: "sync", title: "settings.cloudSync", open: (s) => s.cloudSyncProvider !== "off" },
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
 export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open";
 /** Rows drawn by the tab itself (no stored setting of their own). */
-export type SettingCustomId = "device-name" | "pen-key" | "device-info" | "backup-now";
+export type SettingCustomId = "device-name" | "pen-key" | "device-info" | "backup-now" | "cloud-account" | "cloud-sync-now" | "cloud-log" | "cloud-secret";
 
 export type ControlSpec =
 	| { type: "toggle" }
@@ -393,6 +398,10 @@ const LIBRARY: SettingSpec[] = [
 	{ id: "notebookTemplates", section: "library", group: ADVANCED, order: 22, name: "settings.notebookTemplates", desc: "settings.notebookTemplates.desc", control: { type: "action", run: "notebook-templates-manage", button: "settings.notebookTemplates.button" }, keywords: "template notebooks planner modelli quaderni" },
 ];
 
+// 0.22 synccore (#126): the cloud sync rows show only while the service runs; the options only once a service is chosen.
+const cloudSyncService: Predicate = (_s, ctx) => ctx.cloudSync === true;
+const cloudSyncOn: Predicate = (s, ctx) => ctx.cloudSync === true && s.cloudSyncProvider !== "off";
+
 const SYNC: SettingSpec[] = [
 	{ id: "deviceName", section: "sync", order: 10, name: "settings.deviceName", desc: "settings.deviceName.desc", control: { type: "custom", render: "device-name" }, visible: (_s, ctx) => ctx.sync },
 	{ id: "syncCheck", section: "sync", order: 20, name: "settings.syncCheck", desc: "settings.syncCheck.desc", control: { type: "action", run: "sync-check", button: "sync.check.button" }, visible: (_s, ctx) => ctx.sync },
@@ -406,6 +415,38 @@ const SYNC: SettingSpec[] = [
 	{ id: "zipBackupFolder", section: "sync", order: 31, name: "settings.backupFolder", desc: "settings.backupFolder.desc", control: { type: "folder", placeholder: DEFAULT_SETTINGS.zipBackupFolder }, parent: "zipBackupSchedule", visible: (s, ctx) => ctx.backups === true && s.zipBackupSchedule !== "off" },
 	{ id: "zipBackupKeep", section: "sync", order: 32, name: "settings.backupKeep", desc: "settings.backupKeep.desc", control: { type: "slider", min: 1, max: 30, step: 1 }, parent: "zipBackupSchedule", visible: (s, ctx) => ctx.backups === true && s.zipBackupSchedule !== "off" },
 	{ id: "backupNow", section: "sync", order: 40, name: "settings.backupNow", control: { type: "custom", render: "backup-now" }, keywords: "backup zip now copy safety archive copia di sicurezza adesso", visible: (_s, ctx) => ctx.backups === true },
+	// 0.22 synccore (#126): the optional Google Drive / OneDrive connector (off by default), in its own group of this section.
+	{
+		id: "cloudSyncProvider", section: "sync", group: "cloudSync", order: 10, name: "settings.cloudSyncProvider", desc: "settings.cloudSyncProvider.desc",
+		control: { type: "dropdown", options: options([["off", "settings.cloudSyncProvider.off"], ["gdrive", "settings.cloudSyncProvider.gdrive"], ["onedrive", "settings.cloudSyncProvider.onedrive"]]) },
+		keywords: "cloud google drive onedrive connector account sync connettore account nuvola", visible: cloudSyncService,
+	},
+	// The user's own OAuth client: the id in the settings (the same on every device), Google's secret only on this device.
+	{ id: "cloudSyncGdriveClientId", section: "sync", group: "cloudSync", order: 11, name: "settings.cloudSyncClientId", desc: "settings.cloudSyncClientId.gdrive", control: { type: "text", placeholder: "…apps.googleusercontent.com" }, keywords: "oauth client id google", parent: "cloudSyncProvider", visible: (s, ctx) => cloudSyncOn(s, ctx) && s.cloudSyncProvider === "gdrive" },
+	{ id: "cloudSyncSecret", section: "sync", group: "cloudSync", order: 12, name: "settings.cloudSyncSecret", desc: "settings.cloudSyncSecret.desc", control: { type: "custom", render: "cloud-secret" }, keywords: "oauth client secret google", parent: "cloudSyncProvider", visible: (s, ctx) => cloudSyncOn(s, ctx) && s.cloudSyncProvider === "gdrive" },
+	{ id: "cloudSyncOnedriveClientId", section: "sync", group: "cloudSync", order: 11, name: "settings.cloudSyncClientId", desc: "settings.cloudSyncClientId.onedrive", control: { type: "text", placeholder: "00000000-0000-0000-0000-000000000000" }, keywords: "oauth client id application microsoft azure", parent: "cloudSyncProvider", visible: (s, ctx) => cloudSyncOn(s, ctx) && s.cloudSyncProvider === "onedrive" },
+	{ id: "cloudSyncAccount", section: "sync", group: "cloudSync", order: 13, name: "settings.cloudSyncAccount", control: { type: "custom", render: "cloud-account" }, keywords: "sign in login disconnect accedi disconnetti", parent: "cloudSyncProvider", visible: cloudSyncOn },
+	{ id: "cloudSyncNow", section: "sync", group: "cloudSync", order: 14, name: "settings.cloudSyncNow", control: { type: "custom", render: "cloud-sync-now" }, keywords: "sync now status sincronizza ora stato", parent: "cloudSyncProvider", visible: cloudSyncOn },
+	{
+		id: "cloudSyncScope", section: "sync", group: "cloudSync", order: 20, name: "settings.cloudSyncScope", desc: "settings.cloudSyncScope.desc",
+		control: { type: "dropdown", options: options([["vault", "settings.cloudSyncScope.vault"], ["folders", "settings.cloudSyncScope.folders"], ["rules", "settings.cloudSyncScope.rules"]]) },
+		keywords: "scope folders rules include exclude cartelle regole", parent: "cloudSyncProvider", visible: cloudSyncOn,
+	},
+	{ id: "cloudSyncFolders", section: "sync", group: "cloudSync", order: 21, name: "settings.cloudSyncFolders", desc: "settings.cloudSyncFolders.desc", control: { type: "text", placeholder: "Notebooks, School" }, parent: "cloudSyncScope", visible: (s, ctx) => cloudSyncOn(s, ctx) && s.cloudSyncScope === "folders" },
+	{ id: "cloudSyncInclude", section: "sync", group: "cloudSync", order: 22, name: "settings.cloudSyncInclude", desc: "settings.cloudSyncInclude.desc", control: { type: "text", placeholder: "Notebooks/**, *.pdf" }, keywords: "pattern glob", parent: "cloudSyncScope", visible: (s, ctx) => cloudSyncOn(s, ctx) && s.cloudSyncScope === "rules" },
+	{ id: "cloudSyncExclude", section: "sync", group: "cloudSync", order: 23, name: "settings.cloudSyncExclude", desc: "settings.cloudSyncExclude.desc", control: { type: "text", placeholder: "**/drafts/**, *.zip" }, keywords: "pattern glob", parent: "cloudSyncScope", visible: (s, ctx) => cloudSyncOn(s, ctx) && s.cloudSyncScope === "rules" },
+	{ id: "cloudSyncTypes", section: "sync", group: "cloudSync", order: 24, name: "settings.cloudSyncTypes", desc: "settings.cloudSyncTypes.desc", control: { type: "text", placeholder: "notebook, pdf, png" }, keywords: "extension type estensione tipo", parent: "cloudSyncScope", visible: (s, ctx) => cloudSyncOn(s, ctx) && s.cloudSyncScope === "rules" },
+	{ id: "cloudSyncOnOpen", section: "sync", group: "cloudSync", order: 30, name: "settings.cloudSyncOnOpen", desc: "settings.cloudSyncOnOpen.desc", control: { type: "toggle" }, keywords: "start avvio", parent: "cloudSyncProvider", visible: cloudSyncOn },
+	{ id: "cloudSyncOnClose", section: "sync", group: "cloudSync", order: 31, name: "settings.cloudSyncOnClose", desc: "settings.cloudSyncOnClose.desc", control: { type: "toggle" }, keywords: "quit leave chiusura uscita", parent: "cloudSyncProvider", visible: cloudSyncOn },
+	{ id: "cloudSyncInterval", section: "sync", group: "cloudSync", order: 32, name: "settings.cloudSyncInterval", desc: "settings.cloudSyncInterval.desc", control: { type: "slider", min: 0, max: CLOUD_INTERVAL_MAX, step: 5, format: suffix("min", true) }, keywords: "interval minutes periodic intervallo minuti", parent: "cloudSyncProvider", visible: cloudSyncOn },
+	{ id: "cloudSyncWifiOnly", section: "sync", group: "cloudSync", order: 33, name: "settings.cloudSyncWifiOnly", desc: "settings.cloudSyncWifiOnly.desc", control: { type: "toggle" }, keywords: "wifi mobile data cellular dati mobili rete", parent: "cloudSyncProvider", visible: cloudSyncOn },
+	{
+		id: "cloudSyncLarge", section: "sync", group: "cloudSync", order: 40, name: "settings.cloudSyncLarge", desc: "settings.cloudSyncLarge.desc",
+		control: { type: "dropdown", options: options([["ask", "settings.cloudSyncLarge.ask"], ["skip", "settings.cloudSyncLarge.skip"]]) },
+		keywords: "large big size file grandi dimensione", parent: "cloudSyncProvider", visible: cloudSyncOn,
+	},
+	{ id: "cloudSyncLargeMb", section: "sync", group: "cloudSync", order: 41, name: "settings.cloudSyncLargeMb", desc: "settings.cloudSyncLargeMb.desc", control: { type: "slider", min: 0, max: CLOUD_LARGE_MAX_MB, step: 10, format: suffix("MB", true) }, keywords: "size limit megabytes limite", parent: "cloudSyncLarge", visible: cloudSyncOn },
+	{ id: "cloudSyncLog", section: "sync", group: "cloudSync", order: 50, name: "settings.cloudSyncLog", desc: "settings.cloudSyncLog.desc", control: { type: "custom", render: "cloud-log" }, keywords: "log activity history registro attività", parent: "cloudSyncProvider", visible: cloudSyncOn },
 ];
 
 const companionOn: Predicate = (s) => s.companionNotes;

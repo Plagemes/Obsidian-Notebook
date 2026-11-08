@@ -17806,3 +17806,107 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-slide-back {
 	top: 66px;
 }
+
+/* ===== 0.22 synccore ===== */
+/* #126 cloud sync: the activity log under its settings row, the paths of its two dialogs, the status bar item (desktop). */
+.notebook-settings .setting-item.nb-cloudsync-log-row {
+	flex-wrap: wrap;
+}
+/* The Google client secret: a masked field drawn like the settings' text fields. */
+.nb-ui.nb-cloudsync-secret {
+	min-height: var(--nb-target);
+	padding: 0 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--nb-radius-tile);
+	background-color: var(--background-modifier-form-field);
+	color: var(--text-normal);
+}
+.nb-ui.nb-cloudsync-log {
+	flex: 1 0 100%;
+	box-sizing: border-box;
+	max-height: 240px;
+	overflow-y: auto;
+	margin-top: 8px;
+	padding: 6px 10px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-surface);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+.nb-ui.nb-cloudsync-log .nb-cloudsync-log-line {
+	display: flex;
+	gap: 8px;
+	align-items: baseline;
+	min-width: 0;
+	padding: 3px 0;
+	border-bottom: 1px solid var(--nb-border);
+}
+.nb-ui.nb-cloudsync-log .nb-cloudsync-log-line:last-child {
+	border-bottom: none;
+}
+.nb-ui.nb-cloudsync-log .nb-cloudsync-log-time {
+	flex: none;
+	color: var(--nb-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+.nb-ui.nb-cloudsync-log .nb-cloudsync-log-kind {
+	flex: none;
+	font-weight: 600;
+}
+.nb-ui.nb-cloudsync-log .nb-cloudsync-log-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	color: var(--nb-text-muted);
+}
+.nb-ui.nb-cloudsync-log .is-conflict .nb-cloudsync-log-kind,
+.nb-ui.nb-cloudsync-log .is-run .nb-cloudsync-log-kind {
+	color: var(--nb-accent);
+}
+.nb-ui.nb-cloudsync-log .is-error .nb-cloudsync-log-kind {
+	color: var(--nb-danger);
+}
+.nb-ui.nb-cloudsync-log .nb-cloudsync-log-empty {
+	padding: 4px 0;
+	color: var(--nb-text-muted);
+}
+.nb-ui.nb-cloudsync-modal .nb-cloudsync-path {
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+	align-items: baseline;
+	min-width: 0;
+	padding: 4px 2px;
+	font-size: var(--nb-fs-row);
+	color: var(--nb-text);
+}
+.nb-ui.nb-cloudsync-modal .nb-cloudsync-path-name {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.nb-ui.nb-cloudsync-modal .nb-cloudsync-path-size,
+.nb-ui.nb-cloudsync-modal .nb-cloudsync-more {
+	flex: none;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-variant-numeric: tabular-nums;
+}
+.status-bar-item.nb-ui.nb-cloudsync-bar {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.status-bar-item.nb-ui.nb-cloudsync-bar.notebook-hidden {
+	display: none;
+}
+.status-bar-item.nb-ui.nb-cloudsync-bar .nb-cloudsync-bar-icon {
+	display: inline-flex;
+}
+.status-bar-item.nb-ui.nb-cloudsync-bar .nb-cloudsync-bar-icon svg {
+	width: 14px;
+	height: 14px;
+}
+.status-bar-item.nb-ui.nb-cloudsync-bar.is-attention {
+	color: var(--nb-danger);
+}

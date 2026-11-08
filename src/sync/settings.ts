@@ -33,6 +33,13 @@ export interface CloudSyncSettings {
 	/** Files larger than this (MB) follow `cloudSyncLarge`; 0: no limit. */
 	cloudSyncLargeMb: number;
 	cloudSyncLarge: LargeRule;
+	/**
+	 * The user's own OAuth client id for Google Drive / OneDrive (no client id ships with the plugin). Kept in the settings
+	 * because every device must use the same one (Google's drive.file scope only sees the files of the same client). The Google
+	 * client secret is not here: it stays in this device's local storage (CloudSyncService.clientSecret).
+	 */
+	cloudSyncGdriveClientId: string;
+	cloudSyncOnedriveClientId: string;
 }
 
 export const DEFAULT_CLOUD_SYNC_SETTINGS: CloudSyncSettings = {
@@ -48,6 +55,8 @@ export const DEFAULT_CLOUD_SYNC_SETTINGS: CloudSyncSettings = {
 	cloudSyncWifiOnly: true,
 	cloudSyncLargeMb: 50,
 	cloudSyncLarge: "ask",
+	cloudSyncGdriveClientId: "",
+	cloudSyncOnedriveClientId: "",
 };
 
 const oneOf = <T extends string>(list: readonly T[], v: unknown): v is T => typeof v === "string" && (list as readonly string[]).includes(v);
@@ -69,7 +78,19 @@ export function readCloudSyncSettings(d: Record<string, unknown>): CloudSyncSett
 	if (typeof d.cloudSyncWifiOnly === "boolean") s.cloudSyncWifiOnly = d.cloudSyncWifiOnly;
 	s.cloudSyncLargeMb = clampInt(d.cloudSyncLargeMb, 0, CLOUD_LARGE_MAX_MB) ?? s.cloudSyncLargeMb;
 	if (oneOf(LARGE_RULES, d.cloudSyncLarge)) s.cloudSyncLarge = d.cloudSyncLarge;
+	s.cloudSyncGdriveClientId = text(d.cloudSyncGdriveClientId, 300) ?? s.cloudSyncGdriveClientId;
+	s.cloudSyncOnedriveClientId = text(d.cloudSyncOnedriveClientId, 300) ?? s.cloudSyncOnedriveClientId;
 	return s;
+}
+
+/** The client id entered for `p`, trimmed ("" when none). */
+export function clientIdOf(s: CloudSyncSettings, p: ProviderId): string {
+	return (p === "gdrive" ? s.cloudSyncGdriveClientId : s.cloudSyncOnedriveClientId).trim();
+}
+
+/** Whether `p`'s sign-in also needs a client secret (Google's device flow does; Microsoft's does not). */
+export function needsClientSecret(p: ProviderId): boolean {
+	return p === "gdrive";
 }
 
 /** The provider chosen, or null when cloud sync is off. */

@@ -160,6 +160,36 @@ describe("cloud sync engine, end to end with a fake provider and a fake vault (#
 		expect(local.trashed).toEqual([]);
 	});
 
+	it("a full listing on every run (the providers' index lives in memory) changes and deletes nothing by itself", async () => {
+		const { local, remote, sync } = setup();
+		for (let i = 0; i < 10; i++) local.put(`f${i}.md`, String(i));
+		remote.put("cloud.md", "from the cloud");
+		await sync();
+		remote.alwaysFull = true;
+		const again = await sync();
+		expect(again.outcome).toBe("ok");
+		expect(again.counts).toMatchObject({ up: 0, down: 0, delLocal: 0, delRemote: 0, conflicts: 0 });
+		expect(remote.calls.filter((c) => c.startsWith("upload") || c.startsWith("remove"))).toHaveLength(10);
+		// A file really deleted in the cloud is still seen as deleted (the listing is complete), one at a time.
+		remote.del("f3.md");
+		const one = await sync();
+		expect(one.counts.delLocal).toBe(1);
+		expect(local.files.size).toBe(10);
+	});
+
+	it("a missing cloud folder is an error, never 'everything was deleted'", async () => {
+		const { local, remote, sync } = setup();
+		for (let i = 0; i < 10; i++) local.put(`f${i}.md`, String(i));
+		await sync();
+		// RootMissingError (providers) extends TransientRemoteError.
+		class RootMissingError extends TransientRemoteError {}
+		for (let i = 0; i < 4; i++) remote.failures.push(new RootMissingError("the sync folder is gone"));
+		const r = await sync();
+		expect(["failed", "offline"]).toContain(r.outcome);
+		expect(local.files.size).toBe(10);
+		expect(local.trashed).toEqual([]);
+	});
+
 	it("a corrupt state means a full rescan and no deletions", async () => {
 		const { local, remote, state, sync } = setup();
 		for (let i = 0; i < 5; i++) local.put(`f${i}.md`, String(i));
