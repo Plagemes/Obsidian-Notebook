@@ -769,6 +769,46 @@ describe("#10 library index of the quick switcher (review)", () => {
 		expect(second.dir.index.size).toBe(2);
 	});
 
+	it("a read-only refresh (the Related pages panel) writes nothing, and the next saving refresh writes what it read", async () => {
+		const vault = new FakeVault({ [P]: serialize(sampleDocument(1)), [`${ROOT}/B.notebook`]: serialize(sampleDocument(2)) });
+		const saved = { data: null as unknown, reads: 0 };
+		const writes: string[] = [];
+		const base = host(vault, saved);
+		const counting = { ...base, saveIndex: async (data: unknown) => { writes.push("index"); await base.saveIndex(data); } };
+		const service = new QuickNavService(vault.app, counting, {} as never);
+		const quiet = service.dir.refresh(() => undefined, { save: false });
+		await vi.advanceTimersByTimeAsync(50);
+		await quiet;
+		expect(saved.reads).toBe(2);
+		expect(service.dir.index.size).toBe(2);
+		expect(writes).toEqual([]);
+		expect(saved.data).toBeNull();
+		// The switcher's own refresh finds nothing stale, but still saves what the panel read.
+		await refresh(service);
+		expect(saved.reads).toBe(2);
+		expect(writes).toEqual(["index"]);
+		expect(LibraryIndex.fromJSON(saved.data).size).toBe(2);
+	});
+
+	it("the Related pages source refreshes without saving", async () => {
+		const { createRelatedSource } = await import("../src/view/related-source");
+		const vault = new FakeVault({ [P]: serialize(sampleDocument(1)) });
+		const saved = { data: null as unknown, reads: 0 };
+		const writes: string[] = [];
+		const base = host(vault, saved);
+		const service = new QuickNavService(vault.app, { ...base, saveIndex: async () => void writes.push("index") }, {} as never);
+		const app = Object.assign(Object.create(vault.app as object) as object, {
+			workspace: { getMostRecentLeaf: () => null, getLeavesOfType: () => [] },
+		}) as never;
+		const source = createRelatedSource(app, { quickNav: () => service, timetable: () => null, includeCourse: () => false });
+		const done = source.refresh();
+		await vi.advanceTimersByTimeAsync(50);
+		await done;
+		expect(saved.reads).toBe(1);
+		expect(source.entries()).toHaveLength(1);
+		expect(writes).toEqual([]);
+	});
+
 	it("never saves over an index written by a newer plugin version", async () => {
 		const vault = new FakeVault({ [P]: serialize(sampleDocument(1)) });
 		const newer = { version: INDEX_VERSION + 1, entries: [{ future: true }] };

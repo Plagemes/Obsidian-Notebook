@@ -8,7 +8,7 @@ import { isLinePen, type Page, type PageElement, type Point, type Stroke } from 
  *
  * Both only move the points of a stroke; the stroke keeps its id, its place in the page order (so its layer), its style and every field,
  * the number of points and the pressure of each point, and the points stay [x, y, pressure] in page coordinates. The first and the last
- * point never move. Nothing is stamped (the ink is reshaped, not written now). Who is touched: line pens only (`isLinePen`, so never a
+ * point never move. The moved points are rounded like every other edit does (x and y to 0.01 pt as `quantizePoint` does, so the file stays compact). Nothing is stamped (the ink is reshaped, not written now). Who is touched: line pens only (`isLinePen`, so never a
  * shape, the highlighter or the marker), visible, not bound to a graph, not the ink a collapsed sticky note keeps hidden, and of a group
  * only when the whole group is asked for and holds no locked element. Text, images and area highlights are not strokes and are not touched.
  *
@@ -52,6 +52,11 @@ function cumulative(pts: readonly Point[]): number[] {
 	const out = [0];
 	for (let i = 1; i < pts.length; i++) out.push(out[i - 1]! + Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1]));
 	return out;
+}
+
+/** A reshaped point: x and y rounded to 0.01 pt like the file (and every other edit, `quantizePoint`) does; the pressure is the point's own. */
+function reshaped(x: number, y: number, pressure: number): Point {
+	return [Math.round(x * 100) / 100, Math.round(y * 100) / 100, pressure];
 }
 
 /** Whether `stroke` is handwriting this feature may reshape (before the page-level rules of groups and pinned ink). */
@@ -127,7 +132,7 @@ export function smoothedPoints(stroke: Stroke): Point[] | null {
 		if (d > cap) { dx *= cap / d; dy *= cap / d; }
 		const m = Math.min(d, cap);
 		if (m > moved) moved = m;
-		return [p[0] + dx, p[1] + dy, p[2]] as Point;
+		return reshaped(p[0] + dx, p[1] + dy, p[2]);
 	});
 	return moved < SMOOTH_RULES.minChange ? null : out;
 }
@@ -166,7 +171,7 @@ export function straightenedPoints(stroke: Stroke): Point[] | null {
 		const y = a[1] + cy * s;
 		const d = Math.hypot(x - p[0], y - p[1]);
 		if (d > moved) moved = d;
-		return [x, y, p[2]] as Point;
+		return reshaped(x, y, p[2]);
 	});
 	return moved < STRAIGHT_RULES.minChange ? null : out;
 }

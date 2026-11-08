@@ -11,16 +11,14 @@ import type { InputSettings } from "../ink/input-policy";
 import { visiblePages, type Layout } from "../ink/layout";
 import type { Renderer } from "../ink/renderer";
 import type { Size, Viewport } from "../ink/viewport";
-import { createStroke } from "../model/document";
 import { backgroundRect } from "../model/margins";
-import { freezeStroke } from "../model/serialize";
-import { RENDER_INK, type NotebookDocument, type Page, type Stroke } from "../model/types";
+import type { NotebookDocument, Page, Stroke } from "../model/types";
 import { PageTextCache, runSearch, type SearchHit } from "../pdf/text-index";
 import { boxesOnPage, type PageTextContent, type TextMeasure } from "../pdf/text-items";
 import { hitBoxes, normalizeQuery } from "../pdf/text-search";
-import { bandPoints, bandWidth, snapHighlight } from "../pdf/text-snap";
+import { snapHighlight } from "../pdf/text-snap";
 import { SearchPanel } from "./pdf-search-panel";
-import { backgroundAlpha, hasPdfPages, insertHits, revealViewport, searchTargets, stepIndex, type Rect } from "./reading-logic";
+import { backgroundAlpha, hasPdfPages, insertHits, revealViewport, searchTargets, snappedStrokes, stepIndex, type Rect } from "./reading-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP, normaliseDim, type ReadingSettings } from "./reading-settings";
 import type { Toolbar } from "./toolbar";
 
@@ -486,7 +484,7 @@ export class PdfReading {
 		const boxes = boxesOnPage(cached.content, backgroundRect(page)).filter((b) => b.str.length > 0);
 		const bands = snapHighlight(stroke.points, boxes, this.measure);
 		if (bands.length === 0) return null;
-		return bands.map((band) => freezeStroke(createStroke(stroke.color, bandWidth(band), bandPoints(band), "highlighter", RENDER_INK)));
+		return snappedStrokes(stroke, bands);
 	}
 
 	/** Width of a text in a font, from a canvas: how wide the characters of a run are relative to each other. */

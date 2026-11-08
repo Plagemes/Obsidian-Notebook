@@ -6218,7 +6218,7 @@ export class NotebookView extends FileView {
 				if (page) this.selectFromLasso({ pageIndex, points: polygon }, page);
 			},
 			clearSelection: () => this.clearSelection(),
-			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth }),
+			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth, opacity: normaliseOpacity(this.tools.penOpacity) }),
 			execute: (commands) => {
 				this.commitText();
 				for (const c of commands) this.history.execute(c);
@@ -6707,7 +6707,7 @@ export class NotebookView extends FileView {
 			editable: () => this.editable(),
 			doc: () => this.session?.doc ?? null,
 			captureSelection: () => this.captureSelectionClip(),
-			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth }),
+			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth, opacity: normaliseOpacity(this.tools.penOpacity) }),
 			viewTarget: () => this.pasteTarget(),
 			pageAtClient: (x, y) => this.pageAtClient(x, y),
 			execute: (cmd) => {

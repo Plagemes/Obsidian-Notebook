@@ -40,7 +40,7 @@ export interface PenGestureView {
 	selectionHit(pageIndex: number, local: [number, number]): boolean;
 	selectPolygon(pageIndex: number, polygon: Array<[number, number]>): void;
 	clearSelection(): void;
-	penStyle(): { color: string; width: number };
+	penStyle(): { color: string; width: number; opacity?: number };
 	/** Runs commands as one gesture: one history step each, then the view is refreshed. */
 	execute(commands: Command[]): void;
 	editTags(page: Page): void;
@@ -124,8 +124,10 @@ function gestureInk(v: PenGestureView, trail: readonly TrailPoint[]): GestureInk
 		if (l) pts.push([l[0], l[1], p.p ?? 0.5]);
 	}
 	if (pts.length < 2) return null;
-	const { color, width } = v.penStyle();
-	return { page, stroke: freezeStroke(createStroke(color, width, pts, "pen", RENDER_INK)) };
+	const { color, width, opacity } = v.penStyle();
+	// 0.26 (#358): the stroke left as ink keeps the pen's opacity (absent at full strength).
+	const own = opacity === undefined ? {} : { opacity };
+	return { page, stroke: freezeStroke({ ...createStroke(color, width, pts, "pen", RENDER_INK), ...own }) };
 }
 
 /** Records `effect` after the gesture stroke (see `gestureInk`). Without a stroke the effect is recorded alone. */

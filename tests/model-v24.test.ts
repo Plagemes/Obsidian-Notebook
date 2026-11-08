@@ -176,10 +176,21 @@ describe("format v24: the fields", () => {
 		const r = parsed(JSON.stringify(raw));
 		expect(r.dropped).toBe(5);
 		const page = r.doc.pages[0]!;
-		expect(page.strokes.map((s) => s.opacity)).toEqual([1, OPACITY_MIN, undefined]);
+		expect(page.strokes.map((s) => s.opacity)).toEqual([undefined, OPACITY_MIN, undefined]); // 7 clamps to full strength = no key (Y3), counted
 		expect(page.elements!.map((e) => e.id)).toEqual(["a", "i"]);
 		expect((page.elements![0] as AreaElement).opacity).toBeUndefined();
 		expect((page.elements![1] as ImageElement).opacity).toBe(OPACITY_MIN);
+	});
+
+	it("a value above 1 is read as full strength with no key, so a save never writes opacity 1 (counted as repaired)", () => {
+		const raw = parseRaw(serialize(docWith([area("a", { opacity: 0.5 }), image("i", { opacity: 0.5 })], [stroke("s1", { opacity: 0.5 })])));
+		setAt(raw, ["pages", 0, "strokes", 0, "opacity"], 1.5);
+		setAt(raw, ["pages", 0, "elements", 0, "opacity"], 1000);
+		setAt(raw, ["pages", 0, "elements", 1, "opacity"], 1.0001);
+		const r = parsed(JSON.stringify(raw));
+		expect(r.dropped).toBe(3);
+		const text = serialize(r.doc);
+		expect(text).not.toContain("opacity");
 	});
 });
 

@@ -114,7 +114,7 @@ function starVertices(): Vec[] {
  * A built-in stamp drawn with the shape tool's constant-width ink in the given colour and width (code-generated,
  * so it follows the current pen). Roughly 30 pt wide.
  */
-export function builtinStamp(kind: BuiltinStamp, color: string, width: number, measure: MeasureText = estimateMeasure): ClipContent {
+export function builtinStamp(kind: BuiltinStamp, color: string, width: number, measure: MeasureText = estimateMeasure, opacity?: number): ClipContent {
 	let points: Point[];
 	switch (kind) {
 		case "check":
@@ -127,7 +127,8 @@ export function builtinStamp(kind: BuiltinStamp, color: string, width: number, m
 			points = arrowPoints([2, 12], [36, 12], 11);
 			break;
 	}
-	const stroke = freezeStroke(createStroke(color, width, points, "shape"));
+	// 0.26 (#358): drawn with the pen's opacity like the shape tool's ink (absent at full strength).
+	const stroke = freezeStroke({ ...createStroke(color, width, points, "shape"), ...(opacity === undefined ? {} : { opacity }) });
 	const clip = captureClip([stroke], [], undefined, measure);
 	if (!clip) throw new Error("empty built-in stamp");
 	return normalizeStamp(clip, measure);

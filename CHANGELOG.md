@@ -49,6 +49,14 @@
 - **Read-only.** It reads the library index and the note's metadata only; it never writes to the vault. No format change. A new setting *Related pages: same course* (Integration) turns the course rows off.
 - **Code.** Pure, Node-tested ranking in `src/library/related-pages.ts` (no `obsidian` import); the panel in `src/view/related-view.ts`; what it reads from Obsidian in `src/view/related-source.ts` (reuses the page switcher's index and thumbnails). Tests: `tests/related-pages.test.ts`; harness `doc=related`.
 
+### Review fixes
+- **Opacity is kept where ink is made for you.** *Snap to text lines* gives each snapped highlighter band the opacity the highlighter was drawn with, instead of full strength. The stroke a pen gesture leaves as ink after one Undo, and the built-in stamps (check, star, arrow), use the opacity of the pen in hand.
+- **Opacity above 1 in a file.** A value above 1 is read as full strength and saved with no `opacity` key at all (still counted as repaired), so the app never writes `"opacity":1`.
+- **Tidy up.** A line never ends on top of another line that moves, whatever their horizontal overlap (a short line under the end of a longer one used to count as unrelated below 15 %), also when lines are moved sideways to a common margin. Invisible ink and the ink a collapsed note keeps hidden are in the way like any other ink: a line is not moved onto them.
+- **Smooth and Straighten.** Reshaped points are rounded to 0.01 pt like every other edit, so a reshaped stroke takes no more room in the file than before.
+- **Pen width follows zoom.** The stored width is rounded to 0.01.
+- **Related pages.** Opening the panel or its refresh button no longer writes the library index file. The notebooks it reads stay in memory and are saved by the next page switcher refresh.
+
 ## 0.25.0 — 2026-11-08
 
 Seven features and a first part of the history: an area highlighter, a panel of the actions you took, align to baseline, lecture and study writing profiles, copy as image, a toolbar that fades while you write, a suggested paper for a new page and a page navigator view of marked pages only. The notebook format moves to version 23 (the area highlighter): the migration from version 22 is automatic, and 0.24 and older open a v23 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

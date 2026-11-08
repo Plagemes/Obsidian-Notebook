@@ -51,7 +51,8 @@ export function createRelatedSource(app: App, deps: RelatedSourceDeps): RelatedS
 		},
 		entries: () => deps.quickNav()?.dir.index.all() ?? [],
 		refresh: async () => {
-			await deps.quickNav()?.dir.refresh(() => undefined);
+			// Read-only: the panel brings the index up to date in memory and never writes the library index file.
+			await deps.quickNav()?.dir.refresh(() => undefined, { save: false });
 		},
 		classes: () => deps.timetable()?.entries ?? [],
 		includeCourse: deps.includeCourse,

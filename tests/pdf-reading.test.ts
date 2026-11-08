@@ -5,7 +5,7 @@ import { bandPoints, bandWidth, snapHighlight } from "../src/pdf/text-snap";
 import { PageTextCache, runSearch, type PdfTextSource, type SearchHit } from "../src/pdf/text-index";
 import { boxesOnPage, prefixShare, textBoxes, type PageTextContent, type TextBox } from "../src/pdf/text-items";
 import { assemblePageText, findInPage, hitBoxes, mergeLineBoxes, normalizeQuery, normalizeText, snippetOf } from "../src/pdf/text-search";
-import { backgroundAlpha, hasBackgrounds, hasPdfPages, insertHits, revealViewport, searchTargets, stepIndex } from "../src/view/reading-logic";
+import { backgroundAlpha, hasBackgrounds, hasPdfPages, insertHits, revealViewport, searchTargets, snappedStrokes, stepIndex } from "../src/view/reading-logic";
 import { DEFAULT_DIM, DIM_MAX, DIM_MIN, normaliseDim, readReadingSettings } from "../src/view/reading-settings";
 import { readSettings } from "../src/settings";
 
@@ -242,6 +242,19 @@ describe("snapHighlight", () => {
 		expect(bands[0]!.x1).toBeCloseTo(135, 5);
 		const vertical: TextBox = { str: "rotated", x: 50, y: 100, width: 10, height: 80 };
 		expect(snapHighlight(stroke([55, 120]), [vertical, run("   ", 0, 100)])).toEqual([]);
+	});
+
+	it("snapped bands keep the colour and the opacity of the highlighter stroke they replace (Y1)", () => {
+		const bands = snapHighlight(stroke([102, 104], [180, 104], [102, 124], [180, 124]), boxes);
+		expect(bands.length).toBeGreaterThan(1);
+		const faint = snappedStrokes({ color: "#facc15", opacity: 0.4 }, bands);
+		expect(faint).toHaveLength(bands.length);
+		for (const s of faint) {
+			expect(s).toMatchObject({ tool: "highlighter", color: "#facc15", opacity: 0.4 });
+			expect(s.width).toBeGreaterThan(0);
+		}
+		// Full strength stays a file without the key.
+		for (const s of snappedStrokes({ color: "#facc15" }, bands)) expect("opacity" in s).toBe(false);
 	});
 
 	it("turns a band into a horizontal highlighter stroke of the band's height", () => {

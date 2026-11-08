@@ -30,7 +30,7 @@ export interface StampHost {
 	/** Copy of the lasso selection with its assets, or null when nothing is selected. */
 	captureSelection(): ClipContent | null;
 	/** Colour and width of the current pen (the built-in stamps are drawn with them). */
-	penStyle(): { color: string; width: number };
+	penStyle(): { color: string; width: number; opacity?: number };
 	/** The page in view and the centre of the view on it: where a tap puts a stamp. */
 	viewTarget(): StampTarget | null;
 	/** The page under a screen point, or null when the point is not over the page area. */
@@ -147,7 +147,7 @@ export class StampPalette {
 		const style = this.host.penStyle();
 		this.section(t("stamps.builtin"), BUILTIN_STAMPS.map((kind): Tile => ({
 			key: `builtin:${kind}`, name: t(BUILTIN_LABELS[kind]),
-			clip: builtinStamp(kind, style.color, style.width, measureText), file: null, error: "",
+			clip: builtinStamp(kind, style.color, style.width, measureText, style.opacity), file: null, error: "",
 		})));
 		const mine = this.section(t("stamps.mine"), this.personal);
 		if (this.personal.length === 0) mine.createDiv({ cls: "notebook-stamp-empty", text: t("stamps.empty") });
