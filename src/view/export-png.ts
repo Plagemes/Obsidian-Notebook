@@ -8,6 +8,7 @@ import { uniqueFileName } from "../model/export-markdown";
 import { planPageImages, scaleDpi } from "../model/export-pages";
 import type { Page } from "../model/types";
 import type { ExportOptions } from "./export";
+import { announceRedaction, withRedaction } from "./export-redact";
 import { recordPluginWrite } from "../storage/plugin-written";
 import { prepareExportFolder } from "./export-markdown";
 import type { NotebookMedia } from "./media";
@@ -24,9 +25,11 @@ export interface PngExportRequest {
 }
 
 /** Writes the images; returns the folder they went to, or null when nothing was written because it failed at once. */
-export async function exportPngPages(app: App, pages: readonly Page[], request: PngExportRequest, media: NotebookMedia | null, options: ExportOptions = {}): Promise<string | null> {
+export async function exportPngPages(app: App, allPages: readonly Page[], request: PngExportRequest, media: NotebookMedia | null, base: ExportOptions = {}): Promise<string | null> {
 	const working = showNotice(t("export.working"), 0);
 	let written = 0;
+	// 0.26 (#285): the pages with the redaction boxes applied (the page images, the split into sheets and the background all follow the copies).
+	const { pages, options } = withRedaction(allPages, base);
 	const renderer = new PageImageRenderer(media, {
 		...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}),
 		...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
@@ -77,6 +80,7 @@ export async function exportPngPages(app: App, pages: readonly Page[], request: 
 		}
 		const path = dir === "" ? "/" : dir;
 		showNotice(t("export.png.done", { n: String(written), path }), 8000);
+		announceRedaction(chosen.map((i) => allPages[i]!), base);
 		if (skipped > 0) showNotice(t("export.skipped", { n: String(skipped) }), 8000);
 		return path;
 	} catch (e) {

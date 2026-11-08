@@ -3980,3 +3980,36 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Pure marked-page logic (kinds, reasons, counts) | yes | `tests/nav-marked.test.ts` | | | markers resolved (done) still count as marked |
 | Per-notebook choice in bounded device-local storage (corrupt falls back to all pages) | yes | `tests/nav-marked.test.ts`; harness `doc=markedview` | | | |
 | Marked-only list with badges, sub-filters by kind, empty message, long-press help | yes | harness `doc=markedview` | | | |
+### 0.26 — redact: redaction before export (roadmap #285; steps 2840-2859)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a stylus). Use a notebook with a typed name and an account number on a page, handwriting over them, a sticky note, an equation and a picture; and one page on a scanned or PDF background with printed text. For the files, open them in another app (PDF reader, browser) and also search their text for the covered words.
+
+2840. **Open.** Notebook menu, *Export…*: a row *Cover parts of the page* with a *Redact…* button. Long-press the button: the explanation appears (English and Italian). The *Apply the boxes* switch is not there while there are no boxes.
+2841. **Draw.** Tap *Redact…*: a picture of the current page. Drag with the pen (or the mouse) over the typed name: a dashed outline, then the picture is drawn again and the name is gone under a black box. Drag over the handwriting too.
+2842. **Finger.** With *Draw with finger* on, a finger draws a box; switch it off (long-press shows what it does): a finger scrolls the page and draws nothing. On a tall (infinite) page it starts off.
+2843. **Edit.** The cross on a box removes it (the covered content comes back in the picture); *Undo last box*, *Clear page* and *Clear all* work; the arrows move between pages and the counts follow. A tap draws nothing.
+2844. **Back in the dialog.** *Done*: the row says how many boxes on how many pages and the switch *Apply the boxes* is on, with a note about what happens to content and backgrounds.
+2845. **PDF.** Export a PDF. Open it: black boxes where you drew; nothing of the covered words can be selected, searched or found by copying all the text; ink is cut at the box edges; the note, equation and picture under a box are gone, not just hidden. Delete the black box in an editor if you can: there is nothing under it.
+2846. **Scanned or PDF page.** Export a page that has a PDF or scanned background: the page is one flat picture with the box burned in. The text of that page can no longer be selected (the trade-off); outside the boxes the page looks as before.
+2847. **Other formats.** SVG (open it in a text editor and search for the covered words), interactive HTML, PNG images, *Background only* (the box is in the picture although no ink is drawn), *Ink only* (a transparent picture with the box), a page range, a clean copy, *Split into sheets* on an infinite page: none shows or contains what was covered. Print preview shows the boxes.
+2848. **Switch off.** Turn *Apply the boxes* off and export: everything is there, and the boxes are still kept for next time. Turn it on again.
+2849. **Other exports.** With the switch on: *Hand in…*, *Share page…*, *Export as Markdown* (the text of covered text boxes and the bookmark title of a covered page are not in the note), *Export written area / selection*, *Copy as image* and a quick page export from the page menu each cover the boxes and say so in a notice. Inserting a selection into a note or making a task from one shows the covered page too.
+2850. **Selection.** Select a handwritten word that is partly under a box and *Copy as image*: only the part outside the box is in the picture; a box elsewhere on the page does not widen the picture.
+2851. **Per device.** Close and reopen the notebook, restart Obsidian: the boxes and the switch are still there on this device; open the same notebook on another device: no boxes there. Open another notebook: none.
+2852. **The notebook.** Nothing in the notebook changes: no undo step, no change in the file, the page looks the same on screen; the boxes appear only in the Redact preview and in exports.
+2853. **Comments and header.** A margin comment anchored on a box is not in the PDF notes strip; a comment away from the box is. With a page header turned on for exports, a box over the header leaves the header out of that page.
+2854. **Limits.** Draw more than 60 boxes on one page: a notice says so. A very large set does not slow the export dialog.
+2855. **Not covered.** *Export PDF annotations* (it writes the text of the PDF under highlights) and *Extract pages* ignore the boxes: this is by design and documented.
+2856. **Long press.** In the Redact dialog long-press each of the arrows, the four buttons and a box's cross: each shows a bubble in the language of the interface.
+2857. **Looks.** Light and dark theme, phone and tablet width: the dialog fits, the page fits the screen without sideways scrolling, the buttons wrap.
+2858. **Italian.** Switch to Italian: all texts are translated.
+2859. **Pen button.** While the Redact dialog is open the S Pen side button does nothing special on the preview (the dialog is not a notebook page).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Boxes per page (draw, undo, remove, clear), lenient bounded model, per-notebook device-local storage (corrupt reads as empty), switch to apply | yes | `tests/redact.test.ts`, `tests/redact-store.test.ts`; harness `doc=redact` (the real dialog and its row) | | | |
+| Ink cut at a box with the pen's reach; whole elements dropped (text, picture, equation, graph, box, note, marker, checkbox, excerpt); area highlighter cut round the box; comments, header, tags and states; ink bound to a dropped graph; hidden note ink | yes | `tests/redact.test.ts` (every rule, idempotence, original untouched) | | | text of a half-covered text box goes whole (documented) |
+| A SECRET marker must not be in any byte of the PDF (text, note, equation, box title, comment, scanned background), SVG, interactive HTML, hand-in PDF, area picture and Markdown | yes | `tests/redact-export.test.ts` (each with a control that does contain the marker without redaction) | | | |
+| PDF / picture background burned in (PDF, SVG, HTML, PNG, print, Markdown, share, area), also in a background-only export; the cached page is not changed | yes | burn plan and fake media in `tests/redact-export.test.ts`; pixels (PNG renderer, JPEG, area PNG) in harness `doc=redact` | | | pages with a PDF background lose their text layer (trade-off) |
+| Where it applies: export dialog (switch decides), hand-in, share, Markdown, area / copy as image, quick page exports, pictures put into notes, highlights digest | yes | `tests/redact-export.test.ts`; harness `doc=redact` | | | PDF annotation digest, extract pages, auto PDF copy not covered |
+| Long-press help (English and Italian) on every new control; Italian texts | yes | harness `doc=redact`; i18n parity tests | | | |

@@ -103,6 +103,10 @@ import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
 import { SharePageModal, type ShareHost } from "./share-page"; // 0.20 (#30)
 import { exportPdf, runExport, type ExportOptions } from "./export";
+import { withRedaction } from "./export-redact"; // 0.26 redact (#285)
+import { RedactModal } from "./redact-dialog";
+import { loadRedactState, saveRedactState } from "../ui/redact-store";
+import { isArmed, type RedactState } from "../model/redact";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
@@ -2463,8 +2467,41 @@ export class NotebookView extends FileView {
 			canPrint: canPrint(),
 			...(initialFormat ? { initialFormat } : {}),
 			pages: () => this.renderPagesOf(doc),
+			// 0.26 (#285): the redaction boxes of this notebook on this device, and the dialog where they are drawn.
+			redact: {
+				state: () => this.redactState(),
+				save: (state) => this.saveRedact(state),
+				edit: (closed) => this.openRedact(Math.min(doc.pages.length - 1, Math.max(0, pageIndex ?? this.currentPageIndex())), closed),
+			},
 			run: (request) => void runExport(this.app, file, this.renderPagesOf(doc), request, this.media, this.exportOptions()),
 		}).open();
+	}
+
+	/** 0.26 (#285): what is remembered for this notebook on this device: the redaction boxes and whether exports apply them. */
+	private redactState(): RedactState {
+		return loadRedactState(this.app, this.session?.doc?.id);
+	}
+
+	private saveRedact(state: RedactState): void {
+		saveRedactState(this.app, this.session?.doc?.id, state);
+	}
+
+	/** 0.26 (#285): the dialog where boxes are drawn over the parts of the pages that must not leave the notebook (nothing in the notebook changes). */
+	private openRedact(pageIndex: number, closed: () => void): void {
+		const doc = this.session?.doc;
+		if (!doc) return;
+		const options = this.exportOptions();
+		new RedactModal({
+			app: this.app, media: this.media, options, pageIndex, initial: this.redactState().boxes,
+			pages: () => this.renderPagesOf(doc),
+			commit: (boxes) => this.saveRedact({ on: this.redactState().on, boxes }),
+			closed,
+		}).open();
+	}
+
+	/** The page as an export draws it, with the redaction boxes of this notebook applied when they are on (pictures that go into notes use it). */
+	private redactedPage(page: Page): Page {
+		return withRedaction([page], this.exportOptions()).pages[0] ?? page;
 	}
 
 	/** 0.23 (#280): the dialog that exports the written area of the current page, or the selection, as a transparent PNG or SVG. */
@@ -2572,7 +2609,7 @@ export class NotebookView extends FileView {
 		if (!bounds || !page || !shown) return;
 		const options = this.exportOptions();
 		void runInsertIntoNote({
-			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media, kind,
+			app: this.app, file, settings: this.host.settings, page: this.redactedPage(shown), pageNumber: sel.pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media, kind,
 			exportOptions: options,
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
@@ -2594,7 +2631,7 @@ export class NotebookView extends FileView {
 		const crop = taskCropRect(bounds, page);
 		const options = this.exportOptions();
 		new MakeTaskModal(this.app, this.host.settings, sel.pageIndex + 1, (request) => void runMakeTask({
-			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop, media: this.media,
+			app: this.app, file, settings: this.host.settings, page: this.redactedPage(shown), pageNumber: sel.pageIndex + 1, crop, media: this.media,
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
@@ -2628,7 +2665,7 @@ export class NotebookView extends FileView {
 				if (!page || !shown) return;
 				const options = this.exportOptions();
 				void runInsertIntoNote({
-					app: this.app, file, settings: this.host.settings, page: shown, pageNumber: index + 1, media: this.media, kind: "png", exportOptions: options,
+					app: this.app, file, settings: this.host.settings, page: this.redactedPage(shown), pageNumber: index + 1, media: this.media, kind: "png", exportOptions: options,
 					crop: taskCropRect({ minX: entry.x, minY: entry.y, maxX: entry.x + entry.width, maxY: entry.y + entry.height }, page),
 					render: {
 						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
@@ -2660,7 +2697,7 @@ export class NotebookView extends FileView {
 		const crop = taskCropRect(bounds, page);
 		const options = this.exportOptions();
 		new LookUpWordModal(this.app, sel.pageIndex + 1, (word) => void runLookUp({
-			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop, media: this.media,
+			app: this.app, file, settings: this.host.settings, page: this.redactedPage(shown), pageNumber: sel.pageIndex + 1, crop, media: this.media,
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
@@ -2773,7 +2810,8 @@ export class NotebookView extends FileView {
 		const doc = this.session?.doc;
 		const file = this.file;
 		if (!doc || !file) return;
-		const pages = [...this.renderPagesOf(doc)];
+		// 0.26 (#285): the digest's pictures are drawn from the pages with the redaction boxes applied.
+		const pages = [...withRedaction(this.renderPagesOf(doc), this.exportOptions()).pages];
 		if (digestCounts(pages).regions === 0) {
 			showNotice(t("digest.none"), 6000);
 			return;
@@ -2834,6 +2872,8 @@ export class NotebookView extends FileView {
 	exportOptions(): ExportOptions {
 		const doc = this.session?.doc;
 		const header = this.exportHeader();
+		const stored = this.redactState();
+		const redact = isArmed(stored) ? stored : null;
 		return {
 			hiddenInk: (page) => this.markers?.isRevealed(page) ?? false, boxLabel: translatedBoxLabel,
 			// v9: equations without a cached outline are typeset first; numbers count over the whole notebook.
@@ -2842,6 +2882,8 @@ export class NotebookView extends FileView {
 			...(header ? { header } : {}),
 			// 0.18 (#86): the margin comments as notes in the PDF, when the setting asks for them.
 			...(this.host.settings.commentsInPdf ? { comments: pdfCommentLabels() } : {}),
+			// 0.26 (#285): the redaction boxes of this notebook, when the reader has them switched on (every writer applies them to its pages).
+			...(redact ? { redact: redact.boxes } : {}),
 		};
 	}
 
@@ -3056,7 +3098,7 @@ export class NotebookView extends FileView {
 		if (!doc || !file || !page || !shown) return Promise.resolve(null);
 		const options = this.exportOptions();
 		return runMakeTask({
-			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media,
+			app: this.app, file, settings: this.host.settings, page: this.redactedPage(shown), pageNumber: pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media,
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
@@ -3602,7 +3644,9 @@ export class NotebookView extends FileView {
 				if (indices.length > 0) await runMovePages(ctx, this.host.settings, indices);
 			},
 			exportPages: async (pages, suffix) => {
-				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media);
+				// 0.26 (#285): no other option is passed here, but the redaction boxes of the notebook still cover what the file would show.
+				const stored = this.redactState();
+				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media, isArmed(stored) ? { redact: stored.boxes } : {});
 			},
 		};
 	}

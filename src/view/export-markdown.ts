@@ -6,10 +6,13 @@ import { normalizePath, TFile, TFolder, type App } from "obsidian";
 import { t } from "../i18n";
 import type { PdfCommentLabels } from "../ink/export-pdf";
 import type { BoxLabel } from "../ink/marker-render";
+import { metaWithoutRedactedTitles, redactPages } from "../ink/redact";
 import { buildNotebookMarkdown, planMarkdownFiles, type MarkdownDpi } from "../model/export-markdown";
+import { countBoxes, type Redactions } from "../model/redact";
 import type { NotebookDocument, Page } from "../model/types";
 import { ensureFolder } from "../storage/vault-io";
 import { recordPluginWrite } from "../storage/plugin-written";
+import { announceRedaction } from "./export-redact";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { PageImageRenderer } from "./page-images";
@@ -26,6 +29,8 @@ export interface MarkdownExportOptions {
 	equationNumbers?: ReadonlyMap<string, number>;
 	/** v16: when given (the setting *Include comments in exports* is on), the margin comments are listed below each page's text. */
 	comments?: PdfCommentLabels;
+	/** 0.26 (#285): redaction boxes by page id: the pages are drawn without what they cover, and so is the text written below them. */
+	redact?: Redactions;
 }
 
 /** The folder suggested for the export of `notebook`: next to it, named after it. */
@@ -68,8 +73,11 @@ export async function prepareExportFolder(app: App, folder: string): Promise<{ d
  * Writes the export and reports the result with a notice. Returns the path of notebook.md, or null when it failed.
  * Pages are rendered one after the other, so memory stays at one page.
  */
-export async function exportMarkdown(app: App, notebook: TFile, doc: NotebookDocument, media: NotebookMedia | null, options: MarkdownExportOptions): Promise<string | null> {
+export async function exportMarkdown(app: App, notebook: TFile, source: NotebookDocument, media: NotebookMedia | null, options: MarkdownExportOptions): Promise<string | null> {
 	const working = showNotice(t("export.working"), 0);
+	// 0.26 (#285): the text boxes, equations, notes and comments under a box are not written, nor are the bookmark titles of a covered page.
+	const covered = options.redact && countBoxes(options.redact) > 0 ? redactPages(source.pages, options.redact) : source.pages;
+	const doc: NotebookDocument = covered === source.pages ? source : { ...source, pages: [...covered], meta: metaWithoutRedactedTitles(source.meta, covered) ?? source.meta };
 	let written = 0;
 	const renderer = new PageImageRenderer(media, {
 		...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}),
@@ -99,6 +107,7 @@ export async function exportMarkdown(app: App, notebook: TFile, doc: NotebookDoc
 		const path = normalizePath(`${prefix}${names.markdown}`);
 		await app.vault.create(path, text);
 		showNotice(t("export.markdown.done", { n: String(written), path }), 8000);
+		announceRedaction(source.pages, options);
 		if (skipped > 0) showNotice(t("export.skipped", { n: String(skipped) }), 8000);
 		return path;
 	} catch (e) {

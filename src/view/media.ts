@@ -8,6 +8,8 @@ import { equationNumbers } from "../model/math-elements";
 import type { Asset, AssetKind, ExcerptElement, NotebookDocument, Page, Stroke } from "../model/types";
 import { assetExtension, assetPath, assetsFolder, kindFromName } from "../pdf/assets";
 import { assetIdFromHash, sha256Hex } from "../pdf/hash";
+import { burnPixelRects, type BurnPlan } from "../ink/redact";
+import { burnedCanvas } from "./burn";
 import type { PdfLib } from "../pdf/pdfjs-types";
 import { isAbortError, PdfStore } from "../pdf/pdf-store";
 import { ensureFolder } from "../storage/vault-io";
@@ -434,24 +436,36 @@ export class NotebookMedia implements MediaSource {
 		return c;
 	}
 
-	/** JPEG of a PDF page at `dpi`, for exports. */
-	async pdfPageJpeg(asset: string, page: number, dpi = 200): Promise<{ jpeg: Uint8Array; pixelWidth: number; pixelHeight: number }> {
+	/**
+	 * JPEG of a PDF page at `dpi`, for exports. 0.26 (#285): with `burn` the redaction boxes are painted black on a COPY of the page picture
+	 * before it is encoded (the cached picture of the PDF store keeps its pixels), so what they cover is not in the JPEG.
+	 */
+	async pdfPageJpeg(asset: string, page: number, dpi = 200, burn?: BurnPlan): Promise<{ jpeg: Uint8Array; pixelWidth: number; pixelHeight: number }> {
 		const canvas = await this.pdf.render(asset, page, dpi / 72);
-		return canvasToJpeg(canvas);
+		if (!burn) return canvasToJpeg(canvas);
+		const copy = burnedCanvas(canvas, canvas.width, canvas.height, burnPixelRects(burn.boxes, burn.rect, canvas.width, canvas.height));
+		try {
+			return await canvasToJpeg(copy);
+		} finally {
+			copy.width = 0;
+			copy.height = 0;
+		}
 	}
 
-	/** JPEG of an image asset (any browser-decodable format), for exports. */
-	async imageJpeg(asset: string): Promise<{ jpeg: Uint8Array; pixelWidth: number; pixelHeight: number }> {
+	/** JPEG of an image asset (any browser-decodable format), for exports; `burn` as in `pdfPageJpeg`. */
+	async imageJpeg(asset: string, burn?: BurnPlan): Promise<{ jpeg: Uint8Array; pixelWidth: number; pixelHeight: number }> {
 		const bmp = await createImageBitmap(new Blob([await this.readAsset(asset)]));
-		const c = createEl("canvas");
-		c.width = bmp.width;
-		c.height = bmp.height;
-		const ctx = c.getContext("2d");
-		if (!ctx) throw new Error("Canvas 2D is not available");
-		ctx.fillStyle = "#ffffff";
-		ctx.fillRect(0, 0, c.width, c.height);
-		ctx.drawImage(bmp, 0, 0);
-		return canvasToJpeg(c);
+		try {
+			const c = burnedCanvas(bmp, bmp.width, bmp.height, burn ? burnPixelRects(burn.boxes, burn.rect, bmp.width, bmp.height) : []);
+			try {
+				return await canvasToJpeg(c);
+			} finally {
+				c.width = 0;
+				c.height = 0;
+			}
+		} finally {
+			bmp.close();
+		}
 	}
 
 	destroy(): void {
