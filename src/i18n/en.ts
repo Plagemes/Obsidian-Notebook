@@ -4680,6 +4680,7 @@ export const en = {
 	"histpanel.notice.back": "Went back {n} steps.",
 	"histpanel.notice.forward": "Went forward {n} steps.",
 	"histpanel.notice.stopped": "Stopped after {done} of {total} steps: the next step was refused.",
+	"histpanel.notice.interrupted": "The jump was interrupted because the notebook was closed or reloaded: {done} of {total} steps were taken.",
 	"histpanel.notice.gone": "That step is no longer in the history.",
 	"histpanel.notice.busy": "Finish what you are drawing first.",
 	"histpanel.working": "Going to that step: {done} of {total}. Please wait.",

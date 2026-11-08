@@ -96,7 +96,7 @@ import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./high
 import { MeaningTools } from "./colour-meaning";
 import { SavedViewTools } from "./saved-views";
 import { HistoryTools } from "./history-tools";
-import { finishJump, JumpRunner, type JumpResult, type JumpTarget } from "../model/history-jump";
+import { continueLongJump, JumpRunner, type JumpResult, type JumpTarget } from "../model/history-jump";
 import type { MeaningsStore } from "../library/meanings-store";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -1563,7 +1563,7 @@ export class NotebookView extends FileView {
 			},
 			{
 				busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null
-					|| this.textEditor?.isOpen === true,
+					|| this.textEditor?.isOpen === true || this.jumping !== null,
 				journal: this.host.journal,
 				// The first slice waits for the frame that paints the page just shown (but not for long: no frames come while hidden).
 				yieldTask: (fn, first) => {
@@ -1908,8 +1908,11 @@ export class NotebookView extends FileView {
 		this.pageOffer?.cancel();
 		// A short jump is over inside the first slice and is exactly the jump it always was. A long one on a large notebook (every step checks the
 		// whole document) goes on slice by slice, with the screen free between them, the notebook locked against edits and the panel showing progress.
+		const session = this.session;
+		const doc = session?.doc;
 		const runner = new JumpRunner(this.history, target);
-		if (!runner.advance(JUMP_SLICE_MS)) return this.continueJump(runner, progress);
+		const over = runner.advance(JUMP_SLICE_MS);
+		if (!over && session && doc) return this.continueJump(runner, session, doc, progress);
 		const result = runner.result();
 		// A step the history refused leaves the document as it was, but may have left the stacks changed: the buttons follow either way.
 		if (result.done > 0) this.afterHistoryChange();
@@ -1917,29 +1920,36 @@ export class NotebookView extends FileView {
 		return result;
 	}
 
-	/** The rest of a long jump (see `jumpHistoryTo`); a notebook that is closed or replaced meanwhile stops it where it is. */
-	private async continueJump(runner: JumpRunner, progress?: (done: number, wanted: number) => void): Promise<JumpResult> {
+	/**
+	 * The rest of a long jump (see `jumpHistoryTo`). It is a change of the document like an Undo: every slice marks the session changed (debounced
+	 * save, a file change meanwhile is kept against and backed up, a close saves the steps taken), and the session is busy until it ends. A notebook
+	 * that is closed, reloaded or replaced by another file stops it where it is, and then nothing here touches the new session.
+	 */
+	private continueJump(runner: JumpRunner, session: DocumentSession, doc: NotebookDocument, progress?: (done: number, wanted: number) => void): Promise<JumpResult> {
 		this.jumping = runner;
 		this.updateHistoryButtons();
-		const result = await finishJump(runner, {
+		const same = (): boolean => this.jumping === runner && this.session === session && session.doc === doc;
+		return continueLongJump(runner, {
 			budgetMs: JUMP_SLICE_MS,
 			yieldToUi: () => new Promise<void>((resolve) => window.setTimeout(resolve, 0)),
+			alive: same,
+			changed: () => {
+				if (!this.userReadOnly) session.markChanged();
+			},
 			// The document changed under the view between two slices: lay the pages out again so a frame drawn meanwhile never meets a page that is gone.
 			progress: (done, wanted) => {
 				this.refreshLayout();
 				progress?.(done, wanted);
 			},
-			keepGoing: () => this.jumping === runner,
+			release: (alive) => {
+				if (this.jumping === runner) this.jumping = null;
+				if (!alive) return;
+				if (runner.done > 0) this.afterHistoryChange();
+				else this.updateHistoryButtons();
+				// A file change that came while the session was busy is looked at now.
+				session.gestureEnded();
+			},
 		});
-		if (this.jumping !== runner) {
-			// Closed or replaced: whatever was taken stays in the document, which the session saves with it.
-			if (result.done > 0 && !this.userReadOnly) this.session?.markChanged();
-			return result;
-		}
-		this.jumping = null;
-		if (result.done > 0) this.afterHistoryChange();
-		else this.updateHistoryButtons();
-		return result;
 	}
 
 	// --- pens: favourites, tools, pen-only (hotkey commands) ---

@@ -4682,6 +4682,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"histpanel.notice.back": "Tornato indietro di {n} passi.",
 	"histpanel.notice.forward": "Andato avanti di {n} passi.",
 	"histpanel.notice.stopped": "Fermato dopo {done} passi su {total}: il passo successivo è stato rifiutato.",
+	"histpanel.notice.interrupted": "Il salto è stato interrotto perché il quaderno è stato chiuso o ricaricato: fatti {done} passi su {total}.",
 	"histpanel.notice.gone": "Quel passo non è più nello storico.",
 	"histpanel.notice.busy": "Finisci prima ciò che stai disegnando.",
 	"histpanel.working": "Vado a quel passo: {done} di {total}. Attendi.",

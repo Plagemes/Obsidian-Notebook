@@ -17,6 +17,8 @@ export interface JumpResult {
 	done: number;
 	/** The step is no longer in the history (it was undone past, dropped or refused since the list was drawn). */
 	gone: boolean;
+	/** The jump was ended from outside before it was over (the notebook was closed or replaced): nothing was refused. */
+	stopped?: true;
 }
 
 /** The part of `History` a jump needs (a test can give a smaller one). */
@@ -114,5 +116,51 @@ export async function finishJump(runner: JumpRunner, pacing: JumpPacing): Promis
 		runner.advance(pacing.budgetMs, pacing.now);
 		pacing.progress?.(runner.done, runner.wanted);
 	}
-	return runner.result();
+	const result = runner.result();
+	return runner.finished ? result : { ...result, stopped: true };
+}
+
+/** What the view gives a long jump: the lock it holds and the session it saves into. */
+export interface LongJumpHost extends Omit<JumpPacing, "progress" | "keepGoing"> {
+	/** Still the same jump on the same notebook (not closed, not reloaded, not replaced by another file). */
+	alive(): boolean;
+	/** Steps were taken: the session must treat the document as changed, exactly as after an ordinary Undo (debounced save, conflict handling, flush on close). */
+	changed(): void;
+	/** After every slice that is still alive (lay the pages out again, show the progress). */
+	progress?(done: number, wanted: number): void;
+	/** Always called when the jump ends, however it ends (also when a slice threw): release the edit lock. `alive`: it is still this notebook's jump. */
+	release(alive: boolean): void;
+}
+
+/**
+ * The rest of a long jump after its first slice. Every slice that took steps marks the document changed (so an external change meanwhile is
+ * kept against, a close saves the steps already taken); a jump that is no longer alive stops and touches nothing; whatever happens, the lock
+ * is released.
+ */
+export async function continueLongJump(runner: JumpRunner, host: LongJumpHost): Promise<JumpResult> {
+	let marked = 0;
+	const mark = (): void => {
+		if (runner.done > marked) {
+			marked = runner.done;
+			host.changed();
+		}
+	};
+	try {
+		return await finishJump(runner, {
+			budgetMs: host.budgetMs,
+			now: host.now,
+			yieldToUi: host.yieldToUi,
+			progress: (done, wanted) => {
+				if (!host.alive()) return;
+				mark();
+				host.progress?.(done, wanted);
+			},
+			keepGoing: () => host.alive(),
+		});
+	} finally {
+		const alive = host.alive();
+		// A slice that threw after some steps: they are in the document and must be saved.
+		if (alive) mark();
+		host.release(alive);
+	}
 }

@@ -503,6 +503,7 @@ describe("the rows of the panel", () => {
 		expect(jumpNotice({ direction: "undo", wanted: 3, done: 3, gone: false })).toBe("Went back 3 steps.");
 		expect(jumpNotice({ direction: "redo", wanted: 2, done: 2, gone: false })).toBe("Went forward 2 steps.");
 		expect(jumpNotice({ direction: "undo", wanted: 3, done: 1, gone: false })).toBe("Stopped after 1 of 3 steps: the next step was refused.");
+		expect(jumpNotice({ direction: "undo", wanted: 3, done: 1, gone: false, stopped: true })).toBe("The jump was interrupted because the notebook was closed or reloaded: 1 of 3 steps were taken.");
 		expect(jumpNotice({ direction: null, wanted: 0, done: 0, gone: true })).toBe("That step is no longer in the history.");
 		expect(jumpNotice({ direction: null, wanted: 0, done: 0, gone: false })).toBeNull();
 	});

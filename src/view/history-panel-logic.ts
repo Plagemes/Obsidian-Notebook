@@ -44,6 +44,7 @@ export function timeText(at: number | null, now: number): string {
 export function jumpNotice(result: JumpResult): string | null {
 	if (result.gone) return t("histpanel.notice.gone");
 	if (result.direction === null) return null;
+	if (result.stopped) return t("histpanel.notice.interrupted", { done: String(result.done), total: String(result.wanted) });
 	if (result.done < result.wanted) return t("histpanel.notice.stopped", { done: String(result.done), total: String(result.wanted) });
 	return t(result.direction === "undo" ? "histpanel.notice.back" : "histpanel.notice.forward", { n: String(result.done) });
 }
