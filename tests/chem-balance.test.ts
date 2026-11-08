@@ -292,3 +292,24 @@ describe("review V1: only the reaction lines of an equation are rewritten", () =
 		expect(r.balance.changed).toBe(1);
 	});
 });
+
+describe("review R4: a row of an aligned environment keeps its alignment point", () => {
+	it("keeps the & before the arrow and the environment around it", () => {
+		const src = "\\begin{aligned}\n N_2 + H_2 &\\to NH_3 \\\\\n Al + O_2 &\\ce{-> Al2O3}\n\\end{aligned}";
+		const r = balanceLatex(src);
+		expect(r.latex).toBe("\\begin{aligned}\n \\ce{N2 + 3 H2} &\\ce{→ 2 NH3} \\\\\n \\ce{4 Al + 3 O2} &\\ce{-> 2 Al2O3}\n\\end{aligned}");
+		expect(r.balance.changed).toBe(2);
+		expect(balanceLatex(r.latex).latex).toBe(r.latex);
+	});
+	it("leaves a row whose & is not right before the arrow, or that has several, exactly as written", () => {
+		for (const src of ["& N_2 + H_2 \\to NH_3", "N_2 & + H_2 \\to NH_3", "N_2 + H_2 & \\to & NH_3"]) {
+			const r = balanceLatex(src);
+			expect(r.latex).toBe(src);
+			expect(r.balance.changed).toBe(0);
+		}
+	});
+	it("an escaped ampersand is not an alignment point", () => {
+		const r = balanceLatex("H_2 + O_2 \\to H_2O \\text{ R\\&D}");
+		expect(r.balance.changed).toBe(0);
+	});
+});

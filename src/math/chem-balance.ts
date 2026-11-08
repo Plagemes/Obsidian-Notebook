@@ -541,6 +541,11 @@ export function hasLatexReaction(latex: string): boolean {
 	return latex.length <= CHEM_TEXT_MAX && hasReaction(latexToPlain(latex));
 }
 
+/** The start of what follows an `&` in LaTeX source when it is an arrow (possibly inside `\ce{`). */
+const AMP_ARROW_SOURCE = /^(?:\\ce\{\s*)?(?:\\(?:longrightarrow|rightarrow|Rightarrow|rightleftharpoons|leftrightharpoons|rightleftarrows|Leftrightarrow|leftrightarrow|to)\b|<[-=]{1,3}>|[-=]{1,3}>|<[-=]{1,3}|=|⇌|⇄|⇋|↔|→|⟶|⟹|⇒|⟷)/;
+/** The first arrow of a balanced reaction in plain text. */
+const BODY_ARROW = /<[-=]{1,3}>|[-=]{1,3}>|<[-=]{1,3}|⇌|⇄|⇋|↔|→|⟶|⟹|⇒|⟷|=/;
+
 /**
  * Balances the reactions of an equation's LaTeX. Only the lines (cut at `\\` and at line ends) that are a reaction and get balanced are
  * rewritten, as mhchem (`\ce{...}`); every other part of the source (other maths, text, spacing, a reaction that cannot be balanced,
@@ -567,6 +572,17 @@ export function balanceLatex(latex: string): { balance: TextBalance; latex: stri
 		// A part with words before the reaction is not wholly one: it is left as it is (and not offered).
 		const f = frame(plainCore);
 		if (line.changed && f.head !== "") continue;
+		// A row of an aligned environment keeps its `&`: only a row with one `&` right before the arrow is rewritten, as
+		// `\ce{left} &\ce{arrow right}`; any other row with an `&` is left as it is (and not offered).
+		const amps = core.match(/(^|[^\\])&/g)?.length ?? 0;
+		const body = line.after === null ? "" : line.after.slice(0, line.after.length - f.tail.length);
+		let aligned: [string, string] | null = null;
+		if (line.changed && !line.error && amps > 0) {
+			const amp = /(^|[^\\])&/.exec(core)!;
+			const arrow = AMP_ARROW_SOURCE.test(core.slice(amp.index + amp[0].length).trim()) ? BODY_ARROW.exec(body) : null;
+			if (amps !== 1 || !arrow || body.slice(0, arrow.index).trim() === "") continue;
+			aligned = [body.slice(0, arrow.index).trimEnd(), body.slice(arrow.index)];
+		}
 		lines.push({ ...line, line: i / 2 });
 		if (line.error || line.after === null) {
 			failed++;
@@ -576,7 +592,7 @@ export function balanceLatex(latex: string): { balance: TextBalance; latex: stri
 			same++;
 			continue;
 		}
-		pieces[i] = `${lead}\\ce{${line.after.slice(0, line.after.length - f.tail.length)}}${f.tail}${trail}`;
+		pieces[i] = `${lead}${aligned ? `\\ce{${aligned[0]}} &\\ce{${aligned[1]}}` : `\\ce{${body}}`}${f.tail}${trail}`;
 		changed++;
 	}
 	const result = pieces.join("");

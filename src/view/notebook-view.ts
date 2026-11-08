@@ -33,7 +33,8 @@ import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layou
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
-import { planPenUpTrim } from "../ink/hook-clean";
+import { trimAtPenUp } from "../ink/hook-clean";
+import { commitTrim, isTrimStep, retractCommit, type Committed } from "./commit-trim";
 import { scribbleEraseSteps } from "../ink/scribble";
 import { lineAt, TextLayoutCache, wordAt } from "../ink/words";
 import { InkBuilder } from "../ink/ink-geometry";
@@ -566,7 +567,7 @@ export class NotebookView extends FileView {
 	 * that continues the same contact (side button pressed while writing) spares them, and a late button signal can
 	 * retract them (`retractStroke`).
 	 */
-	private justCommitted: { ids: ReadonlySet<string>; cmd: Command; trim?: Command } | null = null;
+	private justCommitted: Committed | null = null;
 	private lasso: Lasso | null = null;
 	/** wave 0.10 (362): the clipboard files shared between devices (made when first used). */
 	private sharedClipStore: SharedClipStore | null = null;
@@ -1767,7 +1768,11 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		this.penLinks?.hideChip();
 		this.pageOffer?.cancel();
-		if (this.history.undo()) this.afterHistoryChange();
+		const undone = this.history.undo();
+		if (!undone) return;
+		this.afterHistoryChange();
+		// 0.23 (#314): the first Undo after a hook was trimmed at pen-up only gives the hook back; say so, so it does not look like nothing happened.
+		if (isTrimStep(undone)) showNotice(t("trim.undone"), 3000);
 	}
 
 	/**
@@ -1779,17 +1784,16 @@ export class NotebookView extends FileView {
 		const c = this.justCommitted;
 		this.justCommitted = null;
 		if (!c || !this.editable() || this.controller?.drawing || this.history.canRedo()) return false;
-		const steps = this.history.pending();
-		// 0.23 (#314): a hook trimmed at pen-up is its own step after the stroke's; the contact is taken back as a whole.
-		const withTrim = c.trim !== undefined;
-		if (withTrim ? steps[steps.length - 1] !== c.trim || steps[steps.length - 2] !== c.cmd : steps[steps.length - 1] !== c.cmd) return false;
-		this.penLinks?.hideChip();
-		this.pageOffer?.cancel();
-		if (withTrim && this.history.undo() !== c.trim) return false;
-		if (this.history.undo() !== c.cmd) return false;
-		this.renderer?.invalidate();
-		this.afterHistoryChange();
-		return true;
+		// 0.23 (#314): a hook trimmed at pen-up is its own step after the stroke's; the contact is taken back as a whole, and the view is
+		// redrawn and saved whenever a step was undone, even if the second one is refused.
+		const r = retractCommit(this.history, c);
+		if (r.changed) {
+			this.penLinks?.hideChip();
+			this.pageOffer?.cancel();
+			this.renderer?.invalidate();
+			this.afterHistoryChange();
+		}
+		return r.ok;
 	}
 
 	redo(): void {
@@ -5364,6 +5368,7 @@ export class NotebookView extends FileView {
 			this.ink.add(active.rawX, active.rawY, active.rawP);
 			this.ink.finish();
 			const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
+			const cut = this.penUpTrim(active, stroke);
 			const snapped = this.reading?.snapStroke(page, stroke);
 			if (snapped) {
 				// Snap to text lines: straight highlights replace the hand-drawn stroke in the same undo step.
@@ -5373,9 +5378,8 @@ export class NotebookView extends FileView {
 				return;
 			}
 			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
-			this.renderer?.endWet(stroke);
-			this.addStrokes(active.pageIndex, page, [stroke]);
-			this.trimCommitted(active, page, stroke);
+			this.renderer?.endWet(cut ?? stroke);
+			this.trimCommitted(page, stroke, cut, this.addStrokes(active.pageIndex, page, [stroke], true, cut ?? undefined));
 			this.updateGhostLines(active.pageIndex, page, stroke.tool);
 			if (active.liveFallback) this.renderer?.setLive(null);
 			const box = this.layout?.boxes[active.pageIndex];
@@ -5396,8 +5400,8 @@ export class NotebookView extends FileView {
 			return;
 		}
 		const extras = active.extra.map((points) => freezeStroke({ ...active.stroke, id: createId(), points }));
-		this.addStrokes(active.pageIndex, page, [stroke, ...extras]);
-		this.trimCommitted(active, page, stroke);
+		const cut = this.penUpTrim(active, stroke);
+		this.trimCommitted(page, stroke, cut, this.addStrokes(active.pageIndex, page, [stroke, ...extras], true, cut ?? undefined));
 		this.updateGhostLines(active.pageIndex, page, stroke.tool);
 	}
 
@@ -5406,13 +5410,20 @@ export class NotebookView extends FileView {
 	 * is cut as a step of its own (`ink/hook-clean.ts`, stricter limits than the manual clean-up). The raw points stay in the history:
 	 * one Undo gives the written stroke back, a second removes it. A snapped or recognised stroke is left as it is.
 	 */
-	private trimCommitted(active: ActiveStroke, page: Page, stroke: Stroke): void {
-		if (!this.host.settings.trimHooks || active.snap || active.recognized) return;
-		const plan = planPenUpTrim(page, stroke.id);
-		if (!plan || !this.history.execute(plan.command)) return;
-		// `justCommitted` keeps both steps, so a late side-button press still takes the whole contact back.
-		if (this.justCommitted) this.justCommitted = { ...this.justCommitted, trim: plan.command };
-		this.renderer?.invalidate();
+	private penUpTrim(active: ActiveStroke, stroke: Stroke): Stroke | null {
+		return this.host.settings.trimHooks && !active.snap && !active.recognized ? trimAtPenUp(stroke) : null;
+	}
+
+	/**
+	 * The trim is worked out before the stroke is committed, so the renderer draws the trimmed stroke at once (`addStrokes(…, cut)`) and
+	 * the step that follows holds that very object: the static layer is redrawn only if it was drawn from the raw model meanwhile
+	 * (`redrawn`) or the step was not recorded. `justCommitted` keeps both steps, so a late side-button press takes the contact back whole.
+	 */
+	private trimCommitted(page: Page, stroke: Stroke, cut: Stroke | null, redrawn: boolean): void {
+		if (!cut) return;
+		const step = commitTrim(this.history, page, stroke.id, cut, this.justCommitted);
+		if (!step || redrawn) this.renderer?.invalidate();
+		if (!step) return;
 		this.markChanged();
 		this.updateHistoryButtons();
 	}
@@ -5464,7 +5475,7 @@ export class NotebookView extends FileView {
 	}
 
 	/** Commits strokes drawn on a page as one undo step; an infinite page grows in the same step. */
-	private addStrokes(pageIndex: number, page: Page, drawn: Stroke[], offerChecklist = true): void {
+	private addStrokes(pageIndex: number, page: Page, drawn: Stroke[], offerChecklist = true, shown?: Stroke): boolean {
 		// 0.14 slides (#226): ink written while a slide is beside the notes remembers it, in the same undo step. The renderer
 		// still gets the strokes it drew (`drawn`, same geometry): the wet ink hands over to exactly those objects.
 		const linked = this.session?.doc ? linkToSlide(this, this.session.doc, drawn, this.host.settings.slideInkLink) : null;
@@ -5502,12 +5513,14 @@ export class NotebookView extends FileView {
 		}
 		if (grew) {
 			this.afterHistoryChange();
-			return;
+			return true;
 		}
-		for (const s of drawn) this.renderer?.appendStroke(pageIndex, s);
+		// `shown`: the trimmed copy of the first stroke (hook trimmed at pen-up), which the next step puts in the model.
+		for (const s of drawn) this.renderer?.appendStroke(pageIndex, shown && s === drawn[0] ? shown : s);
 		this.markChanged();
 		this.updateHistoryButtons();
 		this.scheduleNavRefresh();
+		return false;
 	}
 
 	private commitShape(shape: ShapeDrag): void {

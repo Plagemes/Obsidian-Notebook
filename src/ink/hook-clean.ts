@@ -248,16 +248,25 @@ export interface PenUpTrim {
 	trimmed: Stroke;
 }
 
+/** `stroke` without its hook under the stricter writing-time limits, or null when it has none. */
+export function trimAtPenUp(stroke: Stroke): Stroke | null {
+	const next = trimHooks(stroke, AUTO_HOOK_OPTIONS);
+	return next === stroke ? null : next;
+}
+
 /**
  * "Trim hooks as you write": the stroke is committed as written (so the raw points are in the history), and this is the step that
- * follows it. `strokeId` is looked up on the page because the committed object may not be the one that was drawn. Null when the stroke
- * is not on the page or has no hook under the stricter automatic limits. One Undo gives the raw stroke back, a second removes it.
+ * follows it. `strokeId` is looked up on the page because the committed object may not be the one that was drawn. `given`: the trim the
+ * caller worked out before committing (and already showed); its points are used on the committed object. Null when the stroke is not
+ * on the page or has no hook under the stricter automatic limits. One Undo gives the raw stroke back, a second removes it.
  */
-export function planPenUpTrim(page: Page, strokeId: string): PenUpTrim | null {
+export function planPenUpTrim(page: Page, strokeId: string, given?: Stroke): PenUpTrim | null {
 	const index = page.strokes.findIndex((s) => s.id === strokeId);
 	if (index < 0) return null;
 	const stroke = page.strokes[index]!;
-	const trimmed = trimHooks(stroke, AUTO_HOOK_OPTIONS);
-	if (trimmed === stroke) return null;
+	let trimmed: Stroke | null;
+	if (given) trimmed = given.slide === stroke.slide && given.group === stroke.group && given.tool === stroke.tool ? given : freezeStroke({ ...stroke, points: given.points });
+	else trimmed = trimAtPenUp(stroke);
+	if (!trimmed || trimmed === stroke) return null;
 	return { command: new ReplaceStroke(page.id, stroke, [trimmed], index), trimmed };
 }

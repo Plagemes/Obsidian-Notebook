@@ -132,11 +132,13 @@ export async function checkHookclean(api: HookcleanCheckApi): Promise<{ ok: bool
 	const trimmed = page().strokes[countBefore + 1];
 	add("with the setting on the stroke ends without its hook (a near reversal; the stricter writing-time limits)", !!trimmed && page().strokes.length === countBefore + 2 && gapToCorner(trimmed, 370) < gapToCorner(plain, 330) - 1.5, `${gapToCorner(trimmed, 370).toFixed(2)} pt from the corner`);
 	const trimmedId = trimmed?.id;
+	const noticesBeforeUndo = api.notices.length;
 	v.undo();
 	await frames(2);
 	add("one undo gives back the stroke as it was written, hook included", page().strokes.length === countBefore + 2 && page().strokes[countBefore + 1]?.id === trimmedId && gapToCorner(page().strokes[countBefore + 1], 370) > 2.5, `${gapToCorner(page().strokes[countBefore + 1], 370).toFixed(2)} pt from the corner`);
 	v.undo();
 	await frames(2);
+	add("the first undo says the hook is back", api.notices.slice(noticesBeforeUndo).some((m) => m.includes("Hook put back")), api.notices.slice(noticesBeforeUndo).join(" | "));
 	add("a second undo removes the stroke", page().strokes.length === countBefore + 1);
 	settings.trimHooks = false;
 	v.redo();

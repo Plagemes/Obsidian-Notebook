@@ -4327,7 +4327,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"views.notice.readOnly": "Questo quaderno è in sola lettura: le sue viste non si possono modificare.",
 	"views.notice.failed": "Non è stato possibile salvare la vista.",
 	"merge.summary.views": "{count} viste salvate aggiunte",
-	"merge.summary.viewsDiffer": "{count} viste salvate sono diverse nella copia: si tengono quelle di questo quaderno, quelle della copia restano nel backup",
+	"merge.summary.viewsDiffer": "{count} viste salvate sono diverse nella copia: si tengono quelle di questo quaderno; le versioni della copia restano nella copia",
 	"merge.summary.viewsFull": "{count} viste salvate della copia non sono state aggiunte: questo quaderno ne ha già il massimo. La copia resta dov'è",
 	// 0.23 exportarea
 	"exportArea.menu": "Esporta area scritta…",
@@ -4463,5 +4463,6 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"cleanup.done": "Pulizia fatta: {hooks} uncini tolti, {dots} puntini isolati rimossi.",
 	"cleanup.nothing": "Niente da pulire nella selezione.",
 	"settings.trimHooks": "Taglia gli uncini mentre scrivi",
-	"settings.trimHooks.desc": "Toglie il minuscolo uncino a inizio o fine linea quando alzi la penna. Gli angoli restano.",
+	"settings.trimHooks.desc": "Toglie il minuscolo uncino a inizio o fine linea quando alzi la penna. Gli angoli restano. Il primo Annulla rimette l'uncino.",
+	"trim.undone": "Uncino rimesso. Annulla ancora per togliere il tratto.",
 };

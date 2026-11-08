@@ -4325,7 +4325,7 @@ export const en = {
 	"views.notice.readOnly": "This notebook is read-only: its views cannot be changed.",
 	"views.notice.failed": "The view could not be saved.",
 	"merge.summary.views": "{count} saved views added",
-	"merge.summary.viewsDiffer": "{count} saved views differ in the copy: this notebook's are kept, the copy's stay in the backup",
+	"merge.summary.viewsDiffer": "{count} saved views differ in the copy: this notebook's are kept; the copy's versions stay in the copy",
 	"merge.summary.viewsFull": "{count} saved views of the copy were not added: this notebook already keeps the most. The copy stays where it is",
 	// 0.23 exportarea
 	"exportArea.menu": "Export written area…",
@@ -4461,7 +4461,8 @@ export const en = {
 	"cleanup.done": "Cleaned up: {hooks} hooks trimmed, {dots} stray dots removed.",
 	"cleanup.nothing": "Nothing to clean up in the selection.",
 	"settings.trimHooks": "Trim hooks as you write",
-	"settings.trimHooks.desc": "Cuts the tiny tick at the start or end of a line when the pen lifts. Corners stay.",
+	"settings.trimHooks.desc": "Cuts the tiny tick at the start or end of a line when the pen lifts. Corners stay. The first Undo gives the hook back.",
+	"trim.undone": "Hook put back. Undo again to remove the stroke.",
 } as const;
 
 export type MessageKey = keyof typeof en;
