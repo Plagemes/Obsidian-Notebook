@@ -68,6 +68,7 @@ async function drawPicture(host: InsertHost): Promise<ArrayBuffer | null> {
 		const placed = (p: Page): SvgPlacedImage[] => (images.get(p) ?? []).map((img) => ({
 			href: jpegDataUrl(img.jpeg), x: img.x, y: img.y, width: img.width, height: img.height,
 			...(img.rotation !== undefined ? { rotation: img.rotation } : {}),
+			...(img.opacity !== undefined ? { opacity: img.opacity } : {}),
 			...(img.layer !== undefined ? { layer: img.layer } : {}),
 		}));
 		const svg = pageToSvg(host.page, {

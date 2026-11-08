@@ -530,6 +530,27 @@ export function v23OnlyElement(page: unknown, index: number): string | null {
 	return null;
 }
 
+/**
+ * v24 adds the optional `opacity` of strokes, images and areas (#358). Every valid v23 document is a valid v24 document: the migration is the
+ * identity apart from the version. A v23 reader ignored unknown fields, so such a key in a v23 file was never ours and never meant anything: it is
+ * dropped, not interpreted (like `nib` in v19 -> v20 and `fill` in v21 -> v22). Nothing else changes, so a large v23 file can still be read page
+ * by page (StagedParse), which ignores these keys of each stroke and element.
+ */
+function v23ToV24(raw: RawObject): RawObject {
+	const out: RawObject = { ...raw, version: 24 };
+	if (!Array.isArray(raw.pages)) return out;
+	const pages = (raw.pages as unknown[]).map((page) => {
+		if (!isRaw(page)) return page;
+		const strokes = Array.isArray(page.strokes) && page.strokes.some((s) => isRaw(s) && "opacity" in s) ? (page.strokes as unknown[]).map((s) => withoutKeys(s, ["opacity"])) : null;
+		const elements = Array.isArray(page.elements) && page.elements.some((e) => isRaw(e) && "opacity" in e) ? (page.elements as unknown[]).map((e) => withoutKeys(e, ["opacity"])) : null;
+		if (!strokes && !elements) return page;
+		return { ...page, ...(strokes ? { strokes } : {}), ...(elements ? { elements } : {}) };
+	});
+	// A document with nothing to drop keeps its pages as they were (the migration is the identity but the version).
+	if (pages.some((p, i) => p !== (raw.pages as unknown[])[i])) out.pages = pages;
+	return out;
+}
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -567,6 +588,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	20: v20ToV21,
 	21: v21ToV22,
 	22: v22ToV23,
+	23: v23ToV24,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

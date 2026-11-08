@@ -4863,6 +4863,15 @@ export const en = {
 	"navMarked.clear": "Show all pages",
 	"navMarked.empty": "Nothing marked here yet.",
 	"help.navMarked": "Show only the pages you marked: bookmarks, markers and questions, colours with a meaning, open checkboxes and page tags. Each page keeps its number and shows why it is marked. Choose which kinds count in the menu.",
+	// 0.26 opacity (#358)
+	"opacity.title": "Opacity",
+	"opacity.reset": "Opacity: back to 100%",
+	"opacity.mixed": "Different values",
+	"opacity.value": "Opacity {percent}%",
+	"opacity.action": "Opacity",
+	"command.opacity": "Opacity of the selection or of the pen",
+	"help.opacity": "How strongly the ink, picture or highlighter shows: 100% is the normal look, lower lets the page show through. In the pen options it sets what you write next; with a selection it changes the ink, pictures and highlighted areas you selected. Tap to put it back to 100%.",
+	"histpanel.t.opacity": "Opacity changed",
 } as const;
 
 export type MessageKey = keyof typeof en;

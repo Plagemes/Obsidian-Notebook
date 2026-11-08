@@ -13,7 +13,8 @@ import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkP
 import { layerFlags, type ExportLayers } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
-import { HIGHLIGHTER_ALPHA, MARKER_ALPHA, strokeSvgPath } from "./stroke-shape";
+import { inkAlpha, strokeSvgPath } from "./stroke-shape";
+import { opacityOf } from "../model/opacity";
 import { fillAlpha, fillPathD, isFilled } from "./shape-style";
 import { LINK_COLOR, lineRuns, shownText } from "./link-text";
 
@@ -47,6 +48,8 @@ export interface SvgPlacedImage {
 	width: number;
 	height: number;
 	rotation?: number;
+	/** Format v24 (#358): how strongly the picture is drawn (an image element's opacity; absent = opaque). */
+	opacity?: number;
 	/** "background" draws under the paper pattern, "element" (default) above it. */
 	layer?: "background" | "element";
 }
@@ -169,12 +172,14 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 			const alpha = fillAlpha(stroke);
 			out.push(`<path d="${fillPathD(stroke.points)}" fill="${escapeAttr(stroke.fill!)}"${alpha < 1 ? ` fill-opacity="${alpha}"` : ""}${clipped}/>`);
 		}
+		// Format v24 (#358): the opacity of the stroke multiplies the translucency of its pen (the same product as the canvas).
+		const alpha = round4(inkAlpha(stroke.tool, stroke.opacity));
 		out.push(
 			stroke.tool === "highlighter"
-				? `<path d="${d}" fill="${fill}" fill-opacity="${HIGHLIGHTER_ALPHA}" style="mix-blend-mode:multiply"${clipped}/>`
+				? `<path d="${d}" fill="${fill}" fill-opacity="${alpha}" style="mix-blend-mode:multiply"${clipped}/>`
 				: stroke.tool === "marker"
-					? `<path d="${d}" fill="${fill}" fill-opacity="${MARKER_ALPHA}"${clipped}/>`
-					: `<path d="${d}" fill="${fill}"${clipped}/>`,
+					? `<path d="${d}" fill="${fill}" fill-opacity="${alpha}"${clipped}/>`
+					: alpha < 1 ? `<path d="${d}" fill="${fill}" fill-opacity="${alpha}"${clipped}/>` : `<path d="${d}" fill="${fill}"${clipped}/>`,
 		);
 	}
 	for (const el of page.elements ?? []) if (el.type === "marker") out.push(markerTag(el));
@@ -279,8 +284,12 @@ function imageTag(img: SvgPlacedImage): string {
 	const rot = img.rotation
 		? ` transform="rotate(${num((img.rotation * 180) / Math.PI)} ${num(img.x + img.width / 2)} ${num(img.y + img.height / 2)})"`
 		: "";
-	return `<image href="${escapeAttr(img.href)}" x="${num(img.x)}" y="${num(img.y)}" width="${num(img.width)}" height="${num(img.height)}" preserveAspectRatio="none"${rot}/>`;
+	// Format v24 (#358): a picture with an opacity.
+	const opacity = img.opacity !== undefined && opacityOf(img) < 1 ? ` opacity="${round4(opacityOf(img))}"` : "";
+	return `<image href="${escapeAttr(img.href)}" x="${num(img.x)}" y="${num(img.y)}" width="${num(img.width)}" height="${num(img.height)}" preserveAspectRatio="none"${rot}${opacity}/>`;
 }
+
+const round4 = (v: number): number => Math.round(v * 10000) / 10000;
 
 /** Greedy wrap by character count; newlines start a line, words longer than a line are split. */
 function wrapByChars(text: string, maxChars: number): string[] {
@@ -360,7 +369,7 @@ function textTag(el: TextElement): string {
 
 /** v23 area highlighter: its rectangle with the highlighter look (opacity and multiply), exactly as on screen. */
 function areaTag(el: AreaElement): string {
-	return `<rect x="${num(el.x)}" y="${num(el.y)}" width="${num(el.width)}" height="${num(el.height)}" fill="${escapeAttr(el.color)}" fill-opacity="${HIGHLIGHTER_ALPHA}" style="mix-blend-mode:multiply"/>`;
+	return `<rect x="${num(el.x)}" y="${num(el.y)}" width="${num(el.width)}" height="${num(el.height)}" fill="${escapeAttr(el.color)}" fill-opacity="${round4(inkAlpha("highlighter", el.opacity))}" style="mix-blend-mode:multiply"/>`;
 }
 
 /** v17 checkbox: its outline and, when ticked, its tick (the shapes are the canvas's, ink/checkbox-render.ts). */

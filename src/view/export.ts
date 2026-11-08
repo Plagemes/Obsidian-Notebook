@@ -81,7 +81,7 @@ export async function collectPageImages(media: NotebookMedia | null, pages: read
 			}
 			if (el.type !== "image") continue;
 			const jpeg = await load(`img:${el.asset}`, () => media.imageJpeg(el.asset));
-			if (jpeg) list.push({ ...jpeg, x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation, layer: "element" });
+			if (jpeg) list.push({ ...jpeg, x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation, ...(el.opacity !== undefined ? { opacity: el.opacity } : {}), layer: "element" });
 			else out.skipped++;
 		}
 		if (list.length > 0) out.images.set(page, list);
@@ -166,6 +166,7 @@ async function buildSvg(app: App, notebook: TFile, page: Page, suffix: string, m
 	const svgImages = (p: Page): SvgPlacedImage[] => (images.get(p) ?? []).map((img) => ({
 		href: jpegDataUrl(img.jpeg), x: img.x, y: img.y, width: img.width, height: img.height,
 		...(img.rotation !== undefined ? { rotation: img.rotation } : {}),
+		...(img.opacity !== undefined ? { opacity: img.opacity } : {}),
 		...(img.layer !== undefined ? { layer: img.layer } : {}),
 	}));
 	const path = freePath(app, notebook, suffix, "svg");
@@ -226,6 +227,7 @@ export async function exportHtml(app: App, notebook: TFile, pages: readonly Page
 				return [{
 					href, x: img.x, y: img.y, width: img.width, height: img.height,
 					...(img.rotation !== undefined ? { rotation: img.rotation } : {}),
+					...(img.opacity !== undefined ? { opacity: img.opacity } : {}),
 					...(img.layer !== undefined ? { layer: img.layer } : {}),
 				}];
 			});

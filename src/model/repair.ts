@@ -33,6 +33,7 @@ import { detectVersion, migrate, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { pageTimesProblem } from "./page-times";
 import { normalizePosition } from "./position";
+import { isOpacity } from "./opacity";
 import { freezeElement, freezeStroke, liveGroups, parse, readPageComments, readPageStates, readSlides, readViews, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
 	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, isShapeDash, PAPER_SPACING, RENDER_FREEHAND, RENDER_INK, RENDER_VERSIONS, TOOLS, type Tool,
@@ -414,6 +415,8 @@ function fixStroke(v: unknown, slides: ReadonlySet<string>): RawObject | null {
 		if (v.fillTint === true) out.fillTint = true;
 	}
 	if (tool === "shape" && isShapeDash(v.dash)) out.dash = v.dash;
+	// v24: the opacity stays when it is valid (any pen has one).
+	if (isOpacity(v.opacity)) out.opacity = v.opacity;
 	// v8 invisible ink stays invisible: a repaired solution is not revealed.
 	if (v.hidden === true) out.hidden = true;
 	// v12: the link stays when it names an entry of the salvaged table; a dangling one is dropped (the ink stays).
@@ -464,7 +467,10 @@ function fixElement(v: unknown, assets: Record<string, Asset>): RawObject | null
 		// An image whose file is not in the asset list cannot be drawn: lost (it stays in the original).
 		if (typeof v.asset !== "string" || assets[v.asset]?.kind !== "image") return null;
 		if (!(typeof v.width === "number" && v.width > 0 && typeof v.height === "number" && v.height > 0)) return null;
-		return { id: v.id, type: "image", asset: v.asset, x: v.x, y: v.y, width: v.width, height: v.height, rotation: finite(v.rotation) ? v.rotation : 0 };
+		const image: RawObject = { id: v.id, type: "image", asset: v.asset, x: v.x, y: v.y, width: v.width, height: v.height, rotation: finite(v.rotation) ? v.rotation : 0 };
+		// v24: the opacity of a picture stays when it is valid.
+		if (isOpacity(v.opacity)) image.opacity = v.opacity;
+		return image;
 	}
 	if (v.type === "marker" || v.type === "box") return fixMarkerOrBox(v, v.id);
 	// v10 excerpts go through the same lenient reader: a bad snapshot reference is left out, the anchor is kept.
@@ -494,7 +500,7 @@ function fixMathElement(v: RawObject, assets: Record<string, Asset>): RawObject 
 }
 
 function strokeKey(s: Stroke): string {
-	return JSON.stringify([s.tool, s.color, s.width, s.render, s.hidden === true, s.points, s.nib ?? null, s.fill ?? null, s.fillTint === true, s.dash ?? null]);
+	return JSON.stringify([s.tool, s.color, s.width, s.render, s.hidden === true, s.points, s.nib ?? null, s.fill ?? null, s.fillTint === true, s.dash ?? null, s.opacity ?? null]);
 }
 
 function elementKey(e: PageElement): string {

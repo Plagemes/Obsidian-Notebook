@@ -26,8 +26,8 @@ describe("favourite pens", () => {
 		expect(captureFavourite({ ...state, tool: "highlighter" })).toEqual({ tool: "highlighter", color: "#facc15", width: 14 });
 	});
 	it("patch selects the tool and its colour and width only", () => {
-		expect(favouritePatch({ tool: "highlighter", color: "#4ade80", width: 20 })).toEqual({ tool: "highlighter", highlighterColor: "#4ade80", highlighterWidth: 20 });
-		expect(favouritePatch({ tool: "pen", color: "#dc2626", width: 3.2 })).toEqual({ tool: "pen", penColor: "#dc2626", penWidth: 3.2, penKind: "pen", nibAngle: 45 });
+		expect(favouritePatch({ tool: "highlighter", color: "#4ade80", width: 20 })).toEqual({ tool: "highlighter", highlighterColor: "#4ade80", highlighterWidth: 20, highlighterOpacity: 1 });
+		expect(favouritePatch({ tool: "pen", color: "#dc2626", width: 3.2 })).toEqual({ tool: "pen", penColor: "#dc2626", penWidth: 3.2, penKind: "pen", nibAngle: 45, penOpacity: 1 });
 	});
 	it("finds the active slot, none for other tools", () => {
 		expect(activeFavourite(DEFAULT_FAVOURITES, state)).toBe(0);

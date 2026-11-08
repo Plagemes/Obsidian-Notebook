@@ -103,7 +103,7 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 			ctx.fill(new Path2D(fillPathD(stroke.points)));
 		}
 		ctx.fillStyle = stroke.color;
-		ctx.globalAlpha = inkAlpha(stroke.tool);
+		ctx.globalAlpha = inkAlpha(stroke.tool, stroke.opacity);
 		ctx.globalCompositeOperation = inkBlend(stroke.tool);
 		const w = highlighter ? stroke.width : Math.max(stroke.width, MIN_STROKE_PX / scale);
 		// Same geometry as the notebook (old strokes: perfect-freehand, new ones: the ink engine).

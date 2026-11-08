@@ -193,6 +193,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "shapefill", theme, device, lowLatency: false });
 // 0.25 areahl (#99): the area highlighter on a PDF page (dev/harness/areahl-check.ts), tablet and phone, light and dark (dist/shots/areahl-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "areahl", theme, device, lowLatency: false });
+// 0.26 opacity (#358): the opacity of ink, pictures and areas (dev/harness/opacity-check.ts), tablet and phone, light and dark (dist/shots/opacity-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "opacity", theme, device, lowLatency: false });
 // 0.25 baseline (#93): Align to baseline (dev/harness/baseline-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "baseline", theme, device, lowLatency: false });
 // 0.25 papersuggest (#409): suggested paper in the "+" strip (dev/harness/papersuggest-check.ts).
@@ -413,6 +415,7 @@ async function main() {
 				else if (s.doc === "hookclean") report = await cdp.evaluate("window.harness.checkHookclean()", 90000); // 0.23 hookclean
 				else if (s.doc === "shapefill") report = await cdp.evaluate("window.harness.checkShapefill()", 90000); // 0.24 shapefill
 				else if (s.doc === "areahl") report = await cdp.evaluate("window.harness.checkAreahl()", 90000); // 0.25 areahl
+				else if (s.doc === "opacity") report = await cdp.evaluate("window.harness.checkOpacity()", 90000); // 0.26 opacity
 				else if (s.doc === "papersuggest") report = await cdp.evaluate("window.harness.checkPapersuggest()", 90000); // 0.25 papersuggest
 				else if (s.doc === "strokejoin") report = await cdp.evaluate("window.harness.checkStrokejoin()", 90000); // 0.24 strokejoin
 				else if (s.doc === "profiles") report = await cdp.evaluate("window.harness.checkProfiles()", 90000); // 0.25 profiles

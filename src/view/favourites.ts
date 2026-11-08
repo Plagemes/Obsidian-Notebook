@@ -1,6 +1,7 @@
 // Favourite pens and eraser size: pure logic (no 'obsidian'), unit-tested.
 import { kindHasNib, isPenKind, normaliseNib, type PenKind } from "../ink/pen-kinds";
 import { NIB_DEFAULT } from "../model/types";
+import { isOpacity, normaliseOpacity, opacityOf } from "../model/opacity";
 import type { MessageKey } from "../i18n/en";
 
 export type FavouriteTool = "pen" | "highlighter";
@@ -15,6 +16,8 @@ export interface FavouritePen {
 	width: number;
 	kind?: Exclude<PenKind, "pen">;
 	nib?: number;
+	/** 0.26 (#358): how strongly the pen writes, 0.05 to just under 1 (absent = full strength, as every older setting). */
+	opacity?: number;
 }
 
 export const FAVOURITE_SLOTS = 6;
@@ -38,6 +41,9 @@ export interface PenState {
 	/** 0.22 (#35): the kind of pen and its nib angle (absent: a ballpoint pen). */
 	penKind?: PenKind;
 	nibAngle?: number;
+	/** 0.26 (#358): the opacity of new ink of each pen (1 or absent = full strength). */
+	penOpacity?: number;
+	highlighterOpacity?: number;
 }
 
 const COLOR = /^#[0-9a-f]{6}$/i;
@@ -50,6 +56,11 @@ export function validPen(v: unknown): FavouritePen | null {
 	if (typeof o.color !== "string" || !COLOR.test(o.color)) return null;
 	if (typeof o.width !== "number" || !Number.isFinite(o.width) || o.width <= 0 || o.width > 100) return null;
 	const pen: FavouritePen = { tool: o.tool, color: o.color.toLowerCase(), width: o.width };
+	// 0.26 (#358): an opacity that does not fit is left out (full strength); 1 is the same as none.
+	if (isOpacity(o.opacity)) {
+		const opacity = normaliseOpacity(o.opacity);
+		if (opacity !== undefined) pen.opacity = opacity;
+	}
 	if (o.tool === "pen" && isPenKind(o.kind) && o.kind !== "pen") {
 		pen.kind = o.kind;
 		if (kindHasNib(o.kind) && typeof o.nib === "number") {
@@ -68,8 +79,15 @@ export function normaliseFavourites(data: unknown): FavouritePen[] {
 
 /** The pen that is selected right now (a highlighter, or else the pen colour and width and, for a new kind of pen, the kind and nib). */
 export function captureFavourite(s: PenState): FavouritePen {
-	if (s.tool === "highlighter") return { tool: "highlighter", color: s.highlighterColor.toLowerCase(), width: s.highlighterWidth };
+	if (s.tool === "highlighter") {
+		const hl: FavouritePen = { tool: "highlighter", color: s.highlighterColor.toLowerCase(), width: s.highlighterWidth };
+		const opacity = normaliseOpacity(s.highlighterOpacity);
+		if (opacity !== undefined) hl.opacity = opacity;
+		return hl;
+	}
 	const pen: FavouritePen = { tool: "pen", color: s.penColor.toLowerCase(), width: s.penWidth };
+	const opacity = normaliseOpacity(s.penOpacity);
+	if (opacity !== undefined) pen.opacity = opacity;
 	if (s.penKind && s.penKind !== "pen") {
 		pen.kind = s.penKind;
 		if (kindHasNib(s.penKind) && normaliseNib(s.nibAngle) !== NIB_DEFAULT) pen.nib = normaliseNib(s.nibAngle);
@@ -80,8 +98,8 @@ export function captureFavourite(s: PenState): FavouritePen {
 /** The toolbar patch that selects a favourite. */
 export function favouritePatch(fav: FavouritePen): Partial<PenState> {
 	return fav.tool === "highlighter"
-		? { tool: "highlighter", highlighterColor: fav.color, highlighterWidth: fav.width }
-		: { tool: "pen", penColor: fav.color, penWidth: fav.width, penKind: fav.kind ?? "pen", nibAngle: fav.nib ?? NIB_DEFAULT };
+		? { tool: "highlighter", highlighterColor: fav.color, highlighterWidth: fav.width, highlighterOpacity: opacityOf(fav) }
+		: { tool: "pen", penColor: fav.color, penWidth: fav.width, penKind: fav.kind ?? "pen", nibAngle: fav.nib ?? NIB_DEFAULT, penOpacity: opacityOf(fav) };
 }
 
 /** The name (i18n key) of the pen a favourite holds: the ballpoint pen, the highlighter or one of the new pens. */
@@ -92,7 +110,7 @@ export function favouriteToolKey(fav: FavouritePen): MessageKey {
 
 export function sameFavourite(a: FavouritePen, b: FavouritePen): boolean {
 	return a.tool === b.tool && a.color.toLowerCase() === b.color.toLowerCase() && a.width === b.width
-		&& (a.kind ?? "pen") === (b.kind ?? "pen") && (a.nib ?? NIB_DEFAULT) === (b.nib ?? NIB_DEFAULT);
+		&& (a.kind ?? "pen") === (b.kind ?? "pen") && (a.nib ?? NIB_DEFAULT) === (b.nib ?? NIB_DEFAULT) && opacityOf(a) === opacityOf(b);
 }
 
 /** Index of the slot holding the pen that is selected now, or -1. */

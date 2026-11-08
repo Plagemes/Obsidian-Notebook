@@ -144,6 +144,8 @@ export function strokeContentKey(s: Stroke): string {
 	// v22: a fill or a line style makes a different shape.
 	if (s.fill !== undefined) key.push(`fill${s.fill}${s.fillTint ? "t" : ""}`);
 	if (s.dash !== undefined) key.push(`dash${s.dash}`);
+	// v24: a different opacity is a different look.
+	if (s.opacity !== undefined) key.push(`op${s.opacity}`);
 	return JSON.stringify(key);
 }
 

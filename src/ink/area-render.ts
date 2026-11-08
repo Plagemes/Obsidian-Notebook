@@ -1,4 +1,5 @@
 import type { AreaElement } from "../model/types";
+import { opacityOf } from "../model/opacity";
 import { inkAlpha, inkBlend } from "./stroke-shape";
 
 /**
@@ -25,7 +26,8 @@ export interface AreaPaint {
 export function drawArea(ctx: CanvasRenderingContext2D, el: AreaElement, paint: AreaPaint = {}): void {
 	const look = areaLook();
 	ctx.fillStyle = paint.colour ?? el.color;
-	ctx.globalAlpha = paint.alpha ?? look.alpha;
+	// v24 (#358): the area's own opacity multiplies the highlighter's look (in the day and at night alike).
+	ctx.globalAlpha = (paint.alpha ?? look.alpha) * opacityOf(el);
 	ctx.globalCompositeOperation = paint.blend ?? look.blend;
 	ctx.fillRect(el.x, el.y, el.width, el.height);
 	ctx.globalAlpha = 1;

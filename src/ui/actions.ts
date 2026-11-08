@@ -44,7 +44,7 @@ export interface UiContext {
 	open: boolean;
 	tool: ToolId;
 	selection: {
-		strokes: number; elements: number; images: number; /** 1 when a selected text box holds a [[link]] */ links?: number;
+		strokes: number; elements: number; images: number; /** 0.26 (#358): selected area highlighters (optional, 0 when absent). */ areas?: number; /** 1 when a selected text box holds a [[link]] */ links?: number;
 		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
 		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
 		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
@@ -149,6 +149,9 @@ const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.
 /** wave 0.10: how many things are selected (strokes and elements), and whether the selection holds ink. */
 const itemCount = (c: UiContext) => (c.selection?.strokes ?? 0) + (c.selection?.elements ?? 0);
 const lassoOrSelection = (c: UiContext) => c.tool === "lasso" || itemCount(c) > 0;
+/** 0.26 (#358): something to give an opacity to: the selection holds ink, a picture or an area, or the tool in hand writes (pen, highlighter, shape). */
+export const canOpacity = (c: UiContext): boolean =>
+	((c.selection?.strokes ?? 0) + (c.selection?.images ?? 0) + (c.selection?.areas ?? 0)) > 0 || c.tool === "pen" || c.tool === "highlighter" || c.tool === "shape";
 const hasInk = (c: UiContext) => (c.selection?.strokes ?? 0) > 0;
 /** wave 0.10 (363): another notebook is open to go to. */
 const otherNotebooks = (c: UiContext) => (c.openNotebooks ?? 0) > 1;
@@ -376,6 +379,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "toggle-snap-highlighter", label: "reading.snap", icon: "text-cursor", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 41, scope: "view", command: "command.snapHighlighter", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.reading.snap, keywords: "highlighter snap text lines evidenziatore testo righe" },
 	// 0.25 (#99): the highlighter marks a rectangle (an area highlighter, drawn under the ink): ideal on scanned PDFs. The "highlighter-" prefix ranks it first while the highlighter is in hand; on a PDF page the reading group ranks it too.
 	{ id: "highlighter-area", label: "highlighter.areaAction", icon: "highlighter", group: "reading", surfaces: ["sheet"], priority: 41, scope: "view", command: "command.highlighterArea", checked: (c) => !!c.toggles.highlighterArea, keywords: "highlighter area rectangle scan pdf block evidenziatore area rettangolo blocco scansione" },
+	// 0.26 (#358): the opacity of ink, pictures and areas: opens the slider of the selection, or the one in the options of the pen in hand. Ranked first with a selection of ink, pictures or areas and while the pen, the highlighter or a shape is in hand (context-rank.ts).
+	{ id: "opacity", label: "opacity.action", icon: "droplet", group: "tool", surfaces: ["sheet"], priority: 42, scope: "view", command: "command.opacity", when: canOpacity, keywords: "opacity transparency translucent fade alpha ink picture image area highlighter opacita trasparenza sfumare inchiostro immagine" },
 	{ id: "pdf-select-text", label: "pdfText.selectText", icon: "text-cursor-input", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 72, scope: "view", command: "command.pdfSelectText", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.reading.selectText, keywords: "select copy text quote pdf seleziona copia testo citazione" },
 	{ id: "pdf-search-next", label: "command.pdfSearchNext", icon: "chevron-down", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "pdf-search-previous", label: "command.pdfSearchPrev", icon: "chevron-up", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
