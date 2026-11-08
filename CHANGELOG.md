@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### pens
+- **New pens (#35): fountain pen, brush and marker.** The pen options have a *Pen type* row. The *fountain pen* is a nib: lines drawn along the nib angle are thin, lines across it thick (pressure still modulates the width, ends are crisp, nothing tapers). The *brush* answers to pressure (fine tip to full belly) and speed (thinner when it is fast), grows from a point and closes to a point. The *marker* is a flat chisel: constant for any pressure, a little narrower along the nib, 85% opaque and painted in stroke order (above the ink written before it, with that ink showing through), not multiplied like the highlighter. The fountain pen and the marker have a *Nib angle* (a slider with a little bar that leans like the nib); the angle is stored on the stroke. The same look in the canvas, the wet ink, thumbnails, SVG, PDF, PNG and the interactive HTML export; eraser, lasso and moves work on their outlines, and a rotated selection turns the nib with it. A hold-still shape made with a new pen becomes an ordinary shape.
+- **Favourites, pen sets and the style eyedropper remember the kind** (and the nib angle). *Settings > Writing* has *Pen type* (the pen the pen tool starts with) and *Nib angle*.
+- **Document format v20.** The tools `fountain`, `brush` and `marker` (always `render` 2) and the optional stroke field `nib` (whole degrees 0 to 179, absent = 45, only the fountain pen and the marker have one). The v19 to v20 migration refuses a v19 file that already has a new tool (no version wrote one) and drops a stray `nib` key; read leniently, an unknown tool name is a pen (counted) and a bad nib is dropped (counted). 0.21 and older open a v20 file read-only. `docs/schema/notebook-v20.schema.json` replaces the v19 schema; the geometry of the pen, highlighter and shape is frozen by golden tests (`tests/pens-golden.test.ts`).
+
 ## 0.21.0 — 2026-11-08
 
 Eight features: a start and end time on every page, scheduled backups, a documented file format with a JSON Schema, an interactive HTML export, a back-of-book index, a reusable signature and date stamp, a way back to the current slide and a strip of recent symbols; plus the review fixes carried over from 0.20. The notebook format moves to version 19 (page start and end times): the migration from version 18 is automatic, and 0.20 and older open a v19 notebook read-only and never overwrite it.

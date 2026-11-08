@@ -134,7 +134,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 34. **P3** Optional compression of very large notebooks (compatible with the planned Markdown container).
 
 ### Advanced writing
-35. **P1** New pen types: fountain pen (angle-dependent width), brush, marker.
+35. **P1** 🧪 New pen types: fountain pen (angle-dependent width), brush, marker. (0.22: pen type row and nib angle in the pen options, format v20; marker is 85% opaque, in stroke order.)
 36. **P1** 🧪 Auto-scroll while writing near the bottom of the screen.
 37. **P2** Filled shapes and dashed or dotted lines.
 38. **P2** 🧪 Align and distribute the selection.
