@@ -4,12 +4,13 @@
 // the notebook (by the area export, recorded as plugin-written). Every outcome shows a notice: nothing fails silently. Document only read.
 import { t } from "../i18n";
 import { planArea, type AreaPlan, type AreaScope } from "../ink/export-area";
-import { afterFailure, clipRoutes, clipScale, failureOf, needsWhite, type ClipBackground, type ClipCapabilities, type ClipFailure, type ClipRoute } from "../ink/clip-image";
+import { afterFailure, CLIP_RETRY_MS, clipRoutes, clipScale, failureOf, failureOnRetry, needsWhite, type ClipBackground, type ClipCapabilities, type ClipFailure, type ClipRoute } from "../ink/clip-image";
 import { scaleDpi } from "../model/export-pages";
 import { canShareFiles, classifyShareError, shareMime } from "../model/share-page";
 import { saveArea, type AreaHost } from "./export-area";
 import { showNotice } from "./notice";
 import { PageImageRenderer } from "./page-images";
+import { pageSignature } from "./view-helpers";
 
 /** Whether `navigator.clipboard.write` takes an image/png here. */
 export function canCopyImage(): boolean {
@@ -71,6 +72,11 @@ export async function drawClipPicture(host: AreaHost, plan: AreaPlan, background
 
 const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+type ClipPicture = { png: Blob; capped: boolean; skipped: number };
+
+/** The picture of a share that asked for a new tap, kept for that tap (see `failureOnRetry`). */
+let ready: { key: string; picture: ClipPicture; at: number } | null = null;
+
 /**
  * Copies the written area (or the selection) as an image. Tries the image clipboard, then the share sheet, then a saved copy, each
  * only where the device allows it. Never throws; returns the route that worked, or null.
@@ -85,8 +91,13 @@ export async function copyAsImage(host: AreaHost, scope: AreaScope, background: 
 	const routes = clipRoutes(caps);
 	let route: ClipRoute | null = routes[0] ?? null;
 	// The picture is drawn once. With an image clipboard it is handed over as a promise, so the tap's permission is still valid.
-	let drawing: Promise<{ png: Blob; capped: boolean; skipped: number }> | null = null;
-	const picture = (): Promise<{ png: Blob; capped: boolean; skipped: number }> => (drawing ??= drawClipPicture(host, plan, background).catch((e: unknown) => { drawing = null; throw e; }));
+	let drawing: Promise<ClipPicture> | null = null;
+	// A picture kept for a share that asked for a new tap is shared at once, inside this tap, if the page is the same and it is still fresh.
+	const key = `${host.file.path}|${host.pageNumber}|${scope}|${background}|${JSON.stringify(plan.rect)}|${pageSignature(plan.page)}`;
+	const retried = ready !== null && ready.key === key && Date.now() - ready.at < CLIP_RETRY_MS;
+	if (retried && ready) drawing = Promise.resolve(ready.picture);
+	ready = null;
+	const picture = (): Promise<ClipPicture> => (drawing ??= drawClipPicture(host, plan, background).catch((e: unknown) => { drawing = null; throw e; }));
 	const working = showNotice(t("export.working"), 0);
 	try {
 		while (route) {
@@ -114,9 +125,10 @@ export async function copyAsImage(host: AreaHost, scope: AreaScope, background: 
 				return null; // saveArea already told why
 			} catch (e) {
 				console.warn("[notebook] copy as image", route, e);
-				const failure: ClipFailure = route === "share" ? failureOf(classifyShareError(e)) : "other";
+				const failure: ClipFailure = route === "share" ? failureOnRetry(failureOf(classifyShareError(e)), retried) : "other";
 				const next = afterFailure(routes, route, failure);
-				// One notice per outcome. A share that needs a new tap keeps the vault clean: the picture is drawn again on the next tap.
+				// One notice per outcome. A share that needs a new tap keeps the vault clean: the picture is kept, and the next tap shares it at once.
+				if (next.notice === "needsTap" && drawing) void drawing.then((p) => void (ready = { key, picture: p, at: Date.now() }), () => undefined);
 				if (next.notice === "cancelled") showNotice(t("clipImage.cancelled"), 4000);
 				else if (next.notice === "needsTap") showNotice(t("clipImage.needsTap"), 9000);
 				else if (next.notice === "fallback") showNotice(t("clipImage.fallback", { error: errorText(e) }), 6000);

@@ -5,7 +5,7 @@ import { ACTIONS, baseContext } from "../src/ui/actions";
 import { ACTION_HELP } from "../src/ui/help-text";
 import { contextBoost } from "../src/ui/context-rank";
 import {
-	CLIP_MAX_PIXELS, CLIP_MAX_SIDE, CLIP_MIN_SCALE, CLIP_SCALE, afterFailure, clipRoutes, clipScale, failureOf, isClipBackground, needsWhite,
+	CLIP_MAX_PIXELS, CLIP_MAX_SIDE, CLIP_MIN_SCALE, CLIP_SCALE, afterFailure, CLIP_RETRY_MS, clipRoutes, clipScale, failureOf, failureOnRetry, isClipBackground, needsWhite,
 } from "../src/ink/clip-image";
 import { classifyShareError } from "../src/model/share-page";
 import { planArea } from "../src/ink/export-area";
@@ -63,6 +63,7 @@ describe("routes and fallback", () => {
 		expect(failureOf(classifyShareError(new Error("boom")))).toBe("other");
 		for (const failure of ["cancelled", "needs-tap"] as const) expect(afterFailure(routes, "share", failure).route).toBeNull();
 	});
+it("a second need for a tap, with the picture ready, falls through to the saved copy instead of asking forever", () => {		const routes = clipRoutes({ imageClipboard: false, shareFiles: true });		expect(failureOnRetry("needs-tap", false)).toBe("needs-tap");		const again = failureOnRetry("needs-tap", true);		expect(afterFailure(routes, "share", again)).toEqual({ route: "save", notice: "fallback" });		expect(failureOnRetry("cancelled", true)).toBe("cancelled");		expect(failureOnRetry("other", true)).toBe("other");		expect(CLIP_RETRY_MS).toBeGreaterThan(5000);	});
 	it("the new-tap notice has both texts", () => {
 		expect(enSrc).toContain("\"clipImage.needsTap\"");
 		expect(itSrc).toContain("\"clipImage.needsTap\"");

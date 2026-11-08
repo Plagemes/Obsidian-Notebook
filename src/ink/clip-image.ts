@@ -77,3 +77,15 @@ export function needsWhite(background: ClipBackground): boolean {
 export function failureOf(outcome: "cancelled" | "needs-tap" | "unsupported" | "failed"): ClipFailure {
 	return outcome === "cancelled" ? "cancelled" : outcome === "needs-tap" ? "needs-tap" : "other";
 }
+
+/** How long a picture drawn for a share that asked for a new tap is kept for that tap (ms). */
+export const CLIP_RETRY_MS = 60_000;
+
+/**
+ * A share that needs a new tap is answered once with a notice; the picture is kept so the next tap shares at once, inside the tap, instead of
+ * drawing again for as long as the browser's window lasts. If the share still needs a tap with the picture ready, asking again would never end:
+ * it counts as an ordinary failure and the next route (the saved copy) is tried.
+ */
+export function failureOnRetry(failure: ClipFailure, retried: boolean): ClipFailure {
+	return retried && failure === "needs-tap" ? "other" : failure;
+}

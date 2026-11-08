@@ -217,15 +217,16 @@ export function ensureProfileSet(sets: readonly PenSet[], p: WritingProfile, dis
 /**
  * What deleting a profile does to its pen set. The set the profile made for itself (`wp-<id>`) goes with it, so it does not pile up
  * against the limit or come back under a new profile; but it stays while a notebook or a folder is assigned to it or another profile
- * points at it (`kept`). A pen set the user made, and any other set, is never touched. `remaining`: the profiles after the deletion.
+ * points at it, or another open notebook is showing it (`shown`: the set ids on the strips of the other views) (`kept`). A pen set the user made, and any other set, is never touched. `remaining`: the profiles after the deletion.
  */
 export function dropProfileSet(
 	deleted: WritingProfile, remaining: readonly WritingProfile[], sets: readonly PenSet[], folders: Readonly<Record<string, string>>, notebooks: Readonly<Record<string, string>>,
+	shown: readonly string[] = [],
 ): { sets: PenSet[]; kept: boolean } {
 	const copy = sets.map((s) => ({ id: s.id, name: s.name, pens: s.pens.map((x) => ({ ...x })) }));
 	const id = profileSetId(deleted);
 	if (!copy.some((s) => s.id === id)) return { sets: copy, kept: false };
-	const used = Object.values(folders).includes(id) || Object.values(notebooks).includes(id) || remaining.some((p) => p.penSetId === id);
+	const used = Object.values(folders).includes(id) || Object.values(notebooks).includes(id) || remaining.some((p) => p.penSetId === id) || shown.includes(id);
 	return used ? { sets: copy, kept: true } : { sets: copy.filter((s) => s.id !== id), kept: false };
 }
 

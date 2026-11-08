@@ -2194,7 +2194,7 @@ export class NotebookView extends FileView {
 				// Its own pen set goes with it, unless a notebook, a folder or another profile still uses it (then the set stays and the user is told).
 				let kept = false;
 				if (gone) {
-					const dropped = dropProfileSet(gone, s().writingProfiles, s().penSets, s().penSetFolders, s().penSetNotebooks);
+					const dropped = dropProfileSet(gone, s().writingProfiles, s().penSets, s().penSetFolders, s().penSetNotebooks, this.otherViewsPenSets());
 					kept = dropped.kept;
 					if (dropped.sets.length !== s().penSets.length) {
 						s().penSets = dropped.sets;
@@ -2207,6 +2207,24 @@ export class NotebookView extends FileView {
 			},
 			available: () => this.file !== null,
 		};
+	}
+
+	/** The pen set on the strip of this notebook view, or null (read by the other views before a profile's set is deleted). */
+	shownPenSetId(): string | null {
+		return this.activePenSetId;
+	}
+
+	/** The pen sets the strips of the other open notebooks show now. */
+	private otherViewsPenSets(): string[] {
+		const out: string[] = [];
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+			const v = leaf.view;
+			if (v instanceof NotebookView && v !== this) {
+				const id = v.shownPenSetId();
+				if (id) out.push(id);
+			}
+		}
+		return out;
 	}
 
 	/** The pens, smoothing and paper in use now (what "Save as a profile" stores). */

@@ -215,6 +215,7 @@ describe("deleting a profile and its pen set (review fix)", () => {
 		}
 	});
 
+it("keeps the set while another open notebook shows it on its strip", () => {		const p = mine();		const sets = withSet(p);		const id = profileSetId(p);		const kept = dropProfileSet(p, [], sets, {}, {}, [id]);		expect(kept.kept).toBe(true);		expect(kept.sets.map((s) => s.id)).toContain(id);		expect(dropProfileSet(p, [], sets, {}, {}, ["some-other-set"]).kept).toBe(false);	});
 	it("never touches a set the user made, nor any other set, and does nothing when the profile never made one", () => {
 		const own = defaultPenSets()[0]!;
 		const p = { ...mine(), penSetId: own.id };
