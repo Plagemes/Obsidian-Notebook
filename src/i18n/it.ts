@@ -3862,6 +3862,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"bookindex.failed": "Impossibile scrivere l'indice: {error}",
 	"bookindex.unsafe": "{path} ha un marcatore d'indice senza coppia; non è stata toccata.",
 	"bookindex.foreign": "{path} esiste già e non è una nota d'indice; non è stata toccata. Rinominala o spostala, poi riprova.",
+	"bookindex.other": "{path} è l'indice di un altro quaderno; non è stata toccata. Riprova per usare una nota separata.",
 	"bookindex.add.title": "Aggiungi all'indice",
 	"bookindex.add.hint": "Scrivi un termine. Usa «Termine / Sottotermine» per annidare.",
 	"bookindex.add.term": "Termine",
