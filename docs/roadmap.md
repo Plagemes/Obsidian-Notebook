@@ -203,7 +203,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 83. **P3** Import from Xournal++ and from SVG.
 
 ### Study
-84. **P2** Action history panel (jump back to a point) and undo that survives reopening.
+84. **P2** Action history panel (jump back to a point) and undo that survives reopening. *0.25: panel done (waiting for hardware verification), persistent undo pending: commands hold element objects by identity and private apply state, so saving them needs a per-class serialiser, re-linking to a freshly read notebook and a verified dry run, and the history would have to be saved at idle saves (Android can end the app without a close event).*
 85. **P1** 🧪 Coloured bookmarks with categories ("important", "to review").
 86. **P2** 🧪 Margin comments attached to a region of the page (0.18, format v16: `Page.comments`, typed text and a small sketch, flat replies, resolve, side panel, PDF margin notes, Markdown list).
 87. **P2** 🧪 Presentation mode: full-screen pages, with the laser pointer (#12).

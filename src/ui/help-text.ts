@@ -51,6 +51,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"selection-join": "help.joinStrokes",
 	// 0.25 areahl
 	"highlighter-area": "help.highlighterArea",
+	// 0.25 histpanel (#84)
+	"history-panel": "help.historyPanel",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

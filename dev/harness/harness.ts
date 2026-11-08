@@ -59,6 +59,7 @@ import { checkGhostlines } from "./ghostlines-check";
 import { checkPagetime } from "./pagetime-check";
 import { checkPens } from "./pens-check";
 import { checkSavedviews } from "./savedviews-check";
+import { checkHistpanel } from "./histpanel-check";
 import { checkMinimap } from "./minimap-check";
 import { checkHeader } from "./header-check";
 import { checkChrome, chromeState, type ChromeState } from "./ds-notebook-check";
@@ -336,7 +337,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, lectureHeaderClassFor: doc === "lecthead" || doc === "pillstack" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, bookmarks: doc === "bookmarks" ? harnessBookmarks(app) : undefined, meanings: doc === "colours" || doc === "coloursedit" ? harnessMeanings() : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "savedviews" || doc === "chembal" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pillstack" || doc === "welcomeback" || doc === "iconhelp" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" || doc === "hookclean" || doc === "shapefill" || doc === "strokejoin" || doc === "navadapt" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" || doc === "areahl" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "bookmarks" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "savedviews" || doc === "histpanel" || doc === "chembal" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pillstack" || doc === "welcomeback" || doc === "iconhelp" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" || doc === "hookclean" || doc === "shapefill" || doc === "strokejoin" || doc === "navadapt" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" || doc === "areahl" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "bookmarks" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2191,6 +2192,8 @@ harnessApi.checkShapefill = () => checkShapefill({ view, penStroke, setTool, ope
 harnessApi.checkAreahl = () => checkAreahl({ view, penStroke, setTool, openOptions, frames, errors, notices }); // 0.25 areahl
 // 0.23 savedviews (#264): its own check (dev/harness/savedviews-check.ts).
 harnessApi.checkSavedviews = () => checkSavedviews({ view, frames, errors, notices });
+// 0.25 histpanel (#84): its own check (dev/harness/histpanel-check.ts).
+harnessApi.checkHistpanel = () => checkHistpanel({ view, frames, errors, notices });
 harnessApi.inboxShot = (state: "list" | "close") => inboxShot(state);
 // 0.22 syncprov (#126): the cloud sign-in dialog (dev/harness/syncprov-check.ts).
 harnessApi.checkSyncprov = () => checkSyncprov({ errors, notices });
