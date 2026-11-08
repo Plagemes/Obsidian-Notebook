@@ -3776,3 +3776,27 @@ Implemented, not verified on hardware. No format change: the list is the sidecar
 | Sidecar `_meta/bookmarks-<device>.json`: per-device file, latest wins, tombstones (90 days) and adoption, unknown fields and entries kept, unreadable or empty file never overwritten, listed in the library check's non-holders | yes | `tests/bookmarks.test.ts` | | | |
 | Follows renamed and moved notebooks (rename events, one write per burst; found again by the notebook's id); a deleted page or a missing notebook shows as Missing and can be removed | yes | `tests/bookmarks.test.ts` (retarget, resolve); harness `doc=bookmarks` | | | |
 | Home chip (count, opens the list) | yes | harness `doc=bookmarks` (rendered through `renderHome`) | | | not checked inside the real library view |
+
+### 0.24 — handin: assignment hand-in (roadmap #334; steps 2580-2599)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook with a few written pages, one blank page, a page with a gap marker, a page with an unticked checkbox and a page with a text box that says TODO.
+
+2580. **Open.** Notebook menu or the all-actions sheet (Export & share): *Hand in…* opens the dialog. The same entry is in the command palette.
+2581. **Pages.** The grid shows a picture of every page; only the page in view is ticked. *All* and *None* work; tapping a cell ticks or unticks it and the count follows.
+2582. **Cover fields.** Your name is empty the first time; type it, export, reopen: it is remembered on this device (not in the notebook). The course is prefilled when the notebook is linked to a timetable class in progress. Assignment starts as the notebook name; the date as today.
+2583. **Pre-flight.** Tick all pages: blank pages, open gaps, open questions, undone homework, unticked checkboxes, TODO notes and empty template boxes are listed with their page. Resolve one on the page (tick the box, fill the gap): after reopening, it is gone from the list.
+2584. **Fix links.** Tap a row: the dialog closes and the notebook shows that page.
+2585. **Leave out.** *Leave out the blank pages* unticks them and the blank rows disappear; the other rows stay.
+2586. **Export anyway.** While anything is open the main button reads *Export anyway*; with nothing open it reads *Export PDF*. Both write the file.
+2587. **The file.** `<notebook> hand-in.pdf` appears next to the notebook; the first page is the cover (name, course, assignment, date, page count, small rule), then the chosen pages in order. A second export is ` hand-in 2.pdf`, never over the first.
+2588. **Share.** On a device with a share sheet the toggle *Open the share sheet afterwards* shows and opens it; elsewhere it is not shown.
+2589. **Library.** The saved PDF is not offered by the shared-files inbox as an unknown file.
+2590. **Empty choice.** Untick every page: the check says to choose a page and the export button is disabled.
+2591. **Style.** Light and dark, phone and tablet: the dialog is a normal Notebook dialog; the grid scrolls, the buttons fit in one row.
+2592. **Italian.** Switch to Italian: all texts are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Hand in…: page grid with checkboxes, cover fields (name remembered per device, course from the timetable, title, date) | yes | page choice, cover layout and its PDF: `tests/hand-in.test.ts`; harness `doc=handin` (real dialog, remembered name, grid) | | | the page panel's own multi-selection is not read yet: the dialog starts on the page in view |
+| Pre-flight: blank pages, open gaps/questions/homework, unticked checkboxes, TODO notes, empty template boxes, with links to fix and "export anyway" | yes | `tests/hand-in.test.ts`; harness `doc=handin` (rows, leave out, link) | | | |
+| PDF with generated cover first, saved next to the notebook under a free name, recorded as plugin-written, optional share sheet | yes | harness `doc=handin` (written through a stand-in vault, second export `hand-in 2.pdf`, cover plus chosen pages) | | | share sheet depends on the WebView |

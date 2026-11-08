@@ -475,6 +475,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "export-png", label: "export.png.menu", icon: "images", group: "share", surfaces: ["sheet", "notebook"], priority: 27, scope: "view", command: "command.exportPng", readOnly: true, keywords: "png images pictures pages folder scale range esporta immagini" },
 	// 0.23 (#280): the written area of the page, or the selection, as a transparent PNG or SVG
 	{ id: "export-area", label: "exportArea.menu", icon: "crop", group: "share", surfaces: ["sheet", "notebook"], priority: 26.5, scope: "view", command: "command.exportArea", readOnly: true, keywords: "export written area crop transparent png svg esporta area scritta ritaglia trasparente" },
+	// 0.24 handin (#334): hand in chosen pages as a PDF with a cover, after a pre-flight check.
+	{ id: "hand-in", label: "handIn.menu", icon: "graduation-cap", group: "share", surfaces: ["sheet", "notebook"], priority: 26.2, scope: "view", command: "command.handIn", readOnly: true, keywords: "hand in assignment submit cover pdf homework consegna compito copertina" },
 	{ id: "selection-export-area", label: "exportArea.selection", icon: "crop", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40.3, scope: "view", command: true, readOnly: true, when: hasSelection, keywords: "export selection transparent png svg esporta selezione trasparente" },
 	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
 

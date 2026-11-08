@@ -19463,3 +19463,84 @@ body.notebook-style-obsidian {
 	max-width: 96px;
 	justify-content: flex-end;
 }
+
+/* ===== 0.24 handin ===== */
+.nb-ui.notebook-handin-modal .nb-handin-tools {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	flex-wrap: wrap;
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-count {
+	flex: 1 1 auto;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+	gap: var(--nb-space-2);
+	max-height: 232px;
+	overflow-y: auto;
+	padding: var(--nb-space-1);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-cell {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 6px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	cursor: pointer;
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-cell:has(input:checked) {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-cell input {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 1;
+	margin: 0;
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-thumb {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	min-height: 96px;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-bg);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-thumb img {
+	display: block;
+	max-width: 100%;
+	max-height: 112px;
+	border-radius: 2px;
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-num {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-finding.is-blank .nb-modal-row-label {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.notebook-handin-modal .nb-handin-leave {
+	display: flex;
+	justify-content: flex-start;
+}
