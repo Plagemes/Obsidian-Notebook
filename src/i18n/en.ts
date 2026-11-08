@@ -3951,6 +3951,13 @@ export const en = {
 	"backup.status.failed": "Last backup failed ({time}): {error}",
 	"backup.status.next": "Next backup after {time}.",
 	"backup.status.dueNow": "The next backup is due.",
+	// 0.22 pens
+	"tool.fountain": "Fountain pen",
+	"tool.brush": "Brush",
+	"tool.marker": "Marker",
+	"practice.tool.fountain": "Fountain pen",
+	"practice.tool.brush": "Brush",
+	"practice.tool.marker": "Marker",
 } as const;
 
 export type MessageKey = keyof typeof en;

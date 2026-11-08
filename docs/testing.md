@@ -3074,7 +3074,7 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 
 ### 0.21 — schema: documented format with a JSON Schema (steps 1860-1879)
 
-Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v19.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
+Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v20.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
 
 1860. **Schema agrees with a real notebook.** Copy a notebook written on the tablet (with ink, a picture, a text box and a comment) to a PC and validate it with any draft 2020-12 validator (see the end of `docs/format.md`): no errors.
 1861. **Old file.** Open a notebook that was last saved by an older plugin version and edit it once, then validate it: it validates after that save (the file is rewritten as version 19 on the first edit).

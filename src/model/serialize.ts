@@ -15,7 +15,7 @@ import { STICKY_INK_MAX, STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STIC
 import { normalizePosition } from "./position";
 import { pageTimesProblem } from "./page-times";
 import {
-	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, GROUP_ID_MAX, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_VERSIONS, TOOLS,
+	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_INK, RENDER_VERSIONS, TOOLS,
 	SLIDE_ID_MAX, SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type SlideRef,
 	STATES_ID_MAX, STATES_MAX_ITEMS, STATES_MAX_PARTS, STATES_MAX_ROT, STATES_MAX_SCALE, STATES_MAX_SHIFT, STATES_MAX_STATES, STATES_MIN_SCALE, STATES_NAME_MAX,
 	type PageState, type PageStates, type PartPose, type StatePart,
@@ -63,7 +63,9 @@ function strokeLine(s: Stroke): string {
 	const hidden = s.hidden !== undefined ? `,"hidden":${j(s.hidden)}` : "";
 	const slide = s.slide !== undefined ? `,"slide":${j(s.slide)}` : "";
 	const group = s.group !== undefined ? `,"group":${j(s.group)}` : "";
-	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide}${group},"points":${j(s.points)}}`;
+	// v20: `nib` only when set, after `group`.
+	const nib = s.nib !== undefined ? `,"nib":${j(s.nib)}` : "";
+	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide}${group}${nib},"points":${j(s.points)}}`;
 }
 
 /**
@@ -468,17 +470,32 @@ function readPoint(v: unknown, path: string): Point {
  */
 type SlideIds = ReadonlySet<string> | "any" | "ignore";
 
-function readStroke(v: unknown, path: string, drop: Dropped | null = null, slides: SlideIds = "any", groups = true): Stroke {
+function readStroke(v: unknown, path: string, drop: Dropped | null = null, slides: SlideIds = "any", groups = true, pens = true): Stroke {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
-	if (!TOOLS.includes(v.tool as Tool)) fail(`${path}.tool`, "unknown tool");
+	// v20: a tool name this version does not know is a detail of the stroke when reading leniently (the stroke is read as a "pen" and
+	// counted, so the ink is kept); strictly it fails. In a file of an older format (`pens` false) the new pens did not exist: such a
+	// stroke was not written by any version of this plugin and fails, as the migration refuses it.
+	const known = TOOLS.includes(v.tool as Tool);
+	let tool: Tool;
+	if (known && (pens || !isNewPen(v.tool as Tool))) tool = v.tool as Tool;
+	else if (known) fail(`${path}.tool`, `tool '${String(v.tool)}' exists only from v20`);
+	else if (drop) {
+		drop.count++;
+		tool = "pen";
+	} else fail(`${path}.tool`, "unknown tool");
 	if (typeof v.color !== "string" || !COLOR_RE.test(v.color)) fail(`${path}.color`, "expected a #rrggbb colour");
 	const width = positive(v.width, `${path}.width`);
 	if (!RENDER_VERSIONS.includes(v.render as RenderVersion)) fail(`${path}.render`, "expected render version 1 or 2");
 	if (!Array.isArray(v.points) || v.points.length === 0) fail(`${path}.points`, "expected at least one point");
 	const points = v.points.map((pt, i) => readPoint(pt, `${path}.points[${i}]`));
-	const tool = v.tool as Tool;
-	const render = v.render as RenderVersion;
+	let render = v.render as RenderVersion;
+	// v20: the new pens have no outline of the old geometry. Read leniently the stroke is drawn with the geometry it needs (counted).
+	if (isNewPen(tool) && render !== RENDER_INK) {
+		if (!drop) fail(`${path}.render`, `tool '${tool}' needs render version 2`);
+		drop.count++;
+		render = RENDER_INK;
+	}
 	let hidden: true | undefined;
 	if (v.hidden !== undefined) {
 		// v8 invisible ink. Anything but `true` is invalid: dropped and counted when reading leniently (the stroke shows).
@@ -501,6 +518,16 @@ function readStroke(v: unknown, path: string, drop: Dropped | null = null, slide
 	if (groups && v.group !== undefined) {
 		const group = orDrop(drop, () => boundedId(v.group, `${path}.group`, GROUP_ID_MAX));
 		if (group !== undefined) stroke.group = group;
+	}
+	// v20: the nib angle of a fountain pen or a marker (a file of an older format has none of ours: an odd `nib` key is ignored, as the
+	// migration drops it). A detail: an invalid angle, or one on a tool that has no nib, is dropped and counted when reading leniently.
+	if (pens && v.nib !== undefined) {
+		const nib = orDrop(drop, () => {
+			if (!isNibPen(tool)) fail(`${path}.nib`, `tool '${tool}' has no nib`);
+			if (!isNibAngle(v.nib)) fail(`${path}.nib`, "expected a whole number of degrees in [0, 179]");
+			return v.nib;
+		});
+		if (nib !== undefined) stroke.nib = nib;
 	}
 	return stroke;
 }
@@ -1342,7 +1369,7 @@ function dissolveSmallGroups(page: Page, path: string, drop: Dropped | null): vo
 	});
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true, withTimes = true): Page {
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true, withTimes = true, withPens = true): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -1354,7 +1381,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 	if (spacing < MIN_PAPER_SPACING) fail(`${path}.paper.spacing`, `must be at least ${MIN_PAPER_SPACING} pt`);
 	if (!Array.isArray(v.strokes)) fail(`${path}.strokes`, "expected an array");
 	const strokes = v.strokes.map((s, i) => {
-		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop, slides, withGroups);
+		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop, slides, withGroups, withPens);
 		if (ids.has(stroke.id)) fail(`${path}.strokes[${i}].id`, "duplicate id");
 		ids.add(stroke.id);
 		freezeStroke(stroke);
@@ -1661,7 +1688,7 @@ export class StagedParse {
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18, this.from >= 19);
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18, this.from >= 19, this.from >= 20);
 	}
 
 	get pending(): number {
@@ -1725,7 +1752,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v16 → v17 only refuses checkboxes (checked page by page as they are read), so large v16 files are staged too.
 	// v17 → v18 only drops the `group`, `locked` and `lockAt` keys of strokes and elements (ignored page by page), so large v17 files are staged too.
 	// v18 → v19 only drops the pages' `startAt` and `endAt` keys (ignored page by page), so large v18 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18) return StagedParse.create(pre.raw, first, pre.version);
+	// v19 → v20 only refuses the new pens (checked stroke by stroke as each page is read) and drops the strokes' `nib` keys (ignored), so large v19 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }

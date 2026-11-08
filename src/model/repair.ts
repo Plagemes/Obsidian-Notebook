@@ -35,7 +35,7 @@ import { pageTimesProblem } from "./page-times";
 import { normalizePosition } from "./position";
 import { freezeElement, freezeStroke, liveGroups, parse, readPageComments, readPageStates, readSlides, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
-	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, GROUP_ID_MAX, PAPER_SPACING, RENDER_FREEHAND, RENDER_VERSIONS, TOOLS,
+	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, PAPER_SPACING, RENDER_FREEHAND, RENDER_INK, RENDER_VERSIONS, TOOLS, type Tool,
 	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageComment, type PageElement, type PageStates, type ReadingPosition, type SlideRef, type Stroke,
 } from "./types";
 
@@ -380,13 +380,17 @@ function fixStroke(v: unknown, slides: ReadonlySet<string>): RawObject | null {
 	if (!isObj(v)) return null;
 	const points = fixPoints(v.points);
 	if (points.length === 0) return null;
+	const tool: Tool = TOOLS.includes(v.tool as never) ? (v.tool as Tool) : "pen";
 	const out: RawObject = {
 		id: typeof v.id === "string" && v.id.length > 0 ? v.id : createId(),
-		tool: TOOLS.includes(v.tool as never) ? v.tool : "pen",
+		tool,
 		color: typeof v.color === "string" && COLOR_RE.test(v.color) ? v.color : "#000000",
 		width: positiveOr(v.width, 2).value,
-		render: RENDER_VERSIONS.includes(v.render as never) ? v.render : RENDER_FREEHAND,
+		// v20: the new pens have no outline of the old geometry.
+		render: isNewPen(tool) ? RENDER_INK : RENDER_VERSIONS.includes(v.render as never) ? v.render : RENDER_FREEHAND,
 	};
+	// v20: the nib angle of a fountain pen or a marker stays when it is valid.
+	if (isNibPen(tool) && isNibAngle(v.nib)) out.nib = v.nib;
 	// v8 invisible ink stays invisible: a repaired solution is not revealed.
 	if (v.hidden === true) out.hidden = true;
 	// v12: the link stays when it names an entry of the salvaged table; a dangling one is dropped (the ink stays).
@@ -466,7 +470,7 @@ function fixMathElement(v: RawObject, assets: Record<string, Asset>): RawObject 
 }
 
 function strokeKey(s: Stroke): string {
-	return JSON.stringify([s.tool, s.color, s.width, s.render, s.hidden === true, s.points]);
+	return JSON.stringify([s.tool, s.color, s.width, s.render, s.hidden === true, s.points, s.nib ?? null]);
 }
 
 function elementKey(e: PageElement): string {

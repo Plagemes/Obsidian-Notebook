@@ -3953,4 +3953,11 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"backup.status.failed": "Ultimo backup non riuscito ({time}): {error}",
 	"backup.status.next": "Prossimo backup dopo {time}.",
 	"backup.status.dueNow": "Il prossimo backup è dovuto.",
+	// 0.22 pens
+	"tool.fountain": "Stilografica",
+	"tool.brush": "Pennello",
+	"tool.marker": "Pennarello",
+	"practice.tool.fountain": "Stilografica",
+	"practice.tool.brush": "Pennello",
+	"practice.tool.marker": "Pennarello",
 };
