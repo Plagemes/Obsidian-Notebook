@@ -3344,6 +3344,10 @@ Fixes of the wave 0.22 cloud sync review (S1–S16 and the provider switch). Imp
 | S15 Drive upload session only on `www.googleapis.com`; addresses stripped from error texts | yes | `tests/sync-gdrive.test.ts`, `tests/sync-review-w22.test.ts` | | | |
 | S16 mobile: unknown network holds automatic runs; *Size cap on phones* (5–500 MB, default 50) | yes | `tests/sync-service-w22.test.ts`, `tests/sync-review-w22.test.ts` | | | |
 | Provider switch disconnects the previous account; Disconnect dialog can forget Google's secret | yes | `tests/sync-service-w22.test.ts`; harness `doc=synccore` (dialog, Cancel) | | | |
+| Round 2: kept files that cannot be copied back (size cap, large-file rule) lose their base, never trashed later | yes | `tests/sync-review-w22.test.ts` | | | |
+| Round 2: newest twin followed; twin above the cap skipped; local rename to an unsyncable name not a cloud deletion | yes | `tests/sync-review-w22.test.ts` | | | |
+| Round 2: Drive displaced versions unchecked or above the cap reported; replace across twin folders by id | yes | `tests/sync-gdrive.test.ts`, `tests/sync-review-w22.test.ts` | | | |
+| Round 2: OneDrive walk with an off-Graph next link or an unfinished listing fails the run | yes | `tests/sync-onedrive.test.ts` | | | |
 
 ### 0.22 — colormeaning: colours with meaning (steps 2120-2139)
 
