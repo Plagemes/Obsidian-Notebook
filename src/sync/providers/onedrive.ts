@@ -212,8 +212,11 @@ export class OneDriveProvider implements CloudProvider {
 					if (it.folder && !it.removed) queue.push(it.id);
 				}
 				const next = str(body["@odata.nextLink"]);
-				url = next && isGraphUrl(next) ? next : undefined;
+				// Review round 2 (R2-8): a listing cut short would read the rest as deleted: a next page off Graph is an error.
+				if (next && !isGraphUrl(next)) throw new TransientRemoteError("OneDrive gave a next page outside Microsoft Graph");
+				url = next;
 			}
+			if (url) throw new TransientRemoteError("OneDrive listing did not finish");
 		}
 		return items;
 	}

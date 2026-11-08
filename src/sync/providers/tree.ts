@@ -156,6 +156,13 @@ export class TreeIndex {
 		return [...out.values()];
 	}
 
+	/** Every known file id at `path` (more than one when Drive holds twins, or twin folders). */
+	idsAt(path: string): string[] {
+		const out: string[] = [];
+		for (const [id, p] of this.files) if (p === path) out.push(id);
+		return out;
+	}
+
 	/** File ids by path (the reverse of `files`). */
 	private idsByPath(): Map<string, string[]> {
 		const out = new Map<string, string[]>();

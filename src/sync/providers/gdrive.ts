@@ -16,7 +16,7 @@
  *   write is undone and reported as a conflict.
  * - The bearer token goes only to www.googleapis.com (the resumable session address is checked, review W22 S15).
  */
-import { RemoteConflictError, TransientRemoteError, type CloudProvider, type DisplacedRevision, type RemoteChanges, type RemoteEntry, type UploadedEntry } from "../provider-types";
+import { RemoteConflictError, TransientRemoteError, type CloudProvider, type DisplacedRevision, type RemoteChanges, type RemoteEntry, type UploadedEntry, type UploadLimits } from "../provider-types";
 import { header, json, JSON_TYPE, num, obj, str, type HttpResponse } from "../auth/http";
 import { throwIfAborted } from "../auth/retry";
 import type { ApiClient } from "./api";
@@ -247,11 +247,14 @@ export class GoogleDriveProvider implements CloudProvider {
 		return res.arrayBuffer;
 	}
 
-	async upload(path: string, data: ArrayBuffer, ifRev: string | null | undefined, signal?: AbortSignal): Promise<UploadedEntry> {
+	async upload(path: string, data: ArrayBuffer, ifRev: string | null | undefined, signal?: AbortSignal, limits?: UploadLimits): Promise<UploadedEntry> {
 		const parts = splitPath(path);
 		const name = parts.pop() as string;
 		const parent = await this.ensureFolder(parts, signal);
-		const existing = await this.findFile(parent, name, ifRev, signal);
+		let existing = await this.findFile(parent, name, ifRev, signal);
+		// Review round 2 (R2-6): two folders with one name (made at once by two devices) hold the file in the other one: a replace
+		// then uses the file the listing gave for this path, found by id.
+		if (typeof ifRev === "string" && (!existing || revOf(existing) !== ifRev)) existing = (await this.knownFile(path, ifRev, signal)) ?? existing;
 		const current = existing ? revOf(existing) : undefined;
 		if (ifRev === null && existing) throw new RemoteConflictError(path, current);
 		if (typeof ifRev === "string" && current !== ifRev) throw new RemoteConflictError(path, current);
@@ -269,10 +272,29 @@ export class GoogleDriveProvider implements CloudProvider {
 		this.index.noteFile(entry.id, path, entryOf(file));
 		// Review W22 S3: did another device write between our check and our write? Only a binary file with a revision id can say.
 		if (id && typeof ifRev === "string" && str(existing?.headRevisionId) === ifRev) {
-			const displaced = await this.displaced(id, ifRev, str(file.headRevisionId), signal);
-			if (displaced.length > 0) entry.displaced = displaced;
+			try {
+				const displaced = await this.displaced(id, ifRev, str(file.headRevisionId), limits?.maxBytes ?? 0, signal);
+				if (displaced.length > 0) entry.displaced = displaced;
+			} catch (e) {
+				// Review round 2 (R2-3): the write is done; the check after it failed. Said, never thrown (a retry would see our own
+				// revision and never look again).
+				console.error("[notebook] cloud sync: could not check the versions replaced by an upload", e);
+				entry.displacedUnknown = true;
+			}
 		}
 		return entry;
+	}
+
+	/** A file listed at `path` (by id, from the index) whose revision is `rev`, when it still exists. */
+	private async knownFile(path: string, rev: string, signal?: AbortSignal): Promise<DriveFile | undefined> {
+		for (const id of this.index.idsAt(path)) {
+			const res = await this.api.send({ url: `${API}/files/${enc(id)}?fields=${enc(FIELDS)}`, method: "GET" }, signal);
+			if (res.status === 404) continue;
+			if (res.status !== 200) this.api.fail(res, "find file");
+			const f = obj(json(res));
+			if (f.trashed !== true && revOf(f) === rev) return f;
+		}
+		return undefined;
 	}
 
 	/**
@@ -280,17 +302,17 @@ export class GoogleDriveProvider implements CloudProvider {
 	 * first, with their bytes. Drive lists revisions without a stated order, so they are sorted by time. When `base` is not
 	 * listed, the revision right before ours counts as written in between (a conflicted copy too many, never one too few).
 	 */
-	private async displaced(id: string, base: string, head: string | undefined, signal?: AbortSignal): Promise<DisplacedRevision[]> {
+	private async displaced(id: string, base: string, head: string | undefined, maxBytes: number, signal?: AbortSignal): Promise<DisplacedRevision[]> {
 		if (!head || head === base) return [];
-		const revs: { id: string; at: number; n: number }[] = [];
+		const revs: { id: string; at: number; n: number; size: number }[] = [];
 		let page: string | undefined;
 		do {
-			const res = await this.api.send({ url: `${API}/files/${enc(id)}/revisions?pageSize=1000&fields=${enc("nextPageToken,revisions(id,modifiedTime)")}${page ? `&pageToken=${enc(page)}` : ""}`, method: "GET" }, signal);
+			const res = await this.api.send({ url: `${API}/files/${enc(id)}/revisions?pageSize=1000&fields=${enc("nextPageToken,revisions(id,modifiedTime,size)")}${page ? `&pageToken=${enc(page)}` : ""}`, method: "GET" }, signal);
 			if (res.status !== 200) this.api.fail(res, "revisions");
 			const body = obj(json(res));
 			for (const r of Array.isArray(body.revisions) ? body.revisions : []) {
 				const rid = str(obj(r).id);
-				if (rid) revs.push({ id: rid, at: Date.parse(str(obj(r).modifiedTime) ?? "") || 0, n: revs.length });
+				if (rid) revs.push({ id: rid, at: Date.parse(str(obj(r).modifiedTime) ?? "") || 0, n: revs.length, size: num(obj(r).size) ?? 0 });
 			}
 			page = str(body.nextPageToken);
 		} while (page);
@@ -302,6 +324,11 @@ export class GoogleDriveProvider implements CloudProvider {
 		const between = b >= 0 && b < h ? revs.slice(b + 1, h) : b >= 0 ? [] : [revs[h - 1]!];
 		const out: DisplacedRevision[] = [];
 		for (const r of between) {
+			// Review round 2 (R2-7): above the caller's cap (a phone): not downloaded, it stays in the version history.
+			if (maxBytes > 0 && r.size > maxBytes) {
+				out.push({ rev: r.id, size: r.size });
+				continue;
+			}
 			const res = await this.api.send({ url: `${API}/files/${enc(id)}/revisions/${enc(r.id)}?alt=media`, method: "GET" }, signal);
 			if (res.status !== 200) this.api.fail(res, "download revision");
 			out.push({ rev: r.id, data: res.arrayBuffer });

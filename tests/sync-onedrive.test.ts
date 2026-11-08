@@ -110,7 +110,7 @@ describe("OneDrive: listing and delta", () => {
 			.on("GET", `${ITEMS}/R?`, res(200, { id: "R", folder: {} }))
 			.once("GET", `${ITEMS}/R/delta?$select=`, res(400, { error: { code: "invalidRequest", message: "Delta is only supported on the root" } }))
 			// Children pages: the parent is forced to the folder listed (children items may carry no parentReference id).
-			.on("GET", `${ITEMS}/R/children?page=2`, res(200, { value: [f("y", "y.md", "R")], "@odata.nextLink": "https://evil.example/next" }))
+			.on("GET", `${ITEMS}/R/children?page=2`, res(200, { value: [f("y", "y.md", "R")] }))
 			.on("GET", `${ITEMS}/R/children?`, res(200, { value: [dir("FA", "A", "?"), { ...f("x", "x.notebook", "R"), parentReference: {} }], "@odata.nextLink": `${ITEMS}/R/children?page=2` }))
 			.on("GET", `${ITEMS}/FA/children?`, res(200, { value: [f("z", "z.png", "FA")] }));
 		const p = provider(http);
@@ -123,6 +123,15 @@ describe("OneDrive: listing and delta", () => {
 		const again = await p.changes(all.cursor);
 		expect(again.full).toBe(true);
 		expect(http.find("GET", `${ITEMS}/R/delta`)).toHaveLength(1);
+	});
+
+	it("R2-8: a children page whose next link leaves Graph fails the listing (never a partial list read as deletions)", async () => {
+		const http = new FakeHttp()
+			.on("GET", `${ITEMS}/R?`, res(200, { id: "R", folder: {} }))
+			.once("GET", `${ITEMS}/R/delta?$select=`, res(400, { error: { code: "invalidRequest", message: "Delta is only supported on the root" } }))
+			.on("GET", `${ITEMS}/R/children?`, res(200, { value: [f("x", "x.notebook", "R")], "@odata.nextLink": "https://evil.example/next" }));
+		await expect(provider(http).changes(undefined)).rejects.toBeInstanceOf(TransientRemoteError);
+		expect(http.calls.some((c) => c.url.includes("evil"))).toBe(false);
 	});
 
 	it("a deleted sync folder stops the listing", async () => {
