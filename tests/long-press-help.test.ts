@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanHelp, HELP_PRESS_MS, HELP_SLOP_PX, LongPressTracker, placeBubble, startsHelp } from "../src/ui/long-press-logic";
+import { cleanHelp, ClickGuard, HELP_CLICK_GUARD_MS, HELP_PRESS_MS, HELP_SLOP_PX, LongPressTracker, placeBubble, startsHelp } from "../src/ui/long-press-logic";
 import { ACTION_HELP, TOOL_HELP } from "../src/ui/help-text";
 import { ACTIONS, actionById } from "../src/ui/actions";
 import { en } from "../src/i18n/en";
@@ -113,5 +113,62 @@ describe("the explanations", () => {
 	it("the setting is on by default and listed", () => {
 		expect(DEFAULT_SETTINGS.iconHelp).toBe(true);
 		expect(settingSpecs().some((s) => s.id === "iconHelp")).toBe(true);
+	});
+});
+
+describe("ClickGuard (the click that ends a long press)", () => {
+	const btn = { id: "delete" };
+	const other = { id: "cut" };
+	it("hold 1.5 s then release on a button: the click is swallowed, whatever the hold length", () => {
+		const g = new ClickGuard<object>();
+		g.arm(btn); // the bubble showed at 0.5 s
+		g.lift(1500); // the finger lifted at 1.5 s, 1000 ms after the bubble: past the old clock
+		expect(g.consume(btn, 1510)).toBe(true);
+	});
+	it("a very long hold (4 s) is covered too: the safety limit counts from the lift", () => {
+		const g = new ClickGuard<object>();
+		g.arm(btn);
+		g.lift(4000);
+		expect(g.consume(btn, 4000 + HELP_CLICK_GUARD_MS)).toBe(true);
+	});
+	it("is one-shot: the second click goes through", () => {
+		const g = new ClickGuard<object>();
+		g.arm(btn);
+		g.lift(100);
+		expect(g.consume(btn, 110)).toBe(true);
+		expect(g.consume(btn, 120)).toBe(false);
+	});
+	it("a quick normal tap within 0.8 s of the bubble is never swallowed (new pointerdown disarms)", () => {
+		const g = new ClickGuard<object>();
+		g.arm(btn); // bubble at t = 500
+		g.lift(600);
+		g.down(); // a new tap on the same button at t = 700
+		expect(g.consume(btn, 760)).toBe(false);
+	});
+	it("a click on another button is not swallowed and keeps the guard for the right one", () => {
+		const g = new ClickGuard<object>();
+		g.arm(btn);
+		g.lift(100);
+		expect(g.consume(other, 110)).toBe(false);
+		expect(g.consume(btn, 120)).toBe(true);
+	});
+	it("a click that arrives too long after the lift (a stale flag) goes through and clears it", () => {
+		const g = new ClickGuard<object>();
+		g.arm(btn);
+		g.lift(100);
+		expect(g.consume(btn, 100 + HELP_CLICK_GUARD_MS + 1)).toBe(false);
+		expect(g.armed).toBe(false);
+		expect(g.consume(btn, 100 + HELP_CLICK_GUARD_MS + 2)).toBe(false);
+	});
+	it("the flag stays armed while the finger is still down", () => {
+		const g = new ClickGuard<object>();
+		g.arm(btn);
+		expect(g.consume(btn, 99_999)).toBe(true);
+	});
+	it("nothing is swallowed when no bubble was shown", () => {
+		const g = new ClickGuard<object>();
+		expect(g.consume(btn, 10)).toBe(false);
+		g.lift(5);
+		expect(g.armed).toBe(false);
 	});
 });

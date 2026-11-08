@@ -5,7 +5,7 @@
 import { t } from "../i18n";
 import type { MessageKey } from "../i18n/en";
 import { ACTION_HELP } from "./help-text";
-import { cleanHelp, HELP_CLICK_GUARD_MS, HELP_LINGER_MS, LongPressTracker, placeBubble, startsHelp, type HelpContent } from "./long-press-logic";
+import { cleanHelp, ClickGuard, HELP_LINGER_MS, LongPressTracker, placeBubble, startsHelp, type HelpContent } from "./long-press-logic";
 
 let enabledFlag = true;
 
@@ -60,7 +60,7 @@ export function attachLongPressHelp(root: HTMLElement, resolve: (button: HTMLEle
 	let target: HTMLElement | null = null;
 	let pointerId = -1;
 	let bubble: HTMLElement | null = null;
-	let shownAt = -Infinity;
+	const guard = new ClickGuard<HTMLElement>();
 	let lingerTimer = 0;
 
 	const clearTimer = (): void => {
@@ -69,7 +69,10 @@ export function attachLongPressHelp(root: HTMLElement, resolve: (button: HTMLEle
 	};
 	let doc: Document | null = null;
 	// A tap anywhere else dismisses it (the press that opened it began before this listener existed).
-	const onOutside = (): void => hide();
+	const onOutside = (): void => {
+		guard.down();
+		hide();
+	};
 	function hide(): void {
 		if (lingerTimer) window.clearTimeout(lingerTimer);
 		lingerTimer = 0;
@@ -96,12 +99,13 @@ export function attachLongPressHelp(root: HTMLElement, resolve: (button: HTMLEle
 		const p = placeBubble(r, w, h, { width: win.innerWidth, height: win.innerHeight });
 		bubble.setCssProps({ left: `${p.left}px`, top: `${p.top}px`, "--nb-help-arrow-x": `${p.arrowX}px` });
 		bubble.toggleClass("is-above", p.above);
-		shownAt = performance.now();
+		guard.arm(btn);
 		activeHide = hide;
 		doc.addEventListener("pointerdown", onOutside, true);
 	};
 
 	const onDown = (e: PointerEvent): void => {
+		guard.down(); // a new press is a new gesture: its tap is never swallowed
 		if (!enabledFlag || !startsHelp(e.pointerType, e.isPrimary)) return;
 		const btn = targetButton(e, root);
 		if (!btn || !resolve(btn)) return;
@@ -123,6 +127,7 @@ export function attachLongPressHelp(root: HTMLElement, resolve: (button: HTMLEle
 		if (e.pointerId !== pointerId) return;
 		clearTimer();
 		tracker.end();
+		guard.lift(performance.now());
 		if (bubble) {
 			// The finger lifted: let the reader finish, then hide.
 			lingerTimer = window.setTimeout(hide, HELP_LINGER_MS);
@@ -132,11 +137,12 @@ export function attachLongPressHelp(root: HTMLElement, resolve: (button: HTMLEle
 		if (e.pointerId !== pointerId) return;
 		clearTimer();
 		tracker.end();
+		guard.lift(performance.now());
 		hide();
 	};
 	// The click that ends the long press must not press the button.
 	const onClick = (e: Event): void => {
-		if (performance.now() - shownAt < HELP_CLICK_GUARD_MS && targetButton(e, root) === target) {
+		if (guard.consume(targetButton(e, root), performance.now())) {
 			e.preventDefault();
 			e.stopImmediatePropagation();
 		}

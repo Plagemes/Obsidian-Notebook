@@ -7,8 +7,54 @@ export const HELP_PRESS_MS = 500;
 export const HELP_SLOP_PX = 10;
 /** How long the bubble stays after the finger lifts, ms (long enough to finish reading it). */
 export const HELP_LINGER_MS = 1200;
-/** The click that ends a long press is swallowed for this long after the bubble showed, ms. */
+/** The click that ends a long press can still arrive this long after the finger lifts, ms (safety limit of the click guard). */
 export const HELP_CLICK_GUARD_MS = 800;
+
+/**
+ * The click that ends a long press must not press the button. A one-shot flag, not a clock from the moment the bubble showed:
+ * armed when the bubble shows, consumed by the next click on that same button, dropped by the next pointerdown (a new tap is
+ * never swallowed) and dropped for good once `guardMs` passed since the finger lifted. A hold of any length is covered because
+ * the flag stays armed while the finger is down.
+ */
+export class ClickGuard<T> {
+	private armedFor: T | null = null;
+	private liftedAt: number | null = null;
+
+	constructor(private readonly guardMs = HELP_CLICK_GUARD_MS) {}
+
+	/** The bubble showed for `target`: the click that follows the lift is swallowed. */
+	arm(target: T): void {
+		this.armedFor = target;
+		this.liftedAt = null;
+	}
+
+	/** The finger lifted (or the press was cancelled): the safety limit counts from here. */
+	lift(now: number): void {
+		if (this.armedFor !== null && this.liftedAt === null) this.liftedAt = now;
+	}
+
+	/** Any new pointerdown: whatever follows is a new gesture, never swallowed. */
+	down(): void {
+		this.armedFor = null;
+		this.liftedAt = null;
+	}
+
+	get armed(): boolean {
+		return this.armedFor !== null;
+	}
+
+	/** A click on `target` arrived: true means swallow it (one-shot). Too late after the lift, it disarms and lets it through. */
+	consume(target: T | null, now: number): boolean {
+		if (this.armedFor === null) return false;
+		if (this.liftedAt !== null && now - this.liftedAt > this.guardMs) {
+			this.down();
+			return false;
+		}
+		if (target !== this.armedFor) return false;
+		this.down();
+		return true;
+	}
+}
 
 /**
  * Only a finger asks for the explanation: a mouse already has the hover tooltip and the pen belongs to writing and to the S Pen
