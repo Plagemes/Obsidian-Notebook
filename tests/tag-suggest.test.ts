@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parsePageTagInput } from "../src/model/page-tags";
 import { contentWords, isStopWord, suggestFromContext, tagForKind } from "../src/model/tag-suggest";
 
 describe("contentWords", () => {
@@ -86,5 +87,27 @@ describe("tag context", () => {
 	it("gives nothing when suggestions are off", () => {
 		expect(tagSuggestionsFor({ enabled: false, timetable: tt([entry("Physics")]), notebookPath: "x.nb" })).toEqual([]);
 		expect(tagSuggestionsFor({ enabled: true, timetable: tt([entry("Physics", "x.nb")]), notebookPath: "x.nb", existing: ["physics"] })).toEqual([]);
+	});
+});
+
+describe("one tap adds exactly one page tag (W11)", () => {
+	const tap = (existing: string[], tag: string) => parsePageTagInput([...existing, tag].join(", "));
+	it("separators in a course name never split the suggestion", () => {
+		for (const course of ["Analysis I, Part 2", "Fisica; Lab", "Algebra #2", "Chem, bio; and #more"]) {
+			const out = suggestFromContext({ course, style: "page" });
+			expect(out, course).toHaveLength(1);
+			expect(tap(["exam"], out[0]!), course).toEqual(["exam", out[0]!]);
+		}
+		expect(suggestFromContext({ course: "Analysis I, Part 2", style: "page" })).toEqual(["Analysis I Part 2"]);
+	});
+	it("sibling tags and every other source are held to the same rule", () => {
+		const out = suggestFromContext({ siblingTags: [["a, b"], ["a, b"], ["x;y"]], style: "page" });
+		for (const tag of out) expect(parsePageTagInput(tag)).toEqual([tag]);
+	});
+	it("a name made only of separators suggests nothing", () => {
+		expect(suggestFromContext({ course: " , ; # ", style: "page" })).toEqual([]);
+	});
+	it("Obsidian-style tags never contain a comma either", () => {
+		expect(suggestFromContext({ course: "Analysis I, Part 2" }).every((t) => !/[,;\s]/.test(t))).toBe(true);
 	});
 });

@@ -6,7 +6,7 @@
  * (question, homework, definition...). Nothing is stored: the list is computed when the editor opens.
  */
 import { normalizeTag, tagKey } from "./tags";
-import { normalizePageTag } from "./page-tags";
+import { normalizePageTag, parsePageTagInput } from "./page-tags";
 
 export const MAX_SUGGESTIONS = 6;
 
@@ -94,11 +94,22 @@ const HEADING_WEIGHT = 3;
 const MIN_WORD_WEIGHT = 3;
 const WORD_SCORE = 10;
 
+/**
+ * A page tag that the tag field takes back as exactly ONE tag: the field splits its text on commas, semicolons and before a "#", so a suggestion made from a
+ * course called "Analysis I, Part 2" would become two tags on one tap. Those separators turn into spaces; null when nothing sensible is left.
+ */
+export function singlePageTag(raw: string): string | null {
+	const tag = normalizePageTag(raw.replace(/[,;]+/g, " ").replace(/\s+#+/g, " "));
+	if (tag === null) return null;
+	const parsed = parsePageTagInput(tag);
+	return parsed.length === 1 && parsed[0]!.toLowerCase() === tag.toLowerCase() ? tag : null;
+}
+
 /** Ranked tag suggestions for the context (at most `limit`, default 6), without the tags already there. */
 export function suggestFromContext(input: TagSuggestInput): string[] {
 	const style = input.style ?? "obsidian";
 	const limit = Math.max(0, input.limit ?? MAX_SUGGESTIONS);
-	const norm = (raw: string): string | null => (style === "page" ? normalizePageTag(raw) : normalizeTag(raw));
+	const norm = (raw: string): string | null => (style === "page" ? singlePageTag(raw) : normalizeTag(raw));
 	const taken = new Set<string>();
 	for (const tag of input.existing ?? []) {
 		taken.add(tagKey(tag));
