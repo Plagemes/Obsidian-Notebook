@@ -2,7 +2,7 @@
  * 0.23 formulasheet (roadmap #249): the formula sheet on the `doc=formulasheet` scenario (npm run harness:check). Checked: the dialog lists
  * the equations in reading order with a page chip each, "Build formula sheet" writes "<Notebook> — Formulas.md" next to the notebook with
  * `$$` blocks and page links, a second run rewrites only the generated region, an unpaired marker, a note without markers and another
- * notebook's sheet are left untouched, and the notice of the result is shown. The dialog is left open for the screenshot.
+ * notebook's sheet are left untouched (the sheet goes to " (2)"), and the notice of the result is shown. The dialog is left open for the screenshot.
  */
 import { FormulaSheetModal, formulaNotePath, writeFormulaNote, type FormulaSheetHost } from "../../src/view/formula-sheet";
 import { createPage } from "../../src/model/document";
@@ -62,10 +62,10 @@ export async function checkFormulaSheet(api: FormulaSheetCheckApi): Promise<{ ok
 	add("a rebuild rewrites only the region", text2.startsWith("Preface\n\n") && text2.endsWith("\n\nAfterword") && text2.includes("a^2 + b^2 = c^2") && text2.split(START_OPEN).length === 2);
 	if (file) await vault.modify(file, `Only mine ${FORMULA_START} broken`);
 	const unsafe = await writeFormulaNote(host);
-	add("an unpaired marker is left untouched", unsafe === null && (await read(file)) === `Only mine ${FORMULA_START} broken`);
+	add("an unpaired marker is left untouched and the sheet goes to the next free name", unsafe === "Notebooks/Physics — Formulas (2).md" && (await read(file)) === `Only mine ${FORMULA_START} broken`, String(unsafe));
 	if (file) await vault.modify(file, "A note of mine without markers");
 	const foreign = await writeFormulaNote(host);
-	add("a note without markers is never changed", foreign === null && (await read(file)) === "A note of mine without markers");
+	add("a note without markers is never changed and the sheet goes to the next free name", foreign === "Notebooks/Physics — Formulas (2).md" && (await read(file)) === "A note of mine without markers", String(foreign));
 	const otherText = `# Other\n\n<!-- notebook-formulas:start for=School%2FOther.notebook id=other-doc -->\n\nOther\n\n${FORMULA_END}\n`;
 	if (file) await vault.modify(file, otherText);
 	const second = await writeFormulaNote(host);

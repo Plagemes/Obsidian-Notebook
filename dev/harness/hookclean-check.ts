@@ -120,7 +120,7 @@ export async function checkHookclean(api: HookcleanCheckApi): Promise<{ ok: bool
 	};
 	v.clearSelection();
 	setTool("pen");
-	const hooked = (y: number): Array<[number, number]> => [frac(60, y), frac(150, y), frac(240, y), frac(...away(240, y, 150, 5))];
+	const hooked = (y: number): Array<[number, number]> => [frac(60, y), frac(150, y), frac(240, y), frac(...away(240, y, 170, 5))];
 	const gapToCorner = (s: Stroke | undefined, y: number): number => (s ? Math.hypot(lastOf(s)[0] - 240, lastOf(s)[1] - y) : NaN);
 	const countBefore = page().strokes.length;
 	settings.trimHooks = false;
@@ -130,11 +130,17 @@ export async function checkHookclean(api: HookcleanCheckApi): Promise<{ ok: bool
 	settings.trimHooks = true;
 	await penStroke(hooked(370), { steps: 10 });
 	const trimmed = page().strokes[countBefore + 1];
-	add("with the setting on the stroke is saved once, with its hook cut", !!trimmed && page().strokes.length === countBefore + 2 && gapToCorner(trimmed, 370) < gapToCorner(plain, 330) - 1.5, `${gapToCorner(trimmed, 370).toFixed(2)} pt from the corner`);
+	add("with the setting on the stroke ends without its hook (a near reversal; the stricter writing-time limits)", !!trimmed && page().strokes.length === countBefore + 2 && gapToCorner(trimmed, 370) < gapToCorner(plain, 330) - 1.5, `${gapToCorner(trimmed, 370).toFixed(2)} pt from the corner`);
+	const trimmedId = trimmed?.id;
 	v.undo();
 	await frames(2);
-	add("one undo removes the stroke whole", page().strokes.length === countBefore + 1);
+	add("one undo gives back the stroke as it was written, hook included", page().strokes.length === countBefore + 2 && page().strokes[countBefore + 1]?.id === trimmedId && gapToCorner(page().strokes[countBefore + 1], 370) > 2.5, `${gapToCorner(page().strokes[countBefore + 1], 370).toFixed(2)} pt from the corner`);
+	v.undo();
+	await frames(2);
+	add("a second undo removes the stroke", page().strokes.length === countBefore + 1);
 	settings.trimHooks = false;
+	v.redo();
+	await frames(2);
 	v.redo();
 	await frames(2);
 

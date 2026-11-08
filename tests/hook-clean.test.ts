@@ -431,7 +431,7 @@ describe("review V7: clean-up never edits ink a collapsed sticky note keeps hidd
 		const visibleDot = stroke([[50, 300, 0.4]]);
 		const hiddenNeighbour = stroke(poly([[50, 301], [50, 340]]));
 		const visibleHook = stroke(poly([[40, 400], [100, 400], away(100, 400, 160, 4)]));
-		const note = { ...createSticky(200, 200, page), collapsed: true, ink: [hiddenHook.id, hiddenStem.id, hiddenDot.id, hiddenNeighbour.id] };
+		const note = { ...createSticky(200, 200, page), collapsed: true as const, ink: [hiddenHook.id, hiddenStem.id, hiddenDot.id, hiddenNeighbour.id] };
 		page.strokes.push(hiddenHook, hiddenStem, hiddenDot, visibleDot, hiddenNeighbour, visibleHook);
 		page.elements = [note];
 		const plan = planCleanup(page, [...page.strokes])!;
