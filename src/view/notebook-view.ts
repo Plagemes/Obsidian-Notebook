@@ -2208,7 +2208,7 @@ export class NotebookView extends FileView {
 		const file = this.file;
 		if (!this.shownDoc() || !file) return;
 		new BookIndexModal({
-			app: this.app, file, prefix: normalizeIndexPrefix(this.host.settings.indexPrefix),
+			app: this.app, file, docId: this.shownDoc()?.id, prefix: normalizeIndexPrefix(this.host.settings.indexPrefix),
 			pages: () => this.shownDoc()?.pages ?? [], goTo: (index, y) => this.scrollToPage(index, y),
 		}).open();
 	}

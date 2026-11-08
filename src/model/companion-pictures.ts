@@ -122,3 +122,11 @@ export async function rewriteIfUnchanged<F extends { stat: FileStamp }>(vault: P
 	await vault.modifyBinary(file, data);
 	return { file, changed: false };
 }
+
+/**
+ * Whether the picture a plan points at may be remembered as the picture of the current ink. A `full` plan points at a stale
+ * picture (older ink): remembering it would keep linking it without probing, even after the user frees a name (review W21 N6).
+ */
+export function pictureCacheable(plan: PicturePlan): boolean {
+	return plan.action !== "full";
+}

@@ -3,7 +3,7 @@ import { HeadingIndex, pageFingerprint } from "../model/heading-index";
 import {
 	COMPANION_HEADING_PIXELS, COMPANION_HEADING_WIDTH, headingPictureName, pickCompanionHeadings,
 } from "../model/companion-headings";
-import { choosePicturePath, NotebookLru, PICTURE_MARK, rewriteIfUnchanged, type PictureProbe } from "../model/companion-pictures";
+import { choosePicturePath, NotebookLru, PICTURE_MARK, pictureCacheable, rewriteIfUnchanged, type PictureProbe } from "../model/companion-pictures";
 import { markPictureBytes, pictureIntact, readPngText } from "../model/png-text";
 import { embedWithWidth } from "../model/selection-task";
 import type { NotebookDocument } from "../model/types";
@@ -112,8 +112,8 @@ export class CompanionHeadings {
 						// No free name left: the previous picture stays linked (it shows older ink) and the user is told once.
 						this.tellFull();
 						const previous = app.vault.getFileByPath(plan.path);
-						// Remembered for this ink: the next runs link it without reading all the names again.
-						if (previous) this.made.set(wanted, { path: previous.path, key });
+						// Not remembered under this ink (review W21 N6): the next run probes again, so a name the user frees is used.
+						if (previous && pictureCacheable(plan)) this.made.set(wanted, { path: previous.path, key });
 						return previous ? embedWithWidth(withEmbedMarker(app.fileManager.generateMarkdownLink(previous, notePath), true), COMPANION_HEADING_WIDTH) : null;
 					}
 					const bytes = render();

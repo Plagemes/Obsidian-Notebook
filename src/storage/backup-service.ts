@@ -33,8 +33,6 @@ const CHECK_EVERY_MS = 30 * 60_000;
  */
 const MAX_BYTES_MOBILE = 64 * 1024 * 1024;
 const MAX_BYTES_DESKTOP = 1024 * 1024 * 1024;
-/** An old backup bigger than this is not read to check its marker, so it is never trashed. */
-const MAX_VERIFY_BYTES = 512 * 1024 * 1024;
 /** The progress notice is updated at most this often. */
 const PROGRESS_EVERY_MS = 700;
 
@@ -210,7 +208,7 @@ export class BackupService {
 			},
 			readOld: async (path) => {
 				const f = file(path);
-				if (f.stat.size > MAX_VERIFY_BYTES) throw new Error("too big to check");
+				if (f.stat.size > (Platform.isMobile ? MAX_BYTES_MOBILE : MAX_BYTES_DESKTOP)) throw new Error("too big to check");
 				return new Uint8Array(await vault.readBinary(f));
 			},
 			writtenByPlugin: (path) => writtenSet(loadWritten(app)).has(normalizePath(path).toLowerCase()),

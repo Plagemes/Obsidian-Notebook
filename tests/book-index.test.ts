@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createPage } from "../src/model/document";
 import { createMarker } from "../src/model/markers";
 import {
-	DEFAULT_INDEX_PREFIX, INDEX_END, INDEX_START, indexOwnerOf, indexStartMarker, pickIndexNote, buildIndex, buildIndexSection, collectIndexEntries, filterIndex, indexCounts, indexLabel, indexTermOf,
+	DEFAULT_INDEX_PREFIX, INDEX_END, INDEX_START, indexOwnerOf, indexRegionOf, indexNoteIsMine, indexStartMarker, pickIndexNote, buildIndex, buildIndexSection, collectIndexEntries, filterIndex, indexCounts, indexLabel, indexTermOf,
 	newIndexNote, normalizeIndexPrefix, replaceIndexSection, sectionLetter, splitTerm, type IndexEntry,
 } from "../src/model/book-index";
 import type { Page } from "../src/model/types";
@@ -202,5 +202,46 @@ describe("review W21 D8: an index note belongs to one notebook", () => {
 		expect(await pickIndexNote(slots({ 1: { exists: true, folder: true } }), "A")).toBe(1);
 		const all = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { exists: true, owner: "B" }]));
 		expect(await pickIndexNote(slots(all), "A")).toBeNull();
+	});
+});
+
+describe("review W21 N1: the index note follows the notebook's document id", () => {
+	const link = (n: number) => `[[Nb#p${n}|p. ${n}]]`;
+	const make = (owner?: string, ownerId?: string) => buildIndexSection({ sections: [], pageLink: link, intro: "Intro", none: "Nothing", owner, ownerId });
+
+	it("records the id next to the path and reads both back; old markers stay readable", () => {
+		const s = make("Old/Bio.notebook", "doc id/1");
+		expect(indexRegionOf(`# t\n${s}`)).toEqual({ path: "Old/Bio.notebook", id: "doc id/1" });
+		expect(indexRegionOf(`# t\n${make("Old/Bio.notebook")}`)).toEqual({ path: "Old/Bio.notebook", id: null });
+		expect(indexRegionOf(`# t\n${make()}`)).toEqual({ path: null, id: null });
+		expect(indexOwnerOf(`# t\n${s}`)).toBe("Old/Bio.notebook");
+		expect(indexRegionOf("plain")).toBeUndefined();
+	});
+
+	it("claims by id after a rename, by path for old markers, and by a vanished path; never another id", () => {
+		expect(indexNoteIsMine({ owner: "Old/B", ownerId: "X" }, "New/B", "X")).toBe(true);
+		expect(indexNoteIsMine({ owner: "New/B", ownerId: "Y" }, "New/B", "X")).toBe(false);
+		expect(indexNoteIsMine({ owner: "New/B", ownerId: null }, "New/B", "X")).toBe(true);
+		expect(indexNoteIsMine({ owner: "Old/B", ownerId: null }, "New/B", "X")).toBe(false);
+		expect(indexNoteIsMine({ owner: "Old/B", ownerId: null, ownerGone: true }, "New/B", "X")).toBe(true);
+		expect(indexNoteIsMine({ owner: "Old/B", ownerId: "Y", ownerGone: true }, "New/B", "X")).toBe(false);
+	});
+
+	it("rename the folder, then write: the note is replaced in place, not numbered", async () => {
+		const note = `Before\n\n${make("Old/Bio.notebook", "X")}\nAfter`;
+		const r = replaceIndexSection(note, make("New/Bio.notebook", "X"), "New/Bio.notebook", { id: "X", pathExists: () => false });
+		expect(r.outcome).toBe("replaced");
+		expect(r.text.startsWith("Before\n\n")).toBe(true);
+		expect(r.text.endsWith("\nAfter")).toBe(true);
+		expect(r.text).toContain('for=New%2FBio.notebook id=X');
+		const pick = await pickIndexNote(async () => ({ exists: true, owner: "Old/Bio.notebook", ownerId: "X" }), "New/Bio.notebook", "X");
+		expect(pick).toBe(1);
+		// a path-only note whose path is gone is reclaimed; one whose path still exists is another notebook's
+		expect(replaceIndexSection(`${make("Old/Bio.notebook")}`, make("New/Bio.notebook", "X"), "New/Bio.notebook", { id: "X", pathExists: () => false }).outcome).toBe("replaced");
+		expect(replaceIndexSection(`${make("Old/Bio.notebook")}`, make("New/Bio.notebook", "X"), "New/Bio.notebook", { id: "X", pathExists: () => true }).outcome).toBe("other");
+		// another notebook's id is never taken over, even when its path is gone
+		expect(replaceIndexSection(`${make("Old/Bio.notebook", "Z")}`, make("New/Bio.notebook", "X"), "New/Bio.notebook", { id: "X", pathExists: () => false }).outcome).toBe("other");
+		expect(await pickIndexNote(async (n) => (n === 1 ? { exists: true, owner: "Old/B", ownerId: "Z", ownerGone: true } : { exists: false }), "New/B", "X")).toBe(2);
+		expect(await pickIndexNote(async (n) => (n === 1 ? { exists: true, owner: "Old/B", ownerId: null, ownerGone: true } : { exists: false }), "New/B", "X")).toBe(1);
 	});
 });

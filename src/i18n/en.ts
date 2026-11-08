@@ -3930,7 +3930,7 @@ export const en = {
 	"settings.backupFolder": "Backup folder",
 	"settings.backupFolder.desc": "A vault folder. Point your sync tool at it to copy backups elsewhere.",
 	"settings.backupKeep": "Backups to keep",
-	"settings.backupKeep.desc": "Older backups made by this plugin go to the trash. Nothing else is touched.",
+	"settings.backupKeep.desc": "Older plugin backups in this folder go to the trash. Move one out to keep it.",
 	"settings.backupFolder.overlapNotebooks": "The backup folder cannot be the notebooks folder, hold it or sit inside it. The previous folder is kept.",
 	"settings.backupFolder.overlapTemplates": "The backup folder cannot overlap a templates folder. The previous folder is kept.",
 	"settings.backupFolder.holdsNotebooks": "That folder holds notebooks, so it cannot be the backup folder. The previous folder is kept.",

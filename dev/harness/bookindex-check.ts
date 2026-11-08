@@ -36,7 +36,7 @@ export async function checkBookIndex(api: BookIndexCheckApi): Promise<{ ok: bool
 	pages[2]!.elements = [mk("#idx Cell / Membrane", 90), mk("#idx Élan vital", 400), mk("#idx 3D structure", 500)];
 	pages[3]!.elements = [mk("#idx photosynthesis", 80)];
 	const jumps: Array<[number, number]> = [];
-	const host: BookIndexHost = { app: app as never, file: notebook as never, prefix: "#idx", pages: () => pages, goTo: (i, y) => jumps.push([i, y]) };
+	const host: BookIndexHost = { app: app as never, file: notebook as never, docId: "bio-doc", prefix: "#idx", pages: () => pages, goTo: (i, y) => jumps.push([i, y]) };
 
 	// 1. The dialog.
 	const dialog = new BookIndexModal(host);
@@ -80,11 +80,16 @@ export async function checkBookIndex(api: BookIndexCheckApi): Promise<{ ok: bool
 	const foreign = await writeIndexNote(host);
 	add("a foreign note with that name is never changed", foreign === null && (file ? await vault.read(file) : "") === "A note of mine without markers");
 	// A note that records another notebook is never rewritten: this notebook's index goes to the "(2)" note.
-	const otherText = `# Other\n\n<!-- notebook-index:start for=School%2FOther.notebook -->\n\nOther index\n\n${INDEX_END}\n`;
+	const otherText = `# Other\n\n<!-- notebook-index:start for=School%2FOther.notebook id=other-doc -->\n\nOther index\n\n${INDEX_END}\n`;
 	if (file) await vault.modify(file, otherText);
 	const second = await writeIndexNote(host);
 	const secondFile = second ? vault.getFileByPath(second) : null;
 	add("another notebook's index note is never rewritten", (file ? await vault.read(file) : "") === otherText && second === "Notebooks/Biology — Index (2).md" && !!secondFile && indexOwnerOf(await vault.read(secondFile)) === (notebook as unknown as { path: string }).path, String(second));
+	// Review W21 N1: a note that records this notebook's document id under an old path (the notebook was renamed or moved) is rewritten in place.
+	const movedText = `# Moved\n\n<!-- notebook-index:start for=Old%2FBiology.notebook id=bio-doc -->\n\nStale index\n\n${INDEX_END}\n`;
+	if (file) await vault.modify(file, movedText);
+	const third = await writeIndexNote(host);
+	add("a note recording this notebook's id is rewritten in place after a rename", third === "Notebooks/Biology — Index.md" && !!file && (await vault.read(file)).includes("# Moved") && !(await vault.read(file)).includes("Stale index"), String(third));
 
 	// 3. A chip jumps and closes.
 	chips[0]?.click();

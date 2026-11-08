@@ -340,3 +340,13 @@ export function planRetention(children: readonly FolderChild[], keep: number, no
 		kept: ours.filter((o) => keepSet.has(o.child.path)).map((o) => o.child),
 	};
 }
+
+/**
+ * What to do with a backup folder the user typed (review W21 N3): saved only once it is final (on change, not per keystroke) and
+ * valid. A refused value is never persisted: `keep` is the folder to show again.
+ */
+export function acceptBackupFolder(typed: string, current: string, layout: BackupLayout, filePaths: readonly string[] = []): { ok: true; folder: string } | { ok: false; conflict: BackupFolderConflict; keep: string } {
+	const folder = backupFolderOf(typed);
+	const conflict = backupFolderConflict(folder, layout, filePaths);
+	return conflict === null ? { ok: true, folder } : { ok: false, conflict, keep: current };
+}
