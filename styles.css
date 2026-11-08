@@ -17914,3 +17914,24 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-canvas-wet.is-marker {
 	opacity: 0.85;
 }
+
+/* Kinds as compact tiles (icon over name) so four fit the options at phone width; hidden wins over the display set above. */
+.workspace-leaf-content .view-content.notebook-view .notebook-pen-kinds > .notebook-kind-button {
+	flex: 1 1 0;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	min-height: 52px;
+	padding: 4px 6px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-kind-label {
+	font-size: var(--nb-text-s, 12px);
+	line-height: 1.1;
+	white-space: nowrap;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-pen-kinds.notebook-hidden,
+.workspace-leaf-content .view-content.notebook-view .notebook-nib-row.notebook-hidden {
+	display: none;
+}

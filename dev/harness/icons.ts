@@ -24,6 +24,8 @@ const P: Record<string, string> = {
 	"alert-triangle": "M12 3L2 20h20z M12 10v4 M12 17h.01",
 	"repeat": "M17 2l4 4-4 4 M3 11V9a3 3 0 0 1 3-3h15 M7 22l-4-4 4-4 M21 13v2a3 3 0 0 1-3 3H3",
 	// Settings section headers (view/settings-schema.ts) that had no stand-in
+	// 0.22 pens: the brush kind of the pen options
+	"paintbrush": "M18.4 2.6a2 2 0 0 1 3 3L12 15l-3-3z M9 12a4 4 0 0 0-4 4c0 1.5-1 2.5-3 3 1 1.5 2.5 2 4.5 2a5 5 0 0 0 5-5 4 4 0 0 0-2.5-4z",
 	"pen-line": "M12 20h9 M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
 	"share": "M4 12v8h16v-8 M16 6l-4-4-4 4 M12 2v13",
 	"stethoscope": "M5 3v6a5 5 0 0 0 10 0V3 M10 14v2a5 5 0 0 0 10 0v-3 M20 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
