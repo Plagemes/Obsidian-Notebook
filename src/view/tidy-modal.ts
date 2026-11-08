@@ -14,7 +14,7 @@ export const TIDY_OPTIONS_KEY = "notebook-tidy-options";
 export function loadTidyOptions(app: Pick<App, "loadLocalStorage">): TidyOptions {
 	try {
 		const raw: unknown = app.loadLocalStorage(TIDY_OPTIONS_KEY);
-		return normaliseTidyOptions(typeof raw === "string" ? (JSON.parse(raw) as unknown) : null);
+		return normaliseTidyOptions(typeof raw === "string" ? (JSON.parse(raw) as unknown) : raw);
 	} catch {
 		return normaliseTidyOptions(null);
 	}
@@ -22,7 +22,7 @@ export function loadTidyOptions(app: Pick<App, "loadLocalStorage">): TidyOptions
 
 export function saveTidyOptions(app: Pick<App, "saveLocalStorage">, options: TidyOptions): void {
 	try {
-		app.saveLocalStorage(TIDY_OPTIONS_KEY, JSON.stringify(options));
+		app.saveLocalStorage(TIDY_OPTIONS_KEY, { ...options });
 	} catch (e) {
 		console.error("[notebook] could not remember the tidy-up choices", e);
 	}

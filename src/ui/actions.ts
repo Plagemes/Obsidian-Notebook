@@ -350,7 +350,7 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-unlock", label: "page.unlock", icon: "lock-open", group: "page", surfaces: ["page", "sheet"], priority: 49, scope: "view", when: (c) => !!c.page?.locked, keywords: "unlock edit sblocca" },
 	{ id: "page-lock-toggle", label: "command.lockPage", icon: "lock", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true },
 	// 0.26 (#238): the same tidy-up for the whole page (the selection, when there is one, in the palette).
-	{ id: "page-tidy", label: "tidy.pageAction", icon: "align-left", group: "page", surfaces: ["page", "sheet"], priority: 44, scope: "view", command: "command.tidyPage", enabled: pageOpen, keywords: "tidy up clean straighten align margin gap space spacing handwriting selection riordina allinea raddrizza margine spazio scrittura pagina" },
+	{ id: "page-tidy", label: "tidy.pageAction", icon: "align-left", group: "page", surfaces: ["page", "sheet"], priority: 44, scope: "view", command: "command.tidyPage", enabled: pageOpen, keywords: "tidy up clean straighten align margin gap space spacing handwriting selection riordina allinea raddrizza margine spazio scrittura" },
 	// 0.20 (#39): the elements locked on the page (a background picture that must not move): listed, shown and unlocked from here.
 	{ id: "locked-elements", label: "groups.lockedElements", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: "groups.command.lockedElements", when: (c) => (c.page?.lockedElements ?? 0) > 0, keywords: "locked lock fixed background element unlock bloccati sblocca sfondo" },
 	// 0.18 (#227): quick tabs. Pinning does not edit the notebook (the pins are in _meta), so it works on a read-only or locked page too.

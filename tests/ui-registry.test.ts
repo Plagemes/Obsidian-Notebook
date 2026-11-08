@@ -34,6 +34,7 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["selection with a linked checkbox (0.19, #103)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, checkboxes: 1, checkboxesLinked: 1 } })],
 	["selection that can be grouped (0.20, #39)", baseContext({ tool: "lasso", selection: { strokes: 2, elements: 1, images: 0, canGroup: true, grouped: 0 } })],
 	["selection that is a group (0.20, #39)", baseContext({ tool: "lasso", selection: { strokes: 2, elements: 1, images: 0, canGroup: false, grouped: 3 } })],
+	["selection of three strokes (0.26, tidy up)", baseContext({ tool: "lasso", selection: { strokes: 3, elements: 0, images: 0 } })],
 	["page with locked elements (0.20, #39)", baseContext({ page: { index: 1, count: 3, background: "none", infinite: false, bookmarked: false, lockedElements: 2 } })],
 	["lasso, nothing selected", baseContext({ tool: "lasso" })],
 	["PDF page", baseContext({ page: { index: 1, count: 3, background: "pdf", infinite: false, bookmarked: false }, notebook: { pdfPages: true, backgrounds: true } })],

@@ -173,6 +173,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "navadapt", theme, device, lowLatency: false });
 // 0.25 markedview (#419): marked pages only in the page navigator (dev/harness/markedview-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "markedview", theme, device, lowLatency: false });
+// 0.26 tidy (#238): Tidy up (dev/harness/tidy-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tidy", theme, device, lowLatency: false });
 // 0.23 welcomeback (#420): the welcome-back card (dev/harness/welcomeback-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "welcomeback", theme, device, lowLatency: false });
 // 0.24 iconhelp (#429): the long-press explanation bubble (dev/harness/iconhelp-check.ts).
@@ -423,6 +425,7 @@ async function main() {
 				else if (s.doc === "navadapt") report = await cdp.evaluate("window.harness.checkNavadapt()", 90000); // 0.24 navadapt
 				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
 				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
+				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -632,6 +635,19 @@ async function main() {
 						writeFileSync(join(designDir, `baseline-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`baseline ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.26 tidy: screenshots of the crooked page, the sheet open over it, and the page tidied.
+			if (s.doc === "tidy") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["before", "sheet", "after"]) {
+					try {
+						await cdp.evaluate(`window.harness.tidyShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `tidy-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`tidy ${state} screenshot: ${e.message}`);
 					}
 				}
 			}
