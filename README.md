@@ -252,7 +252,7 @@ A click while the pen hovers opens the radial menu (or, if you choose, makes the
 <details>
 <summary><b>Does it use AI or the cloud?</b></summary>
 
-No. Everything, including the generated art and the statistics, is computed by ordinary code on your device: no account, no server of ours, no telemetry. Syncing is up to you: the tools you already use (Syncthing, Obsidian Sync, a synced folder) work as before, and the optional cloud sync built in since 0.22 talks only to your own Google Drive or OneDrive, with your own OAuth client, and only after you turn it on and sign in. Optional AI features are only an idea for much later on the roadmap, after writing and saving are proven stable, and would be local first with any cloud use as an explicit opt-in.
+No AI, and no cloud unless you turn it on. Everything, including the generated art and the statistics, is computed by ordinary code on your device: no account, no server of ours, no telemetry. Syncing is up to you: the tools you already use (Syncthing, Obsidian Sync, a synced folder) work as before, and the optional cloud sync built in since 0.22 talks only to your own Google Drive or OneDrive, with your own OAuth client, and only after you turn it on and sign in. Optional AI features are only an idea for much later on the roadmap, after writing and saving are proven stable, and would be local first with any cloud use as an explicit opt-in.
 </details>
 
 ## Roadmap
