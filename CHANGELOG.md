@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### syncprov
+- **Cloud connector: Google Drive and OneDrive providers and sign-in (#126, part 2).** Sign-in with the OAuth 2.0 device code flow (RFC 8628), the same on Android and desktop: a dialog shows the code and the address, with *Copy code*, *Open sign-in page*, a countdown and *Cancel*, and handles denied, expired, refused-client and network failures with *Try again*. The plugin ships no client ID or secret: you register your own app (step-by-step guide in `docs/cloud-sync.md`). Google uses `drive.file` (the only Drive scope the device flow allows besides the hidden app folder), so everything lives in a `Notebook sync` folder the plugin creates; OneDrive uses `Files.ReadWrite` with the same folder name. Tokens stay on the device (Obsidian's local storage), refresh by themselves, are never logged; *Disconnect* revokes them where the provider allows (Google). Both providers list changes incrementally (Drive changes feed, OneDrive delta) with paths rebuilt from parent ids, upload large files in chunks, refuse to overwrite a remote file that changed (`If-Match` on OneDrive, a revision check just before the write on Drive), move removed files to the remote trash (never a permanent delete), and retry 429/5xx with backoff and `Retry-After`. HTTP only through `requestUrl`. No format change. `src/sync/auth/`, `src/sync/providers/`; tests `tests/sync-*.test.ts`; harness `doc=syncprov`.
+
 ## 0.21.0 — 2026-11-08
 
 Eight features: a start and end time on every page, scheduled backups, a documented file format with a JSON Schema, an interactive HTML export, a back-of-book index, a reusable signature and date stamp, a way back to the current slide and a strip of recent symbols; plus the review fixes carried over from 0.20. The notebook format moves to version 19 (page start and end times): the migration from version 18 is automatic, and 0.20 and older open a v19 notebook read-only and never overwrite it.

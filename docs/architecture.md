@@ -1016,3 +1016,47 @@ A page reference typed in a text box ("p. 134", "pag. 134", "p134", "pp. 134-136
 `storage/pdf-copy-logic.ts` (pure: settings, target choice, record file, fingerprint text, timers), `pdf-copy-store.ts` (the record in `<notebooks folder>/_meta/pdfcopy-<device>.json`, one file per device, lenient read, never overwritten when unreadable) and `pdf-copy-service.ts` (vault work: events, build, write). The view hands over a `PdfCopySource` (pages as an export draws them, a stamp that changes on every edit, an unsaved flag) on save, on close and when the app is hidden; the service builds the PDF with `buildPdfBytes` (`view/export.ts`) on its own `NotebookMedia`, page by page through `pagesToPdfYielding` (`ink/export-pdf.ts`, byte-identical to `pagesToPdf`), so it works after the view is gone.
 
 Rules: a file is replaced only when path, size and SHA-256 equal a record of this notebook (`isOurs`); anything else is the user's and the copy goes to `<name> (copy N).pdf`. The PDF is checked to be complete before it is written and read back after. Settings: `pdfCopy`, `pdfCopyWhen`, `pdfCopyFolder` (tab) and `pdfCopyNotebooks` (per-notebook overrides by path, edited from the notebook menu, moved on rename). The notebook format is unchanged.
+
+## Cloud connector: providers and sign-in (0.22, #126)
+
+Optional, off by default, no format change. The engine and its settings section (`src/sync/`, other files) talk to a remote only through the `CloudProvider` contract in `src/sync/provider-types.ts`. This part implements it for Google Drive and OneDrive and adds the sign-in. Sources, endpoints and scope limits: `docs/research.md`, *Cloud connector*. User guide: `docs/cloud-sync.md`.
+
+```
+src/sync/auth/        (pure unless marked)
+  http.ts             Http interface (request → status, headers, text, bytes) and JSON/form helpers
+  http-obsidian.ts    Http on Obsidian's requestUrl (throw: false)                         [obsidian]
+  retry.ts            Clock, AbortError, sendWithRetry: 429/5xx/Drive 403 rate limits/no answer → backoff or Retry-After, then TransientRemoteError
+  oauth-config.ts     endpoints and scopes per provider; ProviderAuth = StoredAuth + Google's clientSecret
+  device-flow.ts      RFC 8628: requestDeviceCode, pollForToken (interval, slow_down +5 s, expiry, cancel), SignInError(reason)
+  tokens.ts           TokenManager (refresh 60 s before expiry, one at a time, onChange), revokeAuth
+  token-store.ts      loadAuth / saveAuth / clearAuth in app local storage (key notebook-sync-auth), lenient
+  connect.ts          connectAccount (device flow → sync folder → account), disconnectAccount
+  sign-in.ts          signIn, openSignIn (the dialog), disconnect                           [obsidian]
+  sign-in-modal.ts    SignInModal on modal-shell                                             [obsidian]
+src/sync/providers/   (pure)
+  index.ts            createProvider(auth, http, opts) → ConnectedProvider (CloudProvider + prepareRoot + auth)
+  api.ts              ApiClient: bearer token per attempt, 401 → refresh once → AuthRequiredError; RemoteHttpError
+  tree.ts             TreeIndex: id → path index, buildFull, applyDelta, RootMissingError
+  gdrive.ts           GoogleDriveProvider, prepareDriveRoot
+  onedrive.ts         OneDriveProvider, prepareOneDriveRoot
+```
+
+**Sign-in.** The settings section calls `openSignIn(app, { provider, clientId, clientSecret? })`. The dialog runs the device flow: it shows the user code and the verification address (Copy code, Open sign-in page, a countdown), polls every `interval` seconds (+5 s after each `slow_down`), and ends on tokens, `access_denied`/`authorization_declined`, `expired_token` (or the code's lifetime), a refused client, or Cancel (the abort signal stops the wait at once). Then it finds or creates the sync root folder (`Notebook sync` at the top of the drive) and reads the account label. It resolves `{ auth, account }` or `null`; the caller stores `auth` with `saveAuth(app, auth)`. `disconnect(app, auth)` revokes (Google) and always clears the local state; Microsoft has no per-token revocation for public clients, so the result carries the consent page to show.
+
+**Tokens.** Device-local only: Obsidian's local storage, per vault and per device, never in the vault or `data.json`, never logged (no request or response is ever logged; error messages carry only status and provider error codes). `TokenManager` refreshes 60 s before expiry and after a 401; `invalid_grant` (and unknown/deleted client, consent needed) → `AuthRequiredError`. Every refresh calls `onAuthChange` with the new state: the owner must store it (Microsoft rotates refresh tokens). Google's client secret is part of the stored state (`ProviderAuth.clientSecret`, an additive field next to the contract's `StoredAuth`).
+
+**Paths from ids (tree.ts).** Neither delta feed gives paths. Each provider maps its items to `TreeItem` (id, folder, removed, name, parent, entry) and `TreeIndex` keeps folder id → (name, parent) and file id → path for the root's subtree, in memory.
+- A full listing rebuilds the index (Drive: breadth-first `files.list` of the root, start token taken first; OneDrive: `delta` on the root folder without a token). Two files at one path (Drive allows it): the newest wins.
+- A delta: the last occurrence of each id counts; a file whose parent chain reaches the root is an upsert (and a deletion of its old path when it moved); a deleted or trashed file, or one whose chain no longer reaches the root (moved out), is a deletion of its old path. An unknown parent is looked up once (`files.get` / `items/{id}`) and cached for the call.
+- **Full listing instead of a delta** when the index cannot answer safely: the first non-empty delta after a restart (the index is not persisted, so an unknown id could be a move or a delete of a file it never saw), any change to a folder already inside the root (rename, move, delete: its descendants change path without being listed), an expired cursor (Drive 400/404/410 on `changes.list`, OneDrive `410 Gone`), or a foreign cursor. A full listing is always correct; it only costs requests.
+- The sync root itself deleted or trashed → `RootMissingError` (a `TransientRemoteError`): nothing is listed and nothing is reported deleted, so the engine never deletes local files because the remote folder vanished.
+
+**Writes.**
+- Drive: `upload` creates missing folders (searched by name under their parent, created if absent; cached by path until the next full listing), looks up the file by name, checks `ifRev` (`null`: no file may exist; a string: `headRevisionId` must match), then sends multipart (≤ 4 MiB) or a resumable session (8 MiB chunks, multiples of 256 KiB, following `308` `Range`). **Race:** Drive v3 has no precondition header on writes, so a write by another device between the metadata read and the write is not detected; the window is one request, and the next delta shows the newer revision to the engine. `remove` reads the metadata, checks `ifRev`, then sets `trashed: true`.
+- OneDrive: folders via `items/{parent}:/{name}` (404 → `POST children` with `conflictBehavior: fail`, 409 → read again). Small files: `PUT …:/content` with `conflictBehavior=fail` (create-only) or `replace` + `If-Match: <eTag>`; above 4 MiB an upload session in 5 MiB fragments (multiples of 320 KiB) sent to the upload URL **without** the bearer token; 409/412 → `RemoteConflictError`; a session left by a failure is cancelled (`DELETE` on the upload URL). `remove` is `DELETE` with `If-Match` (to the recycle bin; 412 → conflict; 404 → already gone).
+- Neither provider ever deletes permanently. `download` of a vanished file is `RemoteConflictError` (the engine re-lists). OneDrive downloads read `@microsoft.graph.downloadUrl` (pre-authenticated, no bearer token) instead of following the `/content` redirect.
+- Cursor and link safety: OneDrive's cursor is the `deltaLink`; the provider follows a cursor or `nextLink` with the user's token only when it starts with `https://graph.microsoft.com/v1.0/`.
+
+**Errors.** Transient (no answer, 429, 5xx except 501, Drive's 403 rate limits) are retried 4 times with exponential backoff and jitter or `Retry-After` (seconds or a date, capped at 60 s), then `TransientRemoteError` (with `retryAfterMs`). 401 → one refresh and retry → `AuthRequiredError`. Conflicts → `RemoteConflictError`. Anything a provider does not expect → `RemoteHttpError(status, code)` (a bug or an unsupported remote set-up). Abort → an `Error` named `AbortError`.
+
+**OneDrive for Business.** Delta works only on the drive root there: when the folder delta is refused (400/403/501), the provider lists the drive root's delta and keeps the root's subtree (the index drops folders outside it).
