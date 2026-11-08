@@ -96,6 +96,7 @@ import { xferApi } from "./pagesplit-check";
 import { linkbackApi } from "./linkback-check";
 import { checkSlideback, slidebackShot } from "./slideback-check";
 import { checkPagerefs, pagerefsShot } from "./pagerefs-check";
+import { checkLecthead, lectheadShot } from "./lecthead-check";
 import { checkSymbols } from "./symbols-check";
 import { checkBackups } from "./backups-check";
 import { checkSynccore } from "./synccore-check";
@@ -315,9 +316,9 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	if (view) await (view as unknown as HarnessView).onClose();
 	root.empty();
 	leaf = new WorkspaceLeaf(app, root);
-	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, meanings: doc === "colours" || doc === "coloursedit" ? harnessMeanings() : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
+	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, lectureHeaderClassFor: doc === "lecthead" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, meanings: doc === "colours" || doc === "coloursedit" ? harnessMeanings() : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pagerefs" || doc === "symbols" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2267,3 +2268,6 @@ Object.assign(harnessApi, pdfcopyApi({ get view() { return view; }, app, frames,
 Object.assign(harnessApi, dropApi({ get view() { return view; }, frames, errors, notices }));
 (window as unknown as { harness: Record<string, unknown> }).harness = harnessApi;
 harnessApi.ready = main();
+
+// 0.22 lecthead: the automatic lecture header (doc=lecthead, lecthead-check.ts).
+Object.assign(harnessApi, { checkLecthead: () => checkLecthead({ get view() { return view; }, open, frames, penStroke, errors, notices }), lectheadShot: (state: "chip" | "header") => lectheadShot({ get view() { return view; }, open, frames, penStroke, errors, notices }, state) });

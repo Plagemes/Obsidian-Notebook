@@ -353,6 +353,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"new-lecture": (v) => void v.newLecture(),
 	"lecture-mode": (v) => v.lectureMode?.toggle(),
 	"slide-back": (v) => void v.backToSlide(),
+	"lecture-header": (v) => v.lectureHeader?.runCommand(),
 	"exercise-paper": (v) => v.chooseExercisePaper(),
 
 	// markers, boxes, invisible ink (wave 0.8)

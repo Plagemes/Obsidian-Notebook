@@ -466,6 +466,11 @@ export default class NotebookPlugin extends Plugin {
 		return this.timetable?.lectureClassFor(path) ?? null;
 	}
 
+	/** 0.22 (#210): the class for the lecture header of the notebook at `path` (the one in progress, else with `nearest` the closest of today). */
+	lectureHeaderClassFor(path: string, nearest: boolean): LectureClass | null {
+		return this.timetable?.headerClassFor(path, nearest) ?? null;
+	}
+
 	/**
 	 * 0.19 (222): a lecture ended in the notebook at `path` (lecture mode left, class over or the notebook closed, after
 	 * writing during the class). `saved` says the view's flush wrote everything; the snapshot is taken from the file on disk.

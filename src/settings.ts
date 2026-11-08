@@ -126,6 +126,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	slideBack: boolean;
 	/** 0.22 pagerefs (#179): a chip on a page that other pages link to. */
 	pageRefs: boolean;
+	/** 0.22 lecthead (#210): header on the page you write on (course, lecturer, room, date, time of the class): off / ask (a chip) / automatic. */
+	lectureHeader: "off" | "ask" | "auto";
+	lectureHeaderLecturer: boolean;
+	lectureHeaderRoom: boolean;
+	lectureHeaderDate: boolean;
+	lectureHeaderTime: boolean;
 	/** 0.17 (#57): a task made from a selection gets its due date as the Tasks plugin's date emoji (else a Dataview field). */
 	taskDueEmoji: boolean;
 	/** 0.17 (#57): the note "Make task" can add to besides the daily note (vault path; empty = none configured). */
@@ -334,6 +340,11 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	refWindowSnap: true, // 0.20 refwindow
 	slideBack: true, // 0.21 slideback
 	pageRefs: true, // 0.22 pagerefs
+	lectureHeader: "ask", // 0.22 lecthead
+	lectureHeaderLecturer: true,
+	lectureHeaderRoom: true,
+	lectureHeaderDate: true,
+	lectureHeaderTime: true,
 	taskDueEmoji: true,
 	tasksNote: "",
 	checklistDraw: "offer",
@@ -483,6 +494,11 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.refWindowSnap === "boolean") s.refWindowSnap = d.refWindowSnap; // 0.20 refwindow
 	if (typeof d.slideBack === "boolean") s.slideBack = d.slideBack; // 0.21 slideback
 	if (typeof d.pageRefs === "boolean") s.pageRefs = d.pageRefs; // 0.22 pagerefs
+	if (d.lectureHeader === "off" || d.lectureHeader === "ask" || d.lectureHeader === "auto") s.lectureHeader = d.lectureHeader; // 0.22 lecthead
+	if (typeof d.lectureHeaderLecturer === "boolean") s.lectureHeaderLecturer = d.lectureHeaderLecturer;
+	if (typeof d.lectureHeaderRoom === "boolean") s.lectureHeaderRoom = d.lectureHeaderRoom;
+	if (typeof d.lectureHeaderDate === "boolean") s.lectureHeaderDate = d.lectureHeaderDate;
+	if (typeof d.lectureHeaderTime === "boolean") s.lectureHeaderTime = d.lectureHeaderTime;
 	if (typeof d.taskDueEmoji === "boolean") s.taskDueEmoji = d.taskDueEmoji;
 	if (typeof d.tasksNote === "string") s.tasksNote = d.tasksNote.trim();
 	if (d.checklistDraw === "off" || d.checklistDraw === "offer" || d.checklistDraw === "auto") s.checklistDraw = d.checklistDraw;

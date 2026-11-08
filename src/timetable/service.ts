@@ -9,6 +9,7 @@ import { createNotebook, listNotebooks } from "../storage/notebooks";
 import { isEditContextSource, type EditContext } from "../view/edit-context";
 import { addLecturePage, classContext } from "../view/lecture";
 import { setLectureClassProvider, setLectureCourseProvider } from "./current";
+import { pickHeaderClass } from "./lecture-header";
 import { lectureClassFor, lectureClassOf, type LectureClass } from "./lecture-mode";
 import { findLecturePage } from "./lecture-open";
 import {
@@ -130,6 +131,12 @@ export class TimetableService {
 		const folder = this.plugin.settings.folder;
 		const books = listNotebooks(this.app, folder).map((f) => ({ path: f.path, basename: f.basename, mtime: f.stat.mtime }));
 		return lectureClassFor(this.timetable, path, books, folder, now, this.lead());
+	}
+
+	/** 0.22 (#210): the class for the lecture header of the notebook at `path`: the one in progress, else (with `nearest`) the closest of today. */
+	headerClassFor(path: string, nearest: boolean, now = new Date()): LectureClass | null {
+		const entry = pickHeaderClass(this.timetable, path, now, this.lead(), nearest);
+		return entry ? lectureClassOf(entry, now) : null;
 	}
 
 	/** Opens the notebook of the class in progress at a new lecture page. */

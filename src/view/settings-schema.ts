@@ -549,6 +549,15 @@ const STUDY: SettingSpec[] = [
 	},
 	// 0.21 slideback (#225): the pill back to where you last wrote during a lecture.
 	{ id: "slideBack", section: "study", group: "timetable", order: 31, name: "settings.slideBack", desc: "settings.slideBack.desc", control: { type: "toggle" }, keywords: "lecture slide back return current page lezione diapositiva torna" },
+	// 0.22 lecthead (#210): the header of the class (course, lecturer, room, date, time) on the page you write on.
+	{
+		id: "lectureHeader", section: "study", group: "timetable", order: 32, name: "settings.lectureHeader", desc: "settings.lectureHeader.desc", keywords: "lecture header course lecturer room date time intestazione lezione corso docente aula",
+		control: { type: "dropdown", options: options([["off", "settings.lectureHeader.off"], ["ask", "settings.lectureHeader.ask"], ["auto", "settings.lectureHeader.auto"]]) },
+	},
+	{ id: "lectureHeaderLecturer", section: "study", group: "timetable", order: 33, name: "settings.lectureHeader.lecturer", control: { type: "toggle" }, parent: "lectureHeader", visible: (s) => s.lectureHeader !== "off" },
+	{ id: "lectureHeaderRoom", section: "study", group: "timetable", order: 34, name: "settings.lectureHeader.room", control: { type: "toggle" }, parent: "lectureHeader", visible: (s) => s.lectureHeader !== "off" },
+	{ id: "lectureHeaderDate", section: "study", group: "timetable", order: 35, name: "settings.lectureHeader.date", control: { type: "toggle" }, parent: "lectureHeader", visible: (s) => s.lectureHeader !== "off" },
+	{ id: "lectureHeaderTime", section: "study", group: "timetable", order: 36, name: "settings.lectureHeader.time", control: { type: "toggle" }, parent: "lectureHeader", visible: (s) => s.lectureHeader !== "off" },
 	{ id: "zettelFolder", section: "study", group: "zettel", order: 10, name: "settings.zettelFolder", desc: "settings.zettelFolder.desc", control: { type: "folder", placeholder: DEFAULT_SETTINGS.zettelFolder } },
 	{
 		id: "zettelIdScheme", section: "study", group: "zettel", order: 20, name: "settings.zettelIdScheme", desc: "settings.zettelIdScheme.desc",

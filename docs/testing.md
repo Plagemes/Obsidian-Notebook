@@ -3387,3 +3387,25 @@ Implemented, not verified on hardware. No format change. Reference screenshots a
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Instant axes (#206): an L or a + (two lines) offered as axes, ticks from the page spacing, number labels, one group, one undo step; insert from the sheet; settings | yes | `tests/axes.test.ts` (L / + classification, tick placement, labels, group ids); harness scenario `axes` | | | offer after a real S Pen stroke on hardware |
+
+### 0.22 — lecthead (automatic lecture header, #210; steps 2180-2199)
+
+Manual steps (real Obsidian; nothing here is verified on Android). You need a class in the timetable for today that is on now and linked to the notebook (or unlinked, with a notebook named like the course), with a lecturer and a room.
+
+2180. **Ask.** *Settings > Study > Timetable > Lecture header* = Ask. In the notebook, add a page: a small chip *Add lecture header* appears at the top left, under the lecture chip. Nothing is written until you tap it. Tap it: the course, and under it lecturer, room, date and start time, appear at the top of the page. One undo removes both boxes.
+2181. **Close.** Add another page and close the chip with the cross: it goes away and does not come back for that page.
+2182. **Automatic.** Set *Automatic* and add a page: the header is written at once and a short notice says so. Undo removes it in one step.
+2183. **Never over your writing.** On a page with ink or a picture at the very top, run *Insert lecture header*: it sits just below them, clear of everything. With the top of the page full there is no free spot: a notice says so (the chip stays in Ask/Automatic) and nothing is written.
+2184. **Fields.** Turn off *Room* and *Lecturer*: the next header has only the date and time. Turn all four off: only the course is written (one box).
+2185. **Command.** In the command palette, *Insert lecture header* with a class in progress writes its header on the page in view. Outside class hours it uses the closest class of today; with no class today a notice says so. Running it twice does not add a second header.
+2186. **Locked page.** Lock the page and run the command: a notice says the page is locked and nothing changes.
+2187. **Lecture mode.** Start lecture mode from the banner on a notebook that already has a lecture page for today: no second header. Start it by hand (command) on a page that is not a lecture page: with Ask the chip appears.
+2188. **Pen.** While the pen is on the screen (or just was), nothing is added or offered; the chip appears at the first pause.
+2189. **Languages.** Switch the plugin to Italian: the setting, the chip, the notices and the date (*lunedì 26 ottobre 2026*) and the *Aula* label are in Italian. Switch back to English: *Room*, and the date in English.
+2190. **Off.** With the setting Off nothing happens on a new page; the command still works.
+2191. **Style.** Light and dark theme, phone and tablet width: the chip is a quiet pill that does not cover the page's top margin; the header text is small and grey under a slightly larger course line.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Automatic lecture header (#210): course, lecturer, room, date and start time as two grouped text boxes at the top, one undo step | yes | slot choice (in progress, lead time, overlap, linked to another notebook, no class, nearest), fields in English and Italian, free-area search, plan, History step and locked page: `tests/lecture-header.test.ts`; view and chip: harness `doc=lecthead` | | | not tried on Android; time zones are covered by the rule that class times are local wall-clock times, not by running under other zones |
+| Setting Off / Ask / Automatic and the four fields; command *Insert lecture header* | yes | settings read: `tests/lecture-header.test.ts`; command and chip: harness `doc=lecthead` | | | |

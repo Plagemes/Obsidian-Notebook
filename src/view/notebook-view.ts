@@ -130,6 +130,7 @@ import { executeThenSettle, type EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
 import { pickSlideRef } from "./lecture-logic";
 import { LectureModeController, routeLectureEnd, type LectureEnd } from "./lecture-mode";
+import { LectureHeaderService, type LectureHeaderHost } from "./lecture-header";
 import { lectureSnapshot, type LectureSnapshot } from "../library/lecture-log-logic";
 import { LECTURE_MEMORY_KEY } from "../timetable/lecture-memory";
 import { findLecturePage } from "../timetable/lecture-open";
@@ -268,6 +269,8 @@ export interface NotebookHost {
 	classNow?(): string | null;
 	/** 0.14 (401): the class in progress that belongs to this notebook (automatic lecture mode). Optional: absent in tests and the harness. */
 	lectureClassFor?(path: string): LectureClass | null;
+	/** 0.22 lecthead (#210): the class for the lecture header (in progress, else with `nearest` the closest of today). */
+	lectureHeaderClassFor?(path: string, nearest: boolean): LectureClass | null;
 	/** 0.19 (222): a lecture ended in that notebook; the plugin takes the lecture snapshot from the saved file. Optional: absent in tests and the harness. */
 	lectureEnded?(path: string, course: string, saved: boolean): void;
 	/** 0.19 (#221): a lecture the user wrote in ended: its line goes into the daily note (library/lecture-log.ts). Optional: absent in tests and the harness. */
@@ -521,6 +524,8 @@ export class NotebookView extends FileView {
 	pageRefs: PageRefs | null = null;
 	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
 	lectureMode: LectureModeController | null = null;
+	/** 0.22 lecthead (#210): the header of the class on the page being written on. */
+	lectureHeader: LectureHeaderService | null = null;
 	/** wave 0.14 (410): the Smart "+" strip (view/smart-add.ts). */
 	private smartAdd: SmartAddStrip | null = null;
 
@@ -820,6 +825,15 @@ export class NotebookView extends FileView {
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
 		this.mountStates();
+		this.lectureHeader = new LectureHeaderService({
+			parent: () => this.body,
+			path: () => this.file?.path ?? null,
+			settings: () => this.host.settings,
+			classFor: (path, nearest) => this.host.lectureHeaderClassFor?.(path, nearest) ?? null,
+			editContext: () => this.editContext(),
+			busy: () => this.inContact(),
+			locale: () => getLanguage(),
+		} satisfies LectureHeaderHost);
 		this.lectureMode = new LectureModeController({
 			parent: () => this.body,
 			path: () => this.file?.path ?? null,
@@ -834,6 +848,7 @@ export class NotebookView extends FileView {
 			},
 			changed: () => this.refreshUi(),
 			ended: (end) => this.onLectureEnd(end),
+			started: (cls, pageAdded) => this.lectureHeader?.lectureStarted(cls, pageAdded),
 			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
 		this.mountExcerpts();
@@ -1099,6 +1114,8 @@ export class NotebookView extends FileView {
 		this.practiceHooks = null;
 		this.presentation?.destroy();
 		this.presentation = null;
+		this.lectureHeader?.destroy();
+		this.lectureHeader = null;
 		this.lectureMode?.destroy();
 		this.lectureMode = null;
 		this.statesTools?.destroy();
@@ -4042,6 +4059,8 @@ export class NotebookView extends FileView {
 			this.syncHooks?.loaded();
 			this.practiceHooks?.loaded();
 			this.lectureMode?.opened();
+			this.lectureHeader?.opened();
+			this.lectureHeader?.pagesChanged();
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
@@ -4182,6 +4201,7 @@ export class NotebookView extends FileView {
 		this.updatePageIndicator();
 		this.pageNav?.refresh();
 		this.statesTools?.refresh();
+		this.lectureHeader?.pagesChanged();
 	}
 
 	/** The page panel shows thumbnails of what was just drawn, a moment after the pen lifts. */

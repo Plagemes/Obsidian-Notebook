@@ -419,7 +419,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 207. **P2** Personal shorthand: your abbreviation symbols with an automatically generated legend.
 208. **P1** 🧪 Quick textbook reference: "p. 134" becomes a link to the textbook PDF at that page.
 209. **P1** 🧪 Assigned homework: a "homework" stamp with a due date that becomes an Obsidian task.
-210. **P2** Automatic lecture header: course, lecturer, room, date and time from the timetable.
+210. **P2** 🧪 Automatic lecture header: course, lecturer, room, date and time from the timetable. (0.22: the class in progress writes its header on the page you are writing on, in an empty spot at the top; setting off / ask / automatic; command; no format change.)
 211. **P1** 🧪 "Pen only" toggle at hand: instantly ignores fingers when you rest your hand.
 212. **P2** 🧪 Recent symbols: the symbols you draw most often (∀, ∫, →) become buttons to insert them quickly. (0.21: a strip of the most used typographic symbols and saved signs, ordered by use with decay; no format change.)
 213. **P2** 🧪 "Look up later" list: circle a word and it goes to a list, with its image.
