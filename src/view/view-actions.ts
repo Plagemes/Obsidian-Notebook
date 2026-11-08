@@ -411,6 +411,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"meaning-filter": (v) => v.openMeaningFilter(),
 	"meaning-legend": (v) => v.openMeaningLegend(),
 	"meaning-digest": (v) => v.openMeaningDigest(),
+	// 0.23 (#264): saved views
+	"saved-view-save": (v) => v.openSavedViews(true),
+	"saved-view-go": (v) => v.openSavedViews(),
 	// 0.18 mentions (O7): the notes that link to this page
 	"mentions": (v) => v.openMentions(),
 	// 0.19 (#228): the Figures gallery

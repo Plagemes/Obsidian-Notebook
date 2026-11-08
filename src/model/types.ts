@@ -2,6 +2,7 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v21: saved views (#264): the optional notebook-level `views` list (a name, a page and the region of it that was in view, with the zoom).
  * v20: new pens (#35): the tools "fountain", "brush" and "marker" (always written with render 2) and the optional `Stroke.nib` (nib angle in degrees
  * of the fountain pen and the marker; absent = 45).
  * v19: start and end time of a page (#217): the optional `Page.startAt` / `Page.endAt` (ms since 1970).
@@ -18,7 +19,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 20;
+export const CURRENT_VERSION = 21;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -753,6 +754,38 @@ export interface ReadingPosition {
 	at: string;
 }
 
+/** v21: most saved views a notebook holds, longest name (characters, after trimming) and longest view / page id. */
+export const VIEWS_MAX = 100;
+export const VIEW_NAME_MAX = 80;
+export const VIEW_ID_MAX = 64;
+export const VIEW_PAGE_ID_MAX = 200;
+/** v21: the zoom of a saved view is relative to the fit-to-width scale of its page (1 = the page fills the width). */
+export const VIEW_ZOOM_MIN = 0.01;
+export const VIEW_ZOOM_MAX = 100;
+/** v21: largest absolute value of a region coordinate or size, pt. */
+export const VIEW_COORD_LIMIT = 1e6;
+
+/**
+ * v21 (#264): a named place in the notebook that is recalled in one step. Everything is in page coordinates (pt, origin at the top-left of
+ * the page), never screen coordinates, so it means the same on any device.
+ * - `page`: the id of the page. A view whose page is gone stays in the list (shown as missing, it can be removed; a page that comes back
+ *   with the same id, e.g. from the trash, makes it work again).
+ * - `x`, `y`, `width`, `height`: the region of the page that was in view (top-left corner and size).
+ * - `zoom`: the scale relative to the fit-to-width scale (1 = the page fills the width), so it survives another screen size.
+ * Recalling puts the middle of the region in the middle of the view at that zoom: the same place on the screen it was saved on, and the same
+ * part of the page on any other.
+ */
+export interface SavedView {
+	id: string;
+	name: string;
+	page: string;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	zoom: number;
+}
+
 export interface NotebookDocument {
 	format: typeof FORMAT_ID;
 	version: typeof CURRENT_VERSION;
@@ -766,6 +799,8 @@ export interface NotebookDocument {
 	position?: ReadingPosition;
 	/** v12 (#226): the slides strokes refer to (`Stroke.slide`). Written only when a stroke refers to one. */
 	slides?: SlideRef[];
+	/** v21 (#264): the saved views, in the order the list shows them. Written only when there is one; edited only through `SetViews` (model/views.ts), which replaces the array. */
+	views?: SavedView[];
 	/** v4: assets referenced by pages, keyed by Asset.id. */
 	assets?: Record<string, Asset>;
 }

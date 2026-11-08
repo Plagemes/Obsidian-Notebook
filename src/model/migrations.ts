@@ -459,6 +459,24 @@ function v19ToV20(raw: RawObject): RawObject {
 	return out;
 }
 
+/**
+ * v21 adds the optional notebook-level `views` list (saved views, #264). Every valid v20 document is a valid v21 document without it:
+ * the migration is the identity apart from the version. A v20 reader ignored unknown document fields, so a `views` key in a v20 file
+ * was never ours and never meant anything: it is dropped, not interpreted (like `slides` in v11 -> v12). Nothing else changes, so a
+ * large v20 file can still be read page by page (StagedParse) after `withoutV21Views`.
+ */
+function v20ToV21(raw: RawObject): RawObject {
+	return { ...withoutV21Views(raw), version: 21 };
+}
+
+/** `raw` without the v21 document list `views` (a copy when there is one; `raw` itself otherwise). */
+export function withoutV21Views(raw: RawObject): RawObject {
+	if (!("views" in raw)) return raw;
+	const copy = { ...raw };
+	delete copy.views;
+	return copy;
+}
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -493,6 +511,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	17: v17ToV18,
 	18: v18ToV19,
 	19: v19ToV20,
+	20: v20ToV21,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

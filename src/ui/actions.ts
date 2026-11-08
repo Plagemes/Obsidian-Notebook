@@ -425,6 +425,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "fit-width", label: "tool.fit", icon: "move-horizontal", group: "view", surfaces: ["quick", "sheet"], priority: 38, scope: "view", command: "command.fit", readOnly: true, keywords: "zoom" },
 	{ id: "next-page", label: "command.nextPage", icon: "chevron-down", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "previous-page", label: "command.prevPage", icon: "chevron-up", group: "view", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
+	// 0.23 (#264): saved views: a named page region with a zoom, recalled in one step. Saving needs an editable notebook; going to one works on a read-only one too.
+	{ id: "saved-view-save", label: "views.save.menu", icon: "frame", group: "view", surfaces: ["sheet", "notebook"], priority: 33, scope: "view", command: "command.savedViewSave", keywords: "saved views place zoom region name save viste salvate zona salva" },
+	{ id: "saved-view-go", label: "views.go.menu", icon: "scan-eye", group: "view", surfaces: ["sheet", "notebook"], priority: 32, scope: "view", command: "command.savedViewGo", readOnly: true, keywords: "saved views go recall place zoom region viste salvate vai richiama zona" },
 
 	// --- export and share.
 	{ id: "share-copy-link", label: "share.copyLink", icon: "link", group: "share", surfaces: ["page"], priority: 40, scope: "view", readOnly: true },

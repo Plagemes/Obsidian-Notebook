@@ -3074,7 +3074,7 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 
 ### 0.21 — schema: documented format with a JSON Schema (steps 1860-1879)
 
-Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v20.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
+Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v21.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
 
 1860. **Schema agrees with a real notebook.** Copy a notebook written on the tablet (with ink, a picture, a text box and a comment) to a PC and validate it with any draft 2020-12 validator (see the end of `docs/format.md`): no errors.
 1861. **Old file.** Open a notebook that was last saved by an older plugin version and edit it once, then validate it: it validates after that save (the file is rewritten as version 19 on the first edit).
@@ -3467,3 +3467,28 @@ Manual steps (real Obsidian; nothing here is verified on Android). You need a cl
 |---|---|---|---|---|---|
 | Automatic lecture header (#210): course, lecturer, room, date and start time as two grouped text boxes at the top, one undo step | yes | slot choice (in progress, lead time, overlap, linked to another notebook, no class, nearest), fields in English and Italian, free-area search, plan, History step and locked page: `tests/lecture-header.test.ts`; view and chip: harness `doc=lecthead` | | | not tried on Android; time zones are covered by the rule that class times are local wall-clock times, not by running under other zones |
 | Setting Off / Ask / Automatic and the four fields; command *Insert lecture header* | yes | settings read: `tests/lecture-header.test.ts`; command and chip: harness `doc=lecthead` | | | |
+
+### 0.23 — savedviews: saved views, document format 21 (roadmap #264; steps 2400-2419)
+
+Implemented, not verified on hardware. **Format change: v20 → v21** (the optional notebook-level `views` list; a v20 notebook opens as before and is written as v21 the first time it is saved; a v21 notebook opens read-only in 0.22). Reference screenshots after `HARNESS_DOC=savedviews npm run harness:check`: `dev/harness/dist/shots/savedviews-*.png` (tablet and phone, light and dark).
+
+2400. **Save.** Zoom in on a part of a page. Open the palette (or the *More* sheet) and run *Save current view…*: a dialog opens with the name field focused and a free name (*View 1*) ready. Type a name, press Enter or *Save*: the dialog closes and a notice says the view was saved.
+2401. **Recall.** Scroll to another page and zoom out, run *Go to saved view…* and tap the view: the dialog closes and the same part of the page is on screen at the same zoom.
+2402. **Another screen.** Rotate the tablet (or open the notebook on the phone) and recall the view: the same part of the page is centred, at the same zoom relative to the page width.
+2403. **Save from the list.** In *Go to saved view…* type a name and tap *Save*: the list stays open and the new row is highlighted for a moment; the field offers the next free name.
+2404. **Rename.** Menu `...` of a row > *Rename*: the name becomes a field; Enter keeps it (extra spaces are removed), Escape leaves the old name.
+2405. **Reorder.** *Move up* / *Move down* change the order; the first row has no *Move up* and the last no *Move down*. The order is the same after closing and reopening the notebook.
+2406. **Update.** Go somewhere else, open the list, menu > *Update to the current view*: the row now shows the new page and zoom; its name and place in the list stay.
+2407. **Remove and Undo.** Menu > *Remove* takes the view out; close the dialog and Undo brings it back where it was. Rename, move, update and save are each one undo step too.
+2408. **Deleted page.** Delete a page that has a view: the view stays in the list as *Page missing* (dashed row). A tap on it says the page is gone and nothing moves; its menu has no *Go to*; *Remove* takes it out. Undo the page deletion: the view works again.
+2409. **Read-only.** Turn on read-only mode: the list still opens and a tap goes to a view; the field and *Save* are disabled and the menu only offers *Go to*. *Save current view…* refuses with a notice.
+2410. **Locked page.** Lock the page a view is on: saving, renaming and removing views still work (a view is not page content).
+2411. **Copies.** Duplicate a page that has a view, or copy / move pages to another notebook: no view is created for the copy and the views stay with the notebook they were saved in; pages moved out leave their views behind as *Page missing*.
+2412. **Merge.** With a conflicted copy of the notebook that has views the main one lacks, *Merge conflicted copy* lists *N saved views added*; one Undo takes them away with the rest of the merge.
+2413. **The file.** Close and reopen the notebook (and on another device with the same vault): the views, their order and their places are the same. On a notebook with more than 100 views a notice says to remove one before saving another.
+2414. **Languages.** In Italian the commands, the dialog, the row lines and the notices are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Saved views (#264): save the page, region and zoom under a name; recall; rename, update, reorder, remove, each one undo step; missing views; read-only recall | yes | model, commands, history, merge and geometry: `tests/model-v21.test.ts`; dialog and commands: harness `doc=savedviews` | | | not tried on Android |
+| Format v21: optional `views` list, migration v20 → v21 (identity plus version), lenient read, strict write, staged loading of large v20 files, repair | yes | `tests/model-v21.test.ts`, `tests/format-schema.test.ts` (schema `docs/schema/notebook-v21.schema.json`) | | | |

@@ -1,6 +1,6 @@
-# The `.notebook` file format (version 20)
+# The `.notebook` file format (version 21)
 
-This guide is for people who write tools that read (or carefully write) Notebook files: converters, search indexes, viewers, backup scripts. The machine-readable contract is the JSON Schema [`docs/schema/notebook-v20.schema.json`](schema/notebook-v20.schema.json) (draft 2020-12). The reasoning behind the format and the full history of every field is in [architecture.md](architecture.md), section 2.
+This guide is for people who write tools that read (or carefully write) Notebook files: converters, search indexes, viewers, backup scripts. The machine-readable contract is the JSON Schema [`docs/schema/notebook-v21.schema.json`](schema/notebook-v21.schema.json) (draft 2020-12). The reasoning behind the format and the full history of every field is in [architecture.md](architecture.md), section 2.
 
 A schema file is also kept in the test suite: `tests/format-schema.test.ts` validates real serializer output (a document that uses every element type and every optional field) against it, and checks that invalid documents are refused. If the plugin changes the format, that test fails until the schema is updated.
 
@@ -16,12 +16,13 @@ Top level:
 | Field | Meaning |
 |---|---|
 | `format` | always `"obsidian-notebook"` |
-| `version` | integer, currently `20` |
+| `version` | integer, currently `21` |
 | `id` | document id; survives renames and "Make a copy" |
 | `createdAt`, `modifiedAt` | ISO times |
 | `meta` | `tags`, `favorite`, `cover` (colour), `bookmarks` (page ids), optional `bookmarkInfo`, `description`, `coverArt` |
 | `position` | optional: where the notebook was last read (`page`, `y`, `at`) |
 | `slides` | optional: PDF pages that were shown beside the notes (`Stroke.slide` points here) |
+| `views` | optional (v21): the saved views, in list order: `{ id, name, page, x, y, width, height, zoom }` (see below) |
 | `assets` | `{ [id]: { id, kind: "pdf" or "image", path, name, bytes } }`, the files in `_assets/` |
 | `pages` | at least one page |
 
@@ -54,13 +55,14 @@ Rules a JSON Schema cannot say (the plugin enforces them when it writes and chec
 - `margins.left + margins.right < width` and `margins.bottom < height`.
 - Graph function ids and parameter names are unique within the graph; `table.fn` names one of its functions.
 - A page has `startAt` and `endAt` both or neither, and `endAt` is not before `startAt`.
+- Saved views (`views`): at most 100, ids unique, `name` 1 to 80 characters, trimmed, on one line, with single spaces; `x`, `y`, `width`, `height` are the region of the page `page` that was in view, in page coordinates (pt); `zoom` is the scale relative to the fit-to-width scale of that page (1 = the page fills the width). `page` may name a page the notebook no longer has: the view is then shown as missing and can be removed, and works again if the page returns.
 - A comment is either a note (`region`, optional `sketch`/`resolved`) or a reply (`parent` names a note, never another reply); replies have text.
 
 ## Versioning and migrations
 
 - `version` is an integer that grows with every schema change. Every change adds a tested migration (`src/model/migrations.ts`), and every older valid document stays valid after migration (most steps are "the identity plus the new version number").
-- Newer fields are always **optional** and written only when used; the version of a file is the version of the plugin that last saved it. v20 added the fountain pen, the brush and the marker (three more `tool` values) and the nib angle of a stroke; v19 added the start and end time of a page; v18 groups and locks; v17 checkboxes; v16 margin comments; v15 sticky notes; v14 page lock; v13 states; v12 slides; v11 description and cover art; v10 excerpts; v9 equations and graphs; v8 markers, boxes and hidden ink; v7 bookmark details, page tags, reading position and more paper kinds; v6 margins; v5 the per-stroke `render`; v4 metadata, assets, backgrounds and elements. The table of what each version added is in architecture.md.
-- **This schema describes version 20 only.** A file with another `version` is not valid against it. The schema file name carries the version (`notebook-v20.schema.json`); a future format version ships its own schema next to this one, and older schemas stay available in the repository history.
+- Newer fields are always **optional** and written only when used; the version of a file is the version of the plugin that last saved it. v21 added the saved views (the notebook-level `views` list); v20 added the fountain pen, the brush and the marker (three more `tool` values) and the nib angle of a stroke; v19 added the start and end time of a page; v18 groups and locks; v17 checkboxes; v16 margin comments; v15 sticky notes; v14 page lock; v13 states; v12 slides; v11 description and cover art; v10 excerpts; v9 equations and graphs; v8 markers, boxes and hidden ink; v7 bookmark details, page tags, reading position and more paper kinds; v6 margins; v5 the per-stroke `render`; v4 metadata, assets, backgrounds and elements. The table of what each version added is in architecture.md.
+- **This schema describes version 21 only.** A file with another `version` is not valid against it. The schema file name carries the version (`notebook-v21.schema.json`); a future format version ships its own schema next to this one, and older schemas stay available in the repository history.
 - A plugin never rewrites a file of a **newer** version than it understands: it opens it read-only and keeps a backup copy in `<notebooks folder>/_backup/`. A tool that writes notebooks should follow the same rule: never save a file whose `version` it does not know.
 
 ## Reading leniently
@@ -92,7 +94,7 @@ All of these live under the notebooks folder (a setting, `Notebooks` by default)
 ```json
 {
 	"format": "obsidian-notebook",
-	"version": 20,
+	"version": 21,
 	"id": "6f1c2d3e-0000-4000-8000-000000000001",
 	"createdAt": "2026-11-05T09:00:00.000Z",
 	"modifiedAt": "2026-11-05T09:05:00.000Z",
@@ -123,7 +125,7 @@ Any draft 2020-12 validator works, for example with Python:
 
 ```python
 import json, jsonschema
-schema = json.load(open("docs/schema/notebook-v20.schema.json"))
+schema = json.load(open("docs/schema/notebook-v21.schema.json"))
 doc = json.load(open("Physics.notebook"))
 jsonschema.Draft202012Validator(schema).validate(doc)
 ```

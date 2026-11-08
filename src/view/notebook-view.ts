@@ -51,6 +51,7 @@ import { drawHeader, exportHeaderFor, headerLayout, pageTimesText, type HeaderLa
 import { pageTimes } from "../model/page-times";
 import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
 import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
+import { captureRegion, restoreRegion, type ViewRegion } from "../ink/view-region";
 import { PageMode } from "./page-mode";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
 import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
@@ -83,6 +84,7 @@ import { AddToIndexModal, BookIndexModal, currentIndex, termSpellings } from "./
 import { normalizeIndexPrefix } from "../model/book-index";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { MeaningTools } from "./colour-meaning";
+import { SavedViewTools } from "./saved-views";
 import type { MeaningsStore } from "../library/meanings-store";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -588,6 +590,8 @@ export class NotebookView extends FileView {
 	private heavyPageId: string | null = null;
 	/** 0.22 (#101): colours with meaning: the legend, the view filter and the digest by colour (view/colour-meaning.ts). */
 	private meaningTools: MeaningTools | null = null;
+	/** 0.23 (#264): saved views: a named page region with a zoom, recalled in one step (view/saved-views.ts; stored in the notebook, format 21). */
+	private savedViews: SavedViewTools | null = null;
 	private navCurrent = -1;
 	/** Pages whose thumbnail was drawn without all its media; redrawn when media arrives. */
 	private readonly thumbPending = new Set<string>();
@@ -726,6 +730,14 @@ export class NotebookView extends FileView {
 					...(options.prepare ? { prepare: options.prepare } : {}),
 				};
 			},
+		});
+		this.savedViews = new SavedViewTools({
+			app: this.app,
+			doc: () => this.shownDoc(),
+			editable: () => !!this.editableDocument(),
+			execute: (cmd) => this.applyCommand(cmd),
+			capture: () => this.captureViewRegion(),
+			show: (index, region) => this.showViewRegion(index, region),
 		});
 		// 0.16 (#124): a locked page shows a small badge over the page area; a tap on it unlocks the page.
 		const badge = this.body.createEl("button", { cls: "nb-ui nb-lock-badge", attr: { type: "button", "aria-label": t("lock.badge.aria") } });
@@ -1163,6 +1175,7 @@ export class NotebookView extends FileView {
 		this.pageOffer = null;
 		this.meaningTools?.destroy();
 		this.meaningTools = null;
+		this.savedViews = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
 		this.pageRefs?.destroy();
@@ -2314,6 +2327,36 @@ export class NotebookView extends FileView {
 
 	openMeaningFilter(): void {
 		this.meaningTools?.openFilter();
+	}
+
+	/** 0.23 (#264): the saved views dialog; `save`: opened by "Save current view" (the name field has the focus, and it closes once saved). */
+	openSavedViews(save = false): void {
+		this.savedViews?.open(save);
+	}
+
+	/** 0.23 (#264): the region in view now and the id of the page the middle of the view is on, or null while there is nothing to measure. */
+	private captureViewRegion(): { pageId: string; region: ViewRegion } | null {
+		const layout = this.layout;
+		const doc = this.shownDoc();
+		if (!layout || !doc) return null;
+		const index = this.currentPageIndex();
+		const page = doc.pages[index];
+		const region = page ? captureRegion(this.pageMode?.enabled ? "pages" : "continuous", this.viewport, this.viewSize, layout, index) : null;
+		return page && region ? { pageId: page.id, region } : null;
+	}
+
+	/** 0.23 (#264): shows a saved view: the page region, centred, at its zoom (the same part of the page on any screen size). */
+	private showViewRegion(pageIndex: number, region: Omit<ViewRegion, "pageIndex">): void {
+		const layout = this.layout;
+		const restored = layout ? restoreRegion(region, pageIndex, this.pageMode?.enabled ? "pages" : "continuous", this.viewSize, layout) : null;
+		this.recordJump(pageIndex);
+		if (!restored) {
+			this.scrollToPage(pageIndex);
+			return;
+		}
+		this.pageMode?.goTo(restored.pageIndex);
+		this.fitMode = restored.fit;
+		this.setViewport(restored.viewport);
 	}
 
 	openMeaningDigest(): void {
