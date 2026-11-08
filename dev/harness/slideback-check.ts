@@ -81,7 +81,11 @@ export async function checkSlideback(api: SlidebackCheckApi): Promise<{ ok: bool
 		add("the command applies", v.commandApplies("slide-back"));
 		const rect = p?.getBoundingClientRect();
 		const body = p?.parentElement?.getBoundingClientRect();
-		add("the pill is small and sits at the top, off the writing area", !!rect && !!body && rect.height <= 48 && rect.top - body.top < 40 && rect.width < body.width);
+		// The recent-symbols strip (0.21) is also centred at the top: the pill sits just below it, never over it.
+		const strip = p?.parentElement?.querySelector<HTMLElement>(".notebook-symbol-strip:not(.notebook-hidden)");
+		const stripRect = strip?.getBoundingClientRect();
+		add("the pill is small and sits at the top, off the writing area", !!rect && !!body && rect.height <= 48 && rect.top - body.top < (stripRect ? 110 : 40) && rect.width < body.width);
+		add("the pill does not overlap the symbols strip", !rect || !stripRect || rect.top >= stripRect.bottom - 1, stripRect && rect ? `strip bottom ${Math.round(stripRect.bottom)}, pill top ${Math.round(rect.top)}` : "no strip");
 
 		// Back.
 		p?.querySelector<HTMLButtonElement>(".notebook-slide-back-go")?.click();
