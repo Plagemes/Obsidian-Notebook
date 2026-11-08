@@ -4764,4 +4764,11 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"histpanel.t.lectureHeader": "Intestazione della lezione aggiunta",
 	"histpanel.t.several": "Più modifiche",
 	"histpanel.t.change": "Modifica",
+	// 0.25 baseline (#93)
+	"baseline.action": "Allinea alla linea di base",
+	"command.alignBaseline": "Allinea le parole della selezione a una linea di base comune (scrittura storta)",
+	"baseline.done": "Allineate {n} parole alla loro linea di base.",
+	"baseline.doneRuled": "Allineate {n} parole ai righi.",
+	"baseline.nothing": "Nessuna parola storta da allineare nella selezione.",
+	"help.alignBaseline": "Sposta in su o in giù le parole scritte a mano storte su una linea di base comune, o sul rigo. Annulla le rimette com'erano.",
 };

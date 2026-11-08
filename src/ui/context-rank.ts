@@ -66,6 +66,8 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	if (TOOL_PREFIXES[c.tool].some((p) => a.id.startsWith(p))) boost += 22;
 	if (c.presenting && a.id === "present") boost += 30;
 	if (c.comments?.panel && a.id.startsWith("comment")) boost += 15;
+	// 0.25 (#93): lining the words up fits ink on ruled paper above all (the words go onto the ruled line).
+	if (a.id === "selection-baseline" && hasSelection && c.page?.kind === "ruled") boost += 10;
 	return boost;
 }
 

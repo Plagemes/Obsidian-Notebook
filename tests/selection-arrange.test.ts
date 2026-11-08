@@ -449,11 +449,17 @@ describe("registry and bar placement (wave 0.10)", () => {
 	const idsOf = (c: UiContext, kind: "all" | "page" = "all") =>
 		buildSheet(c, { kind, usage: {}, now: 0, label: (a) => a.id }).flatMap((s) => s.actions.map((a) => a.id));
 
-	it("puts select similar, align, clean up (0.23), join broken strokes (0.24) and transform on the second row of a selection bar, within the width", () => {
+	/** The second row of a selection bar with ink: select similar, align, clean up, join, transform, then (0.25) align to baseline, which the 5 slots of a phone bar leave to the sheet. */
+	const secondRow = (width: number): string[] => {
+		const full = ["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu", "selection-baseline"];
+		return full.slice(0, Math.min(full.length, width < 480 ? 5 : full.length));
+	};
+
+	it("puts select similar, align, clean up (0.23), join broken strokes (0.24), transform and align to baseline (0.25) on the second row of a selection bar, within the width", () => {
 		for (const width of [360, 800, 1280]) {
 			const bar = contextBar(sel(3, 1), width, {}, 0)!;
 			expect(bar.kind).toBe("selection");
-			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu"]);
+			expect(bar.second, String(width)).toEqual(secondRow(width));
 			// The first row keeps its basics (the layer moves stay where wave 0.9 put them).
 			expect(bar.actions).toContain("selection-copy");
 		}
@@ -472,7 +478,7 @@ describe("registry and bar placement (wave 0.10)", () => {
 		const withReaction = baseContext({ tool: "lasso", selection: { strokes: 3, elements: 1, images: 0, reactions: 1 } });
 		for (const width of [360, 800, 1280]) {
 			const bar = contextBar(withReaction, width, {}, 0)!;
-			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu"]);
+			expect(bar.second, String(width)).toEqual(secondRow(width));
 			// On a narrow bar the chem action overflows into the sheet (priority 57); from tablet width it sits on the first row.
 			if (width >= 800) expect(bar.actions, String(width)).toContain("chem-balance");
 			expect(bar.second).not.toContain("chem-balance");
@@ -490,6 +496,24 @@ describe("registry and bar placement (wave 0.10)", () => {
 		const def = ACTIONS.find((a) => a.id === "selection-join")!;
 		expect(def.command).toBe("command.joinStrokes");
 		for (const key of [def.label, String(def.command), "joinstrokes.done", "joinstrokes.nothing"]) {
+			expect(enSrc, key).toContain(`"${key}"`);
+			expect(itSrc, key).toContain(`"${key}"`);
+		}
+	});
+
+	it("offers Align to baseline (0.25) from two strokes on, on the second row of a wide bar, in the sheet, with a command, a help text and all texts", () => {
+		expect(contextBar(sel(1), 800, {}, 0)!.second).not.toContain("selection-baseline");
+		expect(contextBar(sel(0, 3, 0), 800, {}, 0)!.second).not.toContain("selection-baseline");
+		for (const width of [800, 1280]) expect(contextBar(sel(2), width, {}, 0)!.second, String(width)).toContain("selection-baseline");
+		// The bar of a phone has five places: the older actions keep them, the new one is in the sheet (and in the command palette).
+		expect(contextBar(sel(3), 360, {}, 0)!.second).not.toContain("selection-baseline");
+		expect(contextBar(sel(3), 360, {}, 0)!.second).toContain("selection-transform-menu");
+		expect(idsOf(sel(2))).toContain("selection-baseline");
+		expect(idsOf(sel(1))).not.toContain("selection-baseline");
+		const def = ACTIONS.find((a) => a.id === "selection-baseline")!;
+		expect(def.command).toBe("command.alignBaseline");
+		expect(def.surfaces).toEqual(["context", "sheet"]);
+		for (const key of [def.label, String(def.command), "baseline.done", "baseline.doneRuled", "baseline.nothing", "help.alignBaseline"]) {
 			expect(enSrc, key).toContain(`"${key}"`);
 			expect(itSrc, key).toContain(`"${key}"`);
 		}

@@ -3861,3 +3861,28 @@ Manual steps (real Obsidian; nothing here is verified on Android). Use a noteboo
 |---|---|---|---|---|---|
 | Action history panel: the undo and redo stacks as readable steps (title per command type, page, time, item count), current point highlighted, tap goes back or forward step by step through ordinary Undo/Redo, stops and says so when a step is refused | yes | titles of every command class and of every label in the source, jump back/forward/start, locked page and guard refusals mid-way, read-only, rows: `tests/history-panel.test.ts`; harness `doc=histpanel` (real view and dialog, notices, refusal, read-only) | | | no preview of the state at a step; the list shows the last 500 steps (the history limit) |
 | Persistent undo (survives closing the notebook) | no | | | | not built: commands hold element objects by identity and private apply state, so they cannot be saved and re-attached to a freshly read notebook without a per-class serialiser plus a verified dry run; the history would also have to be saved at idle saves because Android can end the app without a close event. See the roadmap note |
+### 0.25 — baseline: align to baseline (roadmap #93; steps 2660-2679)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a page of your own handwriting: two or three lines of words, written a little crooked on purpose (some words higher, some lower, some with g, p or y, an i with its dot, a comma and a full stop), plus an underline under one word and a small drawing.
+
+2660. **Select and open.** Select the handwriting with the lasso. On a tablet-width window the second row of the selection bar shows *Align to baseline*; on a phone-width window it is in the All actions sheet (Selection) and in the command palette (*Align the words of the selection to a common baseline*). With a single stroke selected it is not offered.
+2661. **Align.** Tap it: the words of each line move straight up or down until they sit on one baseline; nothing moves sideways; the letters keep their shape. A notice says how many words were aligned. The selection stays on the moved ink.
+2662. **Descenders.** A g, p, y or q keeps its tail below the line (the word is not lifted by its tail); the bar of a T or an f does not make the word sit too high.
+2663. **Punctuation.** The dot of an i, a comma and a full stop move together with their word and stay where they were relative to it.
+2664. **Left alone.** The underline and the drawing are not moved. A word far from any line (more than a couple of letter heights) is not pulled onto it.
+2665. **Two lines.** Two lines close together each get their own baseline; no word jumps to the other line.
+2666. **Undo and redo.** One undo puts every word back exactly; one redo aligns again.
+2667. **Twice.** Select the aligned lines and run it again: the notice says there is nothing to align and nothing moves.
+2668. **Sloped line.** Write a line clearly uphill (about 5 degrees) with a little wobble: after aligning it is still uphill but straight; a line that is only wobbly becomes level.
+2669. **Ruled paper.** Change the page to ruled paper, write words slightly off the lines, select and align: the words sit on the ruled lines (the notice says so). On blank or grid paper they go to the common baseline of their line instead.
+2670. **Groups and locks.** Group two words and align: they move together, by the same amount. Group a word with a locked box and align: that word stays where it is.
+2671. **Sticky note.** Collapse a sticky note that holds ink: its hidden ink is not moved.
+2672. **Locked page.** Lock the page and try again: it refuses and says so.
+2673. **Page time.** The page's time in the navigator does not change after aligning (the ink was moved, not written).
+2674. **Help.** Long-press the button: the explanation appears and nothing is aligned until you tap again. Italian: all texts are translated.
+2675. **Looks.** Light and dark, phone and tablet: the button sits in the second row like its neighbours and the icon is readable.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Align to baseline (#93): words found from stroke gaps, lines from baselines, descender-aware baseline, one straight baseline per line (level, or a clear slope kept), ruled paper snaps to the ruled line, rigid y-only moves in one undo step | yes | `tests/baseline.test.ts` (synthetic words with descenders, punctuation, two lines, slopes, ruled paper, groups, locks, pinned ink, undo, page times, jitter, a 20-line page); harness `doc=baseline` | | | rotation of a slanted line (translation only for now); not tried on real handwriting |
+| Selection bar and sheet entry, command, long-press help, context ranking (higher on ruled paper), Italian | yes | `tests/selection-arrange.test.ts`, `tests/long-press-help.test.ts`, `tests/context-rank.test.ts` | | | |

@@ -53,6 +53,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"highlighter-area": "help.highlighterArea",
 	// 0.25 histpanel (#84)
 	"history-panel": "help.historyPanel",
+	// 0.25
+	"selection-baseline": "help.alignBaseline",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

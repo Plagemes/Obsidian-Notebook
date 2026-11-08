@@ -243,7 +243,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 ### A. Smart writing (geometry, no AI)
 91. **P1** 🧪 Insert or remove space: drag a line and everything below moves down (onto the next page if needed) or back up.
 92. **P2** Handwriting reflow: handwritten lines re-wrap to a different width like text, words found from the gaps between strokes.
-93. **P2** Align to baseline: crooked handwritten words are moved onto a common baseline.
+93. **P2** 🧪 Align to baseline: crooked handwritten words are moved onto a common baseline.
 94. **P2** 🧪 Ghost guide lines on blank paper: they appear while writing and fade when you stop.
 95. **P1** 🧪 Automatic next page: writing at the bottom of the last page appends a new page (different from infinite pages).
 96. **P2** Strike-through as logical deletion: a line over a word marks it as deleted; it stays readable struck through and can be hidden.

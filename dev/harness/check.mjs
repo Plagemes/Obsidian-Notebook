@@ -187,6 +187,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "shapefill", theme, device, lowLatency: false });
 // 0.25 areahl (#99): the area highlighter on a PDF page (dev/harness/areahl-check.ts), tablet and phone, light and dark (dist/shots/areahl-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "areahl", theme, device, lowLatency: false });
+// 0.25 baseline (#93): Align to baseline (dev/harness/baseline-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "baseline", theme, device, lowLatency: false });
 // 0.24 strokejoin (#313): join broken strokes (dev/harness/strokejoin-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "strokejoin", theme, device, lowLatency: false });
 // Recent symbols (0.21, #212): the strip, a tapped character and a saved symbol placed pen-sized, tablet and phone, light and dark.
@@ -406,6 +408,7 @@ async function main() {
 				else if (s.doc === "welcomeback") report = await cdp.evaluate("window.harness.checkWelcomeback()", 90000); // 0.23 welcomeback
 				else if (s.doc === "iconhelp") report = await cdp.evaluate("window.harness.checkIconhelp()", 90000); // 0.24 iconhelp
 				else if (s.doc === "navadapt") report = await cdp.evaluate("window.harness.checkNavadapt()", 90000); // 0.24 navadapt
+				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -602,6 +605,19 @@ async function main() {
 						problems.push(`linkback ${state} screenshot: ${e.message}`);
 					}
 					await cdp.evaluate("window.harness.closeLinkback()");
+				}
+			}
+			// 0.25 baseline: screenshots of crooked words (selected), aligned, and aligned on ruled paper.
+			if (s.doc === "baseline") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["before", "after", "ruled"]) {
+					try {
+						await cdp.evaluate(`window.harness.baselineShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `baseline-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`baseline ${state} screenshot: ${e.message}`);
+					}
 				}
 			}
 			// 0.24 navadapt: a screenshot of the list.

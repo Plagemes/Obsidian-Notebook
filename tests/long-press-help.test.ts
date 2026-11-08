@@ -174,8 +174,8 @@ describe("ClickGuard (the click that ends a long press)", () => {
 });
 
 describe("the controls added late in the wave have their explanation", () => {
-	it("the registry actions: global bookmarks, hand in, join broken strokes", () => {
-		for (const id of ["page-global-bookmark", "bookmarks-open", "hand-in", "selection-join"]) {
+	it("the registry actions: global bookmarks, hand in, join broken strokes, align to baseline", () => {
+		for (const id of ["page-global-bookmark", "bookmarks-open", "hand-in", "selection-join", "selection-baseline"]) {
 			expect(ACTION_HELP[id], id).toBeDefined();
 			expect(actionById(id), id).toBeDefined();
 		}

@@ -4762,6 +4762,13 @@ export const en = {
 	"histpanel.t.lectureHeader": "Lecture header added",
 	"histpanel.t.several": "Several changes",
 	"histpanel.t.change": "Change",
+	// 0.25 baseline (#93)
+	"baseline.action": "Align to baseline",
+	"command.alignBaseline": "Align the words of the selection to a common baseline (crooked handwriting)",
+	"baseline.done": "Aligned {n} words to their baseline.",
+	"baseline.doneRuled": "Aligned {n} words to the ruled lines.",
+	"baseline.nothing": "No crooked words to align in the selection.",
+	"help.alignBaseline": "Move crooked handwritten words straight up or down onto a common baseline, or onto the ruled line. Undo puts them back.",
 } as const;
 
 export type MessageKey = keyof typeof en;
