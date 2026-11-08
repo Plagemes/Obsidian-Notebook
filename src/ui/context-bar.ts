@@ -5,6 +5,7 @@ import { setIcon } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import { actionById, isChecked, isEnabled, type ContextKind, type UiContext } from "./actions";
 import { actionLabel } from "./action-sheet";
+import { CTX_LIFT_VAR, contextLift, publish, watchBox } from "./dock-metrics";
 import type { ContextBarPlan } from "./layout";
 
 export interface ContextBarHost {
@@ -43,12 +44,15 @@ export class ContextBar {
 	/** wave 0.10: the second row of the selection context (select similar, align, transform); above the main row, under the restyle rows. */
 	private readonly secondEl: HTMLElement;
 	private plan: ContextBarPlan | null = null;
+	private readonly stopWatch: () => void;
 
 	constructor(parent: HTMLElement, private readonly host: ContextBarHost) {
 		this.el = parent.createDiv({ cls: "notebook-context-bar notebook-hidden", attr: { role: "toolbar" } });
 		this.mainEl = this.el.createDiv({ cls: "notebook-context-main" });
 		this.extraEl = this.el.createDiv({ cls: "notebook-context-extra" });
 		this.secondEl = this.extraEl.createDiv({ cls: "notebook-context-second notebook-hidden", attr: { role: "toolbar" } });
+		// The pieces that share the bottom of the page area stand above this bar (dock-metrics.ts).
+		this.stopWatch = watchBox(this.el, () => publish(parent, CTX_LIFT_VAR, contextLift(this.el.offsetHeight)));
 	}
 
 	/** The context shown now (null: hidden). */
@@ -57,6 +61,8 @@ export class ContextBar {
 	}
 
 	destroy(): void {
+		this.stopWatch();
+		publish(this.el.parentElement, CTX_LIFT_VAR, 0);
 		this.el.remove();
 	}
 

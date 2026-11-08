@@ -286,7 +286,7 @@ hidden in place). Both read what to show from one function, `settingsView`, so t
 | 3 | **Pages & navigation** | Scrolling, fast scrollbar, add a page at the bottom, scroll up near the bottom, page-turner keys |
 | 4 | **PDF & reading** | Snap highlighter to text, dim backgrounds and strength, crop PDF margins |
 | 5 | **Library & files** | Notebooks folder, trash retention, version history (backups). Advanced: loose sheet location, templates folder |
-| 6 | **Sync & safety** | Device name, check sync safety (only when the sync safety service runs) |
+| 6 | **Sync & safety** | Device name, check sync safety (only when the sync safety service runs). 0.22: the *Cloud sync* group (collapsed while off; service, client ID and Google client secret, account, *Sync now* with the status line, scope, triggers, Wi-Fi only, large files, activity log) |
 | 7 | **Export** | Export settings, when there are any (the section is hidden while it is empty) |
 | 8 | **Obsidian integration** | Tabs of open notebooks, companion notes and their options |
 | 9 | **Study** | Groups *Class timetable* (edit, offer the current class, open without asking, start early) and *Zettelkasten* |
@@ -492,3 +492,10 @@ A floating `modal-shell`-like card over the page area (`src/view/ref-window.ts`,
 
 ## Recent symbols (0.21, roadmap #212)
 A floating pill (`.notebook-symbol-strip`, `src/view/symbol-strip.ts`, styles in the 0.21 symbols block) at the top centre of the page area: up to 12 round 40 px buttons, a character in the text font or a small SVG of a saved symbol in the text colour; the armed button uses the active-tool colours and a muted "Tap the page" hint follows. While armed a transparent catcher covers the page (outside the stage) and takes one tap. Same raised surface, border and shadow as the contextual bar; scrolls sideways on a phone.
+
+## Colours with meaning (0.22, roadmap #101)
+
+**Legend editor** (`src/view/meaning-modals.ts`, `MeaningsEditorModal`): a shell dialog that reuses the Board columns editor rows (`nb-colrow*`, class `nb-meaning-editor`): a label field, 20 palette swatches plus a round "other colour" input, up / down / remove. Every change is saved at once. Opened from *Settings > Reading & PDF* (global legend) or the notebook menu (adds a switch for a legend of this notebook only; while it is off the list shows the global legend, read-only). A red inline note names two meanings that are too close in colour. **Filter by meaning** (`MeaningFilterModal`): a narrow shell list, one row per meaning with its colour dot and stroke count, *Show everything* first. While a meaning is chosen a pill (`.nb-meaning-pill`, bottom left, 36 px, colour dot, label, a 32 px × button) sits over the page; the renderer draws other ink at 16 % opacity (`Renderer.setInkDim`). **Digest by colour** (`src/view/meaning-digest.ts`): a medium shell dialog (picture quality) and a note, built like the highlights digest.
+
+## Change cover (0.22, roadmap #53)
+One dialog on the modal shell (`src/library/cover-dialog.ts`): the 3:4 frame (a canvas, with the card's spine) on the left, source chips (Pattern, Image, Page, Template) and their controls on the right; on a phone the frame sits on top. Swatches, style tiles and zoom/pager controls are 40 px targets in the `.nb-ui` scope (`styles.css`, block `0.22 covers`).

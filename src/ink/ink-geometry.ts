@@ -1,4 +1,4 @@
-import type { Point, Tool } from "../model/types";
+import { isNewPen, NIB_DEFAULT, type Point, type Tool } from "../model/types";
 
 /**
  * Wet-ink geometry (render version 2, see docs/architecture.md §6).
@@ -26,6 +26,43 @@ const TAU = Math.PI * 2;
 export function inkRadius(tool: Tool, width: number, pressure: number): number {
 	if (tool === "pen") return Math.max(0.01, width * (0.2 + 0.6 * pressure));
 	return Math.max(0.01, width / 2);
+}
+
+/**
+ * New pens (format v20, #35). Their disc radius is not a function of the pressure alone: it is worked out once per stored point, when
+ * the point is added (`InkBuilder.add`), from the point's pressure and the way the pen has been moving, and kept in `InkBuilder.pr`. It is
+ * causal (it depends on the points up to this one only), so the wet ink and the committed stroke are built from the same numbers.
+ *
+ * - Fountain pen: a nib is a line at the stroke's nib angle `θ`; a line that moves along it is hairline thin, one that moves across it is
+ *   as wide as the nib is long. The disc of a point has the width the nib would leave for the direction the pen has been moving in
+ *   (`|sin|` of the angle between them, from FOUNTAIN_MIN to 1), times a pressure factor from 0.7 to 1.3. Ends are crisp: full width at
+ *   once, no taper.
+ * - Brush: pressure is the main control (a power curve from a fine tip to a full belly), movement thins the line the faster it goes, the
+ *   first stretch grows from a point and the last sample of the stroke closes it to a point (soft ends).
+ * - Marker: a flat chisel, constant for any pressure; the width follows the direction like the fountain pen's, but only between
+ *   MARKER_MIN and 1 of the nominal width.
+ */
+export const FOUNTAIN_MIN = 0.14;
+export const MARKER_MIN = 0.6;
+const BRUSH_GAIN = 1.6;
+const BRUSH_SPEED = 0.5;
+const BRUSH_FLOOR = 0.08;
+const BRUSH_START = 0.3;
+const BRUSH_END = 0.35;
+/** Speed (pt per stored point, smoothed) below which the brush is not thinned and above which it is thinned fully. */
+const BRUSH_SLOW = 1.2;
+const BRUSH_FAST = 10;
+/** How much of the direction so far the pen keeps when it moves on (the rest is the new movement). */
+const DIR_KEEP = 0.5;
+/** Direction factor of a point before the pen has moved (the single point of a tap). */
+const DIR_TAP = 0.7;
+
+/** Largest disc radius a stroke of this tool and width can have (pt): where the culling boxes and the hit tests have to reach. */
+export function inkReach(tool: Tool, width: number): number {
+	const half = width / 2;
+	if (tool === "fountain") return half * 1.3;
+	if (tool === "brush") return half * BRUSH_GAIN;
+	return half;
 }
 
 /**
@@ -80,6 +117,17 @@ export class InkBuilder {
 	px = new Float64Array(256);
 	py = new Float64Array(256);
 	pp = new Float64Array(256);
+	/** Disc radius of each stored point (worked out when the point is added; see `FOUNTAIN_MIN`). */
+	pr = new Float64Array(256);
+	/** Nib angle in degrees (the fountain pen and the marker). */
+	nib = NIB_DEFAULT;
+	/** Movement so far: the direction (smoothed), the length of the path and its speed (smoothed), for the new pens. */
+	private dirX = 0;
+	private dirY = 0;
+	private arc = 0;
+	private speed = 0;
+	private nibSin = 0;
+	private nibCos = 0;
 	/** Number of stored points. */
 	count = 0;
 
@@ -92,9 +140,17 @@ export class InkBuilder {
 	private segments = 0;
 	private finished = false;
 
-	reset(tool: Tool, width: number): void {
+	reset(tool: Tool, width: number, nib: number = NIB_DEFAULT): void {
 		this.tool = tool;
 		this.width = width;
+		this.nib = nib;
+		const a = (nib * Math.PI) / 180;
+		this.nibSin = Math.sin(a);
+		this.nibCos = Math.cos(a);
+		this.dirX = 0;
+		this.dirY = 0;
+		this.arc = 0;
+		this.speed = 0;
 		this.count = 0;
 		this.nodeCount = 0;
 		this.segments = 0;
@@ -118,6 +174,46 @@ export class InkBuilder {
 	}
 
 	/**
+	 * Disc radius of point `n` of a fountain pen, brush or marker (see FOUNTAIN_MIN), `x`, `y`, `p` being the stored point and the
+	 * previous points the stored ones. Updates the movement state: call once per added point, in order. Allocation-free.
+	 */
+	private movingRadius(n: number, x: number, y: number, p: number): number {
+		let len = 0;
+		if (n > 0) {
+			const sx = x - this.px[n - 1]!, sy = y - this.py[n - 1]!;
+			len = Math.hypot(sx, sy);
+			this.dirX = this.dirX * DIR_KEEP + sx;
+			this.dirY = this.dirY * DIR_KEEP + sy;
+			this.arc += len;
+			this.speed = this.speed * 0.5 + len * 0.5;
+		}
+		const half = this.width / 2;
+		const tool = this.tool;
+		if (tool === "brush") {
+			const t = Math.min(1, Math.max(0, (this.speed - BRUSH_SLOW) / (BRUSH_FAST - BRUSH_SLOW)));
+			const thin = 1 - BRUSH_SPEED * t * t * (3 - 2 * t);
+			const press = BRUSH_FLOOR + (1 - BRUSH_FLOOR) * Math.pow(p, 1.4);
+			const grown = Math.min(1, this.arc / (0.8 * this.width + 2));
+			return Math.max(0.01, half * BRUSH_GAIN * press * thin * (BRUSH_START + (1 - BRUSH_START) * grown));
+		}
+		// The width a nib leaves for the direction the pen moves in: |sin| of the angle between them.
+		let across = DIR_TAP;
+		const dl = Math.hypot(this.dirX, this.dirY);
+		if (dl > 1e-6) across = Math.abs(this.dirX * this.nibSin + this.dirY * this.nibCos) / dl;
+		if (tool === "fountain") return Math.max(0.01, half * (FOUNTAIN_MIN + (1 - FOUNTAIN_MIN) * across) * (0.7 + 0.6 * p));
+		return Math.max(0.01, half * (MARKER_MIN + (1 - MARKER_MIN) * across));
+	}
+
+	/**
+	 * Disc radius of a provisional tip point (the raw pen position, a predicted point) that is not a stored point: the pressure for the old
+	 * pens, the radius of the last stored point for the new ones (their radius follows the movement, which a tip point does not have yet).
+	 */
+	tipRadius(pressure: number): number {
+		if (isNewPen(this.tool) && this.count > 0) return this.pr[this.count - 1]!;
+		return inkRadius(this.tool, this.width, pressure);
+	}
+
+	/**
 	 * Adds a point (quantized like the file). Returns false when it lands on the previous point,
 	 * which is then left unchanged (its disc may already be on screen).
 	 */
@@ -132,16 +228,19 @@ export class InkBuilder {
 			this.px = grow(this.px, n + 1);
 			this.py = grow(this.py, n + 1);
 			this.pp = grow(this.pp, n + 1);
+			this.pr = grow(this.pr, n + 1);
 		}
 		this.px[n] = qx;
 		this.py[n] = qy;
 		this.pp[n] = qpr;
+		// The old pens keep their pressure-only radius (the same number the nodes always had); the new ones follow the movement too.
+		this.pr[n] = isNewPen(this.tool) ? this.movingRadius(n, qx, qy, qpr) : inkRadius(this.tool, this.width, qpr);
 		this.count = n + 1;
 		if (n === 0) {
 			this.reserveNodes(1);
 			this.nx[0] = qx;
 			this.ny[0] = qy;
-			this.nr[0] = inkRadius(this.tool, this.width, qpr);
+			this.nr[0] = this.pr[0]!;
 			this.nodeCount = 1;
 		}
 		else if (n >= 2) this.emit(n - 2, n - 1, n);
@@ -153,6 +252,8 @@ export class InkBuilder {
 		if (this.finished) return;
 		this.finished = true;
 		const n = this.count;
+		// Brush: the last sample closes the line to a point. Only the last segment is still to be built, so nothing on screen changes.
+		if (this.tool === "brush" && n >= 2 && this.segments <= n - 2) this.pr[n - 1] = Math.max(0.01, this.pr[n - 1]! * BRUSH_END);
 		while (this.segments < n - 1) {
 			const k = this.segments;
 			this.emit(k, k + 1, Math.min(k + 2, n - 1));
@@ -167,8 +268,8 @@ export class InkBuilder {
 	}
 
 	/** Builds the whole geometry of saved points. */
-	static fromPoints(points: readonly Point[], width: number, tool: Tool, into = new InkBuilder()): InkBuilder {
-		into.reset(tool, width);
+	static fromPoints(points: readonly Point[], width: number, tool: Tool, into = new InkBuilder(), nib: number = NIB_DEFAULT): InkBuilder {
+		into.reset(tool, width, nib);
 		for (const p of points) into.add(p[0], p[1], p[2]);
 		into.finish();
 		return into;
@@ -179,8 +280,8 @@ export class InkBuilder {
 		const a = b > 0 ? b - 1 : b;
 		const { px, py } = this;
 		const ax = px[a]!, ay = py[a]!, bx = px[b]!, by = py[b]!, cx = px[c]!, cy = py[c]!, dx = px[d]!, dy = py[d]!;
-		const rb = inkRadius(this.tool, this.width, this.pp[b]!);
-		const rc = inkRadius(this.tool, this.width, this.pp[c]!);
+		const rb = this.pr[b]!;
+		const rc = this.pr[c]!;
 		const len = Math.hypot(cx - bx, cy - by);
 		const steps = Math.min(INK_MAX_STEPS, Math.max(1, Math.ceil(len / INK_STEP_PT)));
 		// Written straight into the arrays: passing doubles to a helper would box them (garbage per node).
@@ -387,8 +488,8 @@ export function inkBounds(g: InkBuilder): { minX: number; minY: number; maxX: nu
 const shared = new InkBuilder();
 
 /** Committed path of saved points into `sink` (Path2D, canvas, or an export writer). */
-export function inkPath(sink: PathSink, points: readonly Point[], width: number, tool: Tool): void {
-	addInkPath(sink, InkBuilder.fromPoints(points, width, tool, shared));
+export function inkPath(sink: PathSink, points: readonly Point[], width: number, tool: Tool, nib: number = NIB_DEFAULT): void {
+	addInkPath(sink, InkBuilder.fromPoints(points, width, tool, shared, nib));
 }
 
 /** SVG number: 0.01 pt precision. */

@@ -280,6 +280,7 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.19 (#103): handwritten checklists. A drawn square becomes a checkbox (view/checklist-tools.ts); insert one from the sheet, tick / label /
 	// send to tasks from the selection bar. Tapping a checkbox with the pen or a finger ticks it without selecting it.
 	{ id: "insert-checkbox", label: "checklist.insert", icon: "square-check", group: "insert", surfaces: ["sheet"], priority: 57, scope: "view", command: "checklist.command.insert", enabled: pageOpen, keywords: "checkbox checklist todo tick task list casella spunta elenco attivita lista" },
+	{ id: "insert-axes", label: "axes.insert", icon: "axis-3d", group: "insert", surfaces: ["sheet"], priority: 56, scope: "view", command: "axes.command.insert", enabled: pageOpen, keywords: "axes axis graph cartesian plot ticks assi grafico cartesiano piano" },
 	{ id: "checkbox-toggle", label: "checklist.toggle", icon: "square-check", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 93, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) > 0, enabled: pageOpen, keywords: "checkbox tick untick casella spunta" },
 	{ id: "checkbox-select-label", label: "checklist.selectLabel", icon: "text-select", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, keywords: "checkbox label text select casella testo seleziona" },
 	{ id: "checkbox-label", label: "checklist.editLabel", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 89, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, enabled: pageOpen, keywords: "checkbox label name casella etichetta nome" },
@@ -382,6 +383,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.14 (401): switches lecture mode on or off by hand (the rule starts it from the timetable); the contextual bar follows it.
 	// 0.21 slideback (#225): palette command only (assign a hotkey in Obsidian); it applies once something was written during a lecture.
 	{ id: "slide-back", label: "command.slideBack", icon: "corner-up-left", group: "lecture", surfaces: ["palette"], priority: 40, scope: "view", command: true, readOnly: true, keywords: "lecture slide return current page lezione diapositiva torna" },
+	// 0.22 lecthead (#210): writes the course, lecturer, room, date and time of the class on the page in view (the class in progress, else the nearest of today).
+	{ id: "lecture-header", label: "command.lectureHeader", icon: "graduation-cap", group: "lecture", surfaces: ["palette", "sheet"], priority: 38, scope: "view", command: true, keywords: "lecture header course lecturer room date time class intestazione lezione corso docente aula orario" },
 	{ id: "lecture-mode", label: "command.lectureMode", icon: "graduation-cap", group: "lecture", surfaces: ["sheet"], priority: 72, scope: "view", command: true, readOnly: true, checked: (c) => c.lecture, keywords: "class timetable lesson classe orario" },
 	{ id: "exercise-paper", label: "page.exercisePaper", icon: "palette", group: "lecture", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.exercisePaper", readOnly: true },
 	// wave 0.8: markers (#201-#203, #209) and structured boxes (#204): the next tap or drag on a page places one. Also on the radial dial (shapes ring → Markers).
@@ -443,6 +446,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "export-markdown", label: "export.markdown.menu", icon: "files", group: "share", surfaces: ["sheet", "notebook"], priority: 28, scope: "view", command: "command.exportMarkdown", readOnly: true, keywords: "md png images without obsidian share esporta" },
 	// 0.16 (#90): every highlighted region collected in a Markdown note next to the notebook.
 	{ id: "highlights-digest", label: "digest.menu", icon: "highlighter", group: "share", surfaces: ["sheet", "notebook"], priority: 25, scope: "view", command: "command.highlightsDigest", readOnly: true, keywords: "highlights digest summary note evidenziazioni riepilogo raccolta colours" },
+	// 0.22 (#101): what each ink colour means: the legend, a view filter that shows one meaning, and a note that collects the ink of each.
+	{ id: "meaning-filter", label: "meaning.filter.menu", icon: "filter", group: "view", surfaces: ["sheet", "notebook"], priority: 34, scope: "view", command: "command.meaningFilter", readOnly: true, keywords: "colour color meaning legend filter definition example significato colori filtra legenda" },
+	{ id: "meaning-legend", label: "meaning.menu", icon: "tags", group: "view", surfaces: ["sheet", "notebook"], priority: 33, scope: "view", command: "command.meaningLegend", readOnly: true, keywords: "colour color meaning legend definition example significato colori legenda" },
+	{ id: "meaning-digest", label: "meaning.digest.menu", icon: "tags", group: "share", surfaces: ["sheet", "notebook"], priority: 24.5, scope: "view", command: "command.meaningDigest", readOnly: true, keywords: "colour color meaning digest collect note definition example raccolta colori significato" },
 	// 0.18 mentions (O7): the notes that link to the page in view (and to the notebook as a whole).
 	{ id: "mentions", label: "mentions.menu", icon: "links-coming-in", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 24, scope: "view", command: "command.mentions", readOnly: true, keywords: "mentions backlinks linked notes links menzioni collegamenti note" },
 	// 0.19 (#228): every picture and figure cut-out of the section, the notebook or some pages, in one grid.
@@ -479,6 +486,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	global("storage-manager", "command.storage", "database", "app", ["notebook", "library", "palette"], 15),
 	// 0.21 backups (#127): a zip of every notebook, its assets and sidecars in the backup folder.
 	global("backup-now", "command.backupNow", "archive", "app", ["palette"], 15),
+	// 0.22 synccore (#126): the optional cloud sync, on demand.
+	global("cloud-sync-now", "command.cloudSyncNow", "cloud", "app", ["palette"], 15),
 
 	// --- diagnostics: settings tab and palette.
 	global("pen-button-test", "command.penTest", "pen-tool", "dev", ["palette"], 5),

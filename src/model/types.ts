@@ -2,6 +2,8 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v20: new pens (#35): the tools "fountain", "brush" and "marker" (always written with render 2) and the optional `Stroke.nib` (nib angle in degrees
+ * of the fountain pen and the marker; absent = 45).
  * v19: start and end time of a page (#217): the optional `Page.startAt` / `Page.endAt` (ms since 1970).
  * v18: groups and locked elements (#39): the optional `group` of strokes and elements, and the `locked` flag (with `lockAt`) of elements.
  * v17: handwritten checklists (#103): the page element "checkbox" (a drawn square that is tapped to tick it; optional link to an Obsidian task).
@@ -16,7 +18,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 19;
+export const CURRENT_VERSION = 20;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -41,8 +43,40 @@ export type PageSizeName = keyof typeof PAGE_SIZES;
 export type Point = [number, number, number];
 
 /** v2 adds "highlighter" (translucent, constant width); v4 adds "shape" (constant width, for geometric shapes). */
-export const TOOLS = ["pen", "highlighter", "shape"] as const;
+export const TOOLS = ["pen", "highlighter", "shape", "fountain", "brush", "marker"] as const;
 export type Tool = (typeof TOOLS)[number];
+
+/**
+ * v20 (#35): the pens that exist only from format v20. They are drawn by the wet-ink geometry only (render 2): a stroke of one of
+ * them is never written with render 1, and a file of an older format that has one was not written by any version of this plugin.
+ */
+export const TOOLS_V20: readonly Tool[] = ["fountain", "brush", "marker"];
+export function isNewPen(tool: Tool): boolean {
+	return tool === "fountain" || tool === "brush" || tool === "marker";
+}
+/** v20: the pens whose width follows the direction of the stroke relative to a nib (and so carry a nib angle). */
+export function isNibPen(tool: Tool): boolean {
+	return tool === "fountain" || tool === "marker";
+}
+
+/** v20: the pens people write with (the pen and the new pens); the highlighter and the shape tool are not handwriting. */
+export function isWritingPen(tool: Tool): boolean {
+	return tool === "pen" || tool === "fountain" || tool === "brush" || tool === "marker";
+}
+/**
+ * v20: the pens whose strokes are lines of handwriting for the features that read writing as lines (ghost guide lines, scribble
+ * to erase): the pen, the fountain pen and the brush. The marker is a highlighting tool even though it is drawn in stroke order,
+ * so a marker zig-zag over ink never erases it and marking does not move the guides.
+ */
+export function isLinePen(tool: Tool): boolean {
+	return tool === "pen" || tool === "fountain" || tool === "brush";
+}
+/** v20: nib angle, whole degrees in [0, 179] (the nib is a line: 180° is the same as 0°), counter-clockwise on the page; absent = 45. */
+export const NIB_DEFAULT = 45;
+export const NIB_MAX = 179;
+export function isNibAngle(v: unknown): v is number {
+	return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= NIB_MAX;
+}
 
 /** Geometry that draws a stroke: perfect-freehand outline with the frozen per-tool parameters (every stroke written before v5). */
 export const RENDER_FREEHAND = 1;
@@ -79,6 +113,12 @@ export interface Stroke {
 	 * at least two members on the page; a group with fewer is dissolved on read and on write.
 	 */
 	group?: string;
+	/**
+	 * v20 (#35): angle of the nib of a fountain pen or a marker, whole degrees in [0, 179], counter-clockwise on the page (45 is a nib that
+	 * leans like a "/"). The width of the line follows the direction of the stroke relative to it. Written only when it is set; absent = 45.
+	 * Only those two tools have one.
+	 */
+	nib?: number;
 	points: Point[];
 }
 

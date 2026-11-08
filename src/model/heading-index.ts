@@ -12,7 +12,7 @@
  */
 import { detectHeadings, lineSizes, referenceHeight, type LineSize, type PageHeading } from "../ink/headings";
 import { segmentText, type TextLayout } from "../ink/words";
-import type { Page, Stroke } from "./types";
+import { isWritingPen, type Page, type Stroke } from "./types";
 
 /** Pages with more strokes than this are not searched for headings (the outline must stay cheap on a heavy page). */
 export const MAX_HEADING_STROKES = 4000;
@@ -41,9 +41,9 @@ class Hash {
 	}
 }
 
-/** The strokes the headings are read from: visible pen and shape strokes (a highlighter or an invisible stroke is not handwriting). */
+/** The strokes the headings are read from: visible strokes of the pens (v20: the new pens too) and the shape tool (a highlighter or an invisible stroke is not handwriting). */
 export function textStrokes(strokes: readonly Stroke[]): Stroke[] {
-	return strokes.filter((s) => !s.hidden && (s.tool === "pen" || s.tool === "shape"));
+	return strokes.filter((s) => !s.hidden && (isWritingPen(s.tool) || s.tool === "shape"));
 }
 
 /** Fingerprint of what the headings of a page depend on. Equal content gives an equal fingerprint, whatever objects hold it. */

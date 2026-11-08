@@ -1,7 +1,8 @@
 import { Menu, Notice } from "obsidian";
 import { t } from "../i18n";
+import { PEN_KINDS } from "../ink/pen-kinds";
 import {
-	activeFavourite, captureFavourite, DEFAULT_FAVOURITES, ERASER_SIZES, FAVOURITE_SLOTS, favouritePatch, withFavourite,
+	activeFavourite, captureFavourite, DEFAULT_FAVOURITES, ERASER_SIZES, FAVOURITE_SLOTS, favouritePatch, favouriteToolKey, withFavourite,
 	type FavouritePen,
 } from "./favourites";
 import type { Toolbar, ToolbarState } from "./toolbar";
@@ -91,10 +92,11 @@ export class PenControls {
 			b.disabled = !this.editable;
 			b.toggleClass("is-active", i === active);
 			b.setAttribute("aria-pressed", String(i === active));
-			b.setAttribute("aria-label", `${t("pens.slot", { n: String(i + 1) })}: ${t(fav.tool === "pen" ? "tool.pen" : "tool.highlighter")} ${fav.color}, ${fav.width}`);
+			b.setAttribute("aria-label", `${t("pens.slot", { n: String(i + 1) })}: ${t(favouriteToolKey(fav))} ${fav.color}, ${fav.width}`);
 			const dot = b.querySelector<HTMLElement>(".notebook-fav-dot");
 			dot?.setCssProps({ "--notebook-swatch-color": fav.color, "--notebook-fav-w": `${Math.round(Math.min(18, 6 + Math.sqrt(fav.width) * 3))}px` });
 			dot?.toggleClass("is-highlighter", fav.tool === "highlighter");
+			for (const kind of PEN_KINDS) if (kind !== "pen") dot?.toggleClass(`is-kind-${kind}`, fav.kind === kind);
 		});
 
 		this.lastActive = active;

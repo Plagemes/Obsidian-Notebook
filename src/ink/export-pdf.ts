@@ -14,7 +14,7 @@ import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { inkPath, type PathSink } from "./ink-geometry";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
-import { HIGHLIGHTER_ALPHA, strokeOutline } from "./stroke-shape";
+import { HIGHLIGHTER_ALPHA, MARKER_ALPHA, strokeOutline } from "./stroke-shape";
 import { layerFlags, type ExportLayers, type LayerFlags } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
@@ -177,6 +177,8 @@ function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void,
 		const parts: string[] = [];
 		const states: string[] = [];
 		if (res.highlighter) states.push(`/GS1 << /Type /ExtGState /ca ${HIGHLIGHTER_ALPHA} /BM /Multiply >>`);
+		// Format v20: the marker is 85% opaque, source-over (the highlighter multiplies).
+		if (res.marker) states.push(`/GS3 << /Type /ExtGState /ca ${MARKER_ALPHA} >>`);
 		// v9: shaded areas of graphs.
 		if (res.area) states.push(`/GS2 << /Type /ExtGState /ca ${GRAPH_STYLE.areaAlpha} >>`);
 		if (states.length > 0) parts.push(`/ExtGState << ${states.join(" ")} >>`);
@@ -350,6 +352,8 @@ interface PageResources {
 	xobjects: Map<string, number>;
 	font: boolean;
 	highlighter: boolean;
+	/** Format v20: a marker stroke (ExtGState GS3). */
+	marker?: boolean;
 	/** v9: a graph shades an area (ExtGState GS2). */
 	area?: boolean;
 }
@@ -425,6 +429,7 @@ function pageContent(
 		const op = strokeOps(stroke);
 		if (op) {
 			if (stroke.tool === "highlighter") res.highlighter = true;
+			if (stroke.tool === "marker") res.marker = true;
 			// v9: ink bound to a graph is clipped to its frame, as on screen.
 			const clip = strokeClip(stroke, clips);
 			ops.push(clip ? `q ${num(clip.x)} ${num(clip.y)} ${num(clip.width)} ${num(clip.height)} re W n\n${op}\nQ` : op);
@@ -820,10 +825,14 @@ class PdfPathSink implements PathSink {
 function strokeOps(stroke: Stroke): string {
 	if (stroke.render === RENDER_INK) {
 		const sink = new PdfPathSink();
-		inkPath(sink, stroke.points, stroke.width, stroke.tool);
+		inkPath(sink, stroke.points, stroke.width, stroke.tool, stroke.nib);
 		if (sink.parts.length === 0) return "";
 		const body = `${rgb(stroke.color)} rg
 ${sink.parts.join(" ")} f`;
+		if (stroke.tool === "marker") return `q
+/GS3 gs
+${body}
+Q`;
 		return stroke.tool === "highlighter" ? `q
 /GS1 gs
 ${body}

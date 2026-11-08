@@ -1,5 +1,5 @@
 import { RENDER_INK, type Point, type Stroke } from "../model/types";
-import { inkCurveAt } from "./ink-geometry";
+import { inkCurveAt, inkReach } from "./ink-geometry";
 import { pointSegmentDistance, strokeHit, type BBox } from "./hit-test";
 
 /**
@@ -16,7 +16,7 @@ export function eraseSegment(
 	stroke: Stroke, ax: number, ay: number, bx: number, by: number, radius: number, bounds?: BBox,
 ): Point[][] | null {
 	if (!strokeHit(stroke, ax, ay, bx, by, radius, bounds)) return null;
-	const reach = radius + stroke.width / 2;
+	const reach = radius + inkReach(stroke.tool, stroke.width);
 	const dense = densify(stroke.points, Math.max(radius / 2, 0.25), stroke.render === RENDER_INK);
 	const runs: Point[][] = [];
 	let run: Point[] = [];

@@ -175,11 +175,11 @@ describe("style eyedropper: which stroke a tap means", () => {
 	});
 
 	it("turns a stroke into the pen to use", () => {
-		expect(styleOfStroke(thin)).toEqual({ tool: "pen", penColor: "#dc2626", penWidth: 2 });
+		expect(styleOfStroke(thin)).toEqual({ tool: "pen", penColor: "#dc2626", penWidth: 2, penKind: "pen", nibAngle: 45 });
 		expect(styleOfStroke(wide)).toEqual({ tool: "highlighter", highlighterColor: "#facc15", highlighterWidth: 12 });
 		// A shape is taken as a pen (its kind is not stored); odd values are kept in range.
-		expect(styleOfStroke({ tool: "shape", color: "#ABCDEF", width: 3.456 })).toEqual({ tool: "pen", penColor: "#abcdef", penWidth: 3.46 });
-		expect(styleOfStroke({ tool: "pen", color: "garbage", width: Number.NaN })).toEqual({ tool: "pen", penColor: "#1e1e1e", penWidth: 1 });
-		expect(styleOfStroke({ tool: "pen", color: "#000000", width: 500 })).toEqual({ tool: "pen", penColor: "#000000", penWidth: 80 });
+		expect(styleOfStroke({ tool: "shape", color: "#ABCDEF", width: 3.456 })).toEqual({ tool: "pen", penColor: "#abcdef", penWidth: 3.46, penKind: "pen", nibAngle: 45 });
+		expect(styleOfStroke({ tool: "pen", color: "garbage", width: Number.NaN })).toEqual({ tool: "pen", penColor: "#1e1e1e", penWidth: 1, penKind: "pen", nibAngle: 45 });
+		expect(styleOfStroke({ tool: "pen", color: "#000000", width: 500 })).toEqual({ tool: "pen", penColor: "#000000", penWidth: 80, penKind: "pen", nibAngle: 45 });
 	});
 });

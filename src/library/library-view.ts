@@ -141,6 +141,8 @@ export interface LibraryHost {
 	checkLibrary?(): void;
 	/** 0.15 (128): the Storage manager. */
 	openStorage?(): void;
+	/** 0.22 (#53): "Change cover…": opens the cover dialog for that notebook (library/cover-dialog.ts). */
+	changeCover?(file: TFile): void;
 	loadIndex(): Promise<unknown>;
 	saveIndex(data: unknown): Promise<void>;
 	/** 0.12: runs a plugin-level action of the registry (ui/actions.ts) by id; false when it has no handler. */
@@ -2863,6 +2865,7 @@ export class LibraryView extends ItemView {
 		if (host.splitNotebook) menu.addItem((i) => i.setTitle(t("library.menu.split")).setIcon("scissors").onClick(() => void host.splitNotebook?.(file).catch((e: unknown) => this.fail(e))));
 		if (host.extractPages) menu.addItem((i) => i.setTitle(t("library.menu.extract")).setIcon("file-output").onClick(() => void host.extractPages?.(file).catch((e: unknown) => this.fail(e))));
 		menu.addItem((i) => i.setTitle(t("library.menu.tags")).setIcon("tag").onClick(() => this.askTags(path)));
+		if (host.changeCover) menu.addItem((i) => i.setTitle(t("cover.menu")).setIcon("image").onClick(() => host.changeCover?.(file)));
 		menu.addItem((i) => i.setTitle(t("library.menu.cover")).setIcon("palette").onClick(() => this.askCover(path)));
 		menu.addSeparator();
 		menu.addItem((i) => i.setTitle(t("library.menu.delete")).setIcon("trash-2").setWarning(true).onClick(() => this.askDelete(file)));

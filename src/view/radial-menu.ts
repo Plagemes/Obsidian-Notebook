@@ -8,7 +8,7 @@ import {
 	angleOf, arcAngles, bubbleDot, colourSlot, DIAL_RADIUS, DIAL_SIZE, formatWidth, MARKER_RING, nearestStep, paletteFor, PEN_CASE, polar, RING_RADIUS, ringAngles,
 	SLIDER_END, SLIDER_START, stepAtAngle, stepDotRadius, widthScale, type DialState,
 } from "../ui/radial-model";
-import type { FavouritePen } from "./favourites";
+import { favouriteToolKey, type FavouritePen } from "./favourites";
 import type { ShapeKind } from "./view-helpers";
 import type { ToolbarState, ToolName } from "./toolbar";
 
@@ -377,15 +377,15 @@ export class PenRadial {
 		const s = this.ctx.tools();
 		const angles = arcAngles(favs.length, -120, 120);
 		favs.forEach((fav, i) => {
-			const label = `${t("pens.slot", { n: String(i + 1) })}: ${t(fav.tool === "pen" ? "tool.pen" : "tool.highlighter")} ${fav.color}, ${fav.width}`;
+			const label = `${t("pens.slot", { n: String(i + 1) })}: ${t(favouriteToolKey(fav))} ${fav.color}, ${fav.width}`;
 			const b = this.item(layer, `fav:${i}`, label, ...this.at(angles[i]!, 96), 44, "is-round is-fav");
 			const active = s.tool === fav.tool && (fav.tool === "pen"
-				? s.penColor.toLowerCase() === fav.color && s.penWidth === fav.width
+				? s.penColor.toLowerCase() === fav.color && s.penWidth === fav.width && (fav.kind ?? "pen") === (s.penKind ?? "pen")
 				: s.highlighterColor.toLowerCase() === fav.color && s.highlighterWidth === fav.width);
 			b.toggleClass("is-active", active && !this.saveMode);
 			b.toggleClass("is-target", this.saveMode);
 			const d = fav.tool === "highlighter" ? 14 : Math.round(Math.min(20, 6 + Math.sqrt(fav.width) * 3.5));
-			b.createSpan({ cls: `notebook-dial-dot${fav.tool === "highlighter" ? " is-chisel" : ""}` }).setCssProps({ "--d": `${d}px`, "--c": fav.color });
+			b.createSpan({ cls: `notebook-dial-dot${fav.tool === "highlighter" ? " is-chisel" : ""}${fav.kind ? ` is-kind-${fav.kind}` : ""}` }).setCssProps({ "--d": `${d}px`, "--c": fav.color });
 		});
 		if (this.ctx.saveFavourite) {
 			const plus = this.item(layer, "save-favourite", t("radial.saveFavourite"), ...this.at(180, 96), 40, "is-round is-plus");

@@ -14,10 +14,14 @@ import { CustomGesturesModal, GestureCheatSheet, setGestureEnabled, type PenGest
 import { deviceNameRow, type SyncSafetyService } from "./sync-safety";
 import { renderDeviceInfo } from "./device-info";
 import { BoardColumnsModal } from "./board-columns-modal";
+import { MeaningsEditorModal } from "./meaning-modals";
+import { TOLERANCES } from "../model/colour-meaning";
 import { renderBackupRow } from "./backup-settings";
 import { acceptBackupFolder } from "../storage/backup-logic";
 import { showErrorNotice } from "./notice";
 import type { BackupService } from "../storage/backup-service";
+import type { CloudSyncService } from "../sync/sync-service";
+import { renderCloudAccountRow, renderCloudLogRow, renderCloudSecretRow, renderCloudSyncRow } from "./cloud-sync-settings";
 import { resetHints } from "../ui/hints";
 import { resetToolbarAdaptation } from "../ui/toolbar-reset";
 import {
@@ -38,6 +42,8 @@ export interface SettingsHost extends Plugin {
 	syncSafety?: SyncSafetyService;
 	/** 0.21 (#127): the scheduled zip backups. */
 	backups?: BackupService;
+	/** 0.22 synccore (#126): the optional cloud sync. */
+	cloudSync?: CloudSyncService;
 	/** Runs a plugin-level action of the registry (the benchmark of the Diagnostics section). */
 	runGlobal(id: string): void;
 }
@@ -93,6 +99,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 	private stopPenKey: () => void = () => {};
 	/** Stops following the backup status (the "Back up now" row). */
 	private stopBackupRow: () => void = () => {};
+	/** 0.22 synccore: stops following the cloud sync status (account, "Sync now" and activity rows), by row. */
+	private readonly stopCloudRows = new Map<string, () => void>();
 
 	constructor(app: App, private readonly host: SettingsHost) {
 		super(app, host);
@@ -114,6 +122,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 		return {
 			sync: !!this.host.syncSafety,
 			backups: !!this.host.backups,
+			cloudSync: !!this.host.cloudSync,
 			timetable: !!timetable,
 			timetableInUse: timetable?.hasClasses() ?? false,
 			timetablePath: timetable?.path(),
@@ -226,6 +235,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "notebook-templates-manage": openNotebookTemplateManager(this.app, () => this.host.settings); break;
 			case "pen-sets": this.openPenSets(); break;
 			case "board-columns": new BoardColumnsModal({ app: this.app, get: () => this.host.settings.boardColumns, set: (cols) => this.setControlValue("boardColumns", cols) }).open(); break;
+			case "meanings-edit": new MeaningsEditorModal({ app: this.app, tolerance: () => TOLERANCES[this.host.settings.meaningTolerance], globalLegend: () => this.host.settings.colourMeanings, setGlobal: (legend) => this.setControlValue("colourMeanings", legend) }).open(); break;
 		}
 	}
 
@@ -249,6 +259,12 @@ export class NotebookSettingTab extends PluginSettingTab {
 			this.stopBackupRow();
 			this.stopBackupRow = renderBackupRow(setting, this.host.backups);
 		}
+		const cloud = this.host.cloudSync;
+		if (cloud && (id === "cloud-account" || id === "cloud-sync-now" || id === "cloud-log" || id === "cloud-secret")) {
+			this.stopCloudRows.get(id)?.();
+			const render = id === "cloud-account" ? renderCloudAccountRow : id === "cloud-sync-now" ? renderCloudSyncRow : id === "cloud-secret" ? renderCloudSecretRow : renderCloudLogRow;
+			this.stopCloudRows.set(id, render(setting, cloud));
+		}
 		if (id === "pen-key") {
 			this.stopPenKey();
 			const host = { get: () => this.host.settings, set: (key: string, value: unknown) => this.setControlValue(key, value) };
@@ -262,6 +278,8 @@ export class NotebookSettingTab extends PluginSettingTab {
 		this.stopPenKey = () => {};
 		this.stopBackupRow();
 		this.stopBackupRow = () => {};
+		for (const stop of this.stopCloudRows.values()) stop();
+		this.stopCloudRows.clear();
 		super.hide();
 	}
 

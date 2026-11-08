@@ -216,6 +216,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"sticky-expand": (v) => v.stickyTools?.setCollapsed(false),
 	// 0.19 (#103): handwritten checklists
 	"insert-checkbox": (v) => v.checklistTools?.insert(),
+	"insert-axes": (v) => v.axesTools?.insert(),
 	"checkbox-toggle": (v) => v.checklistTools?.toggleSelected(),
 	"checkbox-select-label": (v) => v.checklistTools?.selectWithLabel(),
 	"checkbox-label": (v) => v.checklistTools?.editLabel(),
@@ -352,6 +353,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"new-lecture": (v) => void v.newLecture(),
 	"lecture-mode": (v) => v.lectureMode?.toggle(),
 	"slide-back": (v) => void v.backToSlide(),
+	"lecture-header": (v) => v.lectureHeader?.runCommand(),
 	"exercise-paper": (v) => v.chooseExercisePaper(),
 
 	// markers, boxes, invisible ink (wave 0.8)
@@ -405,6 +407,10 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"export-markdown": (v) => v.openMarkdownExport(),
 	// 0.16 (#90): the highlights digest note
 	"highlights-digest": (v) => v.openHighlightsDigest(),
+	// 0.22 (#101): colours with meaning
+	"meaning-filter": (v) => v.openMeaningFilter(),
+	"meaning-legend": (v) => v.openMeaningLegend(),
+	"meaning-digest": (v) => v.openMeaningDigest(),
 	// 0.18 mentions (O7): the notes that link to this page
 	"mentions": (v) => v.openMentions(),
 	// 0.19 (#228): the Figures gallery

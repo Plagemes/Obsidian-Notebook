@@ -34,6 +34,13 @@ export const SHAPE_V4: Readonly<StrokeOptions> = {
 
 export const HIGHLIGHTER_ALPHA = 0.35;
 
+/**
+ * Marker (format v20, #35): 85% opaque, source-over, painted in stroke order like the pen, so it covers the ink written before it a little
+ * (ink below shows through) and never darkens itself within one stroke. The highlighter, by contrast, is 35% and multiplied. One value
+ * for the canvas, the wet canvas, the SVG, the PDF, the PNG and the thumbnails.
+ */
+export const MARKER_ALPHA = 0.85;
+
 /** Stroke outline (closed polygon) in page coordinates. */
 export function strokeOutline(points: readonly Point[], width: number, complete = true, tool: Tool = "pen"): number[][] {
 	const base = tool === "highlighter" ? HIGHLIGHTER_V2 : tool === "shape" ? SHAPE_V4 : PEN_V1;
@@ -65,9 +72,19 @@ export function strokePath(points: readonly Point[], width: number, complete = t
 }
 
 /** SVG path of a committed stroke with the geometry its render version names (nonzero fill). */
-export function strokeSvgPath(stroke: Pick<Stroke, "points" | "width" | "tool" | "render">): string {
+export function strokeSvgPath(stroke: Pick<Stroke, "points" | "width" | "tool" | "render"> & { nib?: number }): string {
 	if (stroke.render !== RENDER_INK) return strokePath(stroke.points, stroke.width, true, stroke.tool);
 	const sink = new SvgPathSink();
-	inkPath(sink, stroke.points, stroke.width, stroke.tool);
+	inkPath(sink, stroke.points, stroke.width, stroke.tool, stroke.nib);
 	return sink.d;
+}
+
+/** Opacity a committed stroke of `tool` is painted with in the day look (canvas, PNG, thumbnails, SVG and PDF all agree). */
+export function inkAlpha(tool: Tool): number {
+	return tool === "highlighter" ? HIGHLIGHTER_ALPHA : tool === "marker" ? MARKER_ALPHA : 1;
+}
+
+/** Blend mode of a committed stroke of `tool` in the day look: only the highlighter multiplies. */
+export function inkBlend(tool: Tool): "multiply" | "source-over" {
+	return tool === "highlighter" ? "multiply" : "source-over";
 }

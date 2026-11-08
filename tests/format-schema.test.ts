@@ -1,7 +1,7 @@
-// docs/schema/notebook-v19.schema.json against what the serializer really writes (roadmap #167).
+// docs/schema/notebook-v20.schema.json against what the serializer really writes (roadmap #167).
 // The schema is a published contract for other tools: a document the plugin writes must always satisfy it, and a document that
 // breaks one of the writer's rules must not. The validator is a small dependency-free one (tests/json-schema-lite.ts).
-import schemaText from "../docs/schema/notebook-v19.schema.json?raw";
+import schemaText from "../docs/schema/notebook-v20.schema.json?raw";
 import guide from "../docs/format.md?raw";
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
@@ -64,6 +64,8 @@ function fullDocument(): NotebookDocument {
 		stroke("st-pen", { slide: "s1", group: "g1" }),
 		stroke("st-hl", { tool: "highlighter", color: "#facc15", width: 14, render: 2, group: "g1" }),
 		stroke("st-shape", { tool: "shape", render: 2, hidden: true, slide: "s2" }),
+		// v20: the new pens (always render 2) and the nib angle.
+		stroke("st-fountain", { tool: "fountain", render: 2, nib: 120 }), stroke("st-brush", { tool: "brush", render: 2, width: 6 }), stroke("st-marker", { tool: "marker", render: 2, width: 10, nib: 0 }),
 		stroke("st-a"), stroke("st-b"), stroke("st-c"),
 	];
 	const graph: GraphElement = {
@@ -135,7 +137,7 @@ function fullDocument(): NotebookDocument {
 	return doc;
 }
 
-describe("notebook-v19.schema.json: what the serializer writes validates", () => {
+describe("notebook-v20.schema.json: what the serializer writes validates", () => {
 	it("is a well-formed draft 2020-12 schema for the current format version", () => {
 		expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
 		expect((getAt(schema as Raw, ["properties", "version", "const"]))).toBe(CURRENT_VERSION);
@@ -180,7 +182,7 @@ describe("notebook-v19.schema.json: what the serializer writes validates", () =>
 	});
 });
 
-describe("notebook-v19.schema.json: invalid documents are refused", () => {
+describe("notebook-v20.schema.json: invalid documents are refused", () => {
 	const base = (): Raw => parseRaw(written(fullDocument()));
 	const bad = (name: string, edit: (raw: Raw) => void): void => {
 		it(name, () => {
@@ -197,14 +199,14 @@ describe("notebook-v19.schema.json: invalid documents are refused", () => {
 	});
 
 	it("refuses things that are not notebooks", () => {
-		for (const v of [null, 1, "x", [], {}, { format: "other", version: 18 }]) expect(validator.validate(v).length).toBeGreaterThan(0);
+		for (const v of [null, 1, "x", [], {}, { format: "other", version: 20 }]) expect(validator.validate(v).length).toBeGreaterThan(0);
 	});
 
 	// Header.
 	bad("wrong format id", set(["format"], "excalidraw"));
-	bad("another version", set(["version"], 17));
-	bad("the previous version", set(["version"], 18));
-	bad("version as a string", set(["version"], "18"));
+	bad("another version", set(["version"], 18));
+	bad("the previous version", set(["version"], 19));
+	bad("version as a string", set(["version"], "20"));
 	bad("no pages", set(["pages"], []));
 	bad("missing id", del(["id"]));
 	bad("missing meta", del(["meta"]));
@@ -238,7 +240,7 @@ describe("notebook-v19.schema.json: invalid documents are refused", () => {
 	bad("background of an unknown kind", set(["pages", 1, "background"], { kind: "video", asset: "ab" }));
 	bad("too many page tags", set(["pages", 0, "tags"], Array.from({ length: 51 }, (_, i) => `t${i}`)));
 	// Strokes.
-	bad("stroke with unknown tool", set(["pages", 0, "strokes", 0, "tool"], "brush"));
+	bad("stroke with unknown tool", set(["pages", 0, "strokes", 0, "tool"], "quill"));
 	bad("stroke without render", del(["pages", 0, "strokes", 0, "render"]));
 	bad("stroke render 3", set(["pages", 0, "strokes", 0, "render"], 3));
 	bad("stroke width negative", set(["pages", 0, "strokes", 0, "width"], -2));
@@ -251,6 +253,15 @@ describe("notebook-v19.schema.json: invalid documents are refused", () => {
 	bad("x as a string", set(["pages", 0, "strokes", 0, "points", 0, 0], "1"));
 	bad("hidden false", set(["pages", 0, "strokes", 2, "hidden"], false));
 	bad("stroke group too long", set(["pages", 0, "strokes", 0, "group"], "g".repeat(65)));
+	// v20: the new pens and the nib angle (strokes 3..5 of page 1 are the fountain pen, the brush and the marker).
+	bad("fountain pen with render 1", set(["pages", 0, "strokes", 3, "render"], 1));
+	bad("brush with render 1", set(["pages", 0, "strokes", 4, "render"], 1));
+	bad("marker with render 1", set(["pages", 0, "strokes", 5, "render"], 1));
+	bad("nib on a pen", set(["pages", 0, "strokes", 0, "nib"], 45));
+	bad("nib on a brush", set(["pages", 0, "strokes", 4, "nib"], 45));
+	bad("nib above 179", set(["pages", 0, "strokes", 3, "nib"], 180));
+	bad("nib negative", set(["pages", 0, "strokes", 3, "nib"], -1));
+	bad("nib fractional", set(["pages", 0, "strokes", 3, "nib"], 45.5));
 	// Elements.
 	bad("element of an unknown type", set(["pages", 0, "elements", 0, "type"], "video"));
 	bad("text without text", del(["pages", 0, "elements", 0, "text"]));
@@ -335,7 +346,7 @@ describe("docs/format.md", () => {
 	});
 
 	it("names the schema file and the version it describes", () => {
-		expect(guide).toContain("schema/notebook-v19.schema.json");
+		expect(guide).toContain("schema/notebook-v20.schema.json");
 		expect(guide).toContain(`version ${CURRENT_VERSION}`);
 	});
 });

@@ -134,7 +134,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 34. **P3** Optional compression of very large notebooks (compatible with the planned Markdown container).
 
 ### Advanced writing
-35. **P1** New pen types: fountain pen (angle-dependent width), brush, marker.
+35. **P1** 🧪 New pen types: fountain pen (angle-dependent width), brush, marker. (0.22: pen type row and nib angle in the pen options, format v20; marker is 85% opaque, in stroke order.)
 36. **P1** 🧪 Auto-scroll while writing near the bottom of the screen.
 37. **P2** Filled shapes and dashed or dotted lines.
 38. **P2** 🧪 Align and distribute the selection.
@@ -158,7 +158,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 52. **P2** Coloured sections inside a notebook (tab dividers, as in OneNote).
 
 ### Library
-53. **P2** Custom covers (image or template).
+53. **P2** 🧪 Custom covers (image or template).
 54. **P2** 🧪 Pinned notebooks, manual order and an archive that hides notebooks without deleting them.
 55. **P3** Study statistics: writing time per notebook and per day, kept on the device.
 
@@ -251,7 +251,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 98. **P2** Per-page undo: each page has its own history; undo on one page never touches another.
 99. **P2** Area highlighter: translucent rectangles, ideal on scanned PDFs.
 100. **P1** 🧪 Invisible ink for self-testing: write answers with a hidden pen and reveal them with "show solutions".
-101. **P2** Colours with meaning: define what each colour means (red = definition, blue = example), filter the view by it and generate a digest per colour.
+101. **P2** 🧪 Colours with meaning: define what each colour means (red = definition, blue = example), filter the view by it and generate a digest per colour.
 102. **P2** 🧪 Headings from handwriting size (no OCR): lines written large become outline entries, shown as images of the ink.
 103. **P2** 🧪 Handwritten checklists: a drawn square becomes a tappable checkbox, linked to Obsidian tasks (0.19, format v17: element `checkbox`, offered or automatic from a drawn square, tap to tick, label ink, "Send to tasks" with the tick following into the note, "Open items" filter in the notebook map).
 
@@ -286,7 +286,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 125. **P1** 🧪 Last position shared across devices: reopen on the phone at the page you were on with the tablet (stored in the notebook, so it travels with the sync).
 
 ### F. Sync and storage
-126. **P1** Optional Google Drive / OneDrive connector inside the plugin (opt-in only), configurable scope: the whole vault, only selected folders, or include/exclude rules (patterns, file types, size limits). When to sync: on open, on close, on an interval or manually; "Wi-Fi only" option; rules for large files. Conflicts merged with #122; never a mandatory cloud.
+126. **P1** 🧪 Optional Google Drive / OneDrive connector inside the plugin (opt-in only), configurable scope: the whole vault, only selected folders, or include/exclude rules (patterns, file types, size limits). When to sync: on open, on close, on an interval or manually; "Wi-Fi only" option; rules for large files. Conflicts merged with #122; never a mandatory cloud.
 127. **P2** 🧪 Scheduled backups (0.21): a zip of every notebook, its assets and sidecars into a vault folder, daily or weekly or on demand, keeping the last N (a folder outside the vault or Drive is left to the user's own sync tool; a Drive connector is #126).
 128. **P2** 🧪 Storage manager: size of each notebook, duplicate or unused assets, downscaling of heavy images.
 
@@ -352,7 +352,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - Conflict-free by design: every stroke has a unique id, so concurrent edits never clash; at the end everything lands in the host's notebook with the author of each stroke.
     - Asynchronous too: people without Obsidian annotate in the web viewer (#164) and send back an annotation package that is imported with one tap; or the notebook is shared on Drive with conflict merging (#122).
 166. **P3** InkML export (open standard for digital ink).
-167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; no format change.)
+167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20.)
 
 ### E. Automation
 168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.
@@ -370,7 +370,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 176. **P1** 🧪 Loose sheet: a quick-notes notebook opened from anywhere in Obsidian; move its content to the right notebook later.
 177. **P2** 🧪 Inbox folder: files shared from other Android apps land there and the plugin offers to put them into a notebook.
 178. **P2** 🧪 Split an infinite page into A4 pages for export and printing.
-179. **P2** Two-way page references: if page 3 refers to page 7, page 7 shows "referenced on page 3".
+179. **P2** 🧪 Two-way page references: if page 3 refers to page 7, page 7 shows "referenced on page 3".
 180. **P1** 🧪 Restore a single page from a previous version, leaving the rest untouched.
 181. **P2** Reference sheets, dynamic and integrated:
     - Sources: built-in sheets (interactive periodic table with element data, physical constants, formula sheets, unit tables, Greek alphabet), your own notebook pages or Obsidian notes marked as "reference", and sheets you add.
@@ -415,11 +415,11 @@ Features for following a lecture live. Exam and review features stay in the sepa
 203. **P1** 🧪 Importance markers (!, !!, ★) on the page, collected per lecture.
 204. **P1** 🧪 Structured boxes: Definition, Theorem, Example, Proof, Remark — frames drawn on the fly that become callouts in the companion note.
 205. **P2** Automatic numbering of boxes (Def. 3.2) and an index of the course's definitions and theorems.
-206. **P2** Instant axes: one gesture drops Cartesian axes with ticks for quick hand-drawn graphs.
+206. **P2** 🧪 Instant axes: one gesture drops Cartesian axes with ticks for quick hand-drawn graphs.
 207. **P2** Personal shorthand: your abbreviation symbols with an automatically generated legend.
 208. **P1** 🧪 Quick textbook reference: "p. 134" becomes a link to the textbook PDF at that page.
 209. **P1** 🧪 Assigned homework: a "homework" stamp with a due date that becomes an Obsidian task.
-210. **P2** Automatic lecture header: course, lecturer, room, date and time from the timetable.
+210. **P2** 🧪 Automatic lecture header: course, lecturer, room, date and time from the timetable. (0.22: the class in progress writes its header on the page you are writing on, in an empty spot at the top; setting off / ask / automatic; command; no format change.)
 211. **P1** 🧪 "Pen only" toggle at hand: instantly ignores fingers when you rest your hand.
 212. **P2** 🧪 Recent symbols: the symbols you draw most often (∀, ∫, →) become buttons to insert them quickly. (0.21: a strip of the most used typographic symbols and saved signs, ordered by use with decay; no format change.)
 213. **P2** 🧪 "Look up later" list: circle a word and it goes to a list, with its image.

@@ -62,7 +62,7 @@ import {
 import { pageContentCommand } from "../model/page-content";
 import { checkContent, freezeStroke } from "../model/serialize";
 import {
-	DEFAULT_META, PAPER_SPACING,
+	DEFAULT_META, isLinePen, isNewPen, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
 	type PaperKind, type Point, type Stroke, type TextElement, type Tool, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
@@ -82,6 +82,8 @@ import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
 import { AddToIndexModal, BookIndexModal, currentIndex, termSpellings } from "./book-index";
 import { normalizeIndexPrefix } from "../model/book-index";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
+import { MeaningTools } from "./colour-meaning";
+import type { MeaningsStore } from "../library/meanings-store";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
@@ -128,6 +130,7 @@ import { executeThenSettle, type EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
 import { pickSlideRef } from "./lecture-logic";
 import { LectureModeController, routeLectureEnd, type LectureEnd } from "./lecture-mode";
+import { LectureHeaderService, type LectureHeaderHost } from "./lecture-header";
 import { lectureSnapshot, type LectureSnapshot } from "../library/lecture-log-logic";
 import { LECTURE_MEMORY_KEY } from "../timetable/lecture-memory";
 import { findLecturePage } from "../timetable/lecture-open";
@@ -153,6 +156,7 @@ import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
 import { SlideBack } from "./slide-back";
+import { PageRefs } from "./page-refs";
 import { SmartAddStrip } from "./smart-add";
 import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
 import { createMarker, isRegion, visibleStrokes } from "../model/markers";
@@ -176,6 +180,7 @@ import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
+import { AxesTools, type AxesHost } from "./axes-tools";
 import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
@@ -196,6 +201,7 @@ import { ViewUi } from "./view-ui";
 import { pageKindOf } from "../ui/page-kind";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
+import { kindTool, strokeNib } from "../ink/pen-kinds";
 import { hint } from "../ui/hints";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
 import { actionLabel } from "../ui/action-sheet";
@@ -247,6 +253,8 @@ export interface NotebookHost {
 	nav?: NavController;
 	/** 0.18 (#227): quick tabs, pages pinned in a notebook (view/quick-tabs-service.ts). Optional: absent in tests. */
 	quickTabs?: QuickTabsService;
+	/** 0.22 (#101): per-notebook colour meanings (library/meanings-store.ts). Optional: absent in tests. */
+	meanings?: MeaningsStore;
 	/** Roadmap O15: the page in view or the save state of `view` changed (the status bar item follows the active view). Optional. */
 	statusChanged?(view: NotebookView): void;
 	/** Instant save journal shared by all views. */
@@ -261,12 +269,16 @@ export interface NotebookHost {
 	classNow?(): string | null;
 	/** 0.14 (401): the class in progress that belongs to this notebook (automatic lecture mode). Optional: absent in tests and the harness. */
 	lectureClassFor?(path: string): LectureClass | null;
+	/** 0.22 lecthead (#210): the class for the lecture header (in progress, else with `nearest` the closest of today). */
+	lectureHeaderClassFor?(path: string, nearest: boolean): LectureClass | null;
 	/** 0.19 (222): a lecture ended in that notebook; the plugin takes the lecture snapshot from the saved file. Optional: absent in tests and the harness. */
 	lectureEnded?(path: string, course: string, saved: boolean): void;
 	/** 0.19 (#221): a lecture the user wrote in ended: its line goes into the daily note (library/lecture-log.ts). Optional: absent in tests and the harness. */
 	logLecture?(file: TFile, cls: LectureClass, snap: LectureSnapshot, docId?: string): void;
 	/** ui redesign: runs a plugin-level action of the registry (notebook menu). Optional. */
 	runGlobal?(id: string): void;
+	/** 0.22 (#53): opens "Change cover…" for that notebook (library/cover-dialog.ts). Optional: absent in tests and the harness. */
+	changeCover?(file: TFile): void;
 	/** wave 0.7: sync safety (presence files, sync check). Optional: absent in tests and the harness. */
 	syncSafety?: SyncSafetyService;
 	/** wave 0.7: resilience: safe mode, storage-full warning, integrity ledger. Optional: absent in tests. */
@@ -460,6 +472,8 @@ export class NotebookView extends FileView {
 	private sticky: StickyTools | null = null;
 	/** 0.19 (#103): handwritten checklists (taps, the square drawn by hand, send to tasks, the task lines). */
 	private checklist: ChecklistTools | null = null;
+	/** 0.22 (#206): instant axes (an L or a + drawn by hand, the insert). */
+	private axes: AxesTools | null = null;
 	/** 0.20 (#39): groups and locked elements (Group, Ungroup, Lock, the Unlock chip, the list of locked elements). */
 	private groups: GroupTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
@@ -507,8 +521,11 @@ export class NotebookView extends FileView {
 	private pageOffer: PageOffer | null = null;
 	/** 0.21 (#225): the pill back to the place last written during a lecture (view/slide-back.ts). */
 	slideBack: SlideBack | null = null;
+	pageRefs: PageRefs | null = null;
 	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
 	lectureMode: LectureModeController | null = null;
+	/** 0.22 lecthead (#210): the header of the class on the page being written on. */
+	lectureHeader: LectureHeaderService | null = null;
 	/** wave 0.14 (410): the Smart "+" strip (view/smart-add.ts). */
 	private smartAdd: SmartAddStrip | null = null;
 
@@ -569,6 +586,8 @@ export class NotebookView extends FileView {
 	private readonly heavyDismissed = new Set<string>();
 	/** ui redesign: id of the page in view when it is heavy and can be split (page sheet), else null. */
 	private heavyPageId: string | null = null;
+	/** 0.22 (#101): colours with meaning: the legend, the view filter and the digest by colour (view/colour-meaning.ts). */
+	private meaningTools: MeaningTools | null = null;
 	private navCurrent = -1;
 	/** Pages whose thumbnail was drawn without all its media; redrawn when media arrives. */
 	private readonly thumbPending = new Set<string>();
@@ -599,7 +618,7 @@ export class NotebookView extends FileView {
 		super(leaf);
 		const s = host.settings;
 		this.policy = new InputPolicy(policySettings(s));
-		this.tools = { ...this.tools, eraserSize: s.eraserSize };
+		this.tools = { ...this.tools, eraserSize: s.eraserSize, penKind: s.defaultPenKind, nibAngle: s.defaultNibAngle };
 		this.pressure = new PressureModel(s.pressureMode);
 		this.filter.params = stabilizationParams(s.stabilization);
 	}
@@ -688,6 +707,26 @@ export class NotebookView extends FileView {
 				if (id) this.heavyDismissed.add(id);
 			},
 		});
+		this.meaningTools = new MeaningTools({
+			app: this.app, body: this.body, settings: () => this.host.settings,
+			setGlobal: async (legend) => {
+				this.host.settings = readSettings({ ...this.host.settings, colourMeanings: legend });
+				await this.host.saveSettings?.();
+			},
+			store: () => this.host.meanings ?? null, docId: () => this.session?.doc?.id ?? null, file: () => this.file, renderer: () => this.renderer,
+			pages: () => { const doc = this.shownDoc(); return doc ? this.renderPagesOf(doc) : []; },
+			media: () => this.media,
+			render: () => {
+				const options = this.exportOptions();
+				return {
+					render: {
+						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+						...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+					},
+					...(options.prepare ? { prepare: options.prepare } : {}),
+				};
+			},
+		});
 		// 0.16 (#124): a locked page shows a small badge over the page area; a tap on it unlocks the page.
 		const badge = this.body.createEl("button", { cls: "nb-ui nb-lock-badge", attr: { type: "button", "aria-label": t("lock.badge.aria") } });
 		setIcon(badge.createSpan({ cls: "nb-lock-badge-icon", attr: { "aria-hidden": "true" } }), "lock");
@@ -726,6 +765,7 @@ export class NotebookView extends FileView {
 		this.math = new MathTools(this.mathHost());
 		this.sticky = new StickyTools(this.stickyHost());
 		this.checklist = new ChecklistTools(this.checklistHost());
+		this.axes = new AxesTools(this.axesHost());
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
 		this.penGestures = new PenGestureLayer({
@@ -785,6 +825,16 @@ export class NotebookView extends FileView {
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
 		this.mountStates();
+		this.lectureHeader = new LectureHeaderService({
+			parent: () => this.body,
+			path: () => this.file?.path ?? null,
+			settings: () => this.host.settings,
+			classFor: (path, nearest) => this.host.lectureHeaderClassFor?.(path, nearest) ?? null,
+			editContext: () => this.editContext(),
+			document: () => this.session?.doc ?? null,
+			busy: () => this.inContact(),
+			locale: () => getLanguage(),
+		} satisfies LectureHeaderHost);
 		this.lectureMode = new LectureModeController({
 			parent: () => this.body,
 			path: () => this.file?.path ?? null,
@@ -799,6 +849,7 @@ export class NotebookView extends FileView {
 			},
 			changed: () => this.refreshUi(),
 			ended: (end) => this.onLectureEnd(end),
+			started: (cls, pageAdded) => this.lectureHeader?.lectureStarted(cls, pageAdded),
 			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
 		this.mountExcerpts();
@@ -821,6 +872,14 @@ export class NotebookView extends FileView {
 				this.recordJump(index);
 				this.scrollToPage(index, y);
 			},
+		});
+		this.pageRefs = new PageRefs({
+			parent: () => this.body,
+			enabled: () => this.host.settings.pageRefs && this.layout !== null,
+			pages: () => this.shownDoc()?.pages ?? [],
+			path: () => this.file?.path ?? null,
+			current: () => this.currentPageIndex(),
+			goTo: (index) => this.goToPage(index),
 		});
 		this.smartAdd = new SmartAddStrip({
 			app: this.app,
@@ -1056,6 +1115,8 @@ export class NotebookView extends FileView {
 		this.practiceHooks = null;
 		this.presentation?.destroy();
 		this.presentation = null;
+		this.lectureHeader?.destroy();
+		this.lectureHeader = null;
 		this.lectureMode?.destroy();
 		this.lectureMode = null;
 		this.statesTools?.destroy();
@@ -1091,6 +1152,8 @@ export class NotebookView extends FileView {
 		this.selectionActions = null;
 		this.arrange = null;
 		this.checklist?.destroy();
+		this.axes?.destroy();
+		this.axes = null;
 		this.checklist = null;
 		this.groups?.destroy();
 		this.groups = null;
@@ -1098,8 +1161,12 @@ export class NotebookView extends FileView {
 		this.penLinks = null;
 		this.pageOffer?.destroy();
 		this.pageOffer = null;
+		this.meaningTools?.destroy();
+		this.meaningTools = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
+		this.pageRefs?.destroy();
+		this.pageRefs = null;
 		this.smartAdd?.destroy();
 		this.smartAdd = null;
 		this.ui?.destroy();
@@ -1440,6 +1507,7 @@ export class NotebookView extends FileView {
 		this.activePenSetId = null;
 		// wave 0.10 (51): read-only mode belongs to the notebook being read; the next one opens editable.
 		if (this.userReadOnly) this.setReadOnlyMode(false, false);
+		this.meaningTools?.reset();
 		this.syncSafety?.closed();
 		this.resilience?.end();
 		this.history.clear();
@@ -1529,6 +1597,7 @@ export class NotebookView extends FileView {
 	}
 
 	applySettings(settings: NotebookSettings): void {
+		this.meaningTools?.refresh();
 		this.applyInput(settings);
 		refreshSlideBadges(this); // 0.14 slides: the badges setting
 		this.pressure.mode = settings.pressureMode;
@@ -1552,6 +1621,7 @@ export class NotebookView extends FileView {
 		this.reading?.settingsChanged();
 		this.lectureMode?.settingsChanged();
 		this.slideBack?.settingsChanged();
+		this.pageRefs?.reset();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
 		this.display?.settingsChanged();
@@ -1622,6 +1692,26 @@ export class NotebookView extends FileView {
 		const after = mergeMeta(before, patch);
 		if (metaEquals(before, after)) return true;
 		this.history.execute(new SetMeta(before, after));
+		this.afterHistoryChange();
+		return true;
+	}
+
+	/** True when the open document lists this asset (a cover picture that another change already uses must not be trashed). */
+	hasAsset(id: string): boolean {
+		return !!this.session?.doc?.assets?.[id];
+	}
+
+	/**
+	 * 0.22 (#53): a new cover for the library's "Change cover": registers the cover picture `asset` (when there is one) and sets the
+	 * metadata in one undo step. Same refusal rules as `applyMetaPatch`; false also when the history refuses the step.
+	 */
+	applyCoverChange(asset: Asset | null, patch: Partial<NotebookMeta>): boolean {
+		const doc = this.session?.doc;
+		if (!doc || !this.editable() || this.controller?.drawing) return false;
+		const before = doc.meta ?? cloneMeta(DEFAULT_META);
+		const after = mergeMeta(before, patch);
+		const done = this.history.execute(new Batch("Change cover", [...(asset ? [new AddAsset(asset)] : []), new SetMeta(before, after)]));
+		if (!done) return false;
 		this.afterHistoryChange();
 		return true;
 	}
@@ -2217,6 +2307,18 @@ export class NotebookView extends FileView {
 	openMentions(): void {
 		this.mentions?.open();
 	}
+	/** 0.22 (#101): the legend editor, the filter chooser and the digest by colour. */
+	openMeaningLegend(): void {
+		this.meaningTools?.openLegend();
+	}
+
+	openMeaningFilter(): void {
+		this.meaningTools?.openFilter();
+	}
+
+	openMeaningDigest(): void {
+		this.meaningTools?.openDigest();
+	}
 
 	/** 0.16 (#90): the Highlights digest dialog (grouping, picture quality); the note is written next to the notebook. */
 	openHighlightsDigest(): void {
@@ -2466,6 +2568,21 @@ export class NotebookView extends FileView {
 			sendTask: (pageIndex, bounds, request) => this.sendChecklistTask(pageIndex, bounds, request),
 			refresh: () => this.refreshUi(),
 		};
+	}
+
+	/** What the instant axes need from the view (0.22, #206). */
+	private axesHost(): AxesHost {
+		const c = this.checklistHost();
+		return {
+			stage: () => c.stage(), doc: () => c.doc(), editable: () => c.editable(), execute: (cmd) => c.execute(cmd), settings: () => c.settings(),
+			toStage: (p, x, y) => c.toStage(p, x, y), insertTarget: () => c.insertTarget(), penColor: () => c.penColor(), penWidth: () => this.tools.penWidth,
+			select: (p, s, e) => c.select(p, s, e), refresh: () => c.refresh(),
+		};
+	}
+
+	/** 0.22 (#206): instant axes of this view (null before the view is open). */
+	get axesTools(): AxesTools | null {
+		return this.axes;
 	}
 
 	/** 0.19 (#103): handwritten checklists of this view (null before the view is open). */
@@ -3552,6 +3669,15 @@ export class NotebookView extends FileView {
 				.onClick(() => (a.scope === "global" ? this.host.runGlobal?.(id) : this.runAction(id))));
 		}
 		this.addPdfCopyItems(menu);
+		this.addCoverItem(menu);
+	}
+
+	/** 0.22 (#53): "Change cover…" in the notebook tab's menu. */
+	private addCoverItem(menu: Menu): void {
+		const file = this.file;
+		const host = this.host;
+		if (!file || !host.changeCover || isInTrash(file.path)) return;
+		menu.addItem((i) => i.setTitle(t("cover.menu")).setIcon("image").setSection("action").onClick(() => host.changeCover?.(file)));
 	}
 
 	/** 0.17 (#23): "Keep a PDF copy" (this notebook's own choice) and, under it, when the copy was last updated. */
@@ -3901,8 +4027,10 @@ export class NotebookView extends FileView {
 		this.lassoTap = null;
 		this.penLinks?.reset();
 		this.checklist?.reset();
+		this.axes?.reset();
 		this.pageOffer?.reset();
 		this.slideBack?.documentChanged();
+		this.pageRefs?.reset();
 		this.multiTap.reset();
 		this.stopHold();
 		this.textEditor?.close();
@@ -3937,6 +4065,8 @@ export class NotebookView extends FileView {
 			this.syncHooks?.loaded();
 			this.practiceHooks?.loaded();
 			this.lectureMode?.opened();
+			this.lectureHeader?.opened();
+			this.lectureHeader?.pagesChanged();
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
@@ -4077,6 +4207,7 @@ export class NotebookView extends FileView {
 		this.updatePageIndicator();
 		this.pageNav?.refresh();
 		this.statesTools?.refresh();
+		this.lectureHeader?.pagesChanged();
 	}
 
 	/** The page panel shows thumbnails of what was just drawn, a moment after the pen lifts. */
@@ -4103,6 +4234,7 @@ export class NotebookView extends FileView {
 		this.toolbar.setPage(n ? current + 1 : 0, n, lockedPage);
 		this.syncLockBadge(lockedPage);
 		this.mentions?.sync();
+		this.pageRefs?.sync();
 		this.notifyStatus();
 		if (n) this.practiceHooks?.page(current);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
@@ -4116,6 +4248,7 @@ export class NotebookView extends FileView {
 			this.pageNav?.markCurrent(current);
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
 			this.checklist?.cancelOffer();
+			this.axes?.cancelOffer();
 			this.smartAdd?.hide();
 			this.refreshUi(); // the contextual bar follows the kind of page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
@@ -4399,6 +4532,7 @@ export class NotebookView extends FileView {
 		this.renderer?.setViewport(this.viewport, interactive);
 		this.penLinks?.viewChanged();
 		this.checklist?.viewChanged();
+		this.axes?.viewChanged(interactive);
 		this.reading?.viewportChanged();
 		this.pdfText?.viewportChanged();
 		if (this.selection) this.pushSelection();
@@ -4729,6 +4863,7 @@ export class NotebookView extends FileView {
 		// A selection made with the side button's lasso is not carried into new ink.
 		this.clearSelection();
 		this.penLinks?.strokeStarted();
+		this.axes?.strokeStarted();
 		this.checklist?.strokeStarted();
 		this.pageOffer?.penDown();
 		this.smartAdd?.hide();
@@ -4742,16 +4877,18 @@ export class NotebookView extends FileView {
 		const p = this.pressure.sample(sample.pointerType, sample.pressure, sample.x, sample.y, sample.t);
 		const highlighter = tool === "highlighter";
 		if (highlighter && page) this.reading?.prefetch(page);
-		const inkTool = highlighter ? "highlighter" : "pen";
+		// 0.22 (#35): the pen tool writes with the kind of pen chosen in its options (the ballpoint pen, a fountain pen, a brush or a marker).
+		const inkTool: Tool = highlighter ? "highlighter" : kindTool(this.tools.penKind);
+		const nib = strokeNib(inkTool, this.tools.nibAngle);
 		const color = highlighter ? this.tools.highlighterColor : this.tools.penColor;
 		const width = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
-		this.ink.reset(inkTool, width);
+		this.ink.reset(inkTool, width, nib);
 		this.ink.add(start[0], start[1], p);
 		this.active = {
 			pageIndex,
-			stroke: this.markers?.invisibleInk && inkTool === "pen"
-				? { ...createStroke(color, width, [], inkTool, RENDER_INK), hidden: true }
-				: createStroke(color, width, [], inkTool, RENDER_INK),
+			stroke: this.markers?.invisibleInk && !highlighter
+				? { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), hidden: true }
+				: { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }) },
 			wet: true,
 			liveFallback: false,
 			rawX: start[0],
@@ -4945,7 +5082,7 @@ export class NotebookView extends FileView {
 		const points = this.ink.toPoints();
 		points.push([active.rawX, active.rawY, active.rawP]);
 		const { tool, color, width } = active.stroke;
-		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, points, predicted: [] });
+		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, nib: active.stroke.nib, points, predicted: [] });
 	}
 
 	/**
@@ -5148,7 +5285,7 @@ export class NotebookView extends FileView {
 	private updateGhostLines(pageIndex: number, page: Page, tool: Tool): void {
 		const renderer = this.renderer;
 		const mode = this.host.settings.ghostLines;
-		if (!renderer || tool !== "pen") return;
+		if (!renderer || !isLinePen(tool)) return;
 		if (!ghostApplies(mode, page.paper.kind)) {
 			renderer.setGhost(null);
 			return;
@@ -5156,7 +5293,7 @@ export class NotebookView extends FileView {
 		const boxes: GhostBox[] = [];
 		for (let i = page.strokes.length - 1; i >= 0 && boxes.length < GHOST_MAX_STROKES; i--) {
 			const s = page.strokes[i]!;
-			if (s.tool === "pen" && !s.hidden) boxes.push(renderer.boundsOf(s));
+			if (isLinePen(s.tool) && !s.hidden) boxes.push(renderer.boundsOf(s));
 		}
 		boxes.reverse();
 		const lines = inferGhostLines(boxes, ghostSpacingPt(this.host.settings.ghostSpacing));
@@ -5169,7 +5306,7 @@ export class NotebookView extends FileView {
 	 * crosses, as one undo step, and the scribble itself is not kept. Returns true when it did.
 	 */
 	private eraseByScribble(active: ActiveStroke, page: Page): boolean {
-		if (!this.host.settings.scribbleErase || active.stroke.tool !== "pen" || active.snap || active.recognized || !this.renderer) return false;
+		if (!this.host.settings.scribbleErase || !isLinePen(active.stroke.tool) || active.snap || active.recognized || !this.renderer) return false;
 		const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
 		// v8: hidden ink (the solutions) is never scratched out while it is not shown.
 		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf, {}, this.markers?.isRevealed(page) ?? false);
@@ -5215,7 +5352,10 @@ export class NotebookView extends FileView {
 		const cmd = commands.length === 1 ? commands[0]! : new Batch("Draw", commands);
 		this.justCommitted = this.history.execute(cmd) ? { ids: new Set(strokes.map((s) => s.id)), cmd } : null;
 		this.penLinks?.strokesAdded(pageIndex);
-		if (offerChecklist) this.checklist?.strokesAdded(pageIndex, strokes);
+		if (offerChecklist) {
+			this.checklist?.strokesAdded(pageIndex, strokes);
+			this.axes?.strokesAdded(pageIndex, strokes);
+		}
 		// Reaching the bottom of a page in the middle: offer (never add) a page right after it.
 		if (doc && this.renderer && !grew) {
 			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
@@ -5281,7 +5421,10 @@ export class NotebookView extends FileView {
 		if (!shape || !first || first.length < 2) return;
 		// Highlighter shapes stay highlighter strokes (translucent); pen shapes become constant-width "shape" ink.
 		// Shapes keep the perfect-freehand geometry (render 1), drawn whole on the live layer.
-		a.stroke = { ...a.stroke, tool: a.stroke.tool === "highlighter" ? "highlighter" : "shape", points: first, render: RENDER_FREEHAND };
+		// A recognised shape of a new pen (fountain, brush, marker) is a plain shape: those pens have no outline of the old geometry and no nib in a shape.
+		const { nib: _nib, ...flat } = a.stroke;
+		void _nib;
+		a.stroke = { ...flat, tool: a.stroke.tool === "highlighter" ? "highlighter" : "shape", points: first, render: RENDER_FREEHAND };
 		a.extra = shape.points.slice(1);
 		a.wet = false;
 		a.recognized = true;
@@ -5449,7 +5592,7 @@ export class NotebookView extends FileView {
 		this.clearDwell();
 		if (!dwellMayStart({
 			enabled: this.host.settings.penGestureLongPress, pointerType: sample.pointerType, eraser, held,
-			modeOn: this.penGestures?.mode === true, inking: inkTool === "pen" || inkTool === "highlighter",
+			modeOn: this.penGestures?.mode === true, inking: inkTool === "pen" || inkTool === "highlighter" || isNewPen(inkTool as Tool),
 		})) return;
 		const tracker = new DwellTracker();
 		tracker.begin(sample.x, sample.y, performance.now());

@@ -5,6 +5,7 @@ import { iconButton } from "../ui/components/dom";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 import { confirmDestructive } from "../ui/destructive";
 import type { FavouritePen } from "./favourites";
+import { PEN_KINDS } from "../ink/pen-kinds";
 import {
 	assign, displayName, folderKey, MAX_FOLDER_ASSIGNMENTS, MAX_PEN_SETS, removePenSet, renamePenSet, replacePens, restoreStarters,
 	type PenSet,
@@ -31,6 +32,7 @@ export function penDots(parent: HTMLElement, pens: readonly FavouritePen[]): HTM
 	for (const p of pens) {
 		const dot = row.createSpan({ cls: "nb-penset-dot" });
 		dot.toggleClass("is-highlighter", p.tool === "highlighter");
+		for (const kind of PEN_KINDS) if (kind !== "pen") dot.toggleClass(`is-kind-${kind}`, p.kind === kind);
 		dot.setCssProps({ "--nb-penset-color": p.color });
 	}
 	return row;

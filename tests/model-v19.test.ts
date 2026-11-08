@@ -81,8 +81,8 @@ function historyWith(doc: NotebookDocument, clock: () => number) {
 }
 
 describe("format v19: migration", () => {
-	it("has the v18 step and the current format is v19", () => {
-		expect(CURRENT_VERSION).toBe(19);
+	it("has the v18 step (the current format is v19 or later)", () => {
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(19);
 		expect(typeof MIGRATIONS[18]).toBe("function");
 	});
 

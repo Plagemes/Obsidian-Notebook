@@ -4,7 +4,7 @@ import { resolveWeekStart } from "../model/calendar";
 import { createDocument, createId } from "../model/document";
 import { backgroundRect } from "../model/margins";
 import { parse, serializeChecked } from "../model/serialize";
-import { PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
+import { DEFAULT_META, PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
 import { CreateDialog, type ChosenTemplate, type CreateTab, type FolderSpec } from "../view/create-dialog";
 import { applyNotebookMeta, joinPath, notebookDocument, type NotebookSpec } from "../view/create-logic";
 import type { PickedFile } from "../view/pick";
@@ -27,11 +27,13 @@ import { notebookTemplatesFolder, openNotebookTemplatePicker, saveNotebookAsTemp
 import { openTemplateGallery } from "../view/page-tools";
 import { headerField } from "../storage/integrity";
 import { journalFolder, sidecarDeviceId, VaultDocumentIO, vaultDeviceFileAdapter } from "../storage/vault-io";
-import { resolveAssetFile, storeAsset } from "../view/media";
+import { resolveAssetFile, storeAsset, storeAssetTracked } from "../view/media";
 import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
 import { askLectureSetup } from "../view/lecture-pack-modal";
 import { pickFile } from "../view/pick";
-import { libraryIndexPath, parseStoredJson, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
+import { libraryIndexPath, parseStoredJson, patchNotebookCover, patchNotebookId, patchNotebookMeta, type MetaPatchResult } from "./host-logic";
+import { openCoverDialog, type CoverChange } from "./cover-dialog";
+import { SerialQueue, mayTrashCoverAsset } from "./cover-assets";
 import { importPdfAsNotebook } from "./import-pdf";
 import { BulkImportDialog } from "./bulk-import-dialog";
 import { pickManyFiles, fileSource } from "./bulk-drop";
@@ -52,7 +54,7 @@ import { CollectionsStore } from "./collections-store";
 import type { BoardColumn } from "./board-logic";
 import { BoardColumnsModal } from "../view/board-columns-modal";
 import type { LibraryHost } from "./library-view";
-import type { ThumbnailOptions } from "./thumbnail";
+import { renderThumbnail, type ThumbnailOptions } from "./thumbnail";
 import { showNotice } from "../view/notice";
 import { TransferFlows } from "./transfer-flows";
 
@@ -90,6 +92,8 @@ export class NotebookLibraryHost implements LibraryHost {
 	readonly pdf: PdfStore;
 	/** Assets seen in notebooks the library read, so a PDF is found even if its file was moved. */
 	private readonly assets = new Map<string, Asset>();
+	/** Review fix (D10): "Use this cover" runs one at a time, so two applies of the same picture never meet. */
+	private readonly coverApplies = new SerialQueue();
 	/** Library trash (#160): deleting from the library moves to `_trash/`. */
 	readonly trash: LibraryTrash;
 	/** Roadmap 54: pinned, archived and manual order, one file per device in `_meta` (library/library-state.ts). */
@@ -617,6 +621,68 @@ export class NotebookLibraryHost implements LibraryHost {
 			return;
 		}
 		await this.rewrite(file, (json) => patchNotebookMeta(json, patch));
+	}
+
+	/**
+	 * 0.22 (#53): "Change cover…". Opens the dialog for the notebook; the dialog asks, and only its "Use this cover" writes: a baked
+	 * picture is stored as an asset next to the notebook (content-addressed, so the same picture twice is one file) and the cover
+	 * points at it; a pattern only sets `meta.coverArt`. An open notebook takes the change through its history (one undo step), a
+	 * closed one through the safe read-patch-write. A picture this call created is trashed again if the change then fails.
+	 */
+	changeCover(file: TFile): void {
+		const name = file.basename;
+		let cached: NotebookDocument | null = null;
+		const read = async (): Promise<NotebookDocument | null> => (cached ??= await this.readNotebook(file));
+		void read().then((doc) => {
+			if (!doc) return void showNotice(t("library.unreadable"));
+			openCoverDialog(this.app, {
+				name, color: doc.meta?.cover ?? DEFAULT_META.cover, current: doc.meta?.coverArt, seed: doc.id,
+				pickImage: () => pickFile(this.app, "image"),
+				pageCount: async () => (await read())?.pages.length ?? 0,
+				pageImage: async (index) => {
+					const d = await read();
+					const page = d?.pages[index];
+					if (!d || !page) return "";
+					const bg = await this.thumbnailBackground(d, page, 1000);
+					return renderThumbnail(page, 1000, { drawBackground: bg ?? undefined, mime: "image/jpeg", quality: 0.85 });
+				},
+				apply: (change) => this.coverApplies.run(() => this.applyCover(file, change)),
+			});
+		}).catch((e: unknown) => {
+			console.error("[notebook] change cover", e);
+			showNotice(t("library.unreadable"));
+		});
+	}
+
+	/** Whether something other than the failed apply points at the cover picture: a known notebook, or a notebook that is open. */
+	private coverAssetInUse(id: string): boolean {
+		if (this.assets.has(id)) return true;
+		return this.app.workspace.getLeavesOfType(VIEW_TYPE).some((leaf) => leaf.view instanceof NotebookView && leaf.view.hasAsset(id));
+	}
+
+	private async applyCover(file: TFile, change: CoverChange): Promise<void> {
+		if (!this.app.vault.getFileByPath(file.path)) throw new Error(t("cover.notice.missing"));
+		let stored: { asset: Asset; created: boolean } | null = null;
+		if (change.picture) stored = await storeAssetTracked(this.app, this.root(), change.picture.bytes, change.picture.name, "image");
+		const asset = stored?.asset ?? null;
+		const patch: Partial<NotebookMeta> = {
+			...(change.color ? { cover: change.color } : {}),
+			coverArt: asset ? { kind: "image", asset: asset.id } : change.art ? { kind: "art", ...change.art } : undefined,
+		};
+		try {
+			const view = this.openView(file);
+			if (view) {
+				if (!view.applyCoverChange(asset, patch)) throw new Error(t("host.metaRejected"));
+			} else await this.rewrite(file, (json) => patchNotebookCover(json, asset, patch));
+		} catch (e) {
+			// Review fix (D10): a picture another notebook (or an open one) already points at is never trashed.
+			if (stored && mayTrashCoverAsset(stored.created, this.coverAssetInUse(stored.asset.id))) {
+				const written = this.app.vault.getFileByPath(stored.asset.path);
+				if (written) await this.app.fileManager.trashFile(written).catch(() => undefined);
+			}
+			throw e;
+		}
+		if (asset) this.assets.set(asset.id, asset);
 	}
 
 	/** A duplicated notebook is a byte copy: give it its own document id. */

@@ -9,6 +9,9 @@ const TOOL_LABEL: Record<Tool, MessageKey> = {
 	pen: "tool.pen",
 	highlighter: "tool.highlighter",
 	shape: "tool.shape",
+	fountain: "tool.fountain",
+	brush: "tool.brush",
+	marker: "tool.marker",
 };
 
 /**

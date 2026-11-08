@@ -6,6 +6,7 @@ import { ERASE_FILTER_KINDS, type EraseFilterKind } from "../ink/erase-filter";
 import { DEFAULT_ERASER_SIZE } from "./favourites";
 import { SHAPE_KINDS, type ShapeKind } from "./view-helpers";
 import { attachQuickTabGesture } from "./quick-tabs";
+import { kindHasNib, NIB_STEP, normaliseNib, PEN_KINDS, type PenKind } from "../ink/pen-kinds";
 
 export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
 export type EraserMode = "stroke" | "segment" | "area";
@@ -39,6 +40,10 @@ export interface ToolbarState {
 	ruler: boolean;
 	/** The shape of a selection made with the lasso tool. */
 	selectMode: SelectMode;
+	/** 0.22 (#35): which pen the pen tool writes with (ballpoint, fountain pen, brush, marker). */
+	penKind: PenKind;
+	/** 0.22 (#35): nib angle in degrees of new fountain pen and marker strokes (45 is the default). */
+	nibAngle: number;
 }
 
 export const DEFAULT_TOOLS: ToolbarState = {
@@ -55,6 +60,8 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	textSize: TEXT_SIZES[1],
 	ruler: false,
 	selectMode: "lasso",
+	penKind: "pen",
+	nibAngle: 45,
 };
 
 export interface ToolbarActions {
@@ -96,6 +103,10 @@ const TOOL_DEFS: Array<[ToolName, string, MessageKey]> = [
 	["text", "type", "tool.text"],
 	["space", "move-vertical", "tool.space"],
 ];
+
+/** 0.22 (#35): the kinds of the pen tool, with their icon and name. */
+const KIND_ICON: Record<PenKind, string> = { pen: "pencil", fountain: "pen-tool", brush: "paintbrush", marker: "pen-line" };
+const KIND_LABEL: Record<PenKind, MessageKey> = { pen: "tool.pen", fountain: "tool.fountain", brush: "tool.brush", marker: "tool.marker" };
 
 const FILTER_LABELS: Record<EraseFilterKind, MessageKey> = {
 	all: "tool.eraser.filter.all",
@@ -147,6 +158,13 @@ export class Toolbar {
 	private readonly selectButtons = new Map<SelectMode, HTMLButtonElement>();
 	private readonly shapeButtons = new Map<ShapeKind, HTMLButtonElement>();
 	private readonly sizeGroup: HTMLElement;
+	/** 0.22 (#35): the pen kinds of the pen tool, and the nib angle of the fountain pen and the marker. */
+	private readonly penKindGroup: HTMLElement;
+	private readonly penKindButtons = new Map<PenKind, HTMLButtonElement>();
+	private readonly nibGroup: HTMLElement;
+	private readonly nibSlider: HTMLInputElement;
+	private readonly nibValue: HTMLElement;
+	private readonly nibPreview: HTMLElement;
 	private readonly chipButton: HTMLButtonElement;
 	private readonly readOnlyButton: HTMLButtonElement;
 	private readonly chipDot: HTMLElement;
@@ -260,6 +278,28 @@ export class Toolbar {
 				this.set(kind === "color" ? { eraserFilter: kind, eraserColor: this.state.penColor } : { eraserFilter: kind })));
 		}
 		this.penSetsEl = this.row(this.optionsEl);
+		// 0.22 (#35): the kind of pen (ballpoint, fountain pen, brush, marker) and, for the fountain pen and the marker, the nib angle.
+		this.penKindGroup = this.row(this.optionsEl);
+		this.penKindGroup.addClass("notebook-segmented", "notebook-pen-kinds");
+		this.penKindGroup.setAttribute("aria-label", t("tool.penKind"));
+		for (const kind of PEN_KINDS) {
+			const label = KIND_LABEL[kind];
+			const b = this.button(this.penKindGroup, t(label), () => this.set({ penKind: kind }));
+			b.addClass("notebook-text-tool", "notebook-kind-button", `is-kind-${kind}`);
+			setIcon(b.createSpan({ cls: "notebook-kind-icon" }), KIND_ICON[kind]);
+			b.createSpan({ cls: "notebook-kind-label", text: t(label) });
+			this.penKindButtons.set(kind, b);
+		}
+		this.nibGroup = this.row(this.optionsEl);
+		this.nibGroup.addClass("notebook-nib-row");
+		this.nibGroup.createSpan({ cls: "notebook-nib-label", text: t("tool.nib") });
+		this.nibPreview = this.nibGroup.createSpan({ cls: "notebook-nib-preview", attr: { "aria-hidden": "true" } });
+		this.nibPreview.createSpan({ cls: "notebook-nib-bar" });
+		this.nibSlider = this.nibGroup.createEl("input", { cls: "notebook-nib-slider", attr: { type: "range", min: "0", max: "175", step: String(NIB_STEP) } });
+		this.nibValue = this.nibGroup.createSpan({ cls: "notebook-nib-value" });
+		// Dragging only previews the angle; the stroke style changes when the finger lifts (the row is rebuilt by `set`).
+		this.nibSlider.addEventListener("input", () => this.showNib(normaliseNib(Number(this.nibSlider.value))));
+		this.nibSlider.addEventListener("change", () => this.set({ nibAngle: normaliseNib(Number(this.nibSlider.value)) }));
 		this.colorGroup = this.row(this.optionsEl);
 		this.widthGroup = this.row(this.optionsEl);
 		this.sizeGroup = this.row(this.optionsEl);
@@ -437,10 +477,11 @@ export class Toolbar {
 	private syncPopover(): void {
 		const open = this.popover === "options";
 		this.optionsEl.toggleClass("notebook-hidden", !open);
-		// A popover never grows past the bottom of the view (a phone held sideways has little room): it scrolls instead.
+		// A popover never grows past the bottom of the view (a phone held sideways has little room): it scrolls instead. It also
+		// leaves a strip of page below it, so that a tap on the page still closes it (the new pens made the pen options taller).
 		const host = this.el.parentElement;
 		if (open && host) {
-			const room = host.getBoundingClientRect().bottom - this.optionsEl.getBoundingClientRect().top - 8;
+			const room = host.getBoundingClientRect().bottom - this.optionsEl.getBoundingClientRect().top - 8 - 56;
 			this.optionsEl.setCssProps({ "--notebook-popover-max": `${Math.max(120, Math.floor(room))}px` });
 		}
 		this.chipButton.toggleClass("is-active", open);
@@ -494,6 +535,18 @@ export class Toolbar {
 		const erasingColor = s.tool === "eraser" && s.eraserFilter === "color";
 		const colouring = inking || s.tool === "text" || erasingColor;
 		this.penSetsEl.toggleClass("notebook-hidden", s.tool !== "pen" && s.tool !== "highlighter");
+		// 0.22 (#35): the pen kinds are the pen tool's options; the nib angle belongs to the fountain pen and the marker.
+		const penTool = s.tool === "pen";
+		this.penKindGroup.toggleClass("notebook-hidden", !penTool);
+		for (const [kind, b] of this.penKindButtons) {
+			b.toggleClass("is-active", kind === s.penKind);
+			b.setAttribute("aria-pressed", String(kind === s.penKind));
+			b.disabled = !this.editable;
+		}
+		this.nibGroup.toggleClass("notebook-hidden", !(penTool && kindHasNib(s.penKind)));
+		this.nibSlider.disabled = !this.editable;
+		this.nibSlider.value = String(s.nibAngle);
+		this.showNib(s.nibAngle);
 		this.colorGroup.toggleClass("notebook-hidden", !colouring);
 		this.widthGroup.toggleClass("notebook-hidden", !inking);
 		this.sizeGroup.toggleClass("notebook-hidden", s.tool !== "text");
@@ -554,6 +607,13 @@ export class Toolbar {
 		}
 	}
 
+	/** The angle in the nib row: the number and the little bar that leans like the nib. */
+	private showNib(angle: number): void {
+		this.nibValue.setText(`${angle}°`);
+		this.nibSlider.setAttribute("aria-label", t("tool.nib.value", { angle: String(angle) }));
+		this.nibPreview.setCssProps({ "--notebook-nib-angle": `${-angle}deg` });
+	}
+
 	/** The current-pen indicator: colour and thickness of the tool in use; a ring the size of the eraser for the eraser. */
 	private renderChip(): void {
 		const s = this.state;
@@ -564,9 +624,10 @@ export class Toolbar {
 		const dot = this.chipDot;
 		dot.toggleClass("is-eraser", s.tool === "eraser");
 		dot.toggleClass("is-highlighter", s.tool === "highlighter");
+		for (const kind of PEN_KINDS) if (kind !== "pen") dot.toggleClass(`is-kind-${kind}`, s.tool === "pen" && s.penKind === kind);
 		this.chipButton.toggleClass("is-eraser-next", this.eraserNext);
 		if (!has) return;
-		const toolLabel = t(TOOL_DEFS.find((d) => d[0] === s.tool)![2]);
+		const toolLabel = t(s.tool === "pen" ? KIND_LABEL[s.penKind] : TOOL_DEFS.find((d) => d[0] === s.tool)![2]);
 		const armed = this.eraserNext ? ` (${t("penButton.eraserNextArmed")})` : "";
 		this.chipButton.setAttribute("aria-label", `${t("toolbar.options")}: ${toolLabel}${armed}`);
 		if (s.tool === "eraser") {

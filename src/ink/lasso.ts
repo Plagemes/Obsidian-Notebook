@@ -1,5 +1,5 @@
 import { quantizePoint } from "../model/document";
-import type { Point, Stroke } from "../model/types";
+import { isNibPen, NIB_DEFAULT, type Point, type Stroke } from "../model/types";
 import { strokeBounds, type BBox } from "./hit-test";
 import { apply, scaleFactor, type Matrix } from "./transform";
 
@@ -42,6 +42,21 @@ export function selectionBounds(strokes: readonly Stroke[]): BBox | null {
 	}));
 }
 
+/**
+ * v20: the nib angle (degrees, counter-clockwise on the page) of a fountain pen or marker stroke after `m`: the nib is a line in the
+ * page, so it turns, squeezes or flips with the stroke and the line keeps its look. A matrix without a linear part (a move) leaves it.
+ */
+export function nibAfter(nib: number, m: Matrix): number {
+	if (m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1) return nib;
+	const a = (nib * Math.PI) / 180;
+	const nx = Math.cos(a), ny = -Math.sin(a);
+	const x = m[0] * nx + m[2] * ny, y = m[1] * nx + m[3] * ny;
+	if (Math.hypot(x, y) < 1e-9) return nib;
+	let deg = Math.round((Math.atan2(-y, x) * 180) / Math.PI);
+	deg = ((deg % 180) + 180) % 180;
+	return deg;
+}
+
 /** A transformed copy of the stroke (same id, points quantized, width scaled with the matrix). */
 export function transformStroke(stroke: Stroke, m: Matrix): Stroke {
 	const k = scaleFactor(m);
@@ -50,5 +65,9 @@ export function transformStroke(stroke: Stroke, m: Matrix): Stroke {
 		return quantizePoint(tx, ty, p);
 	});
 	const width = Math.max(0.1, Math.round(stroke.width * k * 100) / 100);
+	if (isNibPen(stroke.tool)) {
+		const nib = nibAfter(stroke.nib ?? NIB_DEFAULT, m);
+		if (stroke.nib !== undefined || nib !== NIB_DEFAULT) return { ...stroke, width, points, nib };
+	}
 	return { ...stroke, width, points };
 }

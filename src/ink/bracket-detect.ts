@@ -1,4 +1,4 @@
-import type { Stroke } from "../model/types";
+import { isWritingPen, type Stroke } from "../model/types";
 import type { BBox } from "./hit-test";
 
 /**
@@ -160,7 +160,7 @@ export function isOpenPair(a: BracketShape, b: BracketShape): boolean {
 	return gap >= 0.2 * h && gap <= 1.6 * h;
 }
 
-const isInk = (s: BracketStroke) => s.tool === "pen" && s.points.length >= 4;
+const isInk = (s: BracketStroke) => isWritingPen(s.tool) && s.points.length >= 4;
 
 /** A `[[` in the strokes (the pair at `index` and `index + 1`), or null. */
 export function openBracketsAt(strokes: readonly BracketStroke[], index: number): { first: BracketShape; second: BracketShape } | null {

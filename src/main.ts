@@ -55,12 +55,16 @@ import { SyncSafetyService } from "./view/sync-safety";
 import type { NavController } from "./view/nav-controller";
 import { registerNavigation } from "./view/nav-service";
 import { QuickTabsStore } from "./library/quicktabs-store";
+import { MeaningsStore } from "./library/meanings-store";
 import { QuickTabsService } from "./view/quick-tabs-service";
 import { NotebookStatusBar } from "./view/status-bar";
 import { registerResilience, type ResilienceServices } from "./view/resilience";
 import { PdfCopyService } from "./storage/pdf-copy-service";
 import { PdfCopyStore } from "./storage/pdf-copy-store";
 import { BackupService } from "./storage/backup-service";
+import { obsidianSyncAuth } from "./sync/auth/obsidian-auth";
+import { CloudSyncService } from "./sync/sync-service";
+import { CloudDeletesModal, CloudLargeModal } from "./view/cloud-sync-modals";
 
 export default class NotebookPlugin extends Plugin {
 	settings!: NotebookSettings;
@@ -78,6 +82,8 @@ export default class NotebookPlugin extends Plugin {
 	nav!: NavController;
 	/** 0.18 (#227): quick tabs, pages pinned in a notebook (one file per device in `_meta`, library/quicktabs-store.ts). */
 	quickTabs!: QuickTabsService;
+	/** 0.22 (#101): per-notebook colour meanings (one file per device in `_meta`, library/meanings-store.ts). */
+	meanings!: MeaningsStore;
 	private statusBar: NotebookStatusBar | null = null;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
@@ -95,6 +101,8 @@ export default class NotebookPlugin extends Plugin {
 	pdfCopy?: PdfCopyService;
 	/** 0.21 (#127): scheduled zip backups into a vault folder (storage/backup-service.ts). */
 	backups?: BackupService;
+	/** 0.22 synccore (#126): the optional cloud sync (sync/sync-service.ts); off until a service is chosen and signed in. */
+	cloudSync?: CloudSyncService;
 	/** wave 0.10 (362): the clipboard shared between devices; one store (one write queue) for every view. */
 	private sharedClipStore: SharedClipStore | null = null;
 
@@ -179,6 +187,26 @@ export default class NotebookPlugin extends Plugin {
 			this.backups = new BackupService({ app: this.app, settings: () => this.settings, flush: () => this.flushAll() });
 			this.backups.register(this);
 		});
+		// 0.22 synccore (#126): the optional Google Drive / OneDrive sync. The providers' sign-in is plugged in with `setAuth`.
+		this.step("cloud sync", () => {
+			this.cloudSync = new CloudSyncService({
+				app: this.app,
+				pluginId: this.manifest.id,
+				deviceId: sidecarDeviceId(this.app),
+				settings: () => this.settings,
+				flushAll: () => this.flushAll(),
+				settle: async (path) => {
+					const view = this.views().find((v) => v.file?.path === path);
+					return view ? view.flushNow() : true;
+				},
+				deviceName: () => this.syncSafety?.presence.device().name ?? "",
+				confirmDeletes: (items, decide) => new CloudDeletesModal(this.app, items, decide).open(),
+				confirmLarge: (items, limit, decide) => new CloudLargeModal(this.app, items, limit, decide).open(),
+			});
+			// The providers' sign-in (device code, Google Drive / OneDrive) over the device-local token store.
+			this.cloudSync.setAuth(obsidianSyncAuth(this.app));
+			this.cloudSync.register(this);
+		});
 		// 0.17 (#23): the PDF copy of a notebook, kept up to date in the background when the reader asks for it.
 		this.step("pdf copy", () => {
 			const store = new PdfCopyStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
@@ -211,6 +239,19 @@ export default class NotebookPlugin extends Plugin {
 			const store = new QuickTabsStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
 			this.quickTabs = new QuickTabsService({ app: this.app, store, readNotebook: (file) => this.host.readNotebook(file), notebooksFolder: () => this.settings.folder });
 			this.quickTabs.register(this);
+		});
+		// 0.22 (#101): per-notebook colour meanings follow other devices' files.
+		this.step("colour meanings", () => {
+			const store = new MeaningsStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
+			this.meanings = store;
+			const load = () => void store.load().catch((e) => console.error("[notebook] colour meanings could not be read", e));
+			this.app.workspace.onLayoutReady(load);
+			const changed = (file: unknown) => {
+				if (file instanceof TFile && store.watches(file.path)) load();
+			};
+			this.registerEvent(this.app.vault.on("create", changed));
+			this.registerEvent(this.app.vault.on("modify", changed));
+			this.registerEvent(this.app.vault.on("delete", changed));
 		});
 		this.step("status bar", () => this.registerStatusBar());
 		let quickNav: QuickNavService | null = null;
@@ -251,6 +292,7 @@ export default class NotebookPlugin extends Plugin {
 			"library-check": () => this.host.checkLibrary(),
 			"storage-manager": () => this.host.openStorage(),
 			"backup-now": () => void this.backups?.backUpNow(),
+			"cloud-sync-now": () => void this.cloudSync?.syncNow(),
 			"zettel-inbox": () => void openInbox(this.app),
 			"zettel-inbox-process": () => void processNextInbox(this.app),
 			"benchmark": () => this.openBenchmark(),
@@ -402,6 +444,11 @@ export default class NotebookPlugin extends Plugin {
 		return Promise.all(this.views().map((v) => v.flushNow().catch((e) => console.error("[notebook] flush failed", e))));
 	}
 
+	/** 0.22 (#53): "Change cover…" from the notebook tab's menu. */
+	changeCover(file: TFile): void {
+		this.host.changeCover(file);
+	}
+
 	/** ui redesign: runs a plugin-level action of the registry (the notebook tab's menu). */
 	runGlobal(id: string): void {
 		this.globalActions[id]?.();
@@ -420,6 +467,11 @@ export default class NotebookPlugin extends Plugin {
 	/** 0.14 (401): the class in progress that belongs to the notebook at `path`, for automatic lecture mode; null when none. */
 	lectureClassFor(path: string): LectureClass | null {
 		return this.timetable?.lectureClassFor(path) ?? null;
+	}
+
+	/** 0.22 (#210): the class for the lecture header of the notebook at `path` (the one in progress, else with `nearest` the closest of today). */
+	lectureHeaderClassFor(path: string, nearest: boolean): LectureClass | null {
+		return this.timetable?.headerClassFor(path, nearest) ?? null;
 	}
 
 	/**

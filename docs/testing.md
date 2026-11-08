@@ -348,7 +348,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 5338 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 5739 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -3074,7 +3074,7 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 
 ### 0.21 — schema: documented format with a JSON Schema (steps 1860-1879)
 
-Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v19.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
+Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v20.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
 
 1860. **Schema agrees with a real notebook.** Copy a notebook written on the tablet (with ink, a picture, a text box and a comment) to a PC and validate it with any draft 2020-12 validator (see the end of `docs/format.md`): no errors.
 1861. **Old file.** Open a notebook that was last saved by an older plugin version and edit it once, then validate it: it validates after that save (the file is rewritten as version 19 on the first edit).
@@ -3221,3 +3221,249 @@ Scheduled backups (roadmap #127). Settings, Sync & safety: *Scheduled backups* (
 | Scheduled zip backups (#127): off / daily / weekly into a vault folder, *Back up now*, keep the last N, last time and result in settings | yes | due-time (daily, weekly, other device's backup, clock in the future, failure retry), names, retention never trashing foreign files or the last complete backup, run order (flush, temp name, size check, rename, then trim), partial and failed runs leave old backups alone: `tests/backup-logic.test.ts`, `tests/backup-run.test.ts`, `tests/backup-wiring.test.ts` | | | memory limit of 64 MB on phones and tablets (the zip is built in memory); no Drive and no folder outside the vault (no Node/Electron); not tried on Android |
 | Scheduled backups, review W21 (D1-D5): the zip just written is always kept (names dated more than a day ahead rank oldest); a backup folder that is, holds, or is inside the notebooks folder, overlaps a templates folder or holds notebooks is refused (settings keep the previous folder; a run with one fails; `readSettings` falls back to the default); an old backup is trashed only after its zip comment is read; a notebook that changes during the read is read again once, then skipped and the backup is partial; mobile cap 64 MB | yes | `tests/backup-logic.test.ts` (retention with future-dated names and keep = 1, overlap rules, settings fallback), `tests/backup-run.test.ts` (new backup survives, overlap fails with nothing written or trashed, foreign file with a backup's name left alone, unreadable file never trashed, stale temp needs the record or the mark, racing read re-read once or skipped) | | | the notice in the settings and the check against real vault files are not run inside Obsidian; a backup over 512 MB is never trashed (it is not read to check the mark); an interrupted temporary file from another device stays |
 | Zip writer and reader (STORE, CRC-32, UTF-8 names, strict reader): `src/model/zip.ts` | yes | round trip, CRC, truncated and corrupt archives, name rules, entry limit; checked once against Windows `tar`: `tests/zip.test.ts` | | | no ZIP64 (at most 65 534 files and 4 GB) |
+
+### 0.22 — pens: fountain pen, brush and marker (steps 2040-2059)
+
+New pens (roadmap #35, document format 20). The pen options have a *Pen type* row (Pen, Fountain pen, Brush, Marker) and, for the fountain pen and the marker, a *Nib angle* slider. *Settings > Writing* has *Pen type* and *Nib angle* (the pen a new view starts with).
+
+2040. **Pen type.** Select the pen, tap it again: the options show four tiles. Choosing one changes the current-pen indicator (a leaf, a drop, a small slab) and the next stroke. The nib angle appears only for the fountain pen and the marker.
+2041. **Fountain pen.** Write loops and a cursive line with the S Pen: lines that run along the nib (up to the right at 45) are thin, lines across it thick; pressure thickens the line a little; the ends are crisp. Change the angle with the slider: new strokes follow it, strokes already written do not change.
+2042. **No lag.** The fountain pen, the brush and the marker feel as quick as the pen: no extra delay while writing, and the line does not jump or change shape when the pen lifts (the brush's last tip closes a little, that is expected).
+2043. **Brush.** Light pressure draws a fine line, heavy pressure a full one; a quick flick is thinner than a slow stroke; a stroke starts from a point and ends in a point.
+2044. **Marker.** A flat tip: pressure changes nothing; lines are a little thinner along the nib than across it. Write over a line of pen ink: the line shows through (85% opaque). Cross two marker strokes: the overlap is darker; within one stroke it is not. It is not like the highlighter (paler, and it never covers the ink).
+2045. **Same look everywhere.** Close and reopen the notebook; zoom out far (thumbnails in the library and the page panel); export a page as PNG, SVG, PDF and interactive HTML: the lines look like on the page (the marker 85% opaque in each).
+2046. **Erase and select.** The whole-stroke eraser takes a brush stroke where it is thick; the partial eraser cuts it and the pieces keep their look; the lasso selects them. Rotate a selection with a fountain pen line in it: the thick and thin parts turn with it (the nib turns).
+2047. **Colour, width and style.** Change colour and width of a selection (the kind stays). The style eyedropper on a fountain pen stroke selects the fountain pen with that nib angle.
+2048. **Favourites and pen sets.** Hold a favourite slot to save the fountain pen: the slot dot is a leaf. Pick another pen, tap the slot: the fountain pen and its angle come back. Save a pen set with a brush and a marker and use it from another notebook.
+2049. **Hold to straighten.** Draw a line with a new pen and hold still: it becomes a plain shape (like the pen's).
+2050. **Settings.** Set *Pen type* to Fountain pen: a new notebook view starts with it; *Nib angle* shows only for the fountain pen and the marker.
+2051. **Italian.** Switch the plugin to Italian: Stilografica, Pennello, Pennarello, Angolo della punta.
+2052. **Older plugin.** Open a notebook that has new pen strokes with 0.21 (if you have it): it opens read-only as a newer format and is not overwritten. Open a 0.21 notebook with this version: it opens and saves normally.
+2053. **Merge.** Write a fountain pen stroke on two devices (a sync conflict): the merge keeps both and the nib angle.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| New pens (#35): fountain pen (width follows the direction against the nib angle, pressure modulates, crisp ends), brush (pressure and speed, soft ends), marker (flat chisel, 85% opaque, in stroke order) | yes | geometry (direction, pressure, speed, ends, wet = committed, reach of boxes and hit tests, nib after a move, same paths in SVG / PDF / thumbnails, allocation and time per point), golden hashes of the pen, highlighter and shape: `tests/pens-engine.test.ts`, `tests/pens-golden.test.ts` | | | |
+| Document format v20: tools `fountain`, `brush`, `marker` and `Stroke.nib`: migration v19 -> v20 (refuses new tools, drops a stray nib), lenient read and strict write, staged parse, repair, merge key, copies, schema | yes | `tests/model-v20.test.ts`, `tests/format-schema.test.ts` | | | |
+| Pen type row and nib angle in the pen options; favourites, pen sets, style eyedropper and settings defaults keep the kind | yes | `tests/pens-ui.test.ts`; harness `pens` (options, specimen, exports) | | | |
+
+### 0.22 — synccore: cloud sync engine and settings (steps 2060-2079)
+
+Cloud sync with Google Drive or OneDrive (roadmap #126, part 1: the engine, the settings and the status). Settings, Sync & safety, group *Cloud sync*: *Cloud service* (off by default), *Client ID* (and, for Google, *Client secret*), *Account*, *Sync now*, *What to sync* (with *Folders*, or *Include* / *Exclude* / *File types*), *Sync on open*, *Sync on close*, *Sync every*, *Wi-Fi only*, *Large files* and *Size limit*, *Activity*. Command palette: *Cloud sync now*; desktop status bar item. The sign-in comes from part 2 (`src/sync/providers/`, `src/sync/auth/`), joined to the engine by `src/sync/auth-adapter.ts` (unit-tested with fakes in `tests/sync-auth-adapter.test.ts`); the steps below that talk to the cloud need your own OAuth client and a real account. You need your own OAuth client (Google: a *TVs and limited input devices* client with its secret; Microsoft: an app registration), the same client ID on every device. Implemented, not verified on hardware. Use a test vault you have a copy of.
+
+2060. **Off by default.** A fresh install shows *Cloud sync* closed with *Cloud service: Off*; nothing is sent anywhere, no status bar item, the command says cloud sync is off.
+2061. **Client and sign-in.** Choose *Google Drive*: *Client ID*, *Client secret*, *Account*, *Sync now* and the other rows appear. Tap *Sign in* with the fields empty: a notice says what is missing and nothing opens. Fill them in, tap *Sign in*, complete the sign-in: the *Account* row names the account and the cloud folder, and a first sync starts. The secret is not in `.obsidian/plugins/notebook/data.json`.
+2062. **First sync is a union.** Before signing in, put a different note in the cloud folder from another device or the web. After the first sync both sides have every file; nothing was deleted anywhere; a file present on both sides with different content is kept twice (one is a conflicted copy, step 2066).
+2063. **Edits both ways.** Write in a notebook on the tablet, *Sync now*; on a second device *Sync now*: the notebook shows the new ink (an open notebook reloads by itself). Edit on the second device, sync both: the tablet shows it.
+2064. **Open notebook saved first.** Write a stroke and at once tap *Sync now* (or switch to another app with *Sync on close*): the stroke reaches the cloud. A notebook with unsaved ink is never replaced by the cloud's version during a sync.
+2065. **Deletions.** Delete a note on one device and sync both: it goes to the trash on the other device (Obsidian's trash setting) and to the cloud's trash; nothing is deleted permanently. Delete a file on one device while editing it on the other: the edit wins and the file comes back.
+2066. **Conflict keeps both.** Edit the same notebook on two devices without syncing, then sync both: both versions exist, the cloud's as `Name (conflict YYYY-MM-DD HH.MM Device).notebook`; a notice says both were kept, and with the notebook open the merge offer (#122) appears.
+2067. **Many deletions stop.** Delete a folder with more than 20 files (or most of a small vault) and sync: the sync stops and asks, listing the files. *Keep them* copies them back from the cloud; *Delete them* sends them to the trash on the other side. Closing the dialog does neither; *Review* in the settings asks again.
+2068. **Scope.** Set *What to sync* to *Selected folders* with one folder: only that folder is sent; files outside it are never deleted on either side. *Rules* with `*.pdf` in *Exclude*: PDFs are left alone. `.obsidian`, `.trash`, temporary files and the backup folder are never synced, whatever the rules.
+2069. **Large files.** Set *Size limit* to 10 MB, add a 20 MB PDF and sync with *Large files: Ask first*: the other files sync, then a dialog asks about the PDF (*Sync them* / *Skip for now*). With *Skip*, it is listed as skipped in *Activity*.
+2070. **Wi-Fi only (Android).** On mobile data with *Wi-Fi only* on: no automatic sync; *Sync now* says it is waiting for Wi-Fi. On Wi-Fi it runs. Where the network type is unknown (desktop, some WebViews) it runs and the status line says so.
+2071. **Triggers.** *Sync on open*: a sync about 20 s after Obsidian starts (not while the pen is on the screen). *Sync every 15 min*: one every 15 minutes while open. *Sync on close*: one when the app goes to the background (best effort, at most once a minute).
+2072. **Status.** The *Sync now* row shows the last sync time and counts; *Stop* while one runs. *Activity* lists the last 50 events. On desktop the status bar item shows the state and starts a sync when clicked.
+2073. **Offline and errors.** Turn on airplane mode and *Sync now*: one notice says the cloud cannot be reached, no repeated notices on automatic runs; the next sync after reconnecting works. Revoke the app's access from the account page: the next sync says to sign in again.
+2074. **Disconnect.** Tap *Disconnect*: the account row offers *Sign in* again; no file is touched on either side. Signing in again starts with a safe first sync (a union, nothing deleted). If the access could not be revoked, a notice gives the page to remove it by hand.
+2075. **Damaged state.** Quit Obsidian, corrupt `.obsidian/plugins/notebook/cloud-sync/state-*.json` (type a few letters into it), reopen and sync: it lists everything again and deletes nothing; a copy of the bad file is kept as `.bad.json`.
+2076. **Languages.** Switch the plugin to Italian: the rows, dialogs, notices, status line and activity log are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Cloud sync engine (#126 part 1): three-way planner (per-path remote index + base with hash), first sync = union, deletions only from a synced unchanged state and to the trash, mass-deletion guard (> 20, or ≥ 3 and > 30 %), keep-both conflicts named for the #122 merge offer, conditional uploads with re-plan, retries (Transient with retry-after, Auth stops), scope rules, large-file rule, device-local state (damaged → full rescan, no deletions) | yes | `tests/sync-planner.test.ts`, `tests/sync-rules.test.ts`, `tests/sync-state.test.ts`, `tests/sync-engine.test.ts` (end to end with a fake provider and a fake vault: union, edits, deletions, guard, empty listing, full listing each run, missing root, corrupt state, conflicts during upload, retries, open notebooks, large files, cursor and scope change) | | | not run against real Google Drive / OneDrive nor on Android; the adapter joining it to the providers (`tests/sync-auth-adapter.test.ts`, fakes only) is the one piece no scenario exercises end to end |
+| Cloud sync settings, status and dialogs: *Cloud sync* group (service, client ID, Google client secret kept on the device, account, *Sync now* / *Stop* / *Review*, scope, triggers, Wi-Fi only, large files, activity log), *Cloud sync now* command, desktop status bar item, deletion and large-file dialogs | yes | browser harness `doc=synccore` (in-memory cloud, `dev/harness/synccore-check.ts`): off by default, rows per scope, no sign-in button without the providers, client fields, sign-in and first sync, conflict copy, deletion dialog and *Keep them*, status and log | | | the sign-in itself is the providers' (part 2); Wi-Fi detection depends on the WebView's Network Information API |
+
+### 0.22 — syncprov: Google Drive and OneDrive providers and sign-in (steps 2080-2099)
+
+Cloud connector, part 2 (roadmap #126): the two providers and the device-code sign-in. The *Cloud sync* settings section and the engine are part 1 (synccore); these steps need both. Implemented, not verified on hardware or against the live services. Needs your own OAuth app for each provider (`docs/cloud-sync.md`), a network connection, and a second device or a browser.
+
+2080. **Google app.** Follow `docs/cloud-sync.md` for Google: project, Drive API, consent screen published, client of type *TVs and Limited Input devices*. Note the client ID and secret.
+2081. **Google sign-in (Android).** In *Cloud sync* choose Google Drive, paste ID and secret, *Connect*. The dialog shows *Asking for a sign-in code…*, then a large code, `https://www.google.com/device`, three steps, *Copy code*, *Cancel*, *Open sign-in page* and a countdown that ticks down each second.
+2082. **Open and allow.** *Open sign-in page* opens the system browser at the address. *Copy code* puts the code on the clipboard (paste it on the page). Sign in, allow. Within about 5 s the dialog shows *Signed in. Setting up the sync folder…* and closes; settings show your Google address. In Drive, My Drive has a folder `Notebook sync`.
+2083. **Second device.** Sign in on a second device with the same client ID: it finds the same `Notebook sync` folder (no second folder is made).
+2084. **Deny.** Start again and choose *Cancel* on Google's page: the dialog says *Access was not allowed* with *Try again*; *Try again* shows a new code.
+2085. **Cancel.** Start and tap *Cancel* in the dialog: it closes, settings stay signed out; opening Google's page afterwards and entering the old code does not sign the plugin in.
+2086. **Wrong client.** Paste a wrong client ID (or secret): *The provider refused the client ID or secret* with the hint line.
+2087. **Expiry.** Start and leave the code unused until the countdown ends (30 min for Google, 15 for Microsoft): *The code expired…* with *Try again*.
+2088. **Microsoft app.** Follow `docs/cloud-sync.md` for OneDrive: app registration for any organisational directory and personal accounts, *Allow public client flows* on. Connect with the ID (no secret): code, `https://microsoft.com/devicelogin`, accept; settings show your address; OneDrive has `Notebook sync`.
+2089. **Public client switch off.** Turn *Allow public client flows* off and connect: a client error is shown, not a hang.
+2090. **Desktop.** Repeat 2081-2082 and 2088 on Windows: same dialog, the link opens the default browser.
+2091. **Tokens stay on the device.** After signing in, search the vault folder and `.obsidian/plugins/notebook/data.json` for the access or refresh token (copy it from nowhere: just check that no file mentions `refresh` or the client secret): none. Restart Obsidian: still signed in.
+2092. **Token refresh.** Leave Obsidian open (or the device asleep) for more than an hour, then sync: it works without signing in again.
+2093. **Revoked access.** Remove the app's access at <https://myaccount.google.com/connections> (or <https://account.live.com/consent/Manage>), then sync: the settings ask you to sign in again (no endless retries).
+2094. **Disconnect.** *Disconnect* on Google: the app disappears from <https://myaccount.google.com/connections> within a minute or two; on OneDrive the settings link the consent page. Files in `Notebook sync` are untouched.
+2095. **Large file.** Sync a notebook or PDF above 5 MB on both providers: it arrives whole (sizes match on the web), also on mobile data.
+2096. **Remove goes to the trash.** Delete a synced notebook (so sync removes it remotely): it is in the Google Drive trash / OneDrive recycle bin, not gone.
+2097. **Folder moved on the web.** Rename a subfolder of `Notebook sync` on the provider's website, then sync: the files appear under the new name and nothing is lost. Move one file out of `Notebook sync` on the web: the next sync treats it as deleted remotely.
+2098. **Sync folder trashed.** Move `Notebook sync` to the trash on the web, then sync: the settings report the missing folder; no local notebook is deleted. Restore it: sync continues.
+2099. **Languages and themes.** Italian: every line of the dialog is translated. Light and dark, phone and tablet: the code is large and the dialog fits.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Device-code sign-in (RFC 8628) for Google and Microsoft: code and address, Copy code, Open sign-in page, countdown, `interval` and `slow_down`, denied / expired / refused client / network, Cancel; then the sync folder `Notebook sync` found or created and the account label | yes | `tests/sync-device-flow.test.ts`; harness `doc=syncprov` (dialog, refused sign-in, Cancel) | | | not run against the live endpoints; Google needs the client secret of a limited-input client |
+| Tokens: device-local store (`app.saveLocalStorage`), refresh before expiry and after 401, rotation reported via `onAuthChange`, `invalid_grant` → sign in again, Disconnect (Google revokes; Microsoft local only) | yes | `tests/sync-tokens.test.ts` | | | the settings section must store the state on every `onAuthChange` (part 1) |
+| Google Drive provider (`drive.file`): full listing, changes feed with parent walk, moves in/out of the root, multipart and resumable upload (256 KiB chunks, 308), `ifRev` by metadata read, trash, retries | yes | `tests/sync-gdrive.test.ts` | | | `ifRev` race window of one request (Drive has no If-Match); `308` through `requestUrl` not tried on a device; first non-empty delta after a restart is a full listing |
+| OneDrive provider (`Files.ReadWrite`): folder delta with nextLink/deltaLink, deletions, moves out, 410 resync, Business root-delta fallback, simple and session upload (320 KiB fragments, no bearer on fragments), If-Match / conflictBehavior, recycle bin, download URL | yes | `tests/sync-onedrive.test.ts` | | | Business fallback and `deltaExcludeParent` on consumer OneDrive not tried live; moves out of the folder may not appear in a folder delta on consumer OneDrive (then the file stays listed until the next full listing). Superseded by the review W22 rows below (app folder scope, children walk, hash revision) |
+
+### 0.22 — review W22: cloud sync fixes (steps 2240-2259)
+
+Fixes of the wave 0.22 cloud sync review (S1–S16 and the provider switch). Implemented and unit-tested with fakes (no network); not verified on hardware or against the live services. Needs the set-up of the synccore and syncprov steps.
+
+2240. **Loading.** Start Obsidian and tap *Sync now* at once (before the vault has finished loading on a large vault): a notice says cloud sync starts once the vault has loaded; the status says so; a few seconds later *Sync now* works.
+2241. **Never permanent.** With *Files & links > Deleted files* set to *Permanently delete*, delete a synced note on device A and sync both: on device B the note is in the vault's `.trash` folder.
+2242. **Start-up does not delete.** Delete a note on device A, sync A. On B, close and reopen Obsidian (sync on open): the note is still there and the status says one deletion waits; *Sync now* then moves it to `.trash`.
+2243. **Automatic limit.** Delete 12 synced notes on A and sync A; on B wait for the periodic run: it stops and asks (*Delete 12 files?*).
+2244. **Same name twice (Google).** On the Drive website upload a second file with the name of a synced note but other content into `Notebook sync`; sync: the vault has the note and a conflicted copy with the other content; Drive's trash has the extra file.
+2245. **Simultaneous write (Google).** Edit one notebook on two devices offline, then bring both online and sync them within seconds of each other: both versions survive (one as a conflicted copy) on both devices.
+2246. **Rename on OneDrive's website.** Rename a synced file on the OneDrive website (no content change), then edit it in Obsidian and sync: no conflicted copy is made.
+2247. **Names.** Create `bad?.md` on the Drive website: sync shows one notice naming it; it never appears locally and nothing is deleted. Rename a synced file on the web to `CON.md`: the local file stays and goes up again under its old name.
+2248. **Case rename.** Rename `Note.md` to `note.md` in Obsidian (Windows) and sync: the cloud shows `note.md` only; on the other device the file follows.
+2249. **OneDrive app folder.** Sign in to OneDrive again: the consent screen asks only for the app's own folder; the files go to `Apps/<app name>` in OneDrive; the settings say Notebook sees only that folder.
+2250. **OneDrive work account.** Sign in with a work or school account: note whether the sign-in is allowed and whether delta or the children walk is used (slower runs on a large folder).
+2251. **Disconnect.** *Disconnect* during a run: a dialog asks first (Google: with *Also forget the client secret*); after confirming, the run stops and the settings show signed out; signing in again makes a union (nothing deleted).
+2252. **Switch service.** Signed in to Google, choose OneDrive and sign in: Google is disconnected first (gone from <https://myaccount.google.com/connections>).
+2253. **Phone, unknown network.** On a phone whose WebView does not report the network type, with *Wi-Fi only* on: automatic runs wait (status says so); *Sync now* runs with a note.
+2254. **Phone size cap.** On a phone, with *Size cap on phones* at 5 MB, add a 10 MB PDF on the desktop and sync both: the phone skips it with one notice, even after approving large files.
+2255. **Languages and themes.** Italian: the new notices, status lines, skip reasons and the Disconnect dialog are translated; the dialog fits a phone in light and dark.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| S1 ready gate: no trigger (manual included) before layout ready and the metadata cache's first `resolved` (30 s fallback); the start-up run waits for it | yes | `tests/sync-service-w22.test.ts`; harness `doc=synccore` (loading notice, gate) | | | |
+| S2 local sync deletions to Obsidian's `.trash` (`vault.trash(file, false)`), never permanent | yes | `tests/sync-service-w22.test.ts` | | | lint warns `prefer-file-manager-trash-file` (intended; the rule cannot be disabled) |
+| S3 Drive: revisions displaced by our write kept as conflicted copies; a racing trash undone | yes | `tests/sync-gdrive.test.ts`, `tests/sync-review-w22.test.ts` | | | `revisions.list` may be incomplete (then one copy too many) |
+| S4 two cloud files with one name: smallest id followed, others kept as copies then trashed; idempotent creates with `files.generateIds` (409 → read) | yes | `tests/sync-gdrive.test.ts`, `tests/sync-review-w22.test.ts`, `tests/sync-engine.test.ts` | | | |
+| S5 Disconnect cancels and awaits the run before removing the state; controller made before any wait | yes | `tests/sync-service-w22.test.ts` | | | |
+| S6 OneDrive revision = content hash; If-Match with the eTag read just before; same content as the base is not a conflict | yes | `tests/sync-onedrive.test.ts`, `tests/sync-review-w22.test.ts` | | | state files of earlier builds hold eTag revisions: the first run after the update re-reads changed-looking files (no copies, the hash check adopts them) |
+| S7 start-up/leaving runs defer deletions (count in the status); automatic guard limit 10 | yes | `tests/sync-review-w22.test.ts`, `tests/sync-service-w22.test.ts` | | | |
+| S8 conflicted copy outside the scope stays local | yes | `tests/sync-review-w22.test.ts` | | | |
+| S9/S10 names: one rule both sides, skipped with one notice, never a deletion; NFC/case clashes never both written; case-only renames followed | yes | `tests/sync-review-w22.test.ts` | | | |
+| S11 state saved at most every 10 s during a run | yes | `tests/sync-review-w22.test.ts` | | | |
+| S12 Drive web folders invisible to `drive.file` | documented (`docs/cloud-sync.md`) | | | | a move into such a folder reads as a deletion (to `.trash`, recoverable) |
+| S13/S14 OneDrive `Files.ReadWrite.AppFolder`, root = app folder; children walk when the folder delta is refused | yes | `tests/sync-onedrive.test.ts`, `tests/sync-device-flow.test.ts` | | | work or school accounts: docs disagree; not tried live |
+| S15 Drive upload session only on `www.googleapis.com`; addresses stripped from error texts | yes | `tests/sync-gdrive.test.ts`, `tests/sync-review-w22.test.ts` | | | |
+| S16 mobile: unknown network holds automatic runs; *Size cap on phones* (5–500 MB, default 50) | yes | `tests/sync-service-w22.test.ts`, `tests/sync-review-w22.test.ts` | | | |
+| Provider switch disconnects the previous account; Disconnect dialog can forget Google's secret | yes | `tests/sync-service-w22.test.ts`; harness `doc=synccore` (dialog, Cancel) | | | |
+| Round 2: kept files that cannot be copied back (size cap, large-file rule) lose their base, never trashed later | yes | `tests/sync-review-w22.test.ts` | | | |
+| Round 2: newest twin followed; twin above the cap skipped; local rename to an unsyncable name not a cloud deletion | yes | `tests/sync-review-w22.test.ts` | | | |
+| Round 2: Drive displaced versions unchecked or above the cap reported; replace across twin folders by id | yes | `tests/sync-gdrive.test.ts`, `tests/sync-review-w22.test.ts` | | | |
+| Round 2: OneDrive walk with an off-Graph next link or an unfinished listing fails the run | yes | `tests/sync-onedrive.test.ts` | | | |
+
+### 0.22 — colormeaning: colours with meaning (steps 2120-2139)
+
+Roadmap #101. Say what each ink colour means (red = definition, blue = example) in *Settings > Reading & PDF > Colour meanings* (a dialog) or, for one notebook, in its menu *Colour meanings…*; *Filter by meaning…* draws the ink of the other meanings faint (view only, nothing is saved or changed in the notebook), and *Digest by colour…* writes a note `<Notebook> — Colours.md` with one section per meaning and a picture of each place. The document format is not touched.
+
+2120. **Define.** Settings, Reading: *Colour meanings* > *Open*. With no meanings it offers *Add the usual meanings* (red Definition, blue Example, green Important). Rename one, change its colour (a swatch, or the round "other colour" picker), move one up or down, remove one, add one. Every change is saved at once (close and reopen Settings: it is all there).
+2121. **Too close.** Give two meanings colours that look nearly the same: a red message says which two are too close. Pick colours that differ more and the message goes.
+2122. **Match.** Write with the red pen, then with a slightly different red from the colour picker: *Filter by meaning* > Definition keeps both in full colour. With *Colour matching* set to *Strict* only the exact red stays; with *Loose* a duller red also counts.
+2123. **Filter.** In a notebook with red, blue, green and black ink: menu (More) > *Filter by meaning…* lists the meanings with the number of strokes of each. Choose *Definition*: red ink stays, everything else (also black and PDF-less pen ink of no meaning, and highlighter) is faint; a pill at the bottom left says *Showing only: Definition*. Zoom and scroll: the page still moves smoothly and the faint ink does not flicker.
+2124. **Clear.** Tap the × on the pill, or *Filter by meaning…* > *Show everything*: all the ink is back at once. Switch to another notebook and back: the filter was not kept.
+2125. **Not saved.** With the filter on, write a new stroke in another colour, undo, redo, then clear the filter: every stroke is exactly as before; the notebook does not appear as "changed by the filter" (nothing was saved because of it).
+2126. **Own legend.** In a notebook's *Colour meanings…* switch on *Use a legend for this notebook only*: it starts as a copy of the global legend; rename the first meaning to "Theorem". The filter chooser of this notebook says Theorem; another notebook (and Settings) still says Definition. Switch the option off: this notebook uses the global legend again.
+2127. **Sync.** With a vault synced between two devices, the notebook's own legend shows up on the other device after the sync (the file is `<notebooks folder>/_meta/meanings-<device>.json`). It is not listed as a notebook and does not make *Check the library* report anything.
+2128. **Digest.** *Digest by colour…* says how many places on how many pages, and offers the picture quality. *Create the digest*: the note appears next to the notebook with a section per meaning in legend order, a picture of each place, the PDF text under it (on PDF pages) and a link to the page; a meaning with no ink says so.
+2129. **Run it again.** Write around the section (a line before and after), run the digest again: your text is kept, no new picture files appear, and running it a third time changes nothing. Add a stroke and run it: the new place is listed.
+2130. **A note of yours.** Put a plain note with the digest's name in the folder: the digest asks before adding to it, and nothing else in that note changes. Damage one marker comment: the digest refuses and says so.
+2131. **States.** On a drawing with states, filter and digest follow the state shown on the page.
+2132. **Hidden ink.** Ink written with the invisible pen is neither dimmed differently nor listed in the digest.
+2133. **Android.** On the tablet with the S Pen: choose a meaning in the filter while the pen is hovering and while writing; the filter dialog and the legend editor are comfortable to use with a finger; the pill does not cover the minimap or the page scrollbar.
+2134. **Dark and Italian.** In the dark theme and with the plugin in Italian, the dialogs, the pill and the note's headings read correctly.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Colours with meaning (#101): global legend in settings (label per colour, matched with a tolerance: strict / normal / loose), legend editor dialog, near-duplicate warning | yes | colour distance, matching (exact, shade, tolerance, nearest, tie), near duplicates, free colour, legend parsing (lenient, limits): `tests/colour-meaning.test.ts` | | | |
+| Per-notebook legend in `_meta/meanings-<device>.json` (one file per device, latest wins, tombstone, unknown fields kept, never overwrites an unreadable file) | yes | round trip, merge, store (own file only, damaged and empty files, other device's bad file): `tests/colour-meaning.test.ts` | | | |
+| View filter "Filter by meaning": other ink drawn faint through the renderer (static layer redrawn once, no per-frame work), pill to clear it | yes | dimmer, counts: `tests/colour-meaning.test.ts`; pixels and pill in the harness (`colours`) | | | text boxes, equations and pictures are not dimmed (ink only) |
+| Digest by colour: `<Notebook> — Colours.md`, a section per meaning, pictures, PDF text, marker-bounded rewrite | yes | regions, grouping, Markdown, marker replacement: `tests/colour-meaning.test.ts`; the note and pictures in the harness (`colours`) | | | |
+
+### 0.22 — covers (custom covers, roadmap #53; steps 2160-2179)
+2160. **Open.** Library card menu > *Change cover…* (also the notebook tab's "more options" menu): a dialog with Pattern, Image, Page, Template. Cancel writes nothing.
+2161. **Pattern.** Pick another family and colour, *Use this cover*: the card changes; no file appears in `_assets`.
+2162. **Image.** Image > choose from the vault, then from the device (a camera photo): the picture fills the frame; drag it with the S Pen and with a finger, pinch with two fingers, use the slider and the reset button. *Use this cover*: the card shows exactly what the frame showed.
+2163. **Large photo (Android).** Choose a 12 MP photo: the dialog stays responsive, says it was reduced, and the saved cover file is small (under about 150 KB).
+2164. **Page.** Page > step to another page; the frame shows it; crop to the heading; apply.
+2165. **Template.** Try the five templates and colours; apply; the title is the notebook name.
+2166. **Open notebook.** With the notebook open, change the cover; undo in the notebook restores the previous cover.
+2167. **Failure.** Make the notebook read-only (open, locked) and apply an image: a notice says it failed and no new file stays in `_assets`.
+2168. **Themes and phone.** Light, dark, "Follow Obsidian theme", phone and tablet: nothing overflows, targets are easy to hit.
+2169. **Italian.** Switch the plugin language: the dialog and the menu item are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Change cover: pattern, image (crop), page, template; stored as an image asset + `meta.coverArt` (no format change) | yes | crop maths, template wrapping and colours, `patchNotebookCover`: `tests/cover-crop.test.ts`, `tests/cover-template.test.ts`; dialog flow in the harness (`doc=covers`) | | | not tried on Android; the creation dialog keeps its own image option; a cover is not redrawn when the notebook is renamed |
+
+### 0.22 — pagerefs: two-way page references (steps 2100-2119)
+
+Roadmap #179. Settings, Pages, Outline: *Show pages that link here* (on by default). Use a notebook with several pages and text boxes that hold page links (*Copy link to page*, pasted into a text box). Implemented, not verified on hardware. Links to pages of other notebooks are not listed (only the open notebook is read).
+
+2100. **Chip.** Page 3 has a text box with a link to page 7. Scroll to page 7 and stop: a small chip *Referenced on p. 3* appears at the top right after a moment; it never shows on a page nobody links to.
+2101. **List.** Tap the chip: a short list of the referencing pages opens; a page that links twice says *2 links*.
+2102. **Jump.** Tap a row: the view goes to that page and the list closes. Back (the notebook's back button) returns.
+2103. **Close.** Tap outside the list or press Escape: it closes without jumping.
+2104. **Reorder.** Move page 3 after page 7 in the page panel: page 7 still shows the chip, now with the new page number.
+2105. **Deleted page.** Delete the page a link points to: no other page shows a chip because of it.
+2106. **Self link.** A link on a page to itself adds nothing.
+2107. **Edit.** Delete the link text on page 3: page 7's chip goes away; type a new link: it appears.
+2108. **Sticky note.** A link inside a sticky note counts too.
+2109. **Setting.** Turn the setting off: no chip.
+2110. **Pen.** The chip and list never take pen input: writing under them still works around them.
+2111. **Light, dark, phone.** Readable in light and dark and inside a phone's width; below the recent-symbols strip when it is shown.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Two-way page references (#179): a chip "Referenced on p. 3, p. 12" on a page that other pages of the notebook link to (text boxes and sticky notes; by page id, so reordering keeps them), a list with a jump to each, setting to hide it; derived, nothing stored | yes | index by id, reorder, deleted pages, self links, many links, slices: `tests/page-refs.test.ts`; harness `doc=pagerefs` | | | links from other notebooks are not listed; no "Referenced" filter in the notebook map; not tried on a tablet |
+
+### 0.22 — axes: instant axes (steps 2140-2159)
+
+Implemented, not verified on hardware. No format change. Reference screenshots after `HARNESS_DOC=axes npm run harness:check`: `dev/harness/dist/shots/axes-*.png` (tablet and phone, light and dark).
+
+2140. **L.** With the pen, draw an L about 4 cm tall and 5 cm wide (up, then right). A *Make axes* chip appears under the corner for nine seconds; tap it: the L is replaced by two arrows with ticks following the page grid and small numbers beside every second tick.
+2141. **Undo.** One undo gives your L back, with no axes left; one redo makes the axes again.
+2142. **Group.** Lasso the axes: they select together (one group); move them and the numbers follow.
+2143. **+.** Draw a horizontal line, then a vertical one crossing it near the middle of both: the chip appears after the second line; taking it gives four-quadrant axes with negative numbers left and below.
+2144. **Not axes.** A handwritten letter L or t, a T-shaped pair of lines, a curve and a short + give no chip.
+2145. **Settings.** *Settings > Writing > L or + drawn as axes*: *Make axes* turns the gesture into axes by itself after a moment; *Leave it as ink* does nothing. *Ticks on axes* off gives plain arrows; *Numbers on axes* off keeps the ticks only.
+2146. **Insert.** In the insert sheet choose *Axes*: four-quadrant axes appear where the pen last wrote on the page (the centre of the view if nothing was written), selected; one undo removes them.
+2147. **Pen button.** Neither the side-button tap (radial menu) nor the drag (eraser) is affected; hold-to-snap lines still snap.
+2148. **Languages.** In Italian the chip, setting and insert entry are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Instant axes (#206): an L or a + (two lines) offered as axes, ticks from the page spacing, number labels, one group, one undo step; insert from the sheet; settings | yes | `tests/axes.test.ts` (L / + classification, tick placement, labels, group ids); harness scenario `axes` | | | offer after a real S Pen stroke on hardware |
+
+### 0.22 — review fixes: data and interface (D1-D10, floating pills)
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Lecture header (Automatic) only on a page created by a forward edit: Undo / Redo never adds one, the redo stack stays | yes | service with a fake host, add / undo / redo / delete / undo: `tests/lecture-header-service.test.ts`; harness `doc=lecthead` | | | |
+| An unknown tool name is read as a pen and counted; the strict write and check still refuse it | yes | `tests/serialize.test.ts`, `tests/model-v20.test.ts` | | | the original name is rewritten as `pen` on the next save (a backup is made first) |
+| Style eyedropper: a ballpoint or shape stroke selects the ballpoint and the default nib | yes | `tests/colour.test.ts`, `tests/pens-ui.test.ts` | | | |
+| Marker wet canvas allocated at the first marker stroke, released after 4 s idle, never kept for other pens | yes | lifecycle and allocation counts: `tests/lazy-wet.test.ts`; golden hashes of the old pens unchanged: `tests/pens-golden.test.ts` | | | first marker stroke after a release allocates one canvas (about 16-20 MB on a 2560 x 1600 tablet): latency not measured on a tablet |
+| Colour-meaning dimming multiplies into the marker's alpha | yes | `tests/lazy-wet.test.ts` (setInk) | | | |
+| Axes (Automatic): the 450 ms wait is dropped by the next contact, a scroll, a page change; never converts under the pen | yes | `tests/axes-tools-auto.test.ts` | | | |
+| Digest by colour: the write re-reads the note and asks before appending to a note whose markers vanished | yes | `tests/colour-meaning.test.ts` (`replaceMeaningSectionChecked`) | | | the modal itself is shown by the real view only |
+| Meanings sidecar keeps unknown legend fields and unreadable entries on rewrite until the legend is edited | yes | `tests/colour-meaning.test.ts` | | | |
+| Cover: applies run one at a time; a picture in use is never trashed by a failed apply | yes | `tests/cover-assets.test.ts` | | | other closed notebooks that use the same picture are not scanned (only the notebooks read this session and the open ones) |
+| Floating pills never overlap (tablet, phone): lecture chip shifts the top pieces, contextual bar lifts the bottom-left ones, a minimap parked bottom left pushes the pill and chip right | yes | `tests/dock-metrics.test.ts`; harness `doc=pillstack` (all pieces at once, bounds, pairwise overlap, list opened) | | | not tried on Android; a selection with several restyle rows makes the bar taller (it is measured, not assumed) |
+
+### 0.22 — lecthead (automatic lecture header, #210; steps 2180-2199)
+
+Manual steps (real Obsidian; nothing here is verified on Android). You need a class in the timetable for today that is on now and linked to the notebook (or unlinked, with a notebook named like the course), with a lecturer and a room.
+
+2180. **Ask.** *Settings > Study > Timetable > Lecture header* = Ask. In the notebook, add a page: a small chip *Add lecture header* appears at the top left, under the lecture chip. Nothing is written until you tap it. Tap it: the course, and under it lecturer, room, date and start time, appear at the top of the page. One undo removes both boxes.
+2181. **Close.** Add another page and close the chip with the cross: it goes away and does not come back for that page.
+2182. **Automatic.** Set *Automatic* and add a page: the header is written at once and a short notice says so. Undo removes it in one step.
+2183. **Never over your writing.** On a page with ink or a picture at the very top, run *Insert lecture header*: it sits just below them, clear of everything. With the top of the page full there is no free spot: a notice says so (the chip stays in Ask/Automatic) and nothing is written.
+2184. **Fields.** Turn off *Room* and *Lecturer*: the next header has only the date and time. Turn all four off: only the course is written (one box).
+2185. **Command.** In the command palette, *Insert lecture header* with a class in progress writes its header on the page in view. Outside class hours it uses the closest class of today; with no class today a notice says so. Running it twice does not add a second header.
+2186. **Locked page.** Lock the page and run the command: a notice says the page is locked and nothing changes.
+2187. **Lecture mode.** Start lecture mode from the banner on a notebook that already has a lecture page for today: no second header. Start it by hand (command) on a page that is not a lecture page: with Ask the chip appears.
+2188. **Pen.** While the pen is on the screen (or just was), nothing is added or offered; the chip appears at the first pause.
+2189. **Languages.** Switch the plugin to Italian: the setting, the chip, the notices and the date (*lunedì 26 ottobre 2026*) and the *Aula* label are in Italian. Switch back to English: *Room*, and the date in English.
+2190. **Off.** With the setting Off nothing happens on a new page; the command still works.
+2191. **Style.** Light and dark theme, phone and tablet width: the chip is a quiet pill that does not cover the page's top margin; the header text is small and grey under a slightly larger course line.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Automatic lecture header (#210): course, lecturer, room, date and start time as two grouped text boxes at the top, one undo step | yes | slot choice (in progress, lead time, overlap, linked to another notebook, no class, nearest), fields in English and Italian, free-area search, plan, History step and locked page: `tests/lecture-header.test.ts`; view and chip: harness `doc=lecthead` | | | not tried on Android; time zones are covered by the rule that class times are local wall-clock times, not by running under other zones |
+| Setting Off / Ask / Automatic and the four fields; command *Insert lecture header* | yes | settings read: `tests/lecture-header.test.ts`; command and chip: harness `doc=lecthead` | | | |

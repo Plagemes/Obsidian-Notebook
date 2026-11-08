@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FULL_CHECK_LIMIT, freezeStroke, parse, serialize, serializeChecked } from "../src/model/serialize";
+import { FULL_CHECK_LIMIT, checkContent, freezeStroke, parse, serialize, serializeChecked } from "../src/model/serialize";
 import { CURRENT_VERSION, FORMAT_ID } from "../src/model/types";
 import { createStroke } from "../src/model/document";
 import { line, sampleDocument } from "./helpers";
@@ -89,7 +89,6 @@ describe("parse rejects corrupt files", () => {
 		["stroke without points", (d) => { setAt(d, ["pages", 0, "strokes", 0, "points"], []); }],
 		["bad colour", (d) => { setAt(d, ["pages", 0, "strokes", 0, "color"], "red"); }],
 		["zero width", (d) => { setAt(d, ["pages", 0, "strokes", 0, "width"], 0); }],
-		["unknown tool", (d) => { setAt(d, ["pages", 0, "strokes", 0, "tool"], "laser"); }],
 		["duplicate stroke id", (d) => { setAt(d, ["pages", 0, "strokes", 1, "id"], getAt(d, ["pages", 0, "strokes", 0, "id"])); }],
 		["unknown paper", (d) => { setAt(d, ["pages", 0, "paper"], { kind: "dots" }); }],
 		["missing id", (d) => { delAt(d, ["id"]); }],
@@ -99,6 +98,30 @@ describe("parse rejects corrupt files", () => {
 		const d = valid();
 		mutate(d);
 		expect(reason(JSON.stringify(d))).not.toBe("ok");
+	});
+	// v20: an unknown tool name is no longer fatal when reading: the stroke is read as a pen and counted (the strict check still fails).
+	it("unknown tool: read as a pen and counted, never silently", () => {
+		const d = valid();
+		setAt(d, ["pages", 0, "strokes", 0, "tool"], "laser");
+		const r = parse(JSON.stringify(d));
+		expect(r.ok).toBe(true);
+		if (r.ok) {
+			expect(r.dropped).toBe(1);
+			expect(r.doc.pages[0]!.strokes[0]!.tool).toBe("pen");
+		}
+	});
+	// Review fix (D2): the lenient read keeps the ink as a pen, but a strict write never accepts a tool this version does not know.
+	it("unknown tool: the strict write still refuses it, and the lenient read counts it once per stroke", () => {
+		const doc = sampleDocument(1);
+		(doc.pages[0]!.strokes[0] as { tool: string }).tool = "laser";
+		expect(checkContent(doc)).toMatch(/tool/);
+		const written = serializeChecked(doc);
+		expect(written.ok).toBe(false);
+		const d = valid();
+		setAt(d, ["pages", 0, "strokes", 0, "tool"], "laser");
+		setAt(d, ["pages", 0, "strokes", 1, "tool"], "quill");
+		const r = parse(JSON.stringify(d));
+		expect(r.ok && r.dropped).toBe(2);
 	});
 });
 
