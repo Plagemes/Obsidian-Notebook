@@ -50,6 +50,8 @@ export interface MathHost {
 	pen(): { color: string; textSize: number };
 	/** Setting "Ink follows objects". */
 	inkFollows(): boolean;
+	/** 0.23 dimcheck (#293): setting "Check units in equations". */
+	dimensionHint(): boolean;
 	refresh(): void;
 }
 
@@ -167,7 +169,7 @@ export class MathTools {
 			done: (d) => void this.finishEquation(d),
 			cancel: () => this.endEquation(),
 			remove: element ? () => this.removeEquation() : undefined,
-		});
+		}, { dimensionHint: this.host.dimensionHint() });
 		this.eq = { pageId: page.id, element, x, y, editor };
 		this.place();
 		editor.focus();

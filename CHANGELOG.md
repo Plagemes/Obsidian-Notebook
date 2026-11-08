@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### dimcheck
+- **Dimensional analysis of formulas (#293).** A quiet hint in the equation editor, under the preview, when the units of a formula do not agree: adding metres to seconds, an equation whose two sides differ (force against energy), a function or an exponent applied to something with a dimension. It reads units written with `\mathrm`, `\text` or `\SI` (SI base units, prefixes from yocto to quetta, the named derived units N, J, W, Pa, Hz, C, V, Ω, S, F, H, T, Wb, lm, lx, Bq, Gy, Sv, kat and common others such as min, h, L, t, eV, bar, atm, cal, Wh, ft, in, mi, lb), follows dimensions through + − × ÷ ^, roots, fractions, derivatives (`\frac{dx}{dt}`), integrals, sums and limits, and takes the dimension of a symbol from the value it is set equal to (`m = 2\,\mathrm{kg}`) or from a line `[v] = m/s`. A symbol it knows nothing about is never flagged. Only dimensions are compared, not scales (`3 m + 2 km` is fine). When the units agree it shows a muted tick line. Nothing is stored and the document format is unchanged.
+- **Setting.** *Settings > Writing > Check units in equations* (on by default).
+- **Code.** Pure, Node-tested engine in `src/math/dimensions.ts` (no `obsidian` import; also reads plain text such as `5 m + 3 s`); the words in `src/view/dimension-hint.ts`; English and Italian.
+
 ## 0.22.0 — 2026-11-08
 
 Seven features: three new pens, optional cloud sync with Google Drive or OneDrive, two-way page references, colours with meaning, instant axes, custom covers and an automatic lecture header. The notebook format moves to version 20 (the new pen tools and the nib angle): the migration from version 19 is automatic, and 0.21 and older open a v20 notebook read-only and never overwrite it. Cloud sync is off by default and uses your own OAuth client; the plugin ships no client ID or secret.

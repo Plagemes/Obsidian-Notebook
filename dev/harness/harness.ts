@@ -98,6 +98,7 @@ import { checkSlideback, slidebackShot } from "./slideback-check";
 import { checkPagerefs, pagerefsShot } from "./pagerefs-check";
 import { checkLecthead, lectheadShot } from "./lecthead-check";
 import { checkPillstack, pillstackShot } from "./pillstack-check";
+import { checkDimcheck, dimcheckShot, type DimcheckState } from "./dimcheck-check";
 import { checkSymbols } from "./symbols-check";
 import { checkBackups } from "./backups-check";
 import { checkSynccore } from "./synccore-check";
@@ -2275,3 +2276,6 @@ Object.assign(harnessApi, { checkLecthead: () => checkLecthead({ get view() { re
 
 // 0.22 review fix: every floating pill at once (doc=pillstack, pillstack-check.ts).
 Object.assign(harnessApi, { checkPillstack: () => checkPillstack({ get view() { return view; }, open, frames, penStroke, errors, notices }), pillstackShot: () => pillstackShot({ get view() { return view; }, open, frames, penStroke, errors, notices }) });
+
+// 0.23 dimcheck (#293): the units hint of the equation editor (doc=dimcheck, dimcheck-check.ts).
+Object.assign(harnessApi, { checkDimcheck: () => checkDimcheck({ get view() { return view; }, open, frames, errors, notices }), dimcheckShot: (state: DimcheckState) => dimcheckShot({ get view() { return view; }, open, frames, errors, notices }, state) });

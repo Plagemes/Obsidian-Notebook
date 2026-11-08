@@ -5,6 +5,7 @@ import { EQUATION_LATEX_MAX } from "../model/math-elements";
 import { MAX_FONT_SIZE } from "../model/serialize";
 import { renderPreview } from "./math-typeset";
 import { shellButton, shellCard } from "../ui/components/modal-shell";
+import { dimensionHint } from "./dimension-hint";
 
 /**
  * The in-place editor of an equation (#110): the LaTeX source, a live preview typeset by Obsidian's maths engine, a
@@ -19,6 +20,11 @@ export interface EquationDraft {
 	numbered: boolean;
 	fontSize: number;
 	color: string;
+}
+
+/** 0.23 dimcheck (#293): the quiet units hint under the preview (the setting "Check units in equations"). */
+export interface EquationEditorOptions {
+	dimensionHint?: boolean;
 }
 
 export interface EquationEditorHandlers {
@@ -49,6 +55,9 @@ export class EquationEditor {
 	private readonly area: HTMLTextAreaElement;
 	private readonly preview: HTMLElement;
 	private readonly error: HTMLElement;
+	private readonly hint: HTMLElement;
+	/** Where the view last asked the card to be; the card is kept inside the stage again when the hint changes its height. */
+	private wanted: [number, number] | null = null;
 	private readonly size: HTMLInputElement;
 	private readonly color: HTMLInputElement;
 	private readonly inlineBtn: HTMLButtonElement;
@@ -59,7 +68,7 @@ export class EquationEditor {
 	/** Preview runs are numbered so a slow one cannot overwrite a newer one. */
 	private run = 0;
 
-	constructor(parent: HTMLElement, initial: EquationDraft, private readonly handlers: EquationEditorHandlers) {
+	constructor(parent: HTMLElement, initial: EquationDraft, private readonly handlers: EquationEditorHandlers, private readonly config: EquationEditorOptions = {}) {
 		this.draft = { ...initial };
 		this.el = parent.createDiv({ cls: "notebook-math-panel notebook-eq-editor", attr: { role: "dialog", "aria-label": t("math.eq.title") } });
 		shellCard(this.el, "nb-eq-card");
@@ -90,6 +99,7 @@ export class EquationEditor {
 		});
 		this.preview = this.el.createDiv({ cls: "notebook-eq-preview", attr: { "aria-live": "polite", "aria-label": t("math.eq.preview") } });
 		this.error = this.el.createDiv({ cls: "notebook-eq-error notebook-hidden" });
+		this.hint = this.el.createDiv({ cls: "notebook-eq-dimhint notebook-hidden", attr: { role: "note" } });
 		const options = this.el.createDiv({ cls: "notebook-eq-options" });
 		this.inlineBtn = this.toggle(options, "math.eq.inline", () => {
 			this.draft.inline = !this.draft.inline;
@@ -142,6 +152,7 @@ export class EquationEditor {
 
 	/** Positions the card (stage px) with its top-left corner near (x, y), kept inside the stage. */
 	place(x: number, y: number): void {
+		this.wanted = [x, y];
 		const parent = this.el.parentElement;
 		const pw = parent?.clientWidth ?? 0;
 		const ph = parent?.clientHeight ?? 0;
@@ -191,6 +202,7 @@ export class EquationEditor {
 		if (this.timer !== null) window.clearTimeout(this.timer);
 		this.timer = window.setTimeout(() => {
 			this.timer = null;
+			this.updateHint();
 			const run = ++this.run;
 			renderPreview(this.preview, this.draft.latex, this.draft.inline).then((err) => {
 				if (run !== this.run) return;
@@ -203,6 +215,33 @@ export class EquationEditor {
 				this.error.setText(t("math.eq.noEngine"));
 			});
 		}, delay);
+	}
+
+	/** 0.23 dimcheck (#293): the units hint, quiet: one muted line per problem, a tick when the units agree. */
+	private updateHint(): void {
+		const h = this.config.dimensionHint ? dimensionHint(this.draft.latex, t) : null;
+		this.hint.empty();
+		this.hint.toggleClass("notebook-hidden", !h);
+		this.hint.toggleClass("is-ok", !!h?.consistent);
+		if (!h) {
+			this.replace();
+			return;
+		}
+		const icon = this.hint.createSpan({ cls: "notebook-eq-dimhint-icon", attr: { "aria-hidden": "true" } });
+		setIcon(icon, h.consistent ? "check" : "ruler");
+		const body = this.hint.createDiv({ cls: "notebook-eq-dimhint-body" });
+		body.createSpan({ cls: "notebook-eq-dimhint-label", text: t("dimcheck.label") });
+		if (h.consistent) {
+			body.createSpan({ cls: "notebook-eq-dimhint-line", text: t("dimcheck.ok") });
+		} else {
+			for (const line of h.lines) body.createDiv({ cls: "notebook-eq-dimhint-line", text: line });
+			if (h.more > 0) body.createDiv({ cls: "notebook-eq-dimhint-more", text: t("dimcheck.more", { n: String(h.more) }) });
+		}
+		this.replace();
+	}
+
+	private replace(): void {
+		if (this.wanted) this.place(this.wanted[0], this.wanted[1]);
 	}
 
 	private done(): void {

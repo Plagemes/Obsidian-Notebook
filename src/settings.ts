@@ -265,6 +265,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	/** 0.21 (212): the strip of recent symbols, and how many buttons it has. */
 	symbolStrip: boolean;
 	symbolCount: number;
+	/** 0.23 dimcheck (#293): a quiet hint in the equation editor when the units of a formula do not agree. */
+	dimensionHint: boolean;
 	/** 0.22 (#35): the pen the pen tool starts with (ballpoint, fountain pen, brush or marker) and the nib angle (degrees) of new fountain pen and marker strokes. */
 	defaultPenKind: PenKind;
 	defaultNibAngle: number;
@@ -413,6 +415,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	minimapMode: "auto",
 	symbolStrip: true,
 	symbolCount: 6,
+	dimensionHint: true,
 	defaultPenKind: "pen",
 	defaultNibAngle: 45,
 	appearanceStyle: "notebook",
@@ -565,6 +568,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
 	if (typeof d.symbolStrip === "boolean") s.symbolStrip = d.symbolStrip;
 	s.symbolCount = clampSymbolCount(d.symbolCount);
+	if (typeof d.dimensionHint === "boolean") s.dimensionHint = d.dimensionHint;
 	if (isPenKind(d.defaultPenKind)) s.defaultPenKind = d.defaultPenKind;
 	s.defaultNibAngle = normaliseNib(d.defaultNibAngle);
 	if (isMinimapMode(d.minimapMode)) s.minimapMode = d.minimapMode;
