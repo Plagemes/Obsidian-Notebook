@@ -19224,3 +19224,43 @@ body.notebook-style-obsidian {
 	transform: rotate(225deg);
 }
 
+/* ===== 0.24 tagsuggest ===== */
+.nb-ui.notebook-tags-suggest {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+	margin-top: 10px;
+}
+
+.nb-ui.notebook-tags-suggest:empty {
+	display: none;
+}
+
+.nb-ui .notebook-tags-suggest-title {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	margin-right: 2px;
+}
+
+.nb-ui .notebook-tags-chip.notebook-tags-chip-suggest {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 32px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: var(--nb-fs-meta);
+	background: transparent;
+	border: 1px dashed var(--nb-border-strong);
+	color: inherit;
+}
+
+.nb-ui .notebook-tags-chip.notebook-tags-chip-suggest:hover {
+	border-style: solid;
+	border-color: var(--nb-accent);
+}
+
+.nb-ui .notebook-tags-chip-suggest .notebook-tags-x {
+	color: var(--nb-accent);
+}

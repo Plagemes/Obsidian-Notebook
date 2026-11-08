@@ -3005,6 +3005,7 @@ export class NotebookView extends FileView {
 				headings: this.host.settings.outlineHeadings, markers: this.host.settings.outlineMarkers, pdf: this.host.settings.outlinePdf === "merged",
 			}),
 			pdfOutlineMode: () => this.host.settings.outlinePdf,
+			path: () => this.file?.path ?? null,
 			// 0.16 (#46): the outlines already known; the others are read in the background and the panel refreshed.
 			pdfOutlines: () => {
 				const assets = this.session?.doc?.assets;

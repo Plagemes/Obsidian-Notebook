@@ -736,7 +736,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 408. **P1** 🧪 Notebook map with states: open questions, gaps and homework per page (extends #223 from one lecture to the whole notebook).
 409. **P2** Suggested paper for a new page, from the previous pages and the course.
 410. **P1** 🧪 Smart "+": the 2–3 most likely new pages (same paper, exercise page, slide page) in one tap.
-411. **P2** Tags suggested from context (course, content, markers).
+411. **P2** 🧪 Tags suggested from context (course, content, markers).
 412. **P3** Page panel that shows only what that page has (hides empty sections and actions that do not apply).
 413. **P3** Generated cover for a notebook (title, course, colour, first page).
 414. **P2** Adaptive navigator: large thumbnails for PDFs, a compact list for text pages.

@@ -3716,3 +3716,20 @@ Implemented, not verified on hardware. No format change. Manual steps (real Obsi
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Long-press explanation bubble on toolbar, selection/contextual bar and Home icons (finger only; mouse hover and pen untouched), setting to turn it off | yes | timing, slop, who may start it, placement, texts in en + it, setting: `tests/long-press-help.test.ts`; real view with synthetic touch/pen/mouse events: harness `doc=iconhelp` | | yes | the real long press on a WebView is not simulated; the system context menu on some devices is suppressed while the bubble shows |
+
+### 0.24 — tagsuggest (tags suggested from context, #411; steps 2520-2539)
+
+Manual steps (real Obsidian; nothing here is verified on Android). You need a timetable with a class linked to a notebook or its folder, and a folder with a few notebooks that have tags.
+
+2520. **Notebook tags.** Open *Edit tags* (library notebook menu, or the command inside a notebook): under the tag chips a row *Suggested* shows up to six dashed chips, the course of the linked class first.
+2521. **Sibling notebooks.** Tags that other notebooks in the same folder use appear as chips; a tag the notebook already has is not offered.
+2522. **Content.** In a notebook with typed text that repeats a word (or a titled bookmark), that word shows as a chip; common words in English and Italian (*the*, *della*...) never do.
+2523. **Markers.** With a question marker or a definition box in the notebook, *questions* / *definitions* are offered.
+2524. **One tap.** Tapping a chip adds the tag to the list and removes the chip; *Save* writes it. Inside a notebook, *Undo* takes the tags back (same history as before).
+2525. **Page tags.** Page panel, page menu, *Tags*: chips from the course, the notebook tags, that page's text and markers; a tap writes the tag into the field, *Save* is one undo step.
+2526. **Spelling.** A course such as *Fisica 2* is offered as `Fisica-2` for notebook tags and as `Fisica 2` for page tags.
+2527. **Off.** Settings, *Integration*, *Suggest tags* off: no chips in either editor. Italian reads *Suggerisci i tag* / *Suggeriti*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Suggested tags in the notebook and page tag editors (course, sibling notebooks, frequent words, marker kinds); setting to turn off; no format change | yes | ranking, stop-words, normalisation, context: `tests/tag-suggest.test.ts`; editors: harness `doc=tagsuggest` | | | |

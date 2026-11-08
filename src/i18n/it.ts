@@ -4546,4 +4546,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.home.viewList": "Passa all'elenco compatto.",
 	"help.home.views": "Guarda i quaderni come una lavagna o un calendario.",
 	"help.home.bell": "Quaderni arrivati da altri dispositivi o che richiedono attenzione.",
+	// 0.24 tagsuggest
+	"tagSuggest.title": "Suggeriti",
+	"tagSuggest.add": "Aggiungi il tag {tag}",
+	"settings.tagSuggestions": "Suggerisci i tag",
+	"settings.tagSuggestions.desc": "Propone tag dal corso, dai quaderni vicini, dal testo e dai segni.",
 };

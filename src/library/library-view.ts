@@ -10,6 +10,7 @@ import { breadcrumb, buildFolderTree, flattenTree, isReservedPath, type FolderNo
 import { relativeTime, uniquePath } from "./format";
 import { folderOf, isInside, LibraryIndex, normalizeText, SORTS, type Highlight, type LibraryEntry, type LibraryScope, type LibrarySort, type SearchHit } from "./index";
 import { openTagEditor } from "../integration/tags";
+import { siblingTagLists } from "../model/tag-context";
 import { openNotebookAtPage } from "../integration/open";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
 import type { Timetable } from "../timetable/schedule";
@@ -3017,7 +3018,9 @@ export class LibraryView extends ItemView {
 		const entry = this.index.get(path);
 		if (!entry) return;
 		// O2: suggestions from Obsidian's tags, Obsidian-style normalisation, hint about companion notes (integration/tags.ts).
-		openTagEditor(this.app, { file: this.app.vault.getFileByPath(path), current: entry.tags, libraryTags: this.index.tags().map((x) => x.tag), onSave: (tags) => this.setMeta(path, { tags }) });
+		// 0.24 (#411): chips from the course, sibling notebooks and the indexed text.
+		const context = { path, siblings: siblingTagLists(this.index.all(), path), signals: { text: entry.text ? [entry.text] : [], headings: (entry.bookmarks ?? []).map((b) => b.title), kinds: [] } };
+		openTagEditor(this.app, { file: this.app.vault.getFileByPath(path), current: entry.tags, libraryTags: this.index.tags().map((x) => x.tag), context, onSave: (tags) => this.setMeta(path, { tags }) });
 	}
 
 	private askCover(path: string): void {
