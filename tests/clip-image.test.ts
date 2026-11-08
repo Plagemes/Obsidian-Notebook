@@ -8,6 +8,8 @@ import {
 	CLIP_MAX_PIXELS, CLIP_MAX_SIDE, CLIP_MIN_SCALE, CLIP_SCALE, afterFailure, clipRoutes, clipScale, isClipBackground, needsWhite,
 } from "../src/ink/clip-image";
 import { planArea } from "../src/ink/export-area";
+import { layerFlags } from "../src/ink/export-layers";
+import { createArea } from "../src/model/area";
 import { createDocument, createStroke, quantizePoint } from "../src/model/document";
 
 describe("clipScale", () => {
@@ -75,5 +77,22 @@ describe("the action", () => {
 		expect(planArea(page, null)).toBeNull();
 		page.strokes.push(createStroke("#000000", 2, [quantizePoint(10, 10, 0.5), quantizePoint(60, 40, 0.5)]));
 		expect(planArea(page, null)?.rect.width).toBeGreaterThan(0);
+	});
+	it("draws a highlighter area (format 23) like the other exports: it is on the plan and in the ink layer the copy renders", () => {
+		const doc = createDocument(new Date());
+		const page = doc.pages[0]!;
+		const area = createArea([100, 120], [300, 180], page, "#ffd400")!;
+		page.elements = [area];
+		const whole = planArea(page, null)!;
+		expect(whole).not.toBeNull();
+		expect(whole.rect.x).toBeLessThanOrEqual(100);
+		expect(whole.rect.y).toBeLessThanOrEqual(120);
+		expect(whole.rect.x + whole.rect.width).toBeGreaterThanOrEqual(300);
+		expect(whole.rect.y + whole.rect.height).toBeGreaterThanOrEqual(180);
+		const picked = planArea(page, { strokes: [], elements: [area] })!;
+		expect(picked.page.elements).toEqual([area]);
+		// "Copy as image" renders with layers: "ink" (transparent), which keeps the content layer where areas are drawn.
+		expect(layerFlags("ink").content).toBe(true);
+		expect(layerFlags("ink").background).toBe(false);
 	});
 });
