@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### markedview
+- **Marked pages only in the page navigator (#419).** A flag button in the panel header switches between all pages and *Marked pages only*: pages with a bookmark, a global bookmark, a marker (gap, question, homework, importance), ink in a colour with a meaning, an open checkbox or a page tag. Each page keeps its number and shows why it is marked; a menu picks which kinds count; works in thumbnails, the large layout and the compact list; an empty result says so quietly. The choice is remembered per notebook on this device (bounded local storage). Read-only: no format change; long-press help in English and Italian.
+
 ## 0.24.0 — 2026-11-08
 
 Eight features: filled shapes and dashed or dotted lines, joining of broken strokes, a context-ordered actions sheet, explanations on long press of an icon, tag suggestions, an adaptive page navigator, global bookmarks across notebooks and a hand-in dialog. The notebook format moves to version 22 (filled shapes and dashed or dotted lines): the migration from version 21 is automatic, and 0.23 and older open a v22 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

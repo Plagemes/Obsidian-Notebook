@@ -4635,6 +4635,28 @@ export const en = {
 	"handIn.export": "Export PDF",
 	"handIn.exportAnyway": "Export anyway",
 	"handIn.fixHint": "The dialog closes when you go to a page; open it again from the notebook menu when you are done.",
+	// 0.25 markedview
+	"navMarked.button": "Marked pages",
+	"navMarked.menuAll": "All pages",
+	"navMarked.menuOnly": "Marked pages only",
+	"navMarked.kindsHeading": "Count as marked",
+	"navMarked.kind.bookmark": "Bookmarks",
+	"navMarked.kind.global": "Global bookmarks",
+	"navMarked.kind.marker": "Markers and questions",
+	"navMarked.kind.meaning": "Colour meanings",
+	"navMarked.kind.task": "Open checkboxes",
+	"navMarked.kind.tag": "Page tags",
+	"navMarked.why.bookmark": "Bookmark",
+	"navMarked.why.global": "Global bookmark",
+	"navMarked.why.marker": "Marker",
+	"navMarked.why.meaning": "Colour",
+	"navMarked.why.task": "{n} open",
+	"navMarked.why.tag": "Tags",
+	"navMarked.barAll": "Marked pages only",
+	"navMarked.bar": "Marked pages only: {kinds}",
+	"navMarked.clear": "Show all pages",
+	"navMarked.empty": "Nothing marked here yet.",
+	"help.navMarked": "Show only the pages you marked: bookmarks, markers and questions, colours with a meaning, open checkboxes and page tags. Each page keeps its number and shows why it is marked. Choose which kinds count in the menu.",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -167,6 +167,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "pillstack", theme, device, lowLatency: false });
 // 0.24 navadapt (#414): the adaptive page navigator (dev/harness/navadapt-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "navadapt", theme, device, lowLatency: false });
+// 0.25 markedview (#419): marked pages only in the page navigator (dev/harness/markedview-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "markedview", theme, device, lowLatency: false });
 // 0.23 welcomeback (#420): the welcome-back card (dev/harness/welcomeback-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "welcomeback", theme, device, lowLatency: false });
 // 0.24 iconhelp (#429): the long-press explanation bubble (dev/harness/iconhelp-check.ts).
@@ -401,6 +403,7 @@ async function main() {
 				else if (s.doc === "welcomeback") report = await cdp.evaluate("window.harness.checkWelcomeback()", 90000); // 0.23 welcomeback
 				else if (s.doc === "iconhelp") report = await cdp.evaluate("window.harness.checkIconhelp()", 90000); // 0.24 iconhelp
 				else if (s.doc === "navadapt") report = await cdp.evaluate("window.harness.checkNavadapt()", 90000); // 0.24 navadapt
+				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -596,6 +599,17 @@ async function main() {
 						problems.push(`linkback ${state} screenshot: ${e.message}`);
 					}
 					await cdp.evaluate("window.harness.closeLinkback()");
+				}
+			}
+			// 0.25 markedview: a screenshot of the marked-only list.
+			if (s.doc === "markedview") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				try {
+					await cdp.evaluate("window.harness.markedviewShot().then(() => true)", 60000);
+					writeFileSync(join(designDir, `markedview-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`markedview screenshot: ${e.message}`);
 				}
 			}
 			// 0.24 navadapt: a screenshot of the list.

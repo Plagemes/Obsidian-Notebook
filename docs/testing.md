@@ -3809,3 +3809,23 @@ Manual steps (real Obsidian; nothing here is verified on Android). Use a noteboo
 | Hand in…: page grid with checkboxes, cover fields (name remembered per device, course from the timetable, title, date) | yes | page choice, cover layout and its PDF: `tests/hand-in.test.ts`; harness `doc=handin` (real dialog, remembered name, grid) | | | the page panel's own multi-selection is not read yet: the dialog starts on the page in view |
 | Pre-flight: blank pages, open gaps/questions/homework, unticked checkboxes, TODO notes, empty template boxes, with links to fix and "export anyway" | yes | `tests/hand-in.test.ts`; harness `doc=handin` (rows, leave out, link) | | | |
 | PDF with generated cover first, saved next to the notebook under a free name, recorded as plugin-written, optional share sheet | yes | harness `doc=handin` (written through a stand-in vault, second export `hand-in 2.pdf`, cover plus chosen pages) | | | share sheet depends on the WebView |
+
+### 0.25 — markedview: marked pages only in the page navigator (roadmap #419; steps 2760-2779)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+2760. **Button.** Open the page panel: a flag button sits in its header. Long-press it: the explanation appears (English and Italian).
+2761. **Marked only.** Tap the flag, choose *Marked pages only*: the panel lists only pages that have a bookmark, a global bookmark, a marker (gap, question, homework, importance), ink in a colour with a meaning, an open checkbox or a page tag. Each page keeps its real number and shows a badge for why it is marked. A line under the header says *Marked pages only* and has a close button.
+2762. **Kinds.** In the same menu pick kinds (each shows how many pages it marks): only those count. Picking none (or all) means every kind.
+2763. **Layouts.** Switch the layout button between Thumbnails and List: badges show as icons under a thumbnail and with words in the compact list; both work with large PDF thumbnails too.
+2764. **Go to page.** Tap a page: it opens that page (on a phone the drawer closes). Star, page menu, select mode and drag-to-reorder still work.
+2765. **Empty.** Turn all marks off in a notebook: the panel says "Nothing marked here yet." quietly.
+2766. **Follows changes.** Add a bookmark, a marker, tick the last open checkbox, add a global bookmark: the list updates (reopen the panel if a change is not shown at once).
+2767. **Remembered.** Close and reopen the notebook, restart Obsidian: the choice is still there for that notebook; another notebook still shows all pages. The close button of the line shows all pages again.
+2768. **Looks.** Light and dark theme, phone and tablet width, Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure marked-page logic (kinds, reasons, counts) | yes | `tests/nav-marked.test.ts` | | | markers resolved (done) still count as marked |
+| Per-notebook choice in bounded device-local storage (corrupt falls back to all pages) | yes | `tests/nav-marked.test.ts`; harness `doc=markedview` | | | |
+| Marked-only list with badges, sub-filters by kind, empty message, long-press help | yes | harness `doc=markedview` | | | |

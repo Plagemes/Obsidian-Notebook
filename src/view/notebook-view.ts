@@ -213,6 +213,8 @@ import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-
 import { ViewUi } from "./view-ui";
 import { pageKindOf } from "../ui/page-kind";
 import { loadNavModes, modeOf, saveNavMode } from "../ui/nav-adapt";
+import { loadMarked, markedOf, saveMarked } from "../ui/nav-marked";
+import { MATCH_TOLERANCE, TOLERANCES } from "../model/colour-meaning";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { kindTool, strokeNib } from "../ink/pen-kinds";
@@ -469,6 +471,8 @@ export class NotebookView extends FileView {
 	private minimap: Minimap | null = null;
 	/** Roadmap 18: stops following the history's changes (the quick slots and the page sheet enable or disable Back and Forward). */
 	private stopNav: (() => void) | null = null;
+	/** 0.25 (#419): stops following the global bookmarks for the marked-pages filter. */
+	private stopMarks: (() => void) | null = null;
 	/** 0.18 (#227): the strip of quick tabs and the subscription that keeps it current. */
 	private quickStrip: QuickTabsStrip | null = null;
 	private stopQuick: (() => void) | null = null;
@@ -721,12 +725,25 @@ export class NotebookView extends FileView {
 				const id = this.session?.doc?.id;
 				if (id) saveNavMode(this.app, id, mode);
 			},
+			// 0.25 (#419): marked pages only, kept per notebook on this device (bounded local storage).
+			markedKinds: () => markedOf(loadMarked(this.app), this.session?.doc?.id ?? null),
+			setMarkedKinds: (kinds) => {
+				const id = this.session?.doc?.id;
+				if (id) saveMarked(this.app, id, kinds);
+			},
+			markContext: () => ({
+				globalBookmarks: this.host.bookmarks?.bookmarkedPageIds(this.quickApi()) ?? new Set<string>(),
+				legend: this.meaningTools?.legend() ?? [],
+				tolerance: TOLERANCES[this.host.settings.meaningTolerance] ?? MATCH_TOLERANCE,
+			}),
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.scrollbar = new FastScrollbar(this.body, this.scrollbarHost());
 		this.minimap = new Minimap(this.body, this.minimapHost());
 		this.stopNav = this.host.nav?.onChange(() => this.refreshUi()) ?? null;
+		// 0.25 (#419): a global bookmark added or removed (here or on another device) changes the marked-pages list.
+		this.stopMarks = this.host.bookmarks?.onChange(() => this.pageNav?.refresh()) ?? null;
 		this.mountQuickTabs();
 		this.heavy = new HeavyPageBanner(this.body, {
 			split: (index) => this.splitHeavyPage(index),
@@ -1194,6 +1211,8 @@ export class NotebookView extends FileView {
 		this.comments = null;
 		this.stopNav?.();
 		this.stopNav = null;
+		this.stopMarks?.();
+		this.stopMarks = null;
 		this.stopQuick?.();
 		this.stopQuick = null;
 		this.quickStrip?.el.remove();
