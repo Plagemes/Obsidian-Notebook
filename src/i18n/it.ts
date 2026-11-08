@@ -4865,4 +4865,10 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"navMarked.clear": "Mostra tutte le pagine",
 	"navMarked.empty": "Qui non c'è ancora niente di segnato.",
 	"help.navMarked": "Mostra solo le pagine che hai segnato: segnalibri, segnaposto e domande, colori con significato, caselle da spuntare ed etichette di pagina. Ogni pagina mantiene il suo numero e indica perché è segnata. Nel menu scegli quali tipi contano.",
+	// 0.26 ctxpalette
+	"colour.ctx.page": "In questa pagina",
+	"colour.ctx.slide": "Dalla slide",
+	"colour.ctx.swatch": "{colour} ({hex})",
+	"help.colourCtxPage": "Un colore già usato in questa pagina, dal più usato. Toccalo per scrivere o disegnare di nuovo con quel colore. I colori che hai già tra i Colori recenti non si ripetono, e un colore con un significato mostra la sua etichetta.",
+	"help.colourCtxSlide": "Un colore principale della slide o dell'immagine dietro questa pagina, ricavato dalla sua immagine. Toccalo per abbinare l'inchiostro alla slide. Il bianco della carta è escluso.",
 };

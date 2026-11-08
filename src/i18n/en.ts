@@ -4863,6 +4863,12 @@ export const en = {
 	"navMarked.clear": "Show all pages",
 	"navMarked.empty": "Nothing marked here yet.",
 	"help.navMarked": "Show only the pages you marked: bookmarks, markers and questions, colours with a meaning, open checkboxes and page tags. Each page keeps its number and shows why it is marked. Choose which kinds count in the menu.",
+	// 0.26 ctxpalette
+	"colour.ctx.page": "On this page",
+	"colour.ctx.slide": "From the slide",
+	"colour.ctx.swatch": "{colour} ({hex})",
+	"help.colourCtxPage": "A colour already used on this page, most used first. Tap it to write or draw in it again. Colours you kept in Recent colours are not repeated, and a colour with a meaning shows its label.",
+	"help.colourCtxSlide": "A main colour of the slide or picture behind this page, found from its picture. Tap it to match your ink to the slide. The paper white is left out.",
 } as const;
 
 export type MessageKey = keyof typeof en;
