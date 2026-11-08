@@ -6,7 +6,7 @@ import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
 import { formatBytes } from "../storage/sync-state";
 import type { SyncResult } from "../sync/engine";
-import { modalShell, shellButton, shellNote, shellSection } from "../ui/components/modal-shell";
+import { modalShell, shellButton, shellCheck, shellNote, shellSection } from "../ui/components/modal-shell";
 
 /** Paths shown per list; the rest is counted. */
 const SHOWN = 12;
@@ -50,6 +50,37 @@ export class CloudDeletesModal extends Modal {
 	onClose(): void {
 		this.contentEl.empty();
 		if (!this.decided) this.decide(null);
+	}
+}
+
+/**
+ * "Disconnect from Google Drive?": confirms the disconnection; for Google it offers to forget the client secret typed on this
+ * device too (unchecked by default: signing in again later needs no typing). Closing it disconnects nothing.
+ */
+export class CloudDisconnectModal extends Modal {
+	private forgetSecret = false;
+
+	constructor(app: App, private readonly provider: string, private readonly hasSecret: boolean, private readonly decide: (o: { forgetSecret: boolean }) => void) {
+		super(app);
+	}
+
+	onOpen(): void {
+		const shell = modalShell(this, {
+			title: t("cloudSync.disconnect.title", { provider: this.provider }), subtitle: t("cloudSync.disconnect.subtitle"), icon: "cloud-off", size: "narrow", cls: "nb-cloudsync-modal",
+		});
+		if (this.hasSecret) {
+			shellCheck(shell.body, t("cloudSync.disconnect.secret"), false, (on) => (this.forgetSecret = on));
+			shellNote(shell.body, t("cloudSync.disconnect.secretDesc"));
+		}
+		shellButton(shell.foot, "secondary", t("cloudSync.disconnect.cancel"), () => this.close());
+		shellButton(shell.foot, "danger", t("cloudSync.disconnect.confirm"), () => {
+			this.close();
+			this.decide({ forgetSecret: this.forgetSecret });
+		}, { icon: "cloud-off" });
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
 	}
 }
 

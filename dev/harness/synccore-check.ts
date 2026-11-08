@@ -34,6 +34,10 @@ export async function checkSynccore(api: SynccoreCheckApi): Promise<{ ok: boolea
 	const service = plugin.cloudSync;
 	add("the plugin starts with the cloud sync service, off by default", !!service && plugin.settings.cloudSyncProvider === "off");
 	if (!service) return { ok: false, results, errors: api.errors, notices: api.notices, env: {} };
+	// Review W22 S1: nothing runs before the vault is indexed (the metadata cache's first "resolved").
+	add("nothing runs while the vault is still loading", (await service.syncNow()) === null && api.notices.includes(t("cloudSync.notice.loading")), api.notices.join(" | "));
+	app.metadataCache.trigger("resolved");
+	add("the metadata cache's resolve opens the gate", service.ready());
 	add("nothing runs while it is off", (await service.syncNow()) === null && api.notices.includes(t("cloudSync.notice.off")), api.notices.join(" | "));
 
 	const doc = (name: string, extra = "") => JSON.stringify({ version: 19, id: "doc-maths-0001", name, extra });
@@ -130,6 +134,16 @@ export async function checkSynccore(api: SynccoreCheckApi): Promise<{ ok: boolea
 		keep?.click();
 		for (let i = 0; i < 50 && (service.running() || vault.getFileByPath("Notebooks/Pages/page 0.md") === null); i++) await sleep(50);
 		add("Keep them copies the files back", vault.getFileByPath("Notebooks/Pages/page 23.md") !== null && cloud.files.has("Notebooks/Pages/page 23.md") && cloud.trash.length === 0);
+		// Review W22: "Disconnect" asks first, and offers to forget Google's client secret too.
+		redraw();
+		[...(account()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === t("cloudSync.account.disconnect"))?.click();
+		await sleep(30);
+		const title = t("cloudSync.disconnect.title", { provider: "Google Drive" });
+		const ask = [...document.querySelectorAll<HTMLElement>(".modal")].find((m) => (m.textContent ?? "").includes(title));
+		add("Disconnect asks first, with the option to forget the client secret", !!ask && (ask.textContent ?? "").includes(t("cloudSync.disconnect.secret")) && auth.signedIn, ask?.textContent?.slice(0, 160) ?? "no dialog");
+		[...(ask?.querySelectorAll("button") ?? [])].find((b) => b.textContent === t("cloudSync.disconnect.cancel"))?.click();
+		await sleep(30);
+		add("Cancel keeps the sign-in", auth.signedIn && !document.body.contains(ask ?? null));
 		redraw();
 		row(t("settings.cloudSync"))?.scrollIntoView({ block: "start" });
 		await sleep(50);

@@ -2,8 +2,9 @@
  * 0.22 (roadmap #126): may a sync run on the current network? Pure (the caller passes `navigator`).
  *
  * The Network Information API (`navigator.connection.type`) exists in Chrome on Android (Obsidian's WebView) and is missing
- * elsewhere (desktop Electron reports no type). A known metered type stops a "Wi-Fi only" run; an unknown type is allowed, and
- * the status says the network type could not be checked.
+ * elsewhere (desktop Electron reports no type). A known metered type stops a "Wi-Fi only" run. An unknown type is reported as
+ * such: review W22 S16, the service lets it through on desktop but, on a phone or tablet, holds the automatic runs (a manual
+ * run still goes, with a notice) because the phone may well be on mobile data.
  */
 
 export type NetworkVerdict =

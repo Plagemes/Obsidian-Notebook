@@ -8,7 +8,9 @@
  *  - A replace goes through `vault.modifyBinary`: an open notebook gets the vault's "modify" event and reloads through its
  *    existing external-change path (DocumentSession.handleExternalChange). The engine saves it first (`settle`) and never
  *    replaces it while something is unsaved.
- *  - A delete goes through `fileManager.trashFile` (the user's trash setting).
+ *  - A delete goes to Obsidian's own `.trash` folder (`vault.trash(file, false)`), never through `fileManager.trashFile`:
+ *    that one follows the user's "Deleted files" preference, which can be "Permanently delete" (review W22 S2). A sync
+ *    deletion is always recoverable; `.trash` is a hidden folder, so it is never synced itself.
  *  - An unreadable state file is copied aside once (`.bad.json`) before a new state is written over it.
  */
 import { normalizePath, TFile, type App } from "obsidian";
@@ -61,7 +63,8 @@ export function vaultLocalPort(app: App, settle: (path: string) => Promise<boole
 		trash: async (path, expect) => {
 			const f = fileAt(path);
 			if (!f || !same(statOf(f), expect)) throw new LocalChangedError(path);
-			await app.fileManager.trashFile(f);
+			// Review W22 S2: on purpose not `fileManager.trashFile` (the lint warning): "Permanently delete" must never apply here.
+			await vault.trash(f, false);
 		},
 		settle,
 	};
@@ -72,8 +75,11 @@ export function syncStateFolder(app: App, pluginId: string): string {
 	return normalizePath(`${app.vault.configDir}/plugins/${pluginId}/cloud-sync`);
 }
 
+/** The device-local state file, which "Disconnect" removes. */
+export type VaultStatePort = StatePort & { remove(): Promise<void> };
+
 /** The state file of this device (`deviceId`: the per-device sidecar id). */
-export function vaultStatePort(app: App, pluginId: string, deviceId: string): StatePort & { remove(): Promise<void> } {
+export function vaultStatePort(app: App, pluginId: string, deviceId: string): VaultStatePort {
 	const adapter = app.vault.adapter;
 	const folder = syncStateFolder(app, pluginId);
 	const path = `${folder}/state-${deviceId}.json`;

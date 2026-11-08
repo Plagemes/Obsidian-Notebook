@@ -26,7 +26,7 @@ import { LOOKUP_WIDTH_MAX, LOOKUP_WIDTH_MIN, LOOKUP_WIDTH_STEP } from "../model/
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 import { SYMBOL_COUNT_MAX, SYMBOL_COUNT_MIN } from "../ui/symbol-rank";
-import { CLOUD_INTERVAL_MAX, CLOUD_LARGE_MAX_MB } from "../sync/settings";
+import { CLOUD_INTERVAL_MAX, CLOUD_LARGE_MAX_MB, CLOUD_MOBILE_MAX_MB, CLOUD_MOBILE_MIN_MB } from "../sync/settings";
 
 export type SettingKey = keyof NotebookSettings;
 
@@ -473,6 +473,7 @@ const SYNC: SettingSpec[] = [
 		keywords: "large big size file grandi dimensione", parent: "cloudSyncProvider", visible: cloudSyncOn,
 	},
 	{ id: "cloudSyncLargeMb", section: "sync", group: "cloudSync", order: 41, name: "settings.cloudSyncLargeMb", desc: "settings.cloudSyncLargeMb.desc", control: { type: "slider", min: 0, max: CLOUD_LARGE_MAX_MB, step: 10, format: suffix("MB", true) }, keywords: "size limit megabytes limite", parent: "cloudSyncLarge", visible: cloudSyncOn },
+	{ id: "cloudSyncMobileMaxMb", section: "sync", group: "cloudSync", order: 42, name: "settings.cloudSyncMobileMaxMb", desc: "settings.cloudSyncMobileMaxMb.desc", control: { type: "slider", min: CLOUD_MOBILE_MIN_MB, max: CLOUD_MOBILE_MAX_MB, step: 5, format: suffix("MB") }, keywords: "phone tablet mobile size cap memory telefono limite memoria", parent: "cloudSyncLarge", visible: cloudSyncOn },
 	{ id: "cloudSyncLog", section: "sync", group: "cloudSync", order: 50, name: "settings.cloudSyncLog", desc: "settings.cloudSyncLog.desc", control: { type: "custom", render: "cloud-log" }, keywords: "log activity history registro attività", parent: "cloudSyncProvider", visible: cloudSyncOn },
 ];
 

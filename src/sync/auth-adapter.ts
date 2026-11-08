@@ -83,6 +83,7 @@ export function createSyncAuthUI(d: AuthAdapterDeps): SyncAuthUI {
 	return {
 		available: () => true,
 		isSignedIn: (provider) => load(provider) !== null,
+		signedInAs: () => loadAuth(store)?.provider ?? null,
 		async signIn(provider: ProviderId, client: CloudClient): Promise<boolean> {
 			try {
 				const done = await d.openSignIn({ provider, clientId: client.clientId, ...(client.clientSecret ? { clientSecret: client.clientSecret } : {}) });

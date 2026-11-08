@@ -12,6 +12,9 @@ export const LARGE_RULES = ["ask", "skip"] as const;
 
 export const CLOUD_INTERVAL_MAX = 240;
 export const CLOUD_LARGE_MAX_MB = 1000;
+/** Bounds of the mobile size cap (MB). */
+export const CLOUD_MOBILE_MIN_MB = 5;
+export const CLOUD_MOBILE_MAX_MB = 500;
 
 export interface CloudSyncSettings {
 	/** "off" (the default): no cloud sync at all. */
@@ -34,6 +37,11 @@ export interface CloudSyncSettings {
 	cloudSyncLargeMb: number;
 	cloudSyncLarge: LargeRule;
 	/**
+	 * Review W22 S16: on a phone or tablet, files larger than this (MB) are never transferred, even when approved (a run holds the
+	 * whole file in memory). Never 0: there is always a cap on mobile.
+	 */
+	cloudSyncMobileMaxMb: number;
+	/**
 	 * The user's own OAuth client id for Google Drive / OneDrive (no client id ships with the plugin). Kept in the settings
 	 * because every device must use the same one (Google's drive.file scope only sees the files of the same client). The Google
 	 * client secret is not here: it stays in this device's local storage (CloudSyncService.clientSecret).
@@ -55,6 +63,7 @@ export const DEFAULT_CLOUD_SYNC_SETTINGS: CloudSyncSettings = {
 	cloudSyncWifiOnly: true,
 	cloudSyncLargeMb: 50,
 	cloudSyncLarge: "ask",
+	cloudSyncMobileMaxMb: 50,
 	cloudSyncGdriveClientId: "",
 	cloudSyncOnedriveClientId: "",
 };
@@ -78,6 +87,7 @@ export function readCloudSyncSettings(d: Record<string, unknown>): CloudSyncSett
 	if (typeof d.cloudSyncWifiOnly === "boolean") s.cloudSyncWifiOnly = d.cloudSyncWifiOnly;
 	s.cloudSyncLargeMb = clampInt(d.cloudSyncLargeMb, 0, CLOUD_LARGE_MAX_MB) ?? s.cloudSyncLargeMb;
 	if (oneOf(LARGE_RULES, d.cloudSyncLarge)) s.cloudSyncLarge = d.cloudSyncLarge;
+	s.cloudSyncMobileMaxMb = clampInt(d.cloudSyncMobileMaxMb, CLOUD_MOBILE_MIN_MB, CLOUD_MOBILE_MAX_MB) ?? s.cloudSyncMobileMaxMb;
 	s.cloudSyncGdriveClientId = text(d.cloudSyncGdriveClientId, 300) ?? s.cloudSyncGdriveClientId;
 	s.cloudSyncOnedriveClientId = text(d.cloudSyncOnedriveClientId, 300) ?? s.cloudSyncOnedriveClientId;
 	return s;

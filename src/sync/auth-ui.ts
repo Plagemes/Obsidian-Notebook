@@ -54,6 +54,8 @@ export interface SyncAuthUI {
 	connect(provider: ProviderId): Promise<CloudProvider | null>;
 	/** Optional: lets the user pick another root folder; resolves true when it changed. */
 	chooseRoot?(provider: ProviderId): Promise<boolean>;
+	/** Optional: the service this device holds a sign-in for (one account per device), or null. */
+	signedInAs?(): ProviderId | null;
 }
 
 /** The stub used until the providers are integrated: nothing is available, nothing is signed in. */
