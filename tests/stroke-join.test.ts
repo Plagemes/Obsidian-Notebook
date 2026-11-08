@@ -480,3 +480,21 @@ describe("realistic handwriting", () => {
 		expect(isDropoutPair(stroke(first), stroke(second))).toBe(false);
 	});
 });
+
+describe("graph-bound ink (W2)", () => {
+	it("never joins a graph-bound piece with a free piece, nor pieces bound to different graphs", () => {
+		const [a1, a2] = split([[10, 50], [110, 50]], 50, 2);
+		expect(isDropoutPair(a1, a2)).toBe(true);
+		const bound = { ...a2, id: `g1~${a2.id}` };
+		expect(isDropoutPair(a1, bound)).toBe(false);
+		expect(isDropoutPair({ ...a1, id: `g1~${a1.id}` }, bound)).toBe(true);
+		expect(isDropoutPair({ ...a1, id: `g2~${a1.id}` }, bound)).toBe(false);
+	});
+	it("planJoin leaves such a pair alone", () => {
+		const doc = createDocument();
+		const page = doc.pages[0]!;
+		const [a1, a2] = split([[10, 50], [110, 50]], 50, 2, {}, { id: "g1~tail" });
+		page.strokes.push(a1, a2);
+		expect(planJoin(page, [...page.strokes])).toBeNull();
+	});
+});
