@@ -6,18 +6,28 @@ describe("cover applies", () => {
 	it("run one at a time in order, and a failure does not stop the next", async () => {
 		const q = new SerialQueue();
 		const log: string[] = [];
-		const gate = (name: string, ms: number, fail = false) => () =>
+		const releases: Array<() => void> = [];
+		const task = (name: string, fail = false) => () =>
 			new Promise<string>((resolve, reject) => {
 				log.push(`${name}:start`);
-				setTimeout(() => {
+				releases.push(() => {
 					log.push(`${name}:end`);
 					if (fail) reject(new Error(name));
 					else resolve(name);
-				}, ms);
+				});
 			});
-		const a = q.run(gate("a", 30, true));
-		const b = q.run(gate("b", 1));
+		const a = q.run(task("a", true));
+		const b = q.run(task("b"));
+		await Promise.resolve();
+		await Promise.resolve();
+		// Only the first has started while it is running.
+		expect(log).toEqual(["a:start"]);
+		releases[0]!();
 		await expect(a).rejects.toThrow("a");
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(log).toEqual(["a:start", "a:end", "b:start"]);
+		releases[1]!();
 		await expect(b).resolves.toBe("b");
 		expect(log).toEqual(["a:start", "a:end", "b:start", "b:end"]);
 	});

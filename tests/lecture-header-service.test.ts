@@ -27,7 +27,7 @@ const entry: ClassEntry = { id: "a", course: "Analysis 1", day: 1, start: "09:00
 describe("lecture header service: undo and redo are never a new page", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
-		vi.stubGlobal("window", globalThis);
+		vi.stubGlobal("window", { setTimeout, clearTimeout, navigator: {} });
 	});
 	afterEach(() => {
 		vi.useRealTimers();

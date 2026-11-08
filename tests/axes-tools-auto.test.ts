@@ -31,7 +31,7 @@ function ell(): Point[] {
 describe("axes tools: automatic conversion timer", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
-		vi.stubGlobal("window", globalThis);
+		vi.stubGlobal("window", { setTimeout, clearTimeout, navigator: {} });
 	});
 	afterEach(() => {
 		writing.reset();

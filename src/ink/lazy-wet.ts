@@ -38,7 +38,7 @@ export class LazyWet<T> {
 	idle(): void {
 		if (this.item === null) return;
 		this.cancel();
-		const set = this.o.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+		const set = this.o.setTimer ?? ((fn, ms) => window.setTimeout(fn, ms));
 		this.timer = set(() => {
 			this.timer = null;
 			const item = this.item;
@@ -54,7 +54,7 @@ export class LazyWet<T> {
 
 	cancel(): void {
 		if (this.timer === null) return;
-		(this.o.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>)))(this.timer);
+		(this.o.clearTimer ?? ((h) => window.clearTimeout(h as number)))(this.timer);
 		this.timer = null;
 	}
 

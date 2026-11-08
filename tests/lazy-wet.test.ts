@@ -6,8 +6,14 @@ import { Renderer } from "../src/ink/renderer";
 
 // Review fix (D4): the marker's full-viewport wet canvas exists only around marker strokes.
 describe("lazy wet canvas", () => {
-	beforeEach(() => vi.useFakeTimers());
-	afterEach(() => vi.useRealTimers());
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.stubGlobal("window", { setTimeout, clearTimeout, navigator: {} });
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.unstubAllGlobals();
+	});
 
 	function make() {
 		const live = new Set<number>();
@@ -77,7 +83,7 @@ describe("lazy wet canvas", () => {
 
 // Review fix (D6): the colour filter dims the marker's ink like every other ink.
 describe("setInk and the colour-meaning dimming", () => {
-	const setInk = (Renderer.prototype as unknown as { setInk(this: object, ctx: object, tool: string, color: string): void }).setInk;
+	const setInk = (Renderer.prototype as unknown as { setInk: (this: object, ctx: object, tool: string, color: string) => void }).setInk;
 	const draw = (tool: string, dimNow: boolean, night = false) => {
 		const ctx = { fillStyle: "", globalAlpha: 1, globalCompositeOperation: "source-over" };
 		setInk.call({ inkColor: (_t: string, c: string) => c, dimNow, night }, ctx, tool, "#112233");

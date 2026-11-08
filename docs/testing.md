@@ -3388,6 +3388,21 @@ Implemented, not verified on hardware. No format change. Reference screenshots a
 |---|---|---|---|---|---|
 | Instant axes (#206): an L or a + (two lines) offered as axes, ticks from the page spacing, number labels, one group, one undo step; insert from the sheet; settings | yes | `tests/axes.test.ts` (L / + classification, tick placement, labels, group ids); harness scenario `axes` | | | offer after a real S Pen stroke on hardware |
 
+### 0.22 — review fixes: data and interface (D1-D10, floating pills)
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Lecture header (Automatic) only on a page created by a forward edit: Undo / Redo never adds one, the redo stack stays | yes | service with a fake host, add / undo / redo / delete / undo: `tests/lecture-header-service.test.ts`; harness `doc=lecthead` | | | |
+| An unknown tool name is read as a pen and counted; the strict write and check still refuse it | yes | `tests/serialize.test.ts`, `tests/model-v20.test.ts` | | | the original name is rewritten as `pen` on the next save (a backup is made first) |
+| Style eyedropper: a ballpoint or shape stroke selects the ballpoint and the default nib | yes | `tests/colour.test.ts`, `tests/pens-ui.test.ts` | | | |
+| Marker wet canvas allocated at the first marker stroke, released after 4 s idle, never kept for other pens | yes | lifecycle and allocation counts: `tests/lazy-wet.test.ts`; golden hashes of the old pens unchanged: `tests/pens-golden.test.ts` | | | first marker stroke after a release allocates one canvas (about 16-20 MB on a 2560 x 1600 tablet): latency not measured on a tablet |
+| Colour-meaning dimming multiplies into the marker's alpha | yes | `tests/lazy-wet.test.ts` (setInk) | | | |
+| Axes (Automatic): the 450 ms wait is dropped by the next contact, a scroll, a page change; never converts under the pen | yes | `tests/axes-tools-auto.test.ts` | | | |
+| Digest by colour: the write re-reads the note and asks before appending to a note whose markers vanished | yes | `tests/colour-meaning.test.ts` (`replaceMeaningSectionChecked`) | | | the modal itself is shown by the real view only |
+| Meanings sidecar keeps unknown legend fields and unreadable entries on rewrite until the legend is edited | yes | `tests/colour-meaning.test.ts` | | | |
+| Cover: applies run one at a time; a picture in use is never trashed by a failed apply | yes | `tests/cover-assets.test.ts` | | | other closed notebooks that use the same picture are not scanned (only the notebooks read this session and the open ones) |
+| Floating pills never overlap (tablet, phone): lecture chip shifts the top pieces, contextual bar lifts the bottom-left ones, a minimap parked bottom left pushes the pill and chip right | yes | `tests/dock-metrics.test.ts`; harness `doc=pillstack` (all pieces at once, bounds, pairwise overlap, list opened) | | | not tried on Android; a selection with several restyle rows makes the bar taller (it is measured, not assumed) |
+
 ### 0.22 — lecthead (automatic lecture header, #210; steps 2180-2199)
 
 Manual steps (real Obsidian; nothing here is verified on Android). You need a class in the timetable for today that is on now and linked to the notebook (or unlinked, with a notebook named like the course), with a lecturer and a room.
