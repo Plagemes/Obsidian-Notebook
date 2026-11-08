@@ -2,10 +2,21 @@
  * 0.22 (roadmap #126): what the cloud sync engine and its settings need from the providers' sign-in (implemented by the
  * providers in `src/sync/auth/` and `src/sync/providers/`). Pure types and a stub: no `obsidian` import.
  *
- * Until the providers are wired in, the plugin uses `NO_SYNC_AUTH`: every provider reports itself as not available, so the
- * settings show a note instead of a "Sign in" button (no control that does nothing).
+ * The plugin plugs the real one in at load (`auth/obsidian-auth.ts` over `auth-adapter.ts`). Until then, and in tests that need no
+ * providers, it uses `NO_SYNC_AUTH`: every provider reports itself as not available, so the settings show a note instead of a
+ * "Sign in" button (no control that does nothing).
  */
 import type { CloudProvider, ProviderId } from "./provider-types";
+
+/**
+ * Device-local storage keys of the cloud sync (Obsidian's `app.loadLocalStorage`: per vault and per device, never in the vault
+ * and never in the synced plugin settings). The sign-in state (tokens, cloud folder) is `AUTH_KEY` in auth/token-store.ts.
+ * Google's client secret lives ONLY under `cloudSecretKey`: the settings field edits it, and `auth-adapter.ts` keeps it out of the
+ * sign-in blob and merges it back in when a provider is created.
+ */
+export const cloudSecretKey = (p: ProviderId): string => `notebook-cloud-sync-secret-${p}`;
+/** The account label (e-mail or name) shown in the settings, as `{provider, label}`. */
+export const CLOUD_ACCOUNT_KEY = "notebook-cloud-sync-account";
 
 /** The user's own OAuth client: the id (same on every device) and, for Google, the secret (device-local). */
 export interface CloudClient {

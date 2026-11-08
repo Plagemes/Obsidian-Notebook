@@ -94,14 +94,15 @@ export class AxesTools {
 		this.prev = strokes.length === 1 && !stroke.hidden ? { pageId: page.id, strokeId: stroke.id, at: Date.now() } : null;
 		const mode = this.host.settings().axesDraw;
 		if (mode === "off" || strokes.length !== 1 || !this.host.editable()) return;
-		if (stroke.hidden || stroke.tool === "highlighter" || this.ignored >= MAX_IGNORED) return;
+		// The highlighter and the marker are marking tools: an L or a cross drawn with them is not turned into thin axes.
+		if (stroke.hidden || stroke.tool === "highlighter" || stroke.tool === "marker" || this.ignored >= MAX_IGNORED) return;
 		const index = page.strokes.indexOf(stroke);
 		if (index < 0) return;
 		let spec = axesFromL(stroke.points);
 		let ids = [stroke.id];
 		if (!spec && prev && prev.pageId === page.id && Date.now() - prev.at <= CROSS_MS) {
 			const before = page.strokes[index - 1];
-			if (before && before.id === prev.strokeId && !before.hidden && before.tool !== "highlighter") {
+			if (before && before.id === prev.strokeId && !before.hidden && before.tool !== "highlighter" && before.tool !== "marker") {
 				spec = axesFromCross(before.points, stroke.points);
 				ids = [before.id, stroke.id];
 			}

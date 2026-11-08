@@ -62,7 +62,7 @@ import {
 import { pageContentCommand } from "../model/page-content";
 import { checkContent, freezeStroke } from "../model/serialize";
 import {
-	DEFAULT_META, isNewPen, PAPER_SPACING,
+	DEFAULT_META, isLinePen, isNewPen, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
 	type PaperKind, type Point, type Stroke, type TextElement, type Tool, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
@@ -5278,7 +5278,7 @@ export class NotebookView extends FileView {
 	private updateGhostLines(pageIndex: number, page: Page, tool: Tool): void {
 		const renderer = this.renderer;
 		const mode = this.host.settings.ghostLines;
-		if (!renderer || tool !== "pen") return;
+		if (!renderer || !isLinePen(tool)) return;
 		if (!ghostApplies(mode, page.paper.kind)) {
 			renderer.setGhost(null);
 			return;
@@ -5286,7 +5286,7 @@ export class NotebookView extends FileView {
 		const boxes: GhostBox[] = [];
 		for (let i = page.strokes.length - 1; i >= 0 && boxes.length < GHOST_MAX_STROKES; i--) {
 			const s = page.strokes[i]!;
-			if (s.tool === "pen" && !s.hidden) boxes.push(renderer.boundsOf(s));
+			if (isLinePen(s.tool) && !s.hidden) boxes.push(renderer.boundsOf(s));
 		}
 		boxes.reverse();
 		const lines = inferGhostLines(boxes, ghostSpacingPt(this.host.settings.ghostSpacing));
@@ -5299,7 +5299,7 @@ export class NotebookView extends FileView {
 	 * crosses, as one undo step, and the scribble itself is not kept. Returns true when it did.
 	 */
 	private eraseByScribble(active: ActiveStroke, page: Page): boolean {
-		if (!this.host.settings.scribbleErase || active.stroke.tool !== "pen" || active.snap || active.recognized || !this.renderer) return false;
+		if (!this.host.settings.scribbleErase || !isLinePen(active.stroke.tool) || active.snap || active.recognized || !this.renderer) return false;
 		const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
 		// v8: hidden ink (the solutions) is never scratched out while it is not shown.
 		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf, {}, this.markers?.isRevealed(page) ?? false);

@@ -13,7 +13,7 @@ import type { MessageKey } from "../i18n/en";
 import type { NotebookSettings } from "../settings";
 import { whenIdle } from "../storage/idle";
 import { showErrorNotice, showNotice } from "../view/notice";
-import { NO_SYNC_AUTH, type SyncAuthUI } from "./auth-ui";
+import { cloudSecretKey, NO_SYNC_AUTH, type SyncAuthUI } from "./auth-ui";
 import { runSync, type SyncOutcome, type SyncResult } from "./engine";
 import { sha256Hex } from "./hash";
 import { networkVerdict, type NetworkVerdict } from "./network";
@@ -49,9 +49,6 @@ export interface CloudSyncDeps {
 	confirmDeletes?: (items: SyncResult["heldDeletes"], decide: (choice: "delete" | "keep" | null) => void) => void;
 	confirmLarge?: (items: SyncResult["askLarge"], limitMb: number, decide: (choice: "sync" | "skip" | null) => void) => void;
 }
-
-/** Local-storage key of the client secret of `p` (device-local, see CloudSyncService.clientSecret). */
-const secretKey = (p: ProviderId): string => `notebook-cloud-sync-secret-${p}`;
 
 /** Local date and time as a short text. */
 function whenText(at: number): string {
@@ -191,10 +188,12 @@ export class CloudSyncService {
 		if (!p) return t("cloudSync.status.off");
 		if (!this.auth.available(p)) return t("cloudSync.account.unavailable", { provider: providerName(p) });
 		if (!this.auth.isSignedIn(p)) return t("cloudSync.account.signedOut");
-		return t("cloudSync.account.signedIn", {
+		const line = t("cloudSync.account.signedIn", {
 			account: this.auth.accountLabel(p) ?? t("cloudSync.account.unknown"),
 			folder: this.auth.rootLabel(p) ?? t("cloudSync.account.noFolder"),
 		});
+		// Google's drive.file scope only sees what the same OAuth client created: every device must use the same client ID.
+		return p === "gdrive" ? `${line} ${t("cloudSync.account.gdriveNote")}` : line;
 	}
 
 	/** The status line under "Sync now". */
@@ -417,7 +416,7 @@ export class CloudSyncService {
 	/** The Google client secret kept on this device only (local storage, never in the synced settings); "" when none. */
 	clientSecret(p: ProviderId): string {
 		try {
-			const v: unknown = this.d.app.loadLocalStorage(secretKey(p));
+			const v: unknown = this.d.app.loadLocalStorage(cloudSecretKey(p));
 			return typeof v === "string" ? v : "";
 		} catch {
 			return "";
@@ -426,7 +425,7 @@ export class CloudSyncService {
 
 	setClientSecret(p: ProviderId, value: string): void {
 		try {
-			this.d.app.saveLocalStorage(secretKey(p), value.trim() || null);
+			this.d.app.saveLocalStorage(cloudSecretKey(p), value.trim() || null);
 		} catch (e) {
 			console.error("[notebook] could not store the client secret", e);
 		}

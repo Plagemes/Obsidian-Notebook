@@ -62,6 +62,7 @@ import { registerResilience, type ResilienceServices } from "./view/resilience";
 import { PdfCopyService } from "./storage/pdf-copy-service";
 import { PdfCopyStore } from "./storage/pdf-copy-store";
 import { BackupService } from "./storage/backup-service";
+import { obsidianSyncAuth } from "./sync/auth/obsidian-auth";
 import { CloudSyncService } from "./sync/sync-service";
 import { CloudDeletesModal, CloudLargeModal } from "./view/cloud-sync-modals";
 
@@ -202,6 +203,8 @@ export default class NotebookPlugin extends Plugin {
 				confirmDeletes: (items, decide) => new CloudDeletesModal(this.app, items, decide).open(),
 				confirmLarge: (items, limit, decide) => new CloudLargeModal(this.app, items, limit, decide).open(),
 			});
+			// The providers' sign-in (device code, Google Drive / OneDrive) over the device-local token store.
+			this.cloudSync.setAuth(obsidianSyncAuth(this.app));
 			this.cloudSync.register(this);
 		});
 		// 0.17 (#23): the PDF copy of a notebook, kept up to date in the background when the reader asks for it.

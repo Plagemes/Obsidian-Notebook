@@ -63,6 +63,14 @@ export function isNibPen(tool: Tool): boolean {
 export function isWritingPen(tool: Tool): boolean {
 	return tool === "pen" || tool === "fountain" || tool === "brush" || tool === "marker";
 }
+/**
+ * v20: the pens whose strokes are lines of handwriting for the features that read writing as lines (ghost guide lines, scribble
+ * to erase): the pen, the fountain pen and the brush. The marker is a highlighting tool even though it is drawn in stroke order,
+ * so a marker zig-zag over ink never erases it and marking does not move the guides.
+ */
+export function isLinePen(tool: Tool): boolean {
+	return tool === "pen" || tool === "fountain" || tool === "brush";
+}
 /** v20: nib angle, whole degrees in [0, 179] (the nib is a line: 180° is the same as 0°), counter-clockwise on the page; absent = 45. */
 export const NIB_DEFAULT = 45;
 export const NIB_MAX = 179;

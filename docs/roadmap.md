@@ -286,7 +286,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 125. **P1** 🧪 Last position shared across devices: reopen on the phone at the page you were on with the tablet (stored in the notebook, so it travels with the sync).
 
 ### F. Sync and storage
-126. **P1** Optional Google Drive / OneDrive connector inside the plugin (opt-in only), configurable scope: the whole vault, only selected folders, or include/exclude rules (patterns, file types, size limits). When to sync: on open, on close, on an interval or manually; "Wi-Fi only" option; rules for large files. Conflicts merged with #122; never a mandatory cloud.
+126. **P1** 🧪 Optional Google Drive / OneDrive connector inside the plugin (opt-in only), configurable scope: the whole vault, only selected folders, or include/exclude rules (patterns, file types, size limits). When to sync: on open, on close, on an interval or manually; "Wi-Fi only" option; rules for large files. Conflicts merged with #122; never a mandatory cloud.
 127. **P2** 🧪 Scheduled backups (0.21): a zip of every notebook, its assets and sidecars into a vault folder, daily or weekly or on demand, keeping the last N (a folder outside the vault or Drive is left to the user's own sync tool; a Drive connector is #126).
 128. **P2** 🧪 Storage manager: size of each notebook, duplicate or unused assets, downscaling of heavy images.
 
