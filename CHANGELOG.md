@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### clipimage
+- **Copy as image (#277).** *Copy as image* puts the selection, or the written area of the page, on the system clipboard as a picture to paste into messaging, mail and other apps. It is the last button of the selection bar's second row (from tablet width; on a phone bar it is in the All actions sheet) and *Copy written area as image* is in the page menu and the sheet. The picture is the transparent area export drawn at 2x, with a pixel cap for very large areas, painted onto white by default (new setting *Background of copied pictures*: White or Transparent, for apps that show transparency as black).
+- **Never silent.** Where the WebView has no image clipboard the PNG goes to the system share sheet; where that is missing too, a PNG is saved next to the notebook (recorded as written by the plugin). Every outcome shows a notice, and closing the share sheet is not an error. No format change.
+- **Code.** Pure decisions (size cap, routes, fallback order) in `src/ink/clip-image.ts`; drawing and delivery in `src/view/copy-image.ts`, reusing the area export's plan and renderer; English and Italian; long-press help; harness `doc=clipimage`.
+
 ## 0.24.0 — 2026-11-08
 
 Eight features: filled shapes and dashed or dotted lines, joining of broken strokes, a context-ordered actions sheet, explanations on long press of an icon, tag suggestions, an adaptive page navigator, global bookmarks across notebooks and a hand-in dialog. The notebook format moves to version 22 (filled shapes and dashed or dotted lines): the migration from version 21 is automatic, and 0.23 and older open a v22 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

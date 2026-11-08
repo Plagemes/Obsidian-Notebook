@@ -429,6 +429,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"export-area": (v) => v.openAreaExport("page"),
 	"hand-in": (v) => v.openHandIn(),
 	"selection-export-area": (v) => v.openAreaExport("selection"),
+	"selection-copy-image": (v) => v.copyAsImage("selection"),
+	"page-copy-image": (v) => v.copyAsImage("page"),
 	"print": (v) => {
 		if (canPrint()) v.openExportDialog(undefined, "print");
 		else showNotice(t("export.print.unavailable"), 8000);

@@ -516,7 +516,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 274. **P3** Android home-screen shortcut to the last notebook or page.
 275. **P3** S Pen buttons and Air actions to turn pages in presentation mode (to verify whether the WebView receives them).
 276. **P3** Graphics tablets on Windows: buttons, pressure, tilt.
-277. **P2** Copy to the system clipboard as an image, to paste into messaging, mail and other apps.
+277. **P2** 🧪 Copy to the system clipboard as an image, to paste into messaging, mail and other apps. (0.25: *Copy as image* on the selection bar's second row and in the page menu; 2x PNG capped in size, white or transparent background by a setting; falls back to the share sheet and then to a saved PNG, always with a notice.)
 
 ### Paper ↔ digital and exports
 278. **P2** Paper round trip: print pages with a code, write on paper, scan it and it returns to the right page of the notebook.

@@ -3809,3 +3809,22 @@ Manual steps (real Obsidian; nothing here is verified on Android). Use a noteboo
 | Hand in…: page grid with checkboxes, cover fields (name remembered per device, course from the timetable, title, date) | yes | page choice, cover layout and its PDF: `tests/hand-in.test.ts`; harness `doc=handin` (real dialog, remembered name, grid) | | | the page panel's own multi-selection is not read yet: the dialog starts on the page in view |
 | Pre-flight: blank pages, open gaps/questions/homework, unticked checkboxes, TODO notes, empty template boxes, with links to fix and "export anyway" | yes | `tests/hand-in.test.ts`; harness `doc=handin` (rows, leave out, link) | | | |
 | PDF with generated cover first, saved next to the notebook under a free name, recorded as plugin-written, optional share sheet | yes | harness `doc=handin` (written through a stand-in vault, second export `hand-in 2.pdf`, cover plus chosen pages) | | | share sheet depends on the WebView |
+
+### 0.25 — clipimage
+
+Roadmap #277: Copy as image. Needs a real device; the harness (`doc=clipimage`) only stands in for the clipboard and the share sheet.
+
+2700. **Selection bar.** Select some ink with the lasso on a tablet. The second row ends with *Copy as image*. Tap it: a notice says the picture was copied. Paste into a chat or mail app: the selection appears on a white background.
+2701. **Page menu.** From the notebook menu or the All actions sheet choose *Copy written area as image* with nothing selected: the written area of the page (with a small margin, no paper) is on the clipboard. Paste it.
+2702. **Setting.** Settings, Integration, *Background of copied pictures*: set it to Transparent and copy again; paste into an app that shows transparency (e.g. a note app with a dark page): the ink has no white box. Back to White: it has.
+2703. **No image clipboard.** On a device or WebView that cannot copy pictures, the same action opens the system share sheet with the PNG, after a notice. Close the sheet without sharing: a notice says nothing was copied and no file is written.
+2704. **No clipboard and no share sheet.** A PNG is saved next to the notebook and the notice gives its path.
+2705. **Large area.** Select a very large area (several A4 pages tall on an infinite page): the picture is still copied, drawn a little smaller, and the notice says so.
+2706. **Empty.** On an empty page the action says there is nothing written, and copies nothing.
+2707. **Phone.** On a phone-width bar the button is not on the bar but is in the All actions sheet (long press on the bar's icons shows its explanation on tablets).
+2708. **Italian.** Switch to Italian: all texts are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Copy as image: written area / selection to the system clipboard as a PNG (2x, size capped), white or transparent background (setting, default white) | yes | size cap, routes and fallback order, action registry: `tests/clip-image.test.ts`, `tests/selection-arrange.test.ts`; harness `doc=clipimage` (stand-in clipboard: opaque and transparent corner) | | | image clipboard depends on the WebView (`ClipboardItem`) |
+| Fallback when the device has no image clipboard: share sheet with the PNG, then a saved PNG, always with a notice | yes | route order: `tests/clip-image.test.ts`; harness `doc=clipimage` (share, refused clipboard, saved copy, closed share sheet) | | | share sheet depends on the WebView |

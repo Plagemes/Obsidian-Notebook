@@ -4635,6 +4635,24 @@ export const en = {
 	"handIn.export": "Export PDF",
 	"handIn.exportAnyway": "Export anyway",
 	"handIn.fixHint": "The dialog closes when you go to a page; open it again from the notebook menu when you are done.",
+	// 0.25 clipimage
+	"clipImage.page": "Copy written area as image",
+	"clipImage.selection": "Copy as image",
+	"command.clipImagePage": "Copy the written area to the clipboard as an image",
+	"command.clipImageSelection": "Copy the selection to the clipboard as an image",
+	"help.clipImagePage": "Copy what is written on this page as a picture, ready to paste into a chat or an email.",
+	"help.clipImageSelection": "Copy the selection as a picture, ready to paste into a chat or an email.",
+	"clipImage.copied": "Picture copied. Paste it into any app.",
+	"clipImage.copiedSmaller": "Picture copied, drawn a little smaller because the area is large. Paste it into any app.",
+	"clipImage.shared": "Picture sent to the share sheet.",
+	"clipImage.saved": "This device cannot copy pictures, so a PNG was saved: {path}",
+	"clipImage.cancelled": "Sharing cancelled. Nothing was copied.",
+	"clipImage.fallback": "Could not copy the picture ({error}). Trying another way.",
+	"clipImage.failed": "Could not copy the picture: {error}",
+	"settings.clipImageBackground": "Background of copied pictures",
+	"settings.clipImageBackground.desc": "Copy as image. White suits apps that show transparency as black.",
+	"settings.clipImageBackground.white": "White",
+	"settings.clipImageBackground.transparent": "Transparent",
 } as const;
 
 export type MessageKey = keyof typeof en;

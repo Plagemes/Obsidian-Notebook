@@ -38,6 +38,7 @@ import { DEFAULT_CLOUD_SYNC_SETTINGS, readCloudSyncSettings, type CloudSyncSetti
 import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 import { normalizeIndexPrefix } from "./model/book-index";
 import { clampSymbolCount } from "./ui/symbol-rank";
+import { isClipBackground, type ClipBackground } from "./ink/clip-image";
 import { isPenKind, normaliseNib, type PenKind } from "./ink/pen-kinds";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
@@ -268,6 +269,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	headerTitle: boolean;
 	headerAlign: HeaderAlign;
 	headerInExport: boolean;
+	/** 0.25 (#277): background of "Copy as image": white (apps that show transparency as black) or transparent. */
+	clipImageBackground: ClipBackground;
 	/** 0.21 (#217): show when a page was written (its start and end time) in the header line and on the notebook map. */
 	headerPageTimes: boolean;
 	// wave 0.10: clipboard and stamps
@@ -421,6 +424,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	headerTitle: false,
 	headerAlign: "centre",
 	headerInExport: true,
+	clipImageBackground: "white",
 	headerPageTimes: true,
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
 	signDateMode: DEFAULT_SIGN_DATE_MODE,
@@ -580,6 +584,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.commentsInPdf === "boolean") s.commentsInPdf = d.commentsInPdf;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
+	if (isClipBackground(d.clipImageBackground)) s.clipImageBackground = d.clipImageBackground;
 	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport", "headerPageTimes"] as const) if (typeof d[k] === "boolean") s[k] = d[k];
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	if (isSignDateMode(d.signDateMode)) s.signDateMode = d.signDateMode;

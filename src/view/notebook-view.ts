@@ -80,7 +80,8 @@ import { backupFolder, readSettings, type NotebookSettings } from "../settings";
 import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-markdown";
 import { MakeTaskModal, runMakeTask, type TaskRequest } from "./selection-task";
 import { runInsertIntoNote } from "./selection-insert";
-import { AreaExportModal } from "./export-area";
+import { AreaExportModal, type AreaHost } from "./export-area";
+import { copyAsImage } from "./copy-image";
 import { HandInModal } from "./hand-in";
 import { suggestedCourse } from "../timetable/current";
 import { taskCropRect } from "../model/selection-task";
@@ -2175,23 +2176,38 @@ export class NotebookView extends FileView {
 
 	/** 0.23 (#280): the dialog that exports the written area of the current page, or the selection, as a transparent PNG or SVG. */
 	openAreaExport(scope: "page" | "selection"): void {
+		const made = this.areaHostFor(scope);
+		if (made) new AreaExportModal(made.host, { scope: made.scope }).open();
+	}
+
+	/** 0.25 (#277): Copy as image: the written area of the current page, or the selection, on the system clipboard. */
+	copyAsImage(scope: "page" | "selection"): void {
+		const made = this.areaHostFor(scope);
+		if (made) void copyAsImage(made.host, made.scope, this.host.settings.clipImageBackground);
+	}
+
+	/** The host of the area export and of Copy as image; the selection counts only when this view has one. */
+	private areaHostFor(scope: "page" | "selection"): { host: AreaHost; scope: "page" | "selection" } | null {
 		const doc = this.session?.doc;
 		const file = this.file;
-		if (!doc || !file) return;
+		if (!doc || !file) return null;
 		const sel = this.selection;
 		const useSel = !!sel && !this.statesTools?.ownsSelection(sel) && sel.strokes.length + sel.elements.length > 0;
 		const pageIndex = useSel && sel ? sel.pageIndex : this.currentPageIndex();
 		const shown = this.renderPagesOf(doc)[pageIndex];
-		if (!shown) return;
+		if (!shown) return null;
 		const options = this.exportOptions();
-		new AreaExportModal({
-			app: this.app, file, page: shown, pageNumber: pageIndex + 1, media: this.media, exportOptions: options,
-			selection: useSel && sel ? { strokes: sel.strokes, elements: sel.elements } : null,
-			render: {
-				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
-				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+		return {
+			scope: scope === "selection" && useSel ? "selection" : "page",
+			host: {
+				app: this.app, file, page: shown, pageNumber: pageIndex + 1, media: this.media, exportOptions: options,
+				selection: useSel && sel ? { strokes: sel.strokes, elements: sel.elements } : null,
+				render: {
+					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				},
 			},
-		}, { scope: scope === "selection" && useSel ? "selection" : "page" }).open();
+		};
 	}
 
 	/** 0.24 (#334): "Hand in…": pages as a PDF with a cover, after a check for blank pages and open placeholders. */
