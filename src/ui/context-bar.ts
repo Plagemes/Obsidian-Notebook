@@ -5,6 +5,7 @@ import { setIcon } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import { actionById, isChecked, isEnabled, type ContextKind, type UiContext } from "./actions";
 import { actionLabel } from "./action-sheet";
+import { attachLongPressHelp } from "./long-press-help";
 import { CTX_LIFT_VAR, contextLift, publish, watchBox } from "./dock-metrics";
 import type { ContextBarPlan } from "./layout";
 
@@ -53,7 +54,10 @@ export class ContextBar {
 		this.secondEl = this.extraEl.createDiv({ cls: "notebook-context-second notebook-hidden", attr: { role: "toolbar" } });
 		// The pieces that share the bottom of the page area stand above this bar (dock-metrics.ts).
 		this.stopWatch = watchBox(this.el, () => publish(parent, CTX_LIFT_VAR, contextLift(this.el.offsetHeight)));
+		this.stopHelp = attachLongPressHelp(this.el); // 0.24 iconhelp (#429)
 	}
+
+	private readonly stopHelp: () => void;
 
 	/** The context shown now (null: hidden). */
 	get kind(): ContextKind | null {
@@ -62,6 +66,7 @@ export class ContextBar {
 
 	destroy(): void {
 		this.stopWatch();
+		this.stopHelp();
 		publish(this.el.parentElement, CTX_LIFT_VAR, 0);
 		this.el.remove();
 	}

@@ -297,6 +297,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	userName: string;
 	/** 0.13: just-in-time tips (roadmap 425): a short tip the first time a situation occurs. */
 	hintsEnabled: boolean;
+	/** 0.24 iconhelp (#429): a finger held on a toolbar, bar or Home icon shows what it does. */
+	iconHelp: boolean;
 	/** The tips already shown (ids), so each appears once. Not shown in the settings tab; "Show tips again" clears it. */
 	hintsSeen: HintId[];
 	// 0.14 slides
@@ -431,6 +433,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	appearanceStyle: "notebook",
 	userName: "",
 	hintsEnabled: true,
+	iconHelp: true,
 	hintsSeen: [],
 	// 0.14 slides
 	slideInkLink: true,
@@ -588,6 +591,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
 	if (typeof d.hintsEnabled === "boolean") s.hintsEnabled = d.hintsEnabled;
+	if (typeof d.iconHelp === "boolean") s.iconHelp = d.iconHelp;
 	s.hintsSeen = normaliseSeen(d.hintsSeen);
 	// 0.14 slides
 	if (typeof d.slideInkLink === "boolean") s.slideInkLink = d.slideInkLink;

@@ -1,3 +1,4 @@
+import { setLongPressHelpEnabled } from "./ui/long-press-help";
 import { trackWriting } from "./view/writing-quiet";
 import { registerHints } from "./ui/hints";
 import { showNotice } from "./view/notice";
@@ -114,6 +115,7 @@ export default class NotebookPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		this.settings = await this.readStoredSettings();
+		setLongPressHelpEnabled(this.settings.iconHelp);
 		// Command names (below) are registered once, so they follow the language at startup.
 		this.step("language", () => setUiLanguage(this.settings.uiLanguage));
 		// 0.13 polish: the picture cache (IndexedDB) is per vault; IndexedDB itself is shared by every vault on the device.
@@ -426,6 +428,7 @@ export default class NotebookPlugin extends Plugin {
 		if (this.settingsUnreadable) showNotice(t("notice.settingsNotSaved"));
 		else await this.saveData(this.settings);
 		this.applyAppearanceStyle();
+		setLongPressHelpEnabled(this.settings.iconHelp);
 		for (const view of this.views()) view.applySettings(this.settings);
 	}
 

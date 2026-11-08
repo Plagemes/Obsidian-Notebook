@@ -94,7 +94,7 @@ export class InboxBell {
 
 	/** The bell button with its badge, in the header tools (redrawn with the header). */
 	mount(parent: HTMLElement): void {
-		const b = iconButton(parent, "bell", t("bell.labelNone"), () => (this.pop ? this.close() : this.openPopover()), "nb-bell");
+		const b = iconButton(parent, "bell", t("bell.labelNone"), () => (this.pop ? this.close() : this.openPopover()), "nb-bell", "help.home.bell");
 		b.setAttribute("aria-haspopup", "dialog");
 		b.setAttribute("aria-expanded", String(!!this.pop));
 		b.createSpan({ cls: "nb-badge", attr: { "aria-hidden": "true" } });

@@ -1,5 +1,7 @@
 import { setIcon } from "obsidian";
 import { attachPinGesture, type PinGesture } from "../ui/pin-gesture";
+import { attachLongPressHelp } from "../ui/long-press-help";
+import { TOOL_HELP } from "../ui/help-text";
 import { listenDismiss, releaseSwallowed } from "../ui/dismiss";
 import { t, type MessageKey } from "../i18n";
 import { ERASE_FILTER_KINDS, type EraseFilterKind } from "../ink/erase-filter";
@@ -208,14 +210,17 @@ export class Toolbar {
 		const toolsRow = this.el.createDiv({ cls: "notebook-toolbar-row notebook-toolbar-tools" });
 		this.navigatorButton = this.iconButton(toolsRow, "panel-left", "tool.pages", () => this.actions.toggleNavigator());
 		this.navigatorButton.setAttribute("aria-pressed", "false");
+		this.navigatorButton.dataset.action = "toggle-pages-panel";
 		toolsRow.createDiv({ cls: "notebook-toolbar-divider", attr: { "aria-hidden": "true" } });
 		const toolGroup = toolsRow.createDiv({ cls: "notebook-toolbar-group notebook-tool-group", attr: { role: "group", "aria-label": t("ui.group.tool") } });
 		for (const [tool, icon, label] of TOOL_DEFS) {
 			const b = this.iconButton(toolGroup, icon, label, () => this.onToolTap(tool));
 			b.addClass("notebook-tool-button");
+			b.dataset.help = TOOL_HELP[tool]!; // 0.24 iconhelp (#429): the long-press explanation
 			if (TOOLS_WITH_OPTIONS.has(tool)) {
 				b.addClass("has-options");
 				b.setAttribute("aria-haspopup", "true");
+				b.dataset.helpHint = "help.hint.options";
 			}
 			this.toolButtons.set(tool, b);
 		}
@@ -224,6 +229,8 @@ export class Toolbar {
 		const history = actionsRow.createDiv({ cls: "notebook-toolbar-group", attr: { role: "group", "aria-label": t("ui.group.history") } });
 		this.undoButton = this.iconButton(history, "undo", "tool.undo", () => this.actions.undo());
 		this.redoButton = this.iconButton(history, "redo", "tool.redo", () => this.actions.redo());
+		this.undoButton.dataset.action = "undo";
+		this.redoButton.dataset.action = "redo";
 		actionsRow.createDiv({ cls: "notebook-toolbar-divider", attr: { "aria-hidden": "true" } });
 
 		// wave 0.10 (51): while read-only mode is on this button takes the place of the pen indicator and the favourite pens;
@@ -236,6 +243,7 @@ export class Toolbar {
 
 		this.chipButton = this.button(actionsRow, t("toolbar.options"), () => this.togglePopover("options"));
 		this.chipButton.addClass("notebook-chip");
+		this.chipButton.dataset.help = "help.chip";
 		this.chipButton.setAttribute("aria-haspopup", "true");
 		this.chipDot = this.chipButton.createSpan({ cls: "notebook-chip-dot" });
 		this.chipButton.createSpan({ cls: "notebook-chip-armed", attr: { "aria-hidden": "true" } });
@@ -246,6 +254,7 @@ export class Toolbar {
 		const end = actionsRow.createDiv({ cls: "notebook-toolbar-end" });
 		this.pageButton = end.createEl("button", { cls: "notebook-page-indicator", attr: { type: "button", "aria-haspopup": "dialog", "aria-expanded": "false" } });
 		const quick = this.actions.quickTab ? attachQuickTabGesture(this.pageButton, this.actions.quickTab) : null;
+		if (quick) this.pageButton.dataset.noHelp = ""; // 0.24 iconhelp: it has its own long-press (the quick tab menu)
 		this.pageButton.addEventListener("click", (e) => {
 			e.preventDefault();
 			if (quick?.justOpened()) return;
@@ -318,10 +327,14 @@ export class Toolbar {
 		this.highlighterOptionsEl = this.row(this.optionsEl);
 
 		this.render();
+		this.stopHelp = attachLongPressHelp(this.el); // 0.24 iconhelp (#429)
 	}
+
+	private stopHelp: () => void = () => undefined;
 
 	/** Removes the listeners of an open popover. Call when the view closes. */
 	destroy(): void {
+		this.stopHelp();
 		this.closePopover();
 		releaseSwallowed();
 	}
@@ -377,7 +390,10 @@ export class Toolbar {
 			b.dataset.action = q.id;
 			b.disabled = !q.enabled;
 			b.toggleClass("is-pinned", !!q.pinned);
-			if (this.actions.togglePin) press = attachPinGesture(b, { pinned: () => !!q.pinned, toggle: () => this.actions.togglePin?.(q.id) });
+			if (this.actions.togglePin) {
+				press = attachPinGesture(b, { pinned: () => !!q.pinned, toggle: () => this.actions.togglePin?.(q.id) });
+				b.dataset.noHelp = ""; // 0.24 iconhelp: the long press already opens the pin menu
+			}
 			if (q.checked !== undefined) {
 				b.toggleClass("is-active", q.checked);
 				b.setAttribute("aria-pressed", String(q.checked));
