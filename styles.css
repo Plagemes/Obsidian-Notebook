@@ -18835,3 +18835,46 @@ body.notebook-style-obsidian {
 .nb-ui.nb-eq-card.notebook-eq-editor > * {
 	flex-shrink: 0;
 }
+
+/* ===== 0.23 chembal ===== */
+.nb-ui.nb-chem-modal .nb-chem-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2);
+	max-height: 50vh;
+	overflow-y: auto;
+}
+
+.nb-ui.nb-chem-modal .nb-chem-row {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: var(--nb-space-3);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-surface);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui.nb-chem-modal .nb-chem-row.is-error {
+	border-color: var(--nb-danger);
+}
+
+.nb-ui.nb-chem-modal .nb-chem-before {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+}
+
+.nb-ui.nb-chem-modal .nb-chem-after {
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.nb-ui.nb-chem-modal .nb-chem-problem {
+	color: var(--nb-danger);
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+}

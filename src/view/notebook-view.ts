@@ -184,6 +184,7 @@ import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
 import { AxesTools, type AxesHost } from "./axes-tools";
+import { ChemTools, holdsReaction } from "./chem-tools";
 import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
@@ -477,6 +478,8 @@ export class NotebookView extends FileView {
 	private checklist: ChecklistTools | null = null;
 	/** 0.22 (#206): instant axes (an L or a + drawn by hand, the insert). */
 	private axes: AxesTools | null = null;
+	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
+	private chem: ChemTools | null = null;
 	/** 0.20 (#39): groups and locked elements (Group, Ungroup, Lock, the Unlock chip, the list of locked elements). */
 	private groups: GroupTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
@@ -779,6 +782,7 @@ export class NotebookView extends FileView {
 		this.sticky = new StickyTools(this.stickyHost());
 		this.checklist = new ChecklistTools(this.checklistHost());
 		this.axes = new AxesTools(this.axesHost());
+		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
 		this.penGestures = new PenGestureLayer({
@@ -1167,6 +1171,7 @@ export class NotebookView extends FileView {
 		this.checklist?.destroy();
 		this.axes?.destroy();
 		this.axes = null;
+		this.chem = null;
 		this.checklist = null;
 		this.groups?.destroy();
 		this.groups = null;
@@ -2651,6 +2656,11 @@ export class NotebookView extends FileView {
 		return this.axes;
 	}
 
+	/** 0.23 (#294): balancing of typed chemical reactions (null before the view is open). */
+	get chemTools(): ChemTools | null {
+		return this.chem;
+	}
+
 	/** 0.19 (#103): handwritten checklists of this view (null before the view is open). */
 	get checklistTools(): ChecklistTools | null {
 		return this.checklist;
@@ -3682,6 +3692,7 @@ export class NotebookView extends FileView {
 			elements: elements.length,
 			images: elements.filter((e) => e.type === "image").length,
 			texts: elements.filter((e) => e.type === "text").length,
+			reactions: sel.elements.filter(holdsReaction).length,
 			links: this.penLinks?.linkIn(sel.elements) ? 1 : 0,
 			// The maths actions (Edit, Convert to ink) work on the primary page's elements only (see mathTools).
 			equations: sel.elements.filter((e) => e.type === "equation").length,

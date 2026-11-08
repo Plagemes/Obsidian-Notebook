@@ -26,6 +26,7 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["selection with an image", baseContext({ tool: "lasso", selection: { strokes: 2, elements: 1, images: 1 } })],
 	["selection with a link", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, links: 1 } })],
 	["selection with an equation (wave 0.9: math)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, equations: 1, graphs: 0 } })],
+	["selection with a chemical reaction (0.23 chembal)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, texts: 1, reactions: 1 } })],
 	["selection with an excerpt (v10)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, excerpts: 1 } })],
 	["selection with a sticky note (0.17, #20)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, stickies: 1, stickiesCollapsed: 0 } })],
 	["selection with a collapsed sticky note (0.17, #20)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 0, stickies: 1, stickiesCollapsed: 1 } })],
