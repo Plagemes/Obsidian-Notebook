@@ -1,9 +1,10 @@
 import type { App } from "obsidian";
 import { t } from "../i18n";
 import {
-	normaliseSmartAddStore, parseSmartAddHistory, rankSmartAdd, recordSmartAdd, SMART_ADD_LEGACY_PREFIX, SMART_ADD_STORE_KEY,
+	normaliseSmartAddStore, parseSmartAddHistory, rankSmartAdd, recordSmartAdd, SMART_ADD_LEGACY_PREFIX, SMART_ADD_LIMIT, SMART_ADD_STORE_KEY,
 	type SmartAddChoice, type SmartAddHistoryEntry, type SmartAddInput, type SmartAddStore,
 } from "../model/smart-add";
+import { applyPaperSuggestion, type PaperCandidate, type PaperReason } from "../model/paper-suggest";
 import type { PaperKind } from "../model/types";
 import { chip } from "../ui/components/chip";
 
@@ -24,6 +25,20 @@ export interface SmartAddHost {
 	add(choice: SmartAddChoice): boolean;
 	/** "More…": the full chooser (the page sheet with every way to add a page). */
 	more(): void;
+	/** 0.25 (409): the paper worth highlighting for the next page, or null (off, or nothing to say). Optional: absent in tests. */
+	suggest?(): PaperCandidate | null;
+}
+
+/** 0.25 (409): the short reason of a suggestion, in words ("Like the last 5 pages", "Usual for Analysis"). */
+export function paperReasonText(reason: PaperReason): string {
+	switch (reason.kind) {
+		case "recent": return t("paperSuggest.recent", { n: String(reason.n ?? 0) });
+		case "recentMost": return t("paperSuggest.recentMost", { n: String(reason.n ?? 0) });
+		case "course": return t("paperSuggest.course", { course: reason.course ?? "" });
+		case "notebook": return t("paperSuggest.notebook");
+		case "profile": return t("paperSuggest.profile");
+		default: return t("paperSuggest.pattern");
+	}
 }
 
 /** Roadmap 410: the label and icon of each choice (the paper name for the paper choices). */
@@ -63,7 +78,15 @@ export class SmartAddStrip {
 		const ctx = this.host.context();
 		const id = this.host.notebookId();
 		if (!ctx || !id) return false;
-		this.show(rankSmartAdd({ ...ctx, history: this.history(id) }));
+		const ranked = rankSmartAdd({ ...ctx, history: this.history(id) });
+		let suggestion: PaperCandidate | null = null;
+		try {
+			suggestion = this.host.suggest?.() ?? null;
+		} catch (e) {
+			console.error("[notebook] paper suggestion failed", e);
+		}
+		const made = applyPaperSuggestion<SmartAddChoice>(ranked, suggestion, ctx.paper, SMART_ADD_LIMIT, (paper) => ({ id: "recent-paper", paper, score: 0 }));
+		this.show(made.choices, made.highlight, made.highlight >= 0 && suggestion ? paperReasonText(suggestion.reason) : "");
 		return true;
 	}
 
@@ -78,16 +101,24 @@ export class SmartAddStrip {
 		this.hide();
 	}
 
-	private show(choices: SmartAddChoice[]): void {
+	private show(choices: SmartAddChoice[], highlight = -1, reason = ""): void {
 		const strip = this.host.parent().createDiv({ cls: "nb-ui nb-smart-add", attr: { role: "group", "aria-label": t("smartAdd.aria") } });
 		for (const type of ISOLATED) strip.addEventListener(type, (e) => e.stopPropagation());
 		strip.addEventListener("keydown", (e) => {
 			if (e.key === "Escape") this.hide();
 		});
-		for (const choice of choices) {
+		choices.forEach((choice, i) => {
 			const { label, icon } = smartAddLabel(choice);
-			chip(strip, { label, icon, key: `smart-add:${choice.id}`, onClick: () => this.take(choice) });
-		}
+			const suggested = i === highlight && reason !== "";
+			const b = chip(strip, {
+				label, icon, key: `smart-add:${choice.id}`, active: suggested, title: suggested ? t("paperSuggest.suggested", { reason }) : undefined,
+				onClick: () => this.take(choice),
+			});
+			if (suggested) {
+				b.addClass("nb-smart-suggested");
+				b.createSpan({ cls: "nb-smart-reason", text: reason });
+			}
+		});
 		chip(strip, {
 			label: t("smartAdd.more"), icon: "more-horizontal", key: "smart-add:more",
 			onClick: () => {

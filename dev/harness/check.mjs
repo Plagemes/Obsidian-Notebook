@@ -119,6 +119,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "htmlexport", theme, device, lowLatency: false });
 // 0.23 exportarea (#280): export of the written area or the selection as transparent PNG or SVG (dev/harness/exportarea-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "exportarea", theme, device, lowLatency: false });
+// 0.25 clipimage (#277): Copy as image with its fallbacks (dev/harness/clipimage-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "clipimage", theme, device, lowLatency: false });
 // 0.24 tagsuggest: suggested tags in the tag editors (dev/harness/tagsuggest-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tagsuggest", theme, device, lowLatency: false });
 // 0.24 handin (#334): the Hand in dialog and its cover (dev/harness/handin-check.ts).
@@ -161,16 +163,22 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "slideback", theme, device, lowLatency: false });
 // 0.23 savedviews (#264): saved views (dev/harness/savedviews-check.ts), tablet and phone, light and dark (dist/shots/savedviews-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "savedviews", theme, device, lowLatency: false });
+// 0.25 histpanel (#84): the action history panel (dev/harness/histpanel-check.ts), tablet and phone, light and dark (dist/shots/histpanel-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "histpanel", theme, device, lowLatency: false });
 // 0.22 pagerefs (#179): the chip and list of pages that link here (dev/harness/pagerefs-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "pagerefs", theme, device, lowLatency: false });
 // 0.22 review fix: every floating pill at once, no overlap (dev/harness/pillstack-check.ts), tablet and phone, light and dark (dist/shots/pillstack-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "pillstack", theme, device, lowLatency: false });
 // 0.24 navadapt (#414): the adaptive page navigator (dev/harness/navadapt-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "navadapt", theme, device, lowLatency: false });
+// 0.25 markedview (#419): marked pages only in the page navigator (dev/harness/markedview-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "markedview", theme, device, lowLatency: false });
 // 0.23 welcomeback (#420): the welcome-back card (dev/harness/welcomeback-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "welcomeback", theme, device, lowLatency: false });
 // 0.24 iconhelp (#429): the long-press explanation bubble (dev/harness/iconhelp-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "iconhelp", theme, device, lowLatency: false });
+// 0.25 toolfade (#399): the bars fade while the pen writes (dev/harness/toolfade-check.ts), dist/shots/design/toolfade-*.png.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "toolfade", theme, device, lowLatency: false });
 // 0.22 lecthead (#210): the lecture header (dev/harness/lecthead-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "lecthead", theme, device, lowLatency: false });
 // 0.23 dimcheck (#293): the units hint of the equation editor (dev/harness/dimcheck-check.ts).
@@ -183,8 +191,16 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "hookclean", theme, device, lowLatency: false });
 // 0.24 shapefill (#37): filled shapes and dashed or dotted lines (dev/harness/shapefill-check.ts), tablet and phone, light and dark (dist/shots/shapefill-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "shapefill", theme, device, lowLatency: false });
+// 0.25 areahl (#99): the area highlighter on a PDF page (dev/harness/areahl-check.ts), tablet and phone, light and dark (dist/shots/areahl-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "areahl", theme, device, lowLatency: false });
+// 0.25 baseline (#93): Align to baseline (dev/harness/baseline-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "baseline", theme, device, lowLatency: false });
+// 0.25 papersuggest (#409): suggested paper in the "+" strip (dev/harness/papersuggest-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "papersuggest", theme, device, lowLatency: false });
 // 0.24 strokejoin (#313): join broken strokes (dev/harness/strokejoin-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "strokejoin", theme, device, lowLatency: false });
+// 0.25 profiles (#219): writing profiles chip on the pen options (dev/harness/profiles-check.ts), tablet and phone, light and dark (dist/shots/profiles-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "profiles", theme, device, lowLatency: false });
 // Recent symbols (0.21, #212): the strip, a tapped character and a saved symbol placed pen-sized, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "symbols", theme, device, lowLatency: false });
 // 0.21 backups: scheduled zip backups and their settings rows (dev/harness/backups-check.ts), tablet and phone, dark and light.
@@ -396,11 +412,17 @@ async function main() {
 				else if (s.doc === "termorder") report = await cdp.evaluate("window.harness.checkTermOrder()", 90000);
 				else if (s.doc === "hookclean") report = await cdp.evaluate("window.harness.checkHookclean()", 90000); // 0.23 hookclean
 				else if (s.doc === "shapefill") report = await cdp.evaluate("window.harness.checkShapefill()", 90000); // 0.24 shapefill
+				else if (s.doc === "areahl") report = await cdp.evaluate("window.harness.checkAreahl()", 90000); // 0.25 areahl
+				else if (s.doc === "papersuggest") report = await cdp.evaluate("window.harness.checkPapersuggest()", 90000); // 0.25 papersuggest
 				else if (s.doc === "strokejoin") report = await cdp.evaluate("window.harness.checkStrokejoin()", 90000); // 0.24 strokejoin
+				else if (s.doc === "profiles") report = await cdp.evaluate("window.harness.checkProfiles()", 90000); // 0.25 profiles
 				else if (s.doc === "pillstack") report = await cdp.evaluate("window.harness.checkPillstack()", 90000); // 0.22 review fix: all the floating pills at once
 				else if (s.doc === "welcomeback") report = await cdp.evaluate("window.harness.checkWelcomeback()", 90000); // 0.23 welcomeback
 				else if (s.doc === "iconhelp") report = await cdp.evaluate("window.harness.checkIconhelp()", 90000); // 0.24 iconhelp
+				else if (s.doc === "toolfade") report = await cdp.evaluate("window.harness.checkToolfade()", 120000); // 0.25 toolfade
 				else if (s.doc === "navadapt") report = await cdp.evaluate("window.harness.checkNavadapt()", 90000); // 0.24 navadapt
+				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
+				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -415,12 +437,14 @@ async function main() {
 				else if (s.doc === "cleanexport") report = await cdp.evaluate("window.harness.checkCleanExport()", 60000);
 				else if (s.doc === "htmlexport") report = await cdp.evaluate("window.harness.checkHtmlExport()", 60000);
 				else if (s.doc === "exportarea") report = await cdp.evaluate("window.harness.checkExportArea()", 60000);
+				else if (s.doc === "clipimage") report = await cdp.evaluate("window.harness.checkClipImage()", 60000); // 0.25 clipimage
 				else if (s.doc === "tagsuggest") report = await cdp.evaluate("window.harness.checkTagSuggest()", 60000); // 0.24 tagsuggest
 				else if (s.doc === "handin") report = await cdp.evaluate("window.harness.checkHandIn()", 60000); // 0.24 handin
 				else if (s.doc === "ghostlines") report = await cdp.evaluate("window.harness.checkGhostlines()", 60000);
 				else if (s.doc === "pagetime") report = await cdp.evaluate("window.harness.checkPagetime()", 60000);
 				else if (s.doc === "pens") report = await cdp.evaluate("window.harness.checkPens()", 90000);
 				else if (s.doc === "savedviews") report = await cdp.evaluate("window.harness.checkSavedviews()", 90000); // 0.23 savedviews
+				else if (s.doc === "histpanel") report = await cdp.evaluate("window.harness.checkHistpanel()", 90000); // 0.25 histpanel
 				else if (s.doc === "share") report = await cdp.evaluate("window.harness.checkShare()", 180000); // 0.20 share
 				// 0.18 mentions: its own check.
 				else if (s.doc === "mentions") report = await cdp.evaluate("window.harness.checkMentions()", 60000);
@@ -598,6 +622,30 @@ async function main() {
 					await cdp.evaluate("window.harness.closeLinkback()");
 				}
 			}
+			// 0.25 baseline: screenshots of crooked words (selected), aligned, and aligned on ruled paper.
+			if (s.doc === "baseline") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["before", "after", "ruled"]) {
+					try {
+						await cdp.evaluate(`window.harness.baselineShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `baseline-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`baseline ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.25 markedview: a screenshot of the marked-only list.
+			if (s.doc === "markedview") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				try {
+					await cdp.evaluate("window.harness.markedviewShot().then(() => true)", 60000);
+					writeFileSync(join(designDir, `markedview-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`markedview screenshot: ${e.message}`);
+				}
+			}
 			// 0.24 navadapt: a screenshot of the list.
 			if (s.doc === "navadapt") {
 				const designDir = join(shots, "design");
@@ -618,6 +666,19 @@ async function main() {
 					writeFileSync(join(designDir, `welcomeback-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				} catch (e) {
 					problems.push(`welcomeback screenshot: ${e.message}`);
+				}
+			}
+			// 0.25 toolfade: screenshots of the faded and the restored bars.
+			if (s.doc === "toolfade") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["faded", "restored"]) {
+					try {
+						await cdp.evaluate(`window.harness.toolfadeShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `toolfade-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`toolfade ${state} screenshot: ${e.message}`);
+					}
 				}
 			}
 			// 0.24 iconhelp: a screenshot of the bubble on the eraser.

@@ -83,18 +83,21 @@ function planOf(host: AreaHost, scope: AreaScope): AreaPlan | null {
 	return plan;
 }
 
-/** Saves the picture next to the notebook; returns the path or null (nothing written, the reason is shown). Never throws. */
-export async function saveArea(host: AreaHost, request: AreaRequest): Promise<string | null> {
+/**
+ * Saves the picture next to the notebook; returns the path or null (nothing written, the reason is shown). Never throws. `quiet`: the caller
+ * says the outcome itself (Copy as image), so the "working" and "saved" notices are left to it; a failure is still told.
+ */
+export async function saveArea(host: AreaHost, request: AreaRequest, quiet = false): Promise<string | null> {
 	const plan = planOf(host, request.scope);
 	if (!plan) return null;
-	const working = showNotice(t("export.working"), 0);
+	const working = quiet ? null : showNotice(t("export.working"), 0);
 	try {
 		const picture = await drawAreaPicture(host, plan, request);
 		const path = freePath(host.app, host.file, areaSuffix(host.pageNumber, request.scope), request.format);
 		recordPluginWrite(host.app, [normalizePath(path)]); // before the write: the inbox must not offer this picture
 		if (picture.png) await host.app.vault.createBinary(path, await picture.png.arrayBuffer());
 		else await host.app.vault.create(path, picture.svg ?? "");
-		showNotice(t("export.done", { path }));
+		if (!quiet) showNotice(t("export.done", { path }));
 		if (picture.skipped > 0) showNotice(t("export.skipped", { n: String(picture.skipped) }), 8000);
 		return path;
 	} catch (e) {
@@ -102,7 +105,7 @@ export async function saveArea(host: AreaHost, request: AreaRequest): Promise<st
 		showNotice(t("export.failed", { error: e instanceof Error ? e.message : String(e) }), 9000);
 		return null;
 	} finally {
-		working.hide();
+		working?.hide();
 	}
 }
 

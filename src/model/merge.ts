@@ -236,7 +236,7 @@ function fitOnPage(target: Page, copy: Page, fresh: { strokes: readonly Stroke[]
 			maxY = Math.max(maxY, e.y + e.size);
 			continue;
 		}
-		if (e.type === "marker" || e.type === "box" || e.type === "equation" || e.type === "graph" || e.type === "excerpt" || e.type === "sticky") {
+		if (e.type === "marker" || e.type === "box" || e.type === "equation" || e.type === "graph" || e.type === "excerpt" || e.type === "sticky" || e.type === "area") {
 			const b = e.type === "marker" ? markerBounds(e) : e.type === "box" ? boxBounds(e) : { minX: e.x, maxX: e.x + e.width, maxY: e.y + e.height };
 			minX = Math.min(minX, b.minX);
 			maxX = Math.max(maxX, b.maxX);

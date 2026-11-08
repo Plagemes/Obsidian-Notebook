@@ -7,6 +7,7 @@ import { withoutPinnedInk, withPinnedInk } from "../ink/attach";
 import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
 import { planCleanup, type CleanupPlan } from "../ink/hook-clean";
 import { planJoin, type JoinPlan } from "../ink/stroke-join";
+import { planBaseline, type BaselinePlan } from "../ink/baseline";
 import { selectableItems } from "../model/groups";
 import type { PageBox } from "../ink/layout";
 import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
@@ -316,6 +317,47 @@ export class SelectionActions {
 		this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
 		const joints = plans.reduce((n, p) => n + p.plan.joints, 0);
 		showNotice(t("joinstrokes.done", { n: String(joints) }));
+	}
+
+	// --- align to baseline (0.25, #93) ---
+
+	/**
+	 * Moves the crooked handwritten words of the selection straight up or down onto a common baseline per line (on ruled paper, onto the
+	 * ruled line), as ONE undo step; the strokes only translate (`planBaseline`). Groups come whole (`selectableItems`), a group that
+	 * holds a locked element or is not wholly selected stays where it is, the ink a collapsed note keeps hidden is never touched, and a
+	 * locked page refuses the step in the history, which says so. The page times are not touched: the ink is moved, not written now.
+	 * The selection stays on the moved strokes.
+	 */
+	alignBaseline(): void {
+		const sel = this.host.selection();
+		const doc = this.host.doc();
+		if (!sel || !doc || !this.host.editable()) return;
+		const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])];
+		const plans: Array<{ part: PagePart; plan: BaselinePlan }> = [];
+		for (const part of parts) {
+			const page = doc.pages[part.pageIndex];
+			if (!page) continue;
+			const onPage = new Set(page.strokes);
+			const elements = part.elements.filter((e) => page.elements?.includes(e));
+			const picked = selectableItems(page, { strokes: part.strokes.filter((s) => onPage.has(s)), elements });
+			const plan = planBaseline(page, picked.strokes);
+			if (plan) plans.push({ part, plan });
+		}
+		if (plans.length === 0) {
+			showNotice(t("baseline.nothing"));
+			return;
+		}
+		const cmd = plans.length === 1 ? plans[0]!.plan.command : new Batch("Align to baseline", plans.map((p) => p.plan.command));
+		if (!this.host.execute(cmd)) return;
+		const next = (part: PagePart): PagePart => {
+			const found = plans.find((p) => p.part === part);
+			if (!found) return part;
+			return { pageIndex: part.pageIndex, strokes: part.strokes.map((s) => found.plan.changes.get(s) ?? s), elements: part.elements };
+		};
+		const [first, ...rest] = parts.map(next) as [PagePart, ...PagePart[]];
+		this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
+		const words = plans.reduce((n, p) => n + p.plan.words, 0);
+		showNotice(t(plans.some((p) => p.plan.ruled) ? "baseline.doneRuled" : "baseline.done", { n: String(words) }));
 	}
 
 	// --- copy, cut, duplicate ---

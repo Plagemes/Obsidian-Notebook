@@ -3,6 +3,7 @@ import { allPages, cleanCoverField, coverBlocks, coverPage, defaultHandInPages, 
 import { pagesToPdf } from "../src/ink/export-pdf";
 import { createPage, createStroke, quantizePoint } from "../src/model/document";
 import { createCheckbox } from "../src/model/checklist";
+import { createArea } from "../src/model/area";
 import { createBox, createMarker } from "../src/model/markers";
 import { PAGE_SIZES, type Page, type PageElement } from "../src/model/types";
 
@@ -79,6 +80,14 @@ describe("pre-flight", () => {
 		p.strokes.push(createStroke("#000000", 3, [quantizePoint(150, 550, 0.5), quantizePoint(180, 560, 0.5)]));
 		expect(openOnPage(p, 0)).toEqual([{ page: 0, kind: "emptyBox", count: 1, sample: "Definition 1" }]);
 		expect(openOnPage(withElements(empty, text("answer", 120, 320)), 0)).toEqual([]);
+	});
+	it("an area on a template box counts as something in it (it has a rectangle like an image)", () => {
+		const empty = createBox("definition", { x: 100, y: 300, width: 200, height: 100 }, "Definition 1");
+		const marked = createArea([120, 320], [260, 350], PAGE_SIZES.a4, "#facc15")!;
+		expect(openOnPage(withElements(empty), 0)).toEqual([{ page: 0, kind: "emptyBox", count: 1, sample: "Definition 1" }]);
+		expect(openOnPage(withElements(empty, marked), 0)).toEqual([]);
+		const away = createArea([300, 600], [400, 640], PAGE_SIZES.a4, "#facc15")!;
+		expect(openOnPage(withElements(empty, away), 0)).toHaveLength(1);
 	});
 	it("is clean when nothing is open, and ignores pages that are not chosen", () => {
 		const pages = [written(), withElements(createMarker("gap", 10, 10))];

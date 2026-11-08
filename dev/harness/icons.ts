@@ -173,6 +173,8 @@ const P: Record<string, string> = {
 	"sparkles": "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 3v4 M17 5h4",
 	// 0.24 strokejoin
 	"merge": "M8 6l4-4 4 4 M12 2v10.3a4 4 0 0 1-1.17 2.83L3 22 M15 9l1.83 1.83A4 4 0 0 1 18 13.66V22",
+	// 0.25 baseline
+	"baseline": "M4 20h16 M6 16l6-12 6 12 M8 12h8",
 	"hash": "M4 9h16 M4 15h16 M10 3L8 21 M16 3l-2 18",
 	"book-open": "M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z",
 	"split": "M16 3h5v5 M8 3H3v5 M12 22v-8.3a4 4 0 0 0-1.2-2.8L3 3 M15 9l6-6",

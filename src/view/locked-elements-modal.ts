@@ -21,7 +21,7 @@ export interface LockedListHost {
 }
 
 const ICONS: Readonly<Record<PageElement["type"], string>> = {
-	text: "type", image: "image", marker: "flag", box: "square", equation: "sigma", graph: "chart-spline", excerpt: "crop", sticky: "sticky-note", checkbox: "square-check",
+	text: "type", image: "image", marker: "flag", box: "square", equation: "sigma", graph: "chart-spline", excerpt: "crop", sticky: "sticky-note", checkbox: "square-check", area: "highlighter",
 };
 
 /**

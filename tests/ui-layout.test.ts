@@ -108,7 +108,7 @@ describe("layout engine", () => {
 describe("sheets", () => {
 	it("groups the All actions sheet in a fixed order and includes the page actions", () => {
 		const s = buildSheet(baseContext(), { kind: "all", usage: {}, now: NOW, label });
-		expect(s.map((x) => x.id)).toEqual(["navigate", "insert", "page", "reading", "side", "lecture", "view", "share", "app", "zettel"]);
+		expect(s.map((x) => x.id)).toEqual(["history", "navigate", "insert", "page", "reading", "side", "lecture", "view", "share", "app", "zettel"]);
 		expect(s.find((x) => x.id === "page")!.actions.map((a) => a.id)).toContain("page-delete");
 	});
 

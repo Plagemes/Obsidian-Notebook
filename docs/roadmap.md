@@ -203,7 +203,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 83. **P3** Import from Xournal++ and from SVG.
 
 ### Study
-84. **P2** Action history panel (jump back to a point) and undo that survives reopening.
+84. **P2** Action history panel (jump back to a point) and undo that survives reopening. *0.25: panel done (waiting for hardware verification), persistent undo pending: commands hold element objects by identity and private apply state, so saving them needs a per-class serialiser, re-linking to a freshly read notebook and a verified dry run, and the history would have to be saved at idle saves (Android can end the app without a close event).*
 85. **P1** 🧪 Coloured bookmarks with categories ("important", "to review").
 86. **P2** 🧪 Margin comments attached to a region of the page (0.18, format v16: `Page.comments`, typed text and a small sketch, flat replies, resolve, side panel, PDF margin notes, Markdown list).
 87. **P2** 🧪 Presentation mode: full-screen pages, with the laser pointer (#12).
@@ -243,13 +243,13 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 ### A. Smart writing (geometry, no AI)
 91. **P1** 🧪 Insert or remove space: drag a line and everything below moves down (onto the next page if needed) or back up.
 92. **P2** Handwriting reflow: handwritten lines re-wrap to a different width like text, words found from the gaps between strokes.
-93. **P2** Align to baseline: crooked handwritten words are moved onto a common baseline.
+93. **P2** 🧪 Align to baseline: crooked handwritten words are moved onto a common baseline.
 94. **P2** 🧪 Ghost guide lines on blank paper: they appear while writing and fade when you stop.
 95. **P1** 🧪 Automatic next page: writing at the bottom of the last page appends a new page (different from infinite pages).
 96. **P2** Strike-through as logical deletion: a line over a word marks it as deleted; it stays readable struck through and can be hidden.
 97. **P1** 🧪 Selective eraser: erase only one kind of ink (only highlighter, only one colour) and leave the rest.
 98. **P2** Per-page undo: each page has its own history; undo on one page never touches another.
-99. **P2** Area highlighter: translucent rectangles, ideal on scanned PDFs.
+99. **P2** 🧪 Area highlighter: translucent rectangles, ideal on scanned PDFs.
 100. **P1** 🧪 Invisible ink for self-testing: write answers with a hidden pen and reveal them with "show solutions".
 101. **P2** 🧪 Colours with meaning: define what each colour means (red = definition, blue = example), filter the view by it and generate a digest per colour.
 102. **P2** 🧪 Headings from handwriting size (no OCR): lines written large become outline entries, shown as images of the ink.
@@ -352,7 +352,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - Conflict-free by design: every stroke has a unique id, so concurrent edits never clash; at the end everything lands in the host's notebook with the author of each stroke.
     - Asynchronous too: people without Obsidian annotate in the web viewer (#164) and send back an annotation package that is imported with one tap; or the notebook is shared on Drive with conflict merging (#122).
 166. **P3** InkML export (open standard for digital ink).
-167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20; 0.23: `notebook-v21.schema.json` for format 21; 0.24: `notebook-v22.schema.json` for format 22.)
+167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20; 0.23: `notebook-v21.schema.json` for format 21; 0.24: `notebook-v22.schema.json` for format 22; 0.25: `notebook-v23.schema.json` for format 23.)
 
 ### E. Automation
 168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.
@@ -430,7 +430,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 216. **P1** 🧪 "New lecture" command: creates a section with date and title in the course notebook.
 217. **P2** 🧪 Start and end time on every page (also the basis for audio in M5). (0.21, format v19: optional `startAt` / `endAt` on pages, stamped when ink or an element is added, no undo step; shown in the header line, the notebook map and *Page information*; setting *Show when a page was written*.)
 218. ~~**P2** Automatic new-lecture suggestion after a long pause since the last writing.~~ — dropped (user decision, 2026-10-29)
-219. **P2** "Lecture" and "study" profiles: one tap switches pens, paper and stabilization for fast or careful writing.
+219. **P2** 🧪 "Lecture" and "study" profiles: one tap switches pens, paper and stabilization for fast or careful writing.
 220. **P2** End-of-lecture summary: three guided lines (Cornell style), also saved in the companion note.
 221. **P2** 🧪 Lecture log in the daily note.
 222. **P2** 🧪 Automatic snapshot at the end of the lecture (version history).
@@ -516,7 +516,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 274. **P3** Android home-screen shortcut to the last notebook or page.
 275. **P3** S Pen buttons and Air actions to turn pages in presentation mode (to verify whether the WebView receives them).
 276. **P3** Graphics tablets on Windows: buttons, pressure, tilt.
-277. **P2** Copy to the system clipboard as an image, to paste into messaging, mail and other apps.
+277. **P2** 🧪 Copy to the system clipboard as an image, to paste into messaging, mail and other apps. (0.25: *Copy as image* on the selection bar's second row and in the page menu; 2x PNG capped in size, white or transparent background by a setting; falls back to the share sheet and then to a saved PNG, always with a notice.)
 
 ### Paper ↔ digital and exports
 278. **P2** Paper round trip: print pages with a code, write on paper, scan it and it returns to the right page of the notebook.
@@ -720,7 +720,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 396. **P3** Likely next tool one tap away, from the sequence of tools you usually use.
 397. **P3** Adaptive radial menu: sectors ordered by frequency of use, plus a wedge of recent actions.
 398. **P3** Toolbar placed away from the writing hand (learned handedness and palm position).
-399. **P2** Toolbar fades while writing and returns on the first touch.
+399. **P2** 🧪 Toolbar fades while writing and returns on the first touch.
 400. **P3** The 4–5 most likely commands appear near the nib when the pen lifts.
 401. **P1** 🧪 Automatic lecture mode from the timetable (#115), with the compact lecture toolbar (#214) shown when a class starts.
 
@@ -734,7 +734,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 ### Pages and notebook
 407. **P1** 🧪 Generated outline: bookmarks, large handwriting as headings and slide changes in one outline (combines #15, #102 and #46).
 408. **P1** 🧪 Notebook map with states: open questions, gaps and homework per page (extends #223 from one lecture to the whole notebook).
-409. **P2** Suggested paper for a new page, from the previous pages and the course.
+409. **P2** 🧪 Suggested paper for a new page, from the previous pages and the course.
 410. **P1** 🧪 Smart "+": the 2–3 most likely new pages (same paper, exercise page, slide page) in one tap.
 411. **P2** 🧪 Tags suggested from context (course, content, markers).
 412. **P3** Page panel that shows only what that page has (hides empty sections and actions that do not apply).
@@ -748,7 +748,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 ### PDF and lecture
 417. **P1** 🧪 Slide strip: for each slide, the exercise page after it, the margin note and the question on this slide.
 418. **P2** PDF search with suggested terms (from the outline, headings and your own text).
-419. **P2** Filtered view of marked pages only (bookmarks, markers, questions).
+419. **P2** 🧪 Filtered view of marked pages only (bookmarks, markers, questions).
 420. **P2** 🧪 Welcome-back banner when reopening: last slide, open questions and gaps. (0.23: a card after a configurable absence with the way back, the open questions and gaps; look-up list and checkboxes not included.)
 
 ### Obsidian

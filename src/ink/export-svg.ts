@@ -1,5 +1,5 @@
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import type { BoxElement, CheckboxElement, EquationElement, MarkerElement, Page, StickyElement, TextElement } from "../model/types";
+import type { AreaElement, BoxElement, CheckboxElement, EquationElement, MarkerElement, Page, StickyElement, TextElement } from "../model/types";
 import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
 import { graphScene, GRAPH_STYLE, type GraphScene } from "../math/graph-scene";
 import type { Polygon } from "../math/outline";
@@ -143,6 +143,8 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	for (const el of page.elements ?? []) if (el.type === "box") out.push(boxTag(el, boxLabel(el)));
 	// v15 sticky notes: between the boxes and the equations, as on screen. The ink a collapsed note keeps hidden is left out.
 	for (const el of page.elements ?? []) if (el.type === "sticky") out.push(stickyTag(el));
+	// v23 area highlighter: after the sticky notes, before the equations, with the look of the highlighter (same opacity, multiplied).
+	for (const el of page.elements ?? []) if (el.type === "area") out.push(areaTag(el));
 	const noteInk = hiddenStickyInk(page.elements);
 	const numbers = options.equationNumbers ?? equationNumbers([page]);
 	const outlineOf = options.equationOutline ?? equationOutline;
@@ -354,6 +356,11 @@ function textTag(el: TextElement): string {
 		return `<tspan x="${num(el.x)}" dy="${dy}">${inner}</tspan>`;
 	});
 	return `<text x="${num(el.x)}" y="${num(el.y + size * TEXT_BASELINE)}" font-family="Helvetica, Arial, sans-serif" font-size="${num(size)}" fill="${escapeAttr(el.color)}">${tspans.join("")}</text>`;
+}
+
+/** v23 area highlighter: its rectangle with the highlighter look (opacity and multiply), exactly as on screen. */
+function areaTag(el: AreaElement): string {
+	return `<rect x="${num(el.x)}" y="${num(el.y)}" width="${num(el.width)}" height="${num(el.height)}" fill="${escapeAttr(el.color)}" fill-opacity="${HIGHLIGHTER_ALPHA}" style="mix-blend-mode:multiply"/>`;
 }
 
 /** v17 checkbox: its outline and, when ticked, its tick (the shapes are the canvas's, ink/checkbox-render.ts). */

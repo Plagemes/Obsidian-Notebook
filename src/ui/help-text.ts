@@ -16,6 +16,9 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"add-page-suggest": "help.addPage",
 	"toggle-ruler": "help.ruler",
 	"pen-only": "help.penOnly",
+	"profile-lecture": "help.profileLecture",
+	"profile-study": "help.profileStudy",
+	"profile-next": "help.profileNext",
 	"pen-gesture-mode": "help.penGestures",
 	"fit-width": "help.fitWidth",
 	"toggle-pages-panel": "help.pagesPanel",
@@ -39,6 +42,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"snap-toggle": "help.snap",
 	"share-selection": "help.shareSelection",
 	"selection-export-area": "help.exportSelection",
+	"selection-copy-image": "help.clipImageSelection",
+	"page-copy-image": "help.clipImagePage",
 	"selection-look-up": "help.lookUp",
 	"selection-make-task": "help.makeTask",
 	"comment-selection": "help.comment",
@@ -49,6 +54,12 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"bookmarks-open": "help.openBookmarks",
 	"hand-in": "help.handIn",
 	"selection-join": "help.joinStrokes",
+	// 0.25 areahl
+	"highlighter-area": "help.highlighterArea",
+	// 0.25 histpanel (#84)
+	"history-panel": "help.historyPanel",
+	// 0.25
+	"selection-baseline": "help.alignBaseline",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

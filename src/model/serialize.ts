@@ -6,9 +6,10 @@ import {
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
-import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, v17OnlyElement, withoutV11Meta, withoutV12Slides, withoutV21Views, type RawObject } from "./migrations";
+import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, v17OnlyElement, v23OnlyElement, withoutV11Meta, withoutV12Slides, withoutV21Views, type RawObject } from "./migrations";
 import { isStoredViewName, normalizeViewName, validRegion } from "./views";
 import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE, CHECKBOX_PATH_MAX, cleanCheckboxLabel, isOurBlockId } from "./checklist";
+import { AREA_MAX_SIDE, AREA_MIN_SIDE } from "./area";
 import { commentLine, normalizeComments, readComments } from "./comments-format";
 import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
 import { normalizePageTags } from "./page-tags";
@@ -16,11 +17,11 @@ import { STICKY_INK_MAX, STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STIC
 import { normalizePosition } from "./position";
 import { pageTimesProblem } from "./page-times";
 import {
-	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, isShapeDash, isShapeTool, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_INK, RENDER_VERSIONS, TOOLS,
+	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, ELEMENT_TYPES_V23, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, isShapeDash, isShapeTool, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_INK, RENDER_VERSIONS, TOOLS,
 	SLIDE_ID_MAX, SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type SlideRef,
 	STATES_ID_MAX, STATES_MAX_ITEMS, STATES_MAX_PARTS, STATES_MAX_ROT, STATES_MAX_SCALE, STATES_MAX_SHIFT, STATES_MAX_STATES, STATES_MIN_SCALE, STATES_NAME_MAX,
 	type PageState, type PageStates, type PartPose, type StatePart,
-	type Asset, type CheckboxElement, type ElementFlags, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
+	type Asset, type AreaElement, type CheckboxElement, type ElementFlags, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageComment, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type StickyElement, type Stroke,
 	type TextElement, type Tool,
@@ -272,6 +273,11 @@ function checkboxLine(e: CheckboxElement): string {
 	return line + "}";
 }
 
+/** v23 area highlighter: the rectangle, then the colour (one line). */
+function areaLine(e: AreaElement): string {
+	return `				{"id":${j(e.id)},"type":"area","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${j(e.color)}}`;
+}
+
 function elementLine(e: PageElement): string {
 	return withFlags(typedElementLine(e), e);
 }
@@ -290,6 +296,7 @@ function typedElementLine(e: PageElement): string {
 	if (e.type === "excerpt") return excerptLine(e);
 	if (e.type === "sticky") return stickyLine(e);
 	if (e.type === "checkbox") return checkboxLine(e);
+	if (e.type === "area") return areaLine(e);
 	return fail("element", "unknown element type");
 }
 
@@ -883,6 +890,7 @@ function readTypedElement(v: unknown, path: string, assets: Assets, drop: Droppe
 	if (v.type === "excerpt") return readExcerpt(v, id, path, assets, drop);
 	if (v.type === "sticky") return readSticky(v, id, path, drop);
 	if (v.type === "checkbox") return readCheckbox(v, id, path, drop);
+	if (v.type === "area") return readArea(v, id, path);
 	return fail(`${path}.type`, "unknown element type");
 }
 
@@ -1122,6 +1130,18 @@ function readCheckbox(v: RawObject, id: string, path: string, drop: Dropped | nu
 	});
 	if (task !== undefined) el.task = task;
 	return el;
+}
+
+/**
+ * v23 area highlighter. The rectangle (each side within AREA_MIN_SIDE..AREA_MAX_SIDE) and the colour are required: an area with an invalid one
+ * is not drawn at all, so it fails as a whole (the caller drops and counts it when reading leniently, see ELEMENT_TYPES_V23).
+ */
+function readArea(v: RawObject, id: string, path: string): AreaElement {
+	const width = positive(v.width, `${path}.width`);
+	const height = positive(v.height, `${path}.height`);
+	if (width < AREA_MIN_SIDE || width > AREA_MAX_SIDE) fail(`${path}.width`, `expected ${AREA_MIN_SIDE} to ${AREA_MAX_SIDE} pt`);
+	if (height < AREA_MIN_SIDE || height > AREA_MAX_SIDE) fail(`${path}.height`, `expected ${AREA_MIN_SIDE} to ${AREA_MAX_SIDE} pt`);
+	return { id, type: "area", x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`), width, height, color: colour(v.color, `${path}.color`) };
 }
 
 function readViewport(v: unknown, path: string): GraphViewport {
@@ -1495,7 +1515,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 			// v8 markers and boxes, v9 equations and graphs, v10 excerpts are details: an invalid one is dropped and counted when
 			// reading leniently.
 			const v8 = isObject(e) && typeof e.type === "string"
-				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type) || ELEMENT_TYPES_V15.includes(e.type) || ELEMENT_TYPES_V17.includes(e.type));
+				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type) || ELEMENT_TYPES_V15.includes(e.type) || ELEMENT_TYPES_V17.includes(e.type) || ELEMENT_TYPES_V23.includes(e.type));
 			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop, withGroups)) : readElement(e, at, assets, drop, withGroups);
 			if (!el) return;
 			if (ids.has(el.id)) fail(`${at}.id`, "duplicate id");
@@ -1777,6 +1797,11 @@ export class StagedParse {
 			const problem = v17OnlyElement(this.rawPages[i], i);
 			if (problem) fail(`pages[${i}]`, problem);
 		}
+		// v23: the same for an area (the v22 -> v23 migration refuses it).
+		if (this.from < 23) {
+			const problem = v23OnlyElement(this.rawPages[i], i);
+			if (problem) fail(`pages[${i}]`, problem);
+		}
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
@@ -1847,7 +1872,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v19 → v20 only refuses the new pens (checked stroke by stroke as each page is read) and drops the strokes' `nib` keys (ignored), so large v19 files are staged too.
 	// v20 → v21 only drops a stray `views` key (applied by `StagedParse.create`), so large v20 files are staged too.
 	// v21 → v22 only drops the strokes' `fill`, `fillTint` and `dash` keys (ignored page by page), so large v21 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21) return StagedParse.create(pre.raw, first, pre.version);
+	// v22 → v23 is the identity apart from the version (the area element is new and nothing is dropped), so large v22 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }

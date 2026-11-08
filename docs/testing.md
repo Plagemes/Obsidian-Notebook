@@ -348,7 +348,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 6327 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 6560 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -3721,6 +3721,28 @@ Implemented, not verified on hardware. No format change. Manual steps (real Obsi
 |---|---|---|---|---|---|
 | Long-press explanation bubble on toolbar, selection/contextual bar and Home icons (finger only; mouse hover and pen untouched), setting to turn it off | yes | timing, slop, who may start it, placement, texts in en + it, setting: `tests/long-press-help.test.ts`; real view with synthetic touch/pen/mouse events: harness `doc=iconhelp` | | yes | the real long press on a WebView is not simulated; the system context menu on some devices is suppressed while the bubble shows |
 
+### 0.25 — toolfade: toolbar fades while writing (roadmap #399; steps 2720-2739)
+
+Implemented, not verified on hardware. No format change. Manual steps (real Obsidian on an Android tablet or phone, S Pen):
+
+2720. **Off by default.** Fresh install: write for a long time; the bars never dim. *Settings > Appearance > Toolbar while writing*: *Always shown* / *Fade while writing*; the delay and *First touch* rows only show when it is on.
+2721. **Fade.** Choose *Fade while writing*, delay 2 s. Write continuously with the S Pen: after about 2 s the toolbar, the contextual bar and any floating pill (recent symbols, back-to-page, referenced-on, welcome-back, lecture header) dim to a faint ghost. Nothing moves or resizes; the page does not jump.
+2722. **Return after writing.** Lift the pen and wait: about 2 s after the last stroke the bars come back smoothly. Pause shorter than that between words: they stay dim.
+2723. **Short notes.** One quick word (under 2 s): the bars never dim.
+2724. **Pen over a bar.** While dimmed, bring the pen near the toolbar without touching: the bars return.
+2725. **First touch.** While dimmed, tap a tool with a finger: the bars return and the tool is NOT selected; tap again: it is. With *First touch only brings the bars back* off, the first tap presses at once.
+2726. **Finger outside the page.** While dimmed, touch the page panel, the scrollbar area or any empty area outside the sheet: the bars return. A finger on the sheet (pan or zoom) or a resting palm does not bring them back.
+2727. **Long press.** While dimmed, hold a finger on a toolbar icon: the bars return and, after half a second, the icon help shows; the button is not pressed.
+2728. **Selection and dialogs.** Make a lasso selection or open any dialog: the bars stay fully shown even if you keep writing; closing the dialog lets them fade on the next long stroke.
+2729. **Floating pills.** With the symbols strip, back-to-page pill and referenced-on chip on screen, all dim together and keep their stacking; none overlaps another when they return.
+2730. **Pen button.** The S Pen side button rules (tap with the button held: radial menu; drag: eraser; mid-stroke press: ink) behave as before while the bars are dim.
+2731. **Reduced motion.** With the Android *Remove animations* option on: the bars change state without a fade.
+2732. **Looks.** Light and dark, tablet and phone: the dimmed bars are a quiet ghost, the restored bars are exactly as before. Italian texts in settings.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Toolbar, contextual bar and floating pills fade while the pen writes (delay setting) and return on a touch outside the page, a pen hover or a press on a bar; first touch only restores (setting); never fades during a selection or dialog; reduced motion | yes | state machine and restore rules: `tests/tool-fade.test.ts`; real view with synthetic pen/touch events: harness `doc=toolfade` | | yes | the real S Pen hover and palm behaviour on a WebView is not simulated |
+
 ### 0.24 — tagsuggest (tags suggested from context, #411; steps 2520-2539)
 
 Manual steps (real Obsidian; nothing here is verified on Android). You need a timetable with a class linked to a notebook or its folder, and a folder with a few notebooks that have tags.
@@ -3809,3 +3831,152 @@ Manual steps (real Obsidian; nothing here is verified on Android). Use a noteboo
 | Hand in…: page grid with checkboxes, cover fields (name remembered per device, course from the timetable, title, date) | yes | page choice, cover layout and its PDF: `tests/hand-in.test.ts`; harness `doc=handin` (real dialog, remembered name, grid) | | | the page panel's own multi-selection is not read yet: the dialog starts on the page in view |
 | Pre-flight: blank pages, open gaps/questions/homework, unticked checkboxes, TODO notes, empty template boxes, with links to fix and "export anyway" | yes | `tests/hand-in.test.ts`; harness `doc=handin` (rows, leave out, link) | | | |
 | PDF with generated cover first, saved next to the notebook under a free name, recorded as plugin-written, optional share sheet | yes | harness `doc=handin` (written through a stand-in vault, second export `hand-in 2.pdf`, cover plus chosen pages) | | | share sheet depends on the WebView |
+
+### 0.25 — areahl: area highlighter, document format 23 (roadmap #99; steps 2620-2639)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen). Use a notebook with a PDF page or a scanned picture page, and some handwriting on it.
+
+2620. **Options.** Pick the Highlighter and tap it again: the options show *Stroke | Area* above the colours. Choose *Area*: the width row (and the snap-to-text row on a PDF page) goes. The all-actions sheet has *Area highlighter* (a check shows when it is on); with the highlighter in hand, or on a PDF page, it is near the top.
+2621. **Draw.** On a scanned page drag from one corner of a block of text to the opposite corner: a translucent rectangle in the colour chosen appears, the text under it stays readable (it looks like highlighter ink, not a solid patch), and the rectangle follows your finger or pen live. Dragging up-left instead of down-right gives the same rectangle. A tap or a drag under about 2 pt adds nothing.
+2622. **Below the ink.** Write over the rectangle with the pen and add a typed text box over it: the writing and the text are above the colour, never covered by it. Draw a second area that overlaps the first: the newer one is on top.
+2623. **Colours.** Change the highlighter colour and draw again: the new area takes it. Select an area (lasso, or tap it with the Lasso tool): the bar shows the highlighter colours only; tap one: the area is recoloured, one *Undo* gives the old colour back (*Redo* again). A selection of an area and a pen stroke recolours only the area from the highlighter row.
+2624. **Move, resize, turn.** Move an area; drag the corner handle of the selection frame: it grows or shrinks in proportion (very small or very large sizes stop at the limits). A quarter turn from the transform menu turns it 90 degrees (a rectangle again); the free rotation handle keeps it upright and the same size and only moves it round (ink turns, the highlight does not). Copy, paste and duplicate it; the copy sits on the other page or place.
+2625. **Group and lock.** Group an area with a text box or some ink: selecting one picks all. Lock the area (selection bar): it can no longer be selected by a tap, moved, recoloured or erased, the *Locked items* list of the page shows it as *Highlighter area*, and unlocking it makes it editable again.
+2626. **Eraser.** With the whole-stroke eraser (and the segment eraser) rub over an empty part of an area: the whole rectangle goes; *Undo* brings it back where it was. Write a letter inside an area and rub out the letter in one stroke of the pen: the letter goes and the area stays (an area taken at the start of that stroke comes back as soon as the pen reaches ink). With the eraser limited to *Pen* ink an area is spared; limited to *Highlighter* it goes even when you also rub out ink, limited to its colour it goes like the rule above. The area eraser removes the areas whose middle is inside its outline. A locked area is never erased.
+2627. **Page lock and time.** On a locked page a drag in Area mode is refused with the lock notice. Drawing an area on a page updates the page's start and end time (the time shown by *Page info*).
+2628. **Colour meaning.** Open a notebook with colour meanings and show only one meaning: areas of other colours are dimmed like highlighter ink.
+2629. **Exports.** Export the page as PNG, SVG, PDF, as interactive HTML and the written area or the selection as a transparent picture, and make a hand-in PDF: the areas are there, in the same places and with the same translucency, under the ink; in the PDF and SVG the page text below stays readable. Night mode only changes the colours on screen.
+2630. **Thumbnails.** The Library card and the page navigator show the areas; after drawing or erasing one the thumbnail follows.
+2631. **Sheets.** Export a long page split into sheets (A4 split): a cut may pass through an area.
+2632. **Hide annotations.** On a PDF page hide the annotations (*Reading*): the areas disappear with the ink and come back.
+2633. **Save and reopen.** Close and reopen the notebook: the areas are where they were. Open a notebook written by 0.24: it looks the same and is saved as format 23. A copy of the plugin older than this version opens a notebook saved by this one read-only (it never rewrites it).
+2634. **Merge and sync.** Draw an area on one device and open the notebook on another that also has changes: after the merge both devices have the area once.
+2635. **Languages and looks.** Italian (*Evidenziatore ad area*, *Tratto | Area*), light and dark theme, phone and tablet width: the row fits, nothing is clipped. Hold a finger on *Stroke* or *Area* for the explanation.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v23: element `area` (x, y, width, height, color; sides 2 to 20000 pt), migration v22 → v23 (identity plus version), lenient read (bad area dropped and counted), strict write, staged loading of large v22 files, repair, merge, schema `docs/schema/notebook-v23.schema.json` | yes | `tests/model-v23.test.ts`, `tests/format-schema.test.ts` | | | |
+| Drawing an area with the highlighter's *Area* mode (drag corner to corner, clamped to the page, live preview, one undo step, a too small drag adds nothing) | yes | geometry and history: `tests/model-v23.test.ts`; harness `doc=areahl` | | | the live drag was not tried with a real S Pen |
+| Select, move, resize each side, quarter turn, recolour (highlighter colours), group, lock, copy, delete, undo | yes | `tests/model-v23.test.ts`; harness `doc=areahl` | | | |
+| Eraser removes the whole area when the same gesture erased no ink (stroke and segment modes; selective filter; area eraser by centre; locked spared) | yes | `tests/model-v23.test.ts`; harness `doc=areahl` | | | |
+| Order and look: above the background and the sticky notes, under equations, typed text and all ink; the highlighter's translucency and multiply; night look; dimmed by the colour-meaning filter | yes | render order in SVG, PDF and raster: `tests/model-v23.test.ts`; canvas and night look by harness `doc=areahl` screenshots | | | the canvas, the PDF and the night look were not compared pixel by pixel on a device |
+| Every export and view of the page: PNG, SVG, PDF, HTML, area export, hand-in, thumbnails, navigator, sheets | yes | `tests/model-v23.test.ts` (SVG, PDF, raster, thumbnail signature, sheet obstacles) | | | |
+| Page lock refuses it; page time stamped by adding one | yes | `tests/model-v23.test.ts` | | | |
+| Action *Area highlighter* (all-actions sheet, context rank with the highlighter and on PDF pages, long-press explanations) | yes | `tests/context-rank.test.ts`, `tests/long-press-help.test.ts`, harness `doc=areahl` | | | |
+### 0.25 — histpanel: action history panel (roadmap #84, panel only; steps 2640-2659)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook with three pages. Persistent undo ("undo that survives reopening") is **not** part of 0.25: closing the notebook still empties the history.
+
+2640. **Open.** The all-actions sheet (History) or the notebook menu: *Action history…* opens the panel. The command palette has *Action history: jump back to a point…*. Long-press the entry in the sheet: a bubble explains it.
+2641. **The list.** Write two strokes on page 1, add a text box on page 2, move a selection, erase a stroke. The panel lists the steps newest first ("Stroke written", "Added: text box", "Selection moved or transformed", "Erased"), each with its page (*p. 2*) and when (*just now*, *5 min ago*, then the time of day). The newest step is highlighted and marked *Now*; the last row is *Start of the history*.
+2642. **Go back.** Tap an older step: the notebook goes to the point just after it (the later steps are undone one by one), a notice says how many steps, the panel stays open and the undone steps are listed dimmed above the highlighted one.
+2643. **Go forward.** Tap one of the dimmed steps: everything up to and including it is redone. Tap the top one: everything is back.
+2644. **Start.** Tap *Start of the history*: every step the history holds is undone (the page you were on may disappear if you added it in this session; Redo/tap the top step brings it back). On a large notebook with hundreds of steps the jump goes on in short slices: the panel shows *Going to that step: N of M* and takes no tap until it ends, the page stays responsive, and the notice at the end is the same as for a short jump. Closing the notebook meanwhile stops it where it got to.
+2645. **Refusal.** (Needs a lock that arrives from outside the history, e.g. synced from another device while this one is open; locking from this device is itself a step, and going back past it unlocks the page first.) With a lock on page 3 that was set after you wrote on it, tap an older step: the jump stops at the first step on the locked page, a notice says *Stopped after N of M steps*, the page lock notice shows, and nothing on the locked page changed. Unlock the page, open the panel again, tap the same step: the jump completes.
+2646. **Same as Undo.** Keyboard Undo/Redo, the toolbar buttons and the panel all walk the same list: after a few Undos the panel shows them as dimmed rows.
+2647. **Drawing.** With the pen down (or while a text box is being typed) a tap on a row first closes the text box; during a stroke it says *Finish what you are drawing first* and does nothing.
+2648. **Read-only.** In read-only mode the panel lists the steps, says it is read-only and no row can be tapped.
+2649. **Style.** Light and dark, phone and tablet: a normal Notebook dialog; rows are at least 44 px, the list scrolls, nothing sideways.
+2650. **Italian.** Switch to Italian: all texts, including the step titles, are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Action history panel: the undo and redo stacks as readable steps (title per command type, page, time, item count), current point highlighted, tap goes back or forward step by step through ordinary Undo/Redo, stops and says so when a step is refused; a long jump goes on in slices with a progress line | yes | titles of every command class and of every label in the source, jump back/forward/start, the same result in slices as in one go, locked page and guard refusals mid-way, read-only, rows: `tests/history-panel.test.ts`; a 500-step jump on 2,000 to 40,000 strokes: `tests/history-jump.perf.ts` (`npm run bench`); harness `doc=histpanel` (real view and dialog, notices, refusal, read-only) | | | no preview of the state at a step; the list shows the last 500 steps (the history limit) |
+| Persistent undo (survives closing the notebook) | no | | | | not built: commands hold element objects by identity and private apply state, so they cannot be saved and re-attached to a freshly read notebook without a per-class serialiser plus a verified dry run; the history would also have to be saved at idle saves because Android can end the app without a close event. See the roadmap note |
+### 0.25 — baseline: align to baseline (roadmap #93; steps 2660-2679)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a page of your own handwriting: two or three lines of words, written a little crooked on purpose (some words higher, some lower, some with g, p or y, an i with its dot, a comma and a full stop), plus an underline under one word and a small drawing.
+
+2660. **Select and open.** Select the handwriting with the lasso. On a tablet-width window the second row of the selection bar shows *Align to baseline*; on a phone-width window it is in the All actions sheet (Selection) and in the command palette (*Align the words of the selection to a common baseline*). With a single stroke selected it is not offered.
+2661. **Align.** Tap it: the words of each line move straight up or down until they sit on one baseline; nothing moves sideways; the letters keep their shape. A notice says how many words were aligned. The selection stays on the moved ink.
+2662. **Descenders.** A g, p, y or q keeps its tail below the line (the word is not lifted by its tail); the bar of a T or an f does not make the word sit too high.
+2663. **Punctuation.** The dot of an i, a comma and a full stop move together with their word and stay where they were relative to it.
+2664. **Left alone.** The underline and the drawing are not moved. A word far from any line (more than a couple of letter heights) is not pulled onto it.
+2665. **Two lines.** Two lines close together each get their own baseline; no word jumps to the other line.
+2666. **Undo and redo.** One undo puts every word back exactly; one redo aligns again.
+2667. **Twice.** Select the aligned lines and run it again: the notice says there is nothing to align and nothing moves.
+2668. **Sloped line.** Write a line clearly uphill (about 5 degrees) with a little wobble: after aligning it is still uphill but straight; a line that is only wobbly becomes level.
+2669. **Ruled paper.** Change the page to ruled paper, write words slightly off the lines, select and align: the words sit on the ruled lines (the notice says so). On blank or grid paper they go to the common baseline of their line instead.
+2670. **Groups and locks.** Group two words and align: they move together, by the same amount. Group a word with a locked box and align: that word stays where it is.
+2671. **Sticky note.** Collapse a sticky note that holds ink: its hidden ink is not moved.
+2672. **Locked page.** Lock the page and try again: it refuses and says so.
+2673. **Page time.** The page's time in the navigator does not change after aligning (the ink was moved, not written).
+2674. **Help.** Long-press the button: the explanation appears and nothing is aligned until you tap again. Italian: all texts are translated.
+2675. **Looks.** Light and dark, phone and tablet: the button sits in the second row like its neighbours and the icon is readable.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Align to baseline (#93): words found from stroke gaps, lines from baselines, descender-aware baseline, one straight baseline per line (level, or a clear slope kept), ruled paper snaps to the ruled line, rigid y-only moves in one undo step | yes | `tests/baseline.test.ts` (synthetic words with descenders, punctuation, two lines, slopes, ruled paper, groups, locks, pinned ink, undo, page times, jitter, a 20-line page); harness `doc=baseline` | | | rotation of a slanted line (translation only for now); not tried on real handwriting |
+| Selection bar and sheet entry, command, long-press help, context ranking (higher on ruled paper), Italian | yes | `tests/selection-arrange.test.ts`, `tests/long-press-help.test.ts`, `tests/context-rank.test.ts` | | | |
+### 0.25 — profiles: Lecture and Study writing profiles (roadmap #219; steps 2680-2699)
+2680. **Chip.** Pen tool, tap it again for the options: next to the pen set chip there is a "Profile" chip (lightning icon), "No profile" at first. Long-press it: a help bubble explains it.
+2681. **Lecture.** Chip, Lecture: the strip shows thin ballpoint pens, the chip says Lecture and is highlighted. Settings > Writing: Stabilization is 1; Default paper is Ruled. Create a new notebook: it starts on ruled paper.
+2682. **Study.** Chip, Study: fountain pens on the strip, Stabilization 6, Default paper Grid. Write: lines are visibly smoother than with Lecture.
+2683. **Nothing else changes.** Switch profiles on a notebook with writing: strokes, paper of existing pages and the page count do not change; undo history is unaffected. It also works on a read-only notebook.
+2684. **Own profile.** Set pens, stabilization and paper as you like, chip > "Save current setup as a profile...", name it. Switch to Lecture, then back to your profile: everything returns. Chip > Update (with it active) and Delete work; Lecture and Study have no Update or Delete. Delete a profile, then save a new one right away: the new one shows the pens you saved, never the deleted profile's (ids are never reused). Deleting a profile also deletes the pen set it made; if a notebook, a folder or another profile still uses that set it stays and the notice says so. With all pen sets in use (24), switching to a profile that needs a new set says the pens did not change (the smoothing and the paper did).
+2685. **Drift.** Move the Stabilization slider after switching: the chip goes back to "No profile".
+2686. **Commands.** Command palette and All actions: "Writing profile: Lecture", "...: Study", "...: next" (cycles Lecture, Study, your own). During a class "Lecture" is at the top of "For this page".
+2687. **Lecture mode.** Settings > Writing, "Lecture profile in lecture mode" on: start a lecture (manual or automatic): the profile becomes Lecture. Off: nothing switches.
+2688. **Reopen.** Close and reopen the notebook and restart Obsidian: the active profile and your own profiles are still there.
+2689. **Italian.** Switch to Italian: chip, menu, commands, help and setting are translated.
+2690. **Phone and tablet, light and dark.** The chip wraps next to the pen set chip without overflow.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Built-in Lecture and Study profiles, own profiles saved from the current setup (pens, stabilization, paper), apply, update, delete (the pen set it made goes with it unless in use; ids never reused; a full pen set list is reported) | yes | `tests/writing-profiles.test.ts` (apply, save, limits, lenient reader, cycling, ids, set cleanup, notices); harness `doc=profiles` | | | optional toolbar density per profile |
+| Chip on the pen options, commands, long-press help, context rank | yes | `tests/writing-profiles.test.ts` (actions, help, rank); harness `doc=profiles` (chip, switching, document untouched) | | | |
+| Lecture mode switches to the Lecture profile (setting, off by default) | yes | `tests/writing-profiles.test.ts` (`switchOnLecture`); harness `doc=profiles` | | | |
+### 0.25 — clipimage
+
+Roadmap #277: Copy as image. Needs a real device; the harness (`doc=clipimage`) only stands in for the clipboard and the share sheet.
+
+2700. **Selection bar.** Select some ink with the lasso on a tablet. The second row ends with *Copy as image*. Tap it: a notice says the picture was copied. Paste into a chat or mail app: the selection appears on a white background.
+2701. **Page menu.** From the notebook menu or the All actions sheet choose *Copy written area as image* with nothing selected: the written area of the page (with a small margin, no paper) is on the clipboard. Paste it.
+2702. **Setting.** Settings, Integration, *Background of copied pictures*: set it to Transparent and copy again; paste into an app that shows transparency (e.g. a note app with a dark page): the ink has no white box. Back to White: it has.
+2703. **No image clipboard.** On a device or WebView that cannot copy pictures, the same action opens the system share sheet with the PNG, after a notice. Close the sheet without sharing: a notice says nothing was copied and no file is written. If the share sheet refuses because the tap is too old, one notice asks you to tap Copy as image again and no PNG is saved; the second tap shares.
+2704. **No clipboard and no share sheet.** A PNG is saved next to the notebook and the notice gives its path.
+2705. **Large area.** Select a very large area (several A4 pages tall on an infinite page): the picture is still copied, drawn a little smaller, and the notice says so.
+2706. **Empty.** On an empty page the action says there is nothing written, and copies nothing.
+2707. **Phone.** On a phone-width bar the button is not on the bar but is in the All actions sheet (long press on the bar's icons shows its explanation on tablets).
+2708. **Italian.** Switch to Italian: all texts are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Copy as image: written area / selection to the system clipboard as a PNG (2x, size capped), white or transparent background (setting, default white) | yes | size cap, routes and fallback order, action registry: `tests/clip-image.test.ts`, `tests/selection-arrange.test.ts`; harness `doc=clipimage` (stand-in clipboard: opaque and transparent corner) | | | image clipboard depends on the WebView (`ClipboardItem`) |
+| Fallback when the device has no image clipboard: share sheet with the PNG, then a saved PNG, always with exactly one notice (a share that needs a new tap asks for one instead of saving) | yes | route order and the notice per outcome: `tests/clip-image.test.ts`; harness `doc=clipimage` (share, refused clipboard, saved copy, closed share sheet) | | | share sheet depends on the WebView |
+### 0.25 — papersuggest: suggested paper for a new page (roadmap #409; steps 2740-2759)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook you can freely add pages to, and for the course steps a timetable with a class in progress linked to that notebook.
+
+2740. **A run.** Open a notebook whose last pages all use the same paper (for example grid) and tap **+**. The strip shows that paper first, highlighted, with the reason *Like the last 5 pages*. Nothing is added until you tap a chip.
+2741. **A pattern.** In a notebook that alternates two papers (ruled, grid, ruled, grid), tap **+** on a grid page: the highlighted chip is the ruled page, reason *Alternating, like the last pages*. Tap it: a ruled page is added after the current one; one undo takes it away.
+2742. **Most of the last pages.** With five ruled pages and one grid page among the last six, the ruled chip is highlighted with *Like most of the last 6 pages*.
+2743. **Mixed notebook.** With three different papers in a row and no course, the strip is the usual one: no highlight, no reason.
+2744. **Course.** With a class in progress linked to the notebook, add several pages of one paper (for example millimetre) while it is on. On a page of another paper, **+** now highlights millimetre with *Usual for <course>*. The habit is kept on this device only.
+2745. **Setting.** Settings, *Pages*, *Suggest a paper for new pages* off: **+** shows the plain strip, nothing highlighted. On again: the highlight comes back.
+2746. **Never forced.** Tap a different chip than the highlighted one, or *More…*: that is what happens; the suggestion only changes which chip is marked.
+2747. **Slide strip.** Beside a PDF, the *Notes for this slide* chip stays first; the suggested paper is highlighted after it.
+2748. **Looks.** Light and dark theme, phone width (chips stack, the reason stays on the chip) and tablet width, Italian (*Come le ultime 5 pagine*, *Di solito per <corso>*).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Suggested paper highlighted in the "+" strip with a short reason (run, alternation, most of the last pages, course habit, whole notebook); setting to turn off; ranking returns candidates with scores and reasons so a profile paper can outrank history; no format change, notebooks are only read | yes | ranking, pattern, course store and strip merge: `tests/paper-suggest.test.ts`; harness `doc=papersuggest` (real view and strip) | | | the profile paper is not wired yet (the ranker accepts it as an extra candidate) |
+### 0.25 — markedview: marked pages only in the page navigator (roadmap #419; steps 2760-2779)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+2760. **Button.** Open the page panel: a flag button sits in its header. Long-press it: the explanation appears (English and Italian).
+2761. **Marked only.** Tap the flag, choose *Marked pages only*: the panel lists only pages that have a bookmark, a global bookmark, a marker (gap, question, homework, importance), ink in a colour with a meaning, an open checkbox or a page tag. Each page keeps its real number and shows a badge for why it is marked. A line under the header says *Marked pages only* and has a close button.
+2762. **Kinds.** In the same menu pick kinds (each shows how many pages it marks): only those count. Picking none (or all) means every kind.
+2763. **Layouts.** Switch the layout button between Thumbnails and List: badges show as icons under a thumbnail and with words in the compact list; both work with large PDF thumbnails too.
+2764. **Go to page.** Tap a page: it opens that page (on a phone the drawer closes). Star, page menu, select mode and drag-to-reorder still work.
+2765. **Empty.** Turn all marks off in a notebook: the panel says "Nothing marked here yet." quietly.
+2766. **Follows changes.** Add a bookmark, a marker, tick the last open checkbox, add a global bookmark: the list updates (reopen the panel if a change is not shown at once).
+2767. **Remembered.** Close and reopen the notebook, restart Obsidian: the choice is still there for that notebook; another notebook still shows all pages. The close button of the line shows all pages again.
+2768. **Looks.** Light and dark theme, phone and tablet width, Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure marked-page logic (kinds, reasons, counts) | yes | `tests/nav-marked.test.ts` | | | markers resolved (done) still count as marked |
+| Per-notebook choice in bounded device-local storage (corrupt falls back to all pages) | yes | `tests/nav-marked.test.ts`; harness `doc=markedview` | | | |
+| Marked-only list with badges, sub-filters by kind, empty message, long-press help | yes | harness `doc=markedview` | | | |

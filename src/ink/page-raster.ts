@@ -14,6 +14,7 @@ import { drawExcerpt } from "./excerpt-render";
 import { hiddenStickyInk } from "../model/sticky";
 import { drawSticky } from "./sticky-render";
 import { drawCheckbox } from "./checkbox-render";
+import { drawArea } from "./area-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { inkAlpha, inkBlend, strokeSvgPath } from "./stroke-shape";
@@ -83,6 +84,8 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 		for (const el of elements) if (el.type === "box") drawBox(ctx, el, label);
 		// v15: sticky notes between the boxes and the equations (as on screen); the ink a collapsed note keeps hidden is left out.
 		for (const el of elements) if (el.type === "sticky") drawSticky(ctx, el);
+		// v23 area highlighter: after the sticky notes, before the equations (as on screen), with the look of the highlighter.
+		for (const el of elements) if (el.type === "area") drawArea(ctx, el);
 		const noteInk = hiddenStickyInk(elements);
 		const numbers = inputs.equationNumbers ?? equationNumbers([page]);
 		for (const el of elements) if (el.type === "equation") drawEquation(ctx, el, numbers.get(el.id));

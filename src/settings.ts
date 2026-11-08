@@ -1,5 +1,6 @@
 import type { PressureMode } from "./ink/pressure";
 import { defaultPenSets, MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, type PenSet } from "./view/pen-sets";
+import { normaliseActive, normaliseProfiles, type WritingProfile } from "./view/writing-profiles";
 import { isToleranceName, parseLegend, type Meaning, type ToleranceName } from "./model/colour-meaning";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
@@ -23,6 +24,7 @@ import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from ".
 import { DEFAULT_LECTURE_SETTINGS, readLectureSettings, type LectureSettings } from "./timetable/lecture-mode";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
+import { cleanFadeSeconds, DEFAULT_TOOL_FADE_MODE, DEFAULT_TOOL_FADE_SECONDS, isToolFadeMode, type ToolFadeMode } from "./ui/tool-fade";
 import { normalisePinned } from "./ui/adapt";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { cleanUserName } from "./library/greeting";
@@ -38,6 +40,7 @@ import { DEFAULT_CLOUD_SYNC_SETTINGS, readCloudSyncSettings, type CloudSyncSetti
 import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
 import { normalizeIndexPrefix } from "./model/book-index";
 import { clampSymbolCount } from "./ui/symbol-rank";
+import { isClipBackground, type ClipBackground } from "./ink/clip-image";
 import { isPenKind, normaliseNib, type PenKind } from "./ink/pen-kinds";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
@@ -103,6 +106,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	penSetFolders: Record<string, string>;
 	/** 0.15 pen sets: notebook document id -> set id (wins over the folder). Bounded. */
 	penSetNotebooks: Record<string, string>;
+	/** 0.25 profiles (#219): the user's own writing profiles (Lecture and Study are built in). Bounded. */
+	writingProfiles: WritingProfile[];
+	/** 0.25 profiles: the id of the profile last switched to ("" none, "lecture", "study" or a custom id). */
+	writingProfileActive: string;
+	/** 0.25 profiles: starting lecture mode switches to the Lecture profile. */
+	writingProfileOnLecture: boolean;
 	/** Eraser radius, CSS px. */
 	eraserSize: number;
 	/** Vault path of the loose sheet (quick notes) notebook; empty = `<notebooks folder>/Quick notes.notebook`. */
@@ -127,6 +136,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	slideBack: boolean;
 	/** 0.22 pagerefs (#179): a chip on a page that other pages link to. */
 	pageRefs: boolean;
+	/** 0.25 papersuggest (#409): the "+" strip highlights the paper the history and the course suggest, with the reason. */
+	paperSuggest: boolean;
 	/** 0.23 welcomeback (#420): a quiet card with the way back, the open questions and gaps when a notebook is reopened after a while. */
 	welcomeBack: boolean;
 	/** Hours away before the card is offered. */
@@ -235,6 +246,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	adaptLearn: boolean;
 	/** The selection bar follows what is selected: ink, picture, text, mixed (402). */
 	adaptSelection: boolean;
+	// 0.25 (#399): the toolbar and floating pills fade while the pen writes and return on the first touch.
+	toolFade: ToolFadeMode;
+	/** Seconds of writing before the bars fade, and of rest before they return. */
+	toolFadeSeconds: number;
+	/** The first finger touch on a faded bar only brings it back (the button is not pressed). */
+	toolFadeFirstTouch: boolean;
 	/** Quick actions the person pinned to the toolbar, in order (at most 3): the ranking never moves them. */
 	pinnedQuick: string[];
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
@@ -268,6 +285,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	headerTitle: boolean;
 	headerAlign: HeaderAlign;
 	headerInExport: boolean;
+	/** 0.25 (#277): background of "Copy as image": white (apps that show transparency as black) or transparent. */
+	clipImageBackground: ClipBackground;
 	/** 0.21 (#217): show when a page was written (its start and end time) in the header line and on the notebook map. */
 	headerPageTimes: boolean;
 	// wave 0.10: clipboard and stamps
@@ -341,6 +360,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penSets: defaultPenSets(),
 	penSetFolders: {},
 	penSetNotebooks: {},
+	writingProfiles: [],
+	writingProfileActive: "",
+	writingProfileOnLecture: false,
 	eraserSize: DEFAULT_ERASER_SIZE,
 	looseSheetPath: "",
 	dailyNotebookPath: "",
@@ -353,6 +375,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	refWindowSnap: true, // 0.20 refwindow
 	slideBack: true, // 0.21 slideback
 	pageRefs: true, // 0.22 pagerefs
+	paperSuggest: true, // 0.25 papersuggest
 	welcomeBack: true, // 0.23 welcomeback
 	welcomeBackHours: WELCOME_HOURS_DEFAULT, // 0.23 welcomeback
 	lectureHeader: "ask", // 0.22 lecthead
@@ -403,6 +426,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	adaptPageType: true,
 	adaptLearn: true,
 	adaptSelection: true,
+	toolFade: DEFAULT_TOOL_FADE_MODE,
+	toolFadeSeconds: DEFAULT_TOOL_FADE_SECONDS,
+	toolFadeFirstTouch: true,
 	pinnedQuick: [],
 	pageTurnerKeys: true,
 	notebookTabs: false,
@@ -421,6 +447,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	headerTitle: false,
 	headerAlign: "centre",
 	headerInExport: true,
+	clipImageBackground: "white",
 	headerPageTimes: true,
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
 	signDateMode: DEFAULT_SIGN_DATE_MODE,
@@ -501,6 +528,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.penSets = normalisePenSets(d.penSets);
 	s.penSetFolders = normaliseAssignments(d.penSetFolders, MAX_FOLDER_ASSIGNMENTS);
 	s.penSetNotebooks = normaliseAssignments(d.penSetNotebooks, MAX_NOTEBOOK_ASSIGNMENTS);
+	s.writingProfiles = normaliseProfiles(d.writingProfiles); // 0.25 profiles
+	s.writingProfileActive = normaliseActive(d.writingProfileActive, s.writingProfiles);
+	if (typeof d.writingProfileOnLecture === "boolean") s.writingProfileOnLecture = d.writingProfileOnLecture;
 	s.eraserSize = normaliseEraserSize(d.eraserSize);
 	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();
 	if (typeof d.dailyNotebookPath === "string") s.dailyNotebookPath = d.dailyNotebookPath.trim();
@@ -513,6 +543,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.refWindowSnap === "boolean") s.refWindowSnap = d.refWindowSnap; // 0.20 refwindow
 	if (typeof d.slideBack === "boolean") s.slideBack = d.slideBack; // 0.21 slideback
 	if (typeof d.pageRefs === "boolean") s.pageRefs = d.pageRefs; // 0.22 pagerefs
+	if (typeof d.paperSuggest === "boolean") s.paperSuggest = d.paperSuggest; // 0.25 papersuggest
 	if (typeof d.welcomeBack === "boolean") s.welcomeBack = d.welcomeBack; // 0.23 welcomeback
 	if (typeof d.welcomeBackHours === "number") s.welcomeBackHours = clampWelcomeHours(d.welcomeBackHours); // 0.23 welcomeback
 	if (d.lectureHeader === "off" || d.lectureHeader === "ask" || d.lectureHeader === "auto") s.lectureHeader = d.lectureHeader; // 0.22 lecthead
@@ -567,6 +598,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.adaptPageType === "boolean") s.adaptPageType = d.adaptPageType;
 	if (typeof d.adaptLearn === "boolean") s.adaptLearn = d.adaptLearn;
 	if (typeof d.adaptSelection === "boolean") s.adaptSelection = d.adaptSelection;
+	if (isToolFadeMode(d.toolFade)) s.toolFade = d.toolFade;
+	s.toolFadeSeconds = cleanFadeSeconds(d.toolFadeSeconds);
+	if (typeof d.toolFadeFirstTouch === "boolean") s.toolFadeFirstTouch = d.toolFadeFirstTouch;
 	s.pinnedQuick = normalisePinned(d.pinnedQuick);
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
@@ -580,6 +614,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.commentsInPdf === "boolean") s.commentsInPdf = d.commentsInPdf;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
+	if (isClipBackground(d.clipImageBackground)) s.clipImageBackground = d.clipImageBackground;
 	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport", "headerPageTimes"] as const) if (typeof d[k] === "boolean") s[k] = d[k];
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
 	if (isSignDateMode(d.signDateMode)) s.signDateMode = d.signDateMode;

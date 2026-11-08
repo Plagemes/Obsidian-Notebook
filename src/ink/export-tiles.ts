@@ -91,7 +91,7 @@ export function contentObstacles(page: Page, measure: MeasureText = estimateMeas
 	for (const el of elements) {
 		const b = elementBounds(el, measure);
 		if (![b.minX, b.minY, b.maxX, b.maxY].every(Number.isFinite)) continue;
-		out.push({ minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY, hard: el.type !== "marker" });
+		out.push({ minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY, hard: el.type !== "marker" && el.type !== "area" });
 	}
 	for (const s of page.strokes) {
 		if (s.points.length === 0 || s.hidden || noteInk?.has(s.id)) continue;

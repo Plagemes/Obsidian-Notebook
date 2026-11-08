@@ -19544,3 +19544,219 @@ body.notebook-style-obsidian {
 	display: flex;
 	justify-content: flex-start;
 }
+
+/* ===== 0.25 histpanel ===== */
+/* The action history panel (#84): newest step first, undone steps dimmed above the point the document is at, which is marked. */
+.nb-ui.nb-hist-modal .nb-hist-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui.nb-hist-modal .nb-hist-head {
+	margin-top: var(--nb-space-2);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.nb-ui.nb-hist-modal .nb-hist-head:first-child {
+	margin-top: 0;
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row {
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row.is-undone {
+	border-style: dashed;
+	background: transparent;
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row.is-current {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row-btn {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 56px;
+	margin: 0;
+	padding: 6px 14px;
+	border: 0;
+	border-radius: var(--nb-radius-tile);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row-btn:disabled {
+	cursor: default;
+	opacity: 1;
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row.is-undone .nb-hist-row-btn {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row-icon {
+	display: inline-flex;
+	flex: none;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row.is-undone .nb-hist-row-icon {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row-title {
+	overflow: hidden;
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row-detail {
+	overflow: hidden;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-hist-modal .nb-hist-now {
+	flex: none;
+	padding: 2px 10px;
+	border-radius: var(--nb-radius-pill, 999px);
+	background: var(--nb-accent);
+	color: var(--nb-on-accent, #fff);
+	font-size: var(--nb-fs-meta);
+	font-weight: 600;
+}
+/* ===== 0.25 profiles ===== */
+.nb-ui.notebook-profile-chip.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-soft, var(--nb-tile));
+}
+
+.nb-ui.notebook-profile-chip.is-active .notebook-penset-icon {
+	color: var(--nb-accent);
+}
+
+/* ===== 0.25 toolfade ===== */
+/* "Toolbar fades while writing" (src/view/tool-fade.ts): one class on the view root, opacity only (no layout shift, still hit-testable). */
+.workspace-leaf-content .view-content.notebook-view {
+	--nb-tool-fade-opacity: 0.15;
+}
+.workspace-leaf-content .view-content.notebook-view :is(.notebook-toolbar, .notebook-context-bar, .notebook-slide-back, .notebook-symbol-strip, .notebook-welcome-back, .notebook-page-refs, .notebook-lecture-header-offer) {
+	transition: opacity var(--nb-motion-fast, 120ms) ease-out;
+}
+.workspace-leaf-content .view-content.notebook-view.is-tools-faded :is(.notebook-toolbar, .notebook-context-bar, .notebook-slide-back, .notebook-symbol-strip, .notebook-welcome-back, .notebook-page-refs, .notebook-lecture-header-offer) {
+	opacity: var(--nb-tool-fade-opacity);
+	transition-duration: var(--nb-motion, 300ms);
+}
+@media (prefers-reduced-motion: reduce) {
+	.workspace-leaf-content .view-content.notebook-view :is(.notebook-toolbar, .notebook-context-bar, .notebook-slide-back, .notebook-symbol-strip, .notebook-welcome-back, .notebook-page-refs, .notebook-lecture-header-offer) {
+		transition: none;
+	}
+}
+
+/* ===== 0.25 papersuggest ===== */
+.nb-ui.nb-smart-add .nb-chip.nb-smart-suggested {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-smart-add .nb-chip.nb-smart-suggested .nb-smart-reason {
+	color: var(--nb-text-muted);
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.nb-ui.nb-smart-add .nb-chip.nb-smart-suggested .nb-smart-reason::before {
+	content: "\00b7";
+	margin-right: 6px;
+}
+
+
+/* ===== 0.25 markedview ===== */
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-marked.is-active {
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-markbar {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-markbar.notebook-hidden {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-marks {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 4px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-mark {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 100%;
+	padding: 2px 6px;
+	border-radius: 999px;
+	background: var(--nb-tile);
+	border: 1px solid var(--nb-border);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	line-height: 1.2;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-mark-icon {
+	display: inline-flex;
+	flex: none;
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-mark-icon .svg-icon {
+	width: 12px;
+	height: 12px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-mark-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-mark.is-tag .notebook-navigator-mark-text,
+.workspace-leaf-content .view-content.notebook-view .notebook-navigator-mark.is-meaning .notebook-navigator-mark-text {
+	max-width: 14em;
+}

@@ -27,6 +27,7 @@ import { WELCOME_HOURS_MAX, WELCOME_HOURS_MIN } from "../model/welcome-back";
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 import { SYMBOL_COUNT_MAX, SYMBOL_COUNT_MIN } from "../ui/symbol-rank";
+import { TOOL_FADE_SECONDS_MAX, TOOL_FADE_SECONDS_MIN } from "../ui/tool-fade";
 import { CLOUD_INTERVAL_MAX, CLOUD_LARGE_MAX_MB, CLOUD_MOBILE_MAX_MB, CLOUD_MOBILE_MIN_MB } from "../sync/settings";
 
 export type SettingKey = keyof NotebookSettings;
@@ -228,6 +229,8 @@ const WRITING: SettingSpec[] = [
 		id: "defaultNibAngle", section: "writing", order: 72, name: "settings.defaultNibAngle", desc: "settings.defaultNibAngle.desc", keywords: "nib angle fountain marker calligraphy punta angolo",
 		control: { type: "slider", min: 0, max: 175, step: 5, format: suffix("°") }, parent: "defaultPenKind", visible: (s) => s.defaultPenKind === "fountain" || s.defaultPenKind === "marker",
 	},
+	// 0.25 profiles (#219): Lecture / Study / custom writing profiles (view/writing-profiles.ts); the switcher is on the pen options chip row
+	{ id: "writingProfileOnLecture", section: "writing", order: 73, name: "settings.profileOnLecture", desc: "settings.profileOnLecture.desc", keywords: "profile lecture study fast careful switch pens stabilization paper profilo lezione studio", control: { type: "toggle" } },
 	{ id: "eraseAreaElements", section: "writing", group: ADVANCED, order: 10, name: "settings.eraseAreaElements", desc: "settings.eraseAreaElements.desc", control: { type: "toggle" } },
 	{ id: "dateStampFormat", section: "writing", group: ADVANCED, order: 20, name: "settings.dateStamp", desc: "settings.dateStamp.desc", control: { type: "text", placeholder: DEFAULT_SETTINGS.dateStampFormat } },
 	{ id: "signDateMode", section: "writing", group: ADVANCED, order: 21, name: "settings.signDateMode", desc: "settings.signDateMode.desc", control: { type: "dropdown", options: (tr) => ({ locale: tr("settings.signDateMode.locale"), iso: tr("settings.signDateMode.iso"), custom: tr("settings.signDateMode.custom") }) }, keywords: "signature date sign firma data" },
@@ -326,6 +329,8 @@ const PAGES: SettingSpec[] = [
 		id: "outlinePdf", section: "pages", group: "outline", order: 50, name: "settings.outlinePdf", desc: "settings.outlinePdf.desc",
 		control: { type: "dropdown", options: options([["merged", "settings.outlinePdf.merged"], ["section", "settings.outlinePdf.section"], ["off", "settings.outlinePdf.off"]]) }, keywords: "outline pdf bookmarks table of contents indice segnalibri sommario",
 	},
+	// 0.25 papersuggest (#409): the "+" strip highlights the likeliest paper with the reason.
+	{ id: "paperSuggest", section: "pages", order: 11.5, name: "settings.paperSuggest", desc: "settings.paperSuggest.desc", control: { type: "toggle" }, keywords: "suggest paper new page plus add grid ruled habit course suggerisci carta nuova pagina" },
 	// 0.22 pagerefs (#179): the chip "Referenced on p. 3" on a page that other pages link to.
 	{ id: "pageRefs", section: "pages", group: "outline", order: 60, name: "settings.pageRefs", desc: "settings.pageRefs.desc", control: { type: "toggle" }, keywords: "references backlinks links pages referenced riferimenti collegamenti" },
 	// 0.15 page header (#75): the page number, date and notebook title drawn on the paper, never stored on the page.
@@ -484,6 +489,14 @@ const SYNC: SettingSpec[] = [
 
 const companionOn: Predicate = (s) => s.companionNotes;
 
+// 0.25 clipimage (#277)
+const CLIP: SettingSpec[] = [
+	{
+		id: "clipImageBackground", section: "integration", order: 44, name: "settings.clipImageBackground", desc: "settings.clipImageBackground.desc", keywords: "copy image clipboard background white transparent copia immagine appunti sfondo bianco trasparente",
+		control: { type: "dropdown", options: options([["white", "settings.clipImageBackground.white"], ["transparent", "settings.clipImageBackground.transparent"]]) },
+	},
+];
+
 const INTEGRATION: SettingSpec[] = [
 	{ id: "notebookTabs", section: "integration", order: 10, name: "settings.notebookTabs", desc: "settings.notebookTabs.desc", control: { type: "toggle" } },
 	{ id: "companionNotes", section: "integration", order: 20, name: "settings.companion", desc: "settings.companion.desc", control: { type: "toggle" }, keywords: "markdown dataview bases" },
@@ -594,6 +607,19 @@ const APPEARANCE: SettingSpec[] = [
 	{ id: "adaptLearn", section: "appearance", order: 32, name: "settings.adaptLearn", desc: "settings.adaptLearn.desc", control: { type: "toggle" }, keywords: "adaptive toolbar learn notebook course usage frequent adattiva impara quaderno corso" },
 	{ id: "adaptSelection", section: "appearance", order: 33, name: "settings.adaptSelection", desc: "settings.adaptSelection.desc", control: { type: "toggle" }, keywords: "adaptive selection bar ink image text lasso adattiva selezione" },
 	{ id: "toolbarReset", section: "appearance", order: 34, name: "settings.toolbarReset", desc: "settings.toolbarReset.desc", control: { type: "action", run: "toolbar-reset", button: "settings.toolbarReset.button" }, keywords: "adaptive toolbar pinned pin reset forget learned fissate azzera dimentica" },
+	// 0.25 toolfade (#399): the bars step back while the pen writes.
+	{
+		id: "toolFade", section: "appearance", order: 35, name: "settings.toolFade", desc: "settings.toolFade.desc", keywords: "toolbar fade hide writing dim barra sfuma nascondi scrittura",
+		control: { type: "dropdown", options: options([["off", "settings.toolFade.off"], ["writing", "settings.toolFade.writing"]]) },
+	},
+	{
+		id: "toolFadeSeconds", section: "appearance", order: 36, name: "settings.toolFadeSeconds", desc: "settings.toolFadeSeconds.desc", keywords: "toolbar fade delay seconds ritardo secondi",
+		control: { type: "slider", min: TOOL_FADE_SECONDS_MIN, max: TOOL_FADE_SECONDS_MAX, step: 1, format: suffix("s") }, parent: "toolFade", visible: (s) => s.toolFade !== "off",
+	},
+	{
+		id: "toolFadeFirstTouch", section: "appearance", order: 37, name: "settings.toolFadeFirstTouch", desc: "settings.toolFadeFirstTouch.desc", keywords: "toolbar fade first touch tap primo tocco",
+		control: { type: "toggle" }, parent: "toolFade", visible: (s) => s.toolFade !== "off",
+	},
 	{ id: "userName", section: "appearance", order: 15, name: "settings.userName", desc: "settings.userName.desc", keywords: "name nome greeting saluto home", control: { type: "text", placeholder: "Alex" } },
 	{ id: "nightMode", section: "appearance", order: 40, name: "settings.nightMode", desc: "settings.nightMode.desc", control: { type: "toggle" }, keywords: "dark scuro" },
 	// 0.13: just-in-time tips.
@@ -653,6 +679,8 @@ export const PEN_BUTTON_EXTENSIONS: SettingSpec[] = [
  */
 export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>> = {
 	favouritePens: "edited on the toolbar (long press on a favourite, radial menu)",
+	writingProfiles: "saved from the profile chip on the pen options (Save current as a profile)",
+	writingProfileActive: "set when a profile is switched to (chip, command, or lecture mode)",
 	eraserSize: "the eraser's size, edited in its tool options",
 	recentColours: "history of the colour picker",
 	penButtonWindowsMigrated: "set by the app once the old 150 ms default of the before-window was read as the new one",
@@ -666,7 +694,7 @@ export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>
 	pinnedQuick: "edited on the toolbar (press and hold a quick action, or a row of All actions); Reset the adaptive toolbar clears it",
 };
 
-const ALL: SettingSpec[] = [...WRITING, ...INPUT, ...PAGES, ...READING, ...LIBRARY, ...SYNC, ...INTEGRATION, ...STUDY, ...APPEARANCE, ...DIAGNOSTICS];
+const ALL: SettingSpec[] = [...WRITING, ...INPUT, ...PAGES, ...READING, ...LIBRARY, ...SYNC, ...INTEGRATION, ...CLIP, ...STUDY, ...APPEARANCE, ...DIAGNOSTICS];
 
 /** Every row of the tab, with the extensions, in display order (section, then main / groups / Advanced, then order). */
 export function settingSpecs(): SettingSpec[] {

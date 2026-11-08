@@ -129,6 +129,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"style-eyedropper": (v) => v.colourTools?.armEyedropper("style"),
 	"undo": (v) => v.undo(),
 	"redo": (v) => v.redo(),
+	"history-panel": (v) => v.openHistoryPanel(),
 
 	// selection
 	"selection-copy": (v) => void v.selectionTools?.copy(),
@@ -177,6 +178,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-similar": (v) => v.arrangeTools?.menu("similar"),
 	"selection-cleanup": (v) => v.selectionTools?.cleanUp(),
 	"selection-join": (v) => v.selectionTools?.joinBroken(),
+	"selection-baseline": (v) => v.selectionTools?.alignBaseline(),
 	// 0.15 (241): drawings with states
 	"selection-part": (v) => v.stateTools?.makePartFromSelection(),
 	"states-toggle": (v) => v.stateTools?.toggle(),
@@ -324,6 +326,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"pdf-search-previous": (v) => v.readingTools?.step(-1),
 	"toggle-annotations": (v) => v.readingTools?.toggleAnnotations(),
 	"toggle-snap-highlighter": (v) => v.readingTools?.toggleSnap(),
+	"highlighter-area": (v) => v.toggleHighlighterArea(),
 	"pdf-select-text": (v) => { if (!v.presenting) v.pdfTextTools?.toggle(); },
 	"toggle-dim-background": (v) => v.readingTools?.toggleDim(),
 	"pdf-margins": onPage((v, p) => {
@@ -378,6 +381,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"toggle-pages-panel": (v) => v.toggleNavigator(),
 	"toggle-ruler": (v) => v.toggleRuler(),
 	"pen-only": (v) => v.togglePenOnly(),
+	"profile-lecture": (v) => v.applyWritingProfile("lecture"),
+	"profile-study": (v) => v.applyWritingProfile("study"),
+	"profile-next": (v) => v.applyNextWritingProfile(),
 	"pen-gesture-mode": (v) => v.togglePenGestureMode(),
 	"pen-gesture-sheet": (v) => v.openGestureCheatSheet(),
 	"pen-gesture-custom": (v) => v.openCustomGestures(),
@@ -429,6 +435,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"export-area": (v) => v.openAreaExport("page"),
 	"hand-in": (v) => v.openHandIn(),
 	"selection-export-area": (v) => v.openAreaExport("selection"),
+	"selection-copy-image": (v) => v.copyAsImage("selection"),
+	"page-copy-image": (v) => v.copyAsImage("page"),
 	"print": (v) => {
 		if (canPrint()) v.openExportDialog(undefined, "print");
 		else showNotice(t("export.print.unavailable"), 8000);

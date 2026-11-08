@@ -1,5 +1,5 @@
 import { createId, quantizePoint } from "./document";
-import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND, TOOLS_V20 } from "./types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, ELEMENT_TYPES_V23, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND, TOOLS_V20 } from "./types";
 
 export type RawObject = Record<string, unknown>;
 
@@ -500,6 +500,36 @@ function v21ToV22(raw: RawObject): RawObject {
 /** The stroke keys v22 added. */
 const V22_STROKE_KEYS: readonly string[] = ["fill", "fillTint", "dash"];
 
+/**
+ * v23 adds the element type "area" (area highlighter, #99). Every valid v22 document is a valid v23 document: the migration is the identity apart
+ * from the version. A v22 reader rejected unknown element types, so a pre-v23 file with an area was not written by any version of this plugin: it
+ * is rejected rather than guessed at, like every element type before it (excerpts before v10, sticky notes before v15, checkboxes before v17), and
+ * the file is left untouched. Nothing else changes, so a large v22 file can still be read page by page (StagedParse) with the same check.
+ */
+function v22ToV23(raw: RawObject): RawObject {
+	if (Array.isArray(raw.pages)) {
+		(raw.pages as unknown[]).forEach((page, i) => {
+			const problem = v23OnlyElement(page, i);
+			if (problem) throw new MigrationError(problem);
+		});
+	}
+	return { ...raw, version: 23 };
+}
+
+/**
+ * Why page `index` (0-based) of a v22 (or older) file cannot be read as v23 (it holds an element type that exists only from v23), or null.
+ * Everything else of a v22 page is a valid v23 page, so staged loading reads large v22 files page by page with this check.
+ */
+export function v23OnlyElement(page: unknown, index: number): string | null {
+	const isObj = (v: unknown): v is RawObject => typeof v === "object" && v !== null && !Array.isArray(v);
+	if (!isObj(page) || !Array.isArray(page.elements)) return null;
+	for (const el of page.elements as unknown[]) {
+		const type = isObj(el) ? el.type : undefined;
+		if (typeof type === "string" && ELEMENT_TYPES_V23.includes(type)) return `v22: element type '${type}' (page ${index + 1}) exists only from v23`;
+	}
+	return null;
+}
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -536,6 +566,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	19: v19ToV20,
 	20: v20ToV21,
 	21: v21ToV22,
+	22: v22ToV23,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

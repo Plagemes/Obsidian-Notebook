@@ -1,5 +1,6 @@
 import { Menu, setIcon } from "obsidian";
 import { t } from "../i18n";
+import type { MessageKey } from "../i18n/en";
 import { MAX_ASPECT } from "../library/thumbnail";
 import { bookmarkColor } from "../model/bookmarks";
 import { rangeIds } from "../model/page-ops";
@@ -8,6 +9,7 @@ import type { Page } from "../model/types";
 import { writing } from "../ink/writing-guard";
 import { classifyPages, nextMode, pageRowTime, pageRowTitle, resolveLayout, ThumbCache, type NavLayout, type NavMode } from "../ui/nav-adapt";
 import { attachLongPressHelp, resolveHelp } from "../ui/long-press-help";
+import { markCounts, markedPages, MARK_KINDS, toggleKind, type MarkContext, type MarkKind, type PageMark } from "../ui/nav-marked";
 import { renderOutline, type OutlineHost } from "./outline";
 import { pageSignature } from "./view-helpers";
 
@@ -32,7 +34,15 @@ export interface NavigatorHost {
 	/** 0.24 (#414): the layout chosen for this notebook on this device (auto when none), and remembering a new choice. Absent: auto. */
 	layoutMode?(): NavMode;
 	setLayoutMode?(mode: NavMode): void;
+	/** 0.25 (#419): marked pages only, per notebook on this device: null shows all pages, else the kinds that count (none: all kinds). Absent: no button. */
+	markedKinds?(): readonly MarkKind[] | null;
+	setMarkedKinds?(kinds: readonly MarkKind[] | null): void;
+	/** 0.25 (#419): what makes a page marked besides its own content (global bookmarks, the colour legend). */
+	markContext?(): Pick<MarkContext, "globalBookmarks" | "legend" | "tolerance">;
 }
+
+/** 0.25 (#419): the icon of each reason a page is marked. */
+const MARK_ICON: Readonly<Record<MarkKind, string>> = { bookmark: "bookmark", global: "book-marked", marker: "flag", meaning: "palette", task: "list-checks", tag: "tag" };
 
 const THUMB_WIDTH = 120;
 /** 0.24 (#414): thumbnail widths (CSS px) of the large layout and of the compact list. */
@@ -65,6 +75,8 @@ export class PageNavigator {
 	/** Cached thumbnails: bounded, one width per page, released when the panel closes. */
 	private readonly thumbs = new ThumbCache();
 	private layoutButton: HTMLButtonElement | null = null;
+	private markButton: HTMLButtonElement | null = null;
+	private readonly markBar: HTMLElement;
 	private layout: NavLayout = "normal";
 	/** Bumped on every rebuild: a chunked build that finds another number stops. */
 	private buildToken = 0;
@@ -122,6 +134,12 @@ export class PageNavigator {
 			});
 			this.updateLayoutButton();
 		}
+		if (host.setMarkedKinds) {
+			this.markButton = header.createEl("button", { cls: "notebook-tool clickable-icon notebook-navigator-marked", attr: { "aria-label": t("navMarked.button"), type: "button" } });
+			setIcon(this.markButton, "flag");
+			this.markButton.dataset.help = "help.navMarked"; // long-press explanation
+			this.markButton.addEventListener("click", (e) => this.openMarkedMenu(e));
+		}
 		this.tagButton = header.createEl("button", {
 			cls: "notebook-tool clickable-icon", attr: { "aria-label": t("nav.filterTag"), type: "button" },
 		});
@@ -163,6 +181,7 @@ export class PageNavigator {
 			}
 		});
 		this.tagBar = this.el.createDiv({ cls: "notebook-navigator-tagbar notebook-hidden" });
+		this.markBar = this.el.createDiv({ cls: "notebook-navigator-tagbar notebook-navigator-markbar notebook-hidden" });
 		this.listEl = this.el.createDiv({ cls: "notebook-navigator-list" });
 		this.observer = new IntersectionObserver((entries) => {
 			// Wave 0.8 (374): thumbnails are drawn at the first pause in writing, not under the pen.
@@ -239,14 +258,20 @@ export class PageNavigator {
 		this.layout = resolveLayout(this.host.layoutMode?.() ?? "auto", classifyPages(pages));
 		this.el.toggleClass("is-large", this.layout === "large");
 		this.el.toggleClass("is-list", this.layout === "list");
-		const entries: Array<{ page: Page; index: number }> = [];
+		const entries: Array<{ page: Page; index: number; why?: PageMark[] }> = [];
+		// 0.25 (#419): marked pages only: each page with the reasons it is marked, its real number kept.
+		const markedKinds = this.host.setMarkedKinds ? this.host.markedKinds?.() ?? null : null;
+		this.updateMarkBar(markedKinds);
+		const reasons = new Map<string, PageMark[]>();
+		if (markedKinds !== null) for (const m of markedPages(pages, this.markContext(marks), markedKinds)) reasons.set(m.page.id, m.marks);
 		pages.forEach((page, index) => {
+			if (markedKinds !== null && !reasons.has(page.id)) return;
 			if (this.onlyBookmarks && !marks.has(page.id)) return;
 			if (this.tagFilter !== null && !pageHasTag(page, this.tagFilter)) return;
-			entries.push({ page, index });
+			entries.push({ page, index, ...(markedKinds !== null ? { why: reasons.get(page.id)! } : {}) });
 			this.shownIds.push(page.id);
 		});
-		if (entries.length === 0) this.listEl.createDiv({ cls: "notebook-navigator-empty", text: t("nav.empty") });
+		if (entries.length === 0) this.listEl.createDiv({ cls: "notebook-navigator-empty", text: t(markedKinds !== null ? "navMarked.empty" : "nav.empty") });
 		// The rows come in chunks, so 500 pages never hold the screen: the first chunk now, the rest in the next frames.
 		// The scroll position (or the current page, when the panel was just opened) is restored as soon as the rows reach it.
 		let from = 0;
@@ -255,7 +280,7 @@ export class PageNavigator {
 		const step = () => {
 			if (token !== this.buildToken) return;
 			const to = Math.min(entries.length, from + CHUNK);
-			for (let i = from; i < to; i++) this.buildItem(entries[i]!.page, entries[i]!.index, current, marks, info);
+			for (let i = from; i < to; i++) this.buildItem(entries[i]!.page, entries[i]!.index, current, marks, info, entries[i]!.why);
 			from = to;
 			if (wantCenter) {
 				const cur = this.listEl.querySelector(".is-current");
@@ -281,7 +306,7 @@ export class PageNavigator {
 	private centerCurrent = false;
 
 	/** One page of the list: a thumbnail card (large or usual layout) or a compact row. */
-	private buildItem(page: Page, index: number, current: number, marks: ReadonlySet<string>, info: NonNullable<ReturnType<OutlineHost["meta"]>>["bookmarkInfo"]): void {
+	private buildItem(page: Page, index: number, current: number, marks: ReadonlySet<string>, info: NonNullable<ReturnType<OutlineHost["meta"]>>["bookmarkInfo"], why?: readonly PageMark[]): void {
 		{
 			const list = this.layout === "list";
 			const item = this.listEl.createDiv({ cls: "notebook-navigator-item", attr: { tabindex: "0", "data-index": String(index), "data-id": page.id } });
@@ -311,6 +336,7 @@ export class PageNavigator {
 				if (details?.title) caption.createDiv({ cls: "notebook-navigator-caption-title", text: details.title });
 				if (page.tags?.length) caption.createDiv({ cls: "notebook-navigator-caption-tags", text: page.tags.map((x) => `#${x}`).join(" ") });
 			}
+			if (why && why.length > 0) this.buildBadges(item, why, list);
 			const footer = item.createDiv({ cls: "notebook-navigator-footer" });
 			if (!list) footer.createSpan({ text: String(index + 1), cls: "notebook-navigator-number" });
 			// 0.16 (#124): a locked page shows a lock in the footer; a tap unlocks it.
@@ -361,6 +387,72 @@ export class PageNavigator {
 			this.enableDrag(item, index, page.id);
 			this.observer.observe(item);
 		}
+	}
+
+	// ------------------------------------------------------------- marked pages only (0.25, #419)
+
+	private markContext(bookmarks: ReadonlySet<string>): MarkContext {
+		const extra = this.host.markContext?.();
+		return { bookmarks, globalBookmarks: extra?.globalBookmarks ?? new Set(), legend: extra?.legend ?? [], ...(extra?.tolerance !== undefined ? { tolerance: extra.tolerance } : {}) };
+	}
+
+	/** The words for a reason: the kind, plus the marker kinds, the open count, the legend labels or the tags where there are some. */
+	private markText(m: PageMark): string {
+		switch (m.kind) {
+			case "task": return t("navMarked.why.task", { n: m.detail ?? "0" });
+			case "marker": return (m.detail ?? "").split(",").filter(Boolean).map((k) => t(`markers.kind.${k}` as MessageKey)).join(", ") || t("navMarked.why.marker");
+			case "meaning": return m.detail || t("navMarked.why.meaning");
+			case "tag": return m.detail || t("navMarked.why.tag");
+			default: return t(`navMarked.why.${m.kind}` as MessageKey);
+		}
+	}
+
+	/** The badges under a page: why it is marked (an icon and, in the compact list, the words; the words are always the label). */
+	private buildBadges(item: HTMLElement, why: readonly PageMark[], list: boolean): void {
+		const row = (list ? item.querySelector<HTMLElement>(".notebook-navigator-rowbody") : null) ?? item;
+		const badges = row.createDiv({ cls: "notebook-navigator-marks" });
+		for (const m of why) {
+			const text = this.markText(m);
+			const badge = badges.createSpan({ cls: `notebook-navigator-mark is-${m.kind}`, attr: { title: text, "aria-label": `${t(`navMarked.kind.${m.kind}` as MessageKey)}: ${text}` } });
+			setIcon(badge.createSpan({ cls: "notebook-navigator-mark-icon" }), MARK_ICON[m.kind]);
+			if (list) badge.createSpan({ cls: "notebook-navigator-mark-text", text });
+		}
+	}
+
+	/** The line under the header while marked-only is on: which kinds count, and a button back to all pages. */
+	private updateMarkBar(kinds: readonly MarkKind[] | null): void {
+		this.markButton?.toggleClass("is-active", kinds !== null);
+		this.markBar.empty();
+		const show = kinds !== null && !this.outlineMode;
+		this.markBar.toggleClass("notebook-hidden", !show);
+		if (!show) return;
+		const names = kinds.map((k) => t(`navMarked.kind.${k}` as MessageKey)).join(", ");
+		this.markBar.createSpan({ cls: "notebook-navigator-tagbar-text", text: kinds.length > 0 ? t("navMarked.bar", { kinds: names }) : t("navMarked.barAll") });
+		const clear = this.markBar.createEl("button", { cls: "notebook-tool clickable-icon", attr: { "aria-label": t("navMarked.clear"), type: "button" } });
+		setIcon(clear, "x");
+		clear.addEventListener("click", () => this.setMarked(null));
+	}
+
+	private setMarked(kinds: readonly MarkKind[] | null): void {
+		this.host.setMarkedKinds?.(kinds);
+		this.refresh();
+	}
+
+	/** All pages / marked pages only, and which kinds count (with the number of pages each marks). */
+	private openMarkedMenu(evt: MouseEvent): void {
+		const menu = new Menu();
+		const kinds = this.host.markedKinds?.() ?? null;
+		menu.addItem((i) => i.setTitle(t("navMarked.menuAll")).setIcon("files").setChecked(kinds === null).onClick(() => this.setMarked(null)));
+		menu.addItem((i) => i.setTitle(t("navMarked.menuOnly")).setIcon("flag").setChecked(kinds !== null).onClick(() => this.setMarked(kinds ?? [])));
+		menu.addSeparator();
+		menu.addItem((i) => i.setTitle(t("navMarked.kindsHeading")).setDisabled(true));
+		const counts = markCounts(this.host.pages(), this.markContext(this.host.bookmarks()));
+		for (const kind of MARK_KINDS) {
+			const on = kinds !== null && (kinds.length === 0 || kinds.includes(kind));
+			menu.addItem((i) => i.setTitle(`${t(`navMarked.kind.${kind}` as MessageKey)} (${counts[kind]})`).setIcon(MARK_ICON[kind]).setChecked(on)
+				.onClick(() => this.setMarked(toggleKind(kinds === null ? [] : kinds.length === 0 ? [...MARK_KINDS] : kinds, kind))));
+		}
+		menu.showAtMouseEvent(evt);
 	}
 
 	// ------------------------------------------------------------- multi-selection (wave 0.8, 378)
@@ -437,6 +529,7 @@ export class PageNavigator {
 		this.selectButton.toggleClass("notebook-hidden", this.outlineMode);
 		this.mapButton?.toggleClass("notebook-hidden", this.outlineMode);
 		this.layoutButton?.toggleClass("notebook-hidden", this.outlineMode);
+		this.markButton?.toggleClass("notebook-hidden", this.outlineMode);
 		this.syncSelection();
 	}
 

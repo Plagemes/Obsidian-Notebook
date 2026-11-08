@@ -77,6 +77,7 @@ export interface UiContext {
 	toggles: {
 		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
 		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
+		/** 0.25 (#99): the highlighter marks rectangles (area highlighter) instead of strokes. */ highlighterArea?: boolean;
 		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
 		/** 0.17 (#71): snap is available (the setting is not "off") and whether it is on now (not paused in this view). Optional (absent: available, on). */ snapAvailable?: boolean; snap?: boolean;
 	};
@@ -92,10 +93,14 @@ export interface UiContext {
 	comments?: { panel: boolean; total: number; open: number; drawing?: boolean };
 	/** 0.24 (#424): presentation mode is on. Optional (off when absent). */
 	presenting?: boolean;
+	/** 0.25 (#219): the writing profile in use ("" none, "lecture", "study" or a custom id). Optional (none when absent). */
+	profile?: string;
 	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
 	openNotebooks?: number;
 	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */
 	nav?: { back: boolean; forward: boolean };
+	/** 0.25 (#84): how many steps the undo history holds (to take back) and how many were undone (to bring back). Optional (absent: none). */
+	history?: { undo: number; redo: number };
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -201,6 +206,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// --- history: fixed in the toolbar, also in the radial menu and as gestures.
 	{ id: "undo", label: "tool.undo", icon: "undo", group: "history", surfaces: ["toolbar", "radial"], priority: 100, scope: "view", command: "command.undo" },
 	{ id: "redo", label: "tool.redo", icon: "redo", group: "history", surfaces: ["toolbar", "radial"], priority: 99, scope: "view", command: "command.redo" },
+	// 0.25 (#84): every step listed, a tap goes back or forward to that point. The list can be read on a read-only notebook (it cannot jump there).
+	{ id: "history-panel", label: "histpanel.menu", icon: "history", group: "history", surfaces: ["sheet", "notebook"], priority: 45, scope: "view", command: "command.historyPanel", readOnly: true, keywords: "undo redo history steps jump back go to point storico passi azioni annulla ripeti torna" },
 
 	// --- selection: the contextual bar of the lasso.
 	{ id: "selection-copy", label: "selection.copy", icon: "copy", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: hasSelection },
@@ -240,6 +247,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-cleanup", label: "cleanup.action", icon: "sparkles", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 58, scope: "view", command: "command.cleanUp", when: hasInk, keywords: "clean tidy hook tick dot bounce stray trim pulisci uncino puntino" },
 	// 0.24 (#313): strokes that a tiny pen dropout split in two are joined, in one undo step (needs two strokes).
 	{ id: "selection-join", label: "joinstrokes.action", icon: "merge", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 58, scope: "view", command: "command.joinStrokes", when: (c) => (c.selection?.strokes ?? 0) >= 2, keywords: "join merge broken split dropout gap line connect unisci spezzato tratto interruzione" },
+	// 0.25 (#93): crooked handwritten words are moved straight up or down onto a common baseline (or the ruled line), in one undo step.
+	{ id: "selection-baseline", label: "baseline.action", icon: "baseline", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 57, scope: "view", command: "command.alignBaseline", when: (c) => (c.selection?.strokes ?? 0) >= 2, keywords: "baseline align straighten level line words crooked handwriting writing ruled allinea linea base parole storte scrittura rigo" },
 	// 0.15 states (#241): the selected ink becomes a part of the drawing, which the states of the page move together (view/states-tools.ts).
 	{ id: "selection-part", label: "states.makePart", icon: "group", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.makePart", when: hasInk, keywords: "states part group figure physics stati parte gruppo" },
 	{ id: "select-same-colour", label: "select.sameColour", icon: "palette", group: "selection", surfaces: ["sheet"], priority: 48, scope: "view", command: "command.selectSameColour", when: hasInk, keywords: "similar color all" },
@@ -365,6 +374,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "pdf-search", label: "reading.search", icon: "search", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 80, scope: "view", command: "command.pdfSearch", readOnly: true, when: (c) => c.notebook.pdfPages },
 	// 0.14 (392): the highlighter follows the text lines of PDF pages (the same switch as the highlighter options and the settings).
 	{ id: "toggle-snap-highlighter", label: "reading.snap", icon: "text-cursor", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 41, scope: "view", command: "command.snapHighlighter", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.reading.snap, keywords: "highlighter snap text lines evidenziatore testo righe" },
+	// 0.25 (#99): the highlighter marks a rectangle (an area highlighter, drawn under the ink): ideal on scanned PDFs. The "highlighter-" prefix ranks it first while the highlighter is in hand; on a PDF page the reading group ranks it too.
+	{ id: "highlighter-area", label: "highlighter.areaAction", icon: "highlighter", group: "reading", surfaces: ["sheet"], priority: 41, scope: "view", command: "command.highlighterArea", checked: (c) => !!c.toggles.highlighterArea, keywords: "highlighter area rectangle scan pdf block evidenziatore area rettangolo blocco scansione" },
 	{ id: "pdf-select-text", label: "pdfText.selectText", icon: "text-cursor-input", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 72, scope: "view", command: "command.pdfSelectText", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.reading.selectText, keywords: "select copy text quote pdf seleziona copia testo citazione" },
 	{ id: "pdf-search-next", label: "command.pdfSearchNext", icon: "chevron-down", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "pdf-search-previous", label: "command.pdfSearchPrev", icon: "chevron-up", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
@@ -425,6 +436,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "toggle-pages-panel", label: "tool.pages", icon: "panel-left", group: "view", surfaces: ["toolbar"], priority: 100, scope: "view", command: "command.toggleNavigator", readOnly: true, checked: (c) => c.toggles.navigator },
 	{ id: "toggle-ruler", label: "tool.ruler", icon: "ruler", group: "view", surfaces: ["quick", "radial", "sheet"], priority: 50, scope: "view", command: "command.toggleRuler", checked: (c) => c.toggles.ruler },
 	{ id: "pen-only", label: "pens.penOnly", icon: "pen-tool", group: "view", surfaces: ["quick", "sheet"], priority: 42, scope: "view", command: "command.penOnly", readOnly: true, checked: (c) => c.toggles.penOnly, keywords: "finger touch palm" },
+	// 0.25 profiles (#219): one tap switches the pens, the stabilization and the paper of new notebooks (view/writing-profiles.ts). They change tools and defaults only, so they work on a read-only notebook too.
+	{ id: "profile-lecture", label: "profiles.action.lecture", icon: "zap", group: "view", surfaces: ["sheet"], priority: 40, scope: "view", command: "command.profileLecture", readOnly: true, checked: (c) => c.profile === "lecture", keywords: "profile lecture fast class quick pens stabilization paper profilo lezione veloce" },
+	{ id: "profile-study", label: "profiles.action.study", icon: "graduation-cap", group: "view", surfaces: ["sheet"], priority: 39, scope: "view", command: "command.profileStudy", readOnly: true, checked: (c) => c.profile === "study", keywords: "profile study careful slow neat pens stabilization paper profilo studio accurato" },
+	{ id: "profile-next", label: "profiles.action.next", icon: "repeat", group: "view", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.profileNext", readOnly: true, keywords: "profile switch next custom cycle profilo cambia successivo" },
 	// wave 0.10 (51): read-only mode of this view. The toolbar shows a button while it is on (tap to switch it off); the sheet and the command toggle it.
 	{ id: "toggle-read-only", label: "readonly.toggle", icon: "lock", group: "view", surfaces: ["sheet"], priority: 44, scope: "view", command: "command.readOnly", readOnly: true, checked: (c) => !!c.toggles.readOnly, keywords: "lock protect accidental marks reading view only sola lettura blocca proteggi" },
 	// wave 0.8: pen gestures. The mode toggle is a quick slot (the "move to page" gesture starts
@@ -478,6 +493,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.24 handin (#334): hand in chosen pages as a PDF with a cover, after a pre-flight check.
 	{ id: "hand-in", label: "handIn.menu", icon: "graduation-cap", group: "share", surfaces: ["sheet", "notebook"], priority: 26.2, scope: "view", command: "command.handIn", readOnly: true, keywords: "hand in assignment submit cover pdf homework consegna compito copertina" },
 	{ id: "selection-export-area", label: "exportArea.selection", icon: "crop", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40.3, scope: "view", command: true, readOnly: true, when: hasSelection, keywords: "export selection transparent png svg esporta selezione trasparente" },
+	// 0.25 clipimage (#277): the written area, or the selection, copied to the system clipboard as a picture
+	{ id: "page-copy-image", label: "clipImage.page", icon: "image", group: "share", surfaces: ["sheet", "notebook"], priority: 26.4, scope: "view", command: "command.clipImagePage", readOnly: true, keywords: "copy clipboard image picture paste whatsapp mail written area copia appunti immagine incolla area scritta" },
+	{ id: "selection-copy-image", label: "clipImage.selection", icon: "image", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 55, scope: "view", command: "command.clipImageSelection", readOnly: true, when: hasSelection, keywords: "copy clipboard image picture paste whatsapp mail selection copia appunti immagine incolla selezione" },
 	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
 
 	// --- notebooks: the library, the ribbon and the palette.

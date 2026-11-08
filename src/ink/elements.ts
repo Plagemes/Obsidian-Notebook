@@ -1,6 +1,7 @@
 import { boxBounds, markerBounds, MARKER_BADGE } from "../model/markers";
-import type { BoxElement, CheckboxElement, EquationElement, ExcerptElement, GraphElement, ImageElement, MarkerElement, PageElement, StickyElement, TextElement } from "../model/types";
+import type { AreaElement, BoxElement, CheckboxElement, EquationElement, ExcerptElement, GraphElement, ImageElement, MarkerElement, PageElement, StickyElement, TextElement } from "../model/types";
 import { checkboxBounds, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE } from "../model/checklist";
+import { AREA_MAX_SIDE, AREA_MIN_SIDE, areaBounds } from "../model/area";
 import { STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STICKY_MIN_SIZE, stickyBounds } from "../model/sticky";
 import { scaleOutline } from "../math/outline";
 import { EQUATION_OUTLINE_MAX, GRAPH_MAX_SIDE } from "../model/math-elements";
@@ -37,6 +38,8 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 	if (el.type === "sticky") return stickyBounds(el);
 	// v17: a checkbox is its square.
 	if (el.type === "checkbox") return checkboxBounds(el);
+	// v23: an area is its rectangle.
+	if (el.type === "area") return areaBounds(el);
 	const c = imageCorners(el);
 	const xs = c.map((p) => p[0]);
 	const ys = c.map((p) => p[1]);
@@ -44,7 +47,7 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 }
 
 function hits(el: PageElement, x: number, y: number, tolerance: number, measure: MeasureText): boolean {
-	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky" || el.type === "checkbox") {
+	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky" || el.type === "checkbox" || el.type === "area") {
 		const b = elementBounds(el, measure);
 		return x >= b.minX - tolerance && x <= b.maxX + tolerance && y >= b.minY - tolerance && y <= b.maxY + tolerance;
 	}
@@ -225,9 +228,30 @@ function transformCheckbox(el: CheckboxElement, m: Matrix): CheckboxElement {
 	return { ...el, x: round2(cx - size / 2), y: round2(cy - size / 2), size };
 }
 
+/**
+ * v23 area highlighter: always an axis-aligned rectangle. A move, a scale (also with a different factor on each axis) and a quarter turn map
+ * the rectangle itself (a quarter turn swaps its sides); any other turn cannot be a rectangle, so then the area keeps its shape and size (scaled
+ * with the selection) and only its centre goes where the turn takes it, like a text box. A side never gets smaller or larger than the format allows.
+ */
+function transformArea(el: AreaElement, m: Matrix): AreaElement {
+	const clamp = (v: number) => Math.min(AREA_MAX_SIDE, Math.max(AREA_MIN_SIDE, v));
+	const eps = 1e-9;
+	const axisAligned = (Math.abs(m[1]) < eps && Math.abs(m[2]) < eps) || (Math.abs(m[0]) < eps && Math.abs(m[3]) < eps);
+	if (axisAligned) {
+		const r = mappedRect(el.x, el.y, el.width, el.height, m);
+		return { ...el, x: r.x, y: r.y, width: clamp(r.width), height: clamp(r.height) };
+	}
+	const k = scaleFactor(m);
+	const width = clamp(round2(el.width * k));
+	const height = clamp(round2(el.height * k));
+	const [cx, cy] = apply(m, el.x + el.width / 2, el.y + el.height / 2);
+	return { ...el, x: round2(cx - width / 2), y: round2(cy - height / 2), width, height };
+}
+
 /** New element moved/scaled/rotated by `m` (elements are immutable). Text scales font size and width uniformly. */
 export function transformElement(el: PageElement, m: Matrix, measure: MeasureText = estimateMeasure): PageElement {
 	if (el.type === "checkbox") return transformCheckbox(el, m);
+	if (el.type === "area") return transformArea(el, m);
 	if (el.type === "marker") return transformMarker(el, m);
 	if (el.type === "box") return transformBox(el, m);
 	if (el.type === "equation") return transformEquation(el, m);
