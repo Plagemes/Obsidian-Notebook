@@ -5,7 +5,7 @@
 // `host.commit` after every change, and the caller keeps them on this device.
 import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
-import { headerAfterRedaction, redactPage } from "../ink/redact";
+import { headerAfterRedaction, redactPage, withExcerptChains } from "../ink/redact";
 import { REDACT_MAX_PER_PAGE, addBox, boxFromDrag, boxesOf, clearPage, countBoxes, countPages, pointToPage, removeBox, removeLast, type RedactBox, type Redactions } from "../model/redact";
 import type { Page } from "../model/types";
 import { iconButton } from "../ui/components/dom";
@@ -15,6 +15,7 @@ import type { MessageKey } from "../i18n/en";
 import type { ExportOptions } from "./export";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
+import { confirmDestructive } from "../ui/destructive";
 import { PageImageRenderer } from "./page-images";
 
 export interface RedactHost {
@@ -32,6 +33,10 @@ export interface RedactHost {
 	commit(boxes: Redactions): void;
 	/** Called when the dialog has closed. */
 	closed?(): void;
+	/** Review fix (R3): the boxes kept for the notebook could not be read (the dialog says so and offers the reset). */
+	unreadable?: boolean;
+	/** Review fix (R3): forgets the boxes of every notebook on this device; offered only with `unreadable`, after a confirmation. */
+	reset?(): void;
 }
 
 /** Resolution of the preview, dpi: sharp enough to place a box, light enough for a phone. */
@@ -80,6 +85,7 @@ export class RedactModal extends Modal {
 			return;
 		}
 		shellNote(body, t("redact.hint")).addClass("nb-redact-hint");
+		if (this.host.unreadable) this.unreadableRow(body);
 
 		const bar = body.createDiv({ cls: "nb-redact-bar" });
 		this.prevButton = iconButton(bar, "chevron-left", t("redact.prev"), () => this.go(-1), "nb-redact-nav", "help.redact.prev");
@@ -108,7 +114,10 @@ export class RedactModal extends Modal {
 		this.failedNote.hide();
 		this.wirePointer(this.layer);
 
-		shellButton(shell.foot, "primary", t("redact.done"), () => this.close());
+		shellButton(shell.foot, "primary", t("redact.done"), () => {
+			this.confirmed = true;
+			this.close();
+		});
 		this.stopHelp = attachLongPressHelp(this.modalEl, (b) => (b.dataset.help ? resolveHelp(b) : null));
 		this.show();
 	}
@@ -122,10 +131,30 @@ export class RedactModal extends Modal {
 		if (this.url) URL.revokeObjectURL(this.url);
 		this.url = "";
 		this.contentEl.empty();
-		// Review fix (P4): Done hands over the set as it is, even unchanged: boxes that could not be read are then set again (to what is
-		// shown here, possibly none), and exports can go on.
-		this.host.commit(this.boxes);
+		// Review fixes (P4, R3, R4): Done hands over the set as it is, even unchanged: boxes that could not be read are then set to exactly
+		// what is shown here (possibly none), and exports can go on. Closing any other way (Escape, ×) saves only what was changed (every
+		// change is handed over at once), so an unreadable state stays refused until the reader chooses.
+		if (this.confirmed) this.host.commit(this.boxes);
 		this.host.closed?.();
+	}
+
+	/** Review fix (R3): set by Done (not by Escape or ×). */
+	private confirmed = false;
+
+	/** Review fix (R3): the note that the kept boxes could not be read, and the reset (after a confirmation). */
+	private unreadableRow(body: HTMLElement): void {
+		const note = shellNote(body, t("redact.unreadable.dialog"), "error");
+		if (!this.host.reset) return;
+		const reset = (): void => this.host.reset?.();
+		const row = body.createDiv({ cls: "nb-redact-tools" });
+		const button = shellButton(row, "danger", t("redact.reset"), () => {
+			confirmDestructive(this.app, { title: t("redact.reset.title"), body: t("redact.reset.body"), confirm: t("redact.reset.confirm") }, () => {
+				reset();
+				note.remove();
+				row.remove();
+			});
+		}, { icon: "rotate-ccw" });
+		button.dataset.help = "help.redact.reset";
 	}
 
 	// --- state ---
@@ -321,7 +350,8 @@ export class RedactModal extends Modal {
 		const o = this.host.options;
 		try {
 			await o.prepare?.([page]);
-			const shown = redactPage(page, boxesOf(this.boxes, page.id), this.boxes);
+			// Review fix (R5): excerpts of excerpts of a covered region go too, as in the export.
+			const shown = redactPage(page, boxesOf(this.boxes, page.id), withExcerptChains(this.all, this.boxes));
 			const header = o.header;
 			this.renderer ??= new PageImageRenderer(this.host.media, {
 				...(o.hiddenInk ? { hiddenInk: o.hiddenInk } : {}), ...(o.boxLabel ? { boxLabel: o.boxLabel } : {}),

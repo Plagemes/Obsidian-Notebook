@@ -107,9 +107,9 @@ import { SharePageModal, type ShareHost } from "./share-page"; // 0.20 (#30)
 import { exportPdf, runExport, type ExportOptions } from "./export";
 import { announceRedactionOff, redactionRefused, withRedaction } from "./export-redact"; // 0.26 redact (#285)
 import { RedactModal } from "./redact-dialog";
-import { loadRedactState, saveRedactState } from "../ui/redact-store";
-import { boxesOf, countBoxes, isArmed, rectsOverlap, type RedactState } from "../model/redact";
-import { headerAfterRedaction } from "../ink/redact";
+import { loadRedactState, resetRedactStorage, saveRedactState, takeRedactStoreNotice } from "../ui/redact-store";
+import { countBoxes, isArmed, type RedactState } from "../model/redact";
+import { elementKept, headerAfterRedaction, withExcerptChains } from "../ink/redact";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
@@ -2515,12 +2515,24 @@ export class NotebookView extends FileView {
 		const doc = this.session?.doc;
 		if (!doc) return;
 		const options = this.exportOptions();
+		const opened = this.redactState();
 		new RedactModal({
-			app: this.app, media: this.media, options, pageIndex, initial: this.redactState().boxes,
+			app: this.app, media: this.media, options, pageIndex, initial: opened.boxes,
 			pages: () => this.renderPagesOf(doc),
-			commit: (boxes) => this.saveRedact({ on: this.redactState().on, boxes }),
+			// Review fix (R3): boxes drawn again after an unreadable state are applied (the switch was not readable either).
+			commit: (boxes) => {
+				const now = this.redactState();
+				this.saveRedact({ on: now.unreadable === true ? countBoxes(boxes) > 0 : now.on, boxes });
+			},
+			...(opened.unreadable ? { unreadable: true, reset: () => this.resetRedactStorage() } : {}),
 			closed,
 		}).open();
+	}
+
+	/** Review fix (R3): the reader confirmed "Reset redaction storage" in the Redact dialog. */
+	private resetRedactStorage(): void {
+		const ok = resetRedactStorage(this.app);
+		showNotice(t(ok ? "redact.reset.done" : "redact.reset.failed"), 8000);
 	}
 
 	/**
@@ -2715,8 +2727,12 @@ export class NotebookView extends FileView {
 			copyRefused: (entry) => {
 				const options = this.redactOptions();
 				if (options.redactBlocked) return t("redact.unreadable");
-				const r = { x: entry.x, y: entry.y, width: entry.width, height: entry.height };
-				return boxesOf(options.redact, entry.pageId).some((b) => rectsOverlap(b, r)) ? t("redact.figureCovered") : null;
+				if (!options.redact) return null;
+				// Review fix (R1): refused unless the figure is still there on the page as an export draws it (a picture under or near a
+				// box, an excerpt whose source region is covered on any page, at any depth). A page that cannot be found is refused.
+				const doc = this.session?.doc;
+				const shown = doc ? this.renderPagesOf(doc).find((p) => p.id === entry.pageId) : undefined;
+				return shown && elementKept(shown, entry.elementId, options.redact) ? null : t("redact.figureCovered");
 			},
 			openOriginal: (entry) => {
 				const asset = this.shownDoc()?.assets?.[entry.asset];
@@ -2949,8 +2965,14 @@ export class NotebookView extends FileView {
 	 */
 	private redactOptions(): Pick<ExportOptions, "redact" | "redactBlocked" | "redactOff"> {
 		const stored = this.redactState();
-		if (stored.unreadable) return { redactBlocked: true };
-		if (isArmed(stored)) return { redact: stored.boxes };
+		if (stored.unreadable) {
+			// Review fix (R3): the first time in a session, one notice says what happened and what to do (the refusals point there too).
+			if (takeRedactStoreNotice(this.app)) showNotice(t("redact.storeDamaged"), 15000);
+			return { redactBlocked: true };
+		}
+		// Review fix (R5): the chains of excerpts are found over the whole notebook once, so a writer given one page still knows them.
+		const doc = this.session?.doc;
+		if (isArmed(stored)) return { redact: (doc ? withExcerptChains(doc.pages, stored.boxes) : undefined) ?? stored.boxes };
 		const off = countBoxes(stored.boxes);
 		return off > 0 ? { redactOff: off } : {};
 	}

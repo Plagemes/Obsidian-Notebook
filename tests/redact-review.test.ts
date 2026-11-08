@@ -323,3 +323,24 @@ describe("P11: the header of a covered page is left out of the SVG a note gets",
 		expect(pageToSvg(covered.pages[0]!, { header: covered.options.header!(covered.pages[0]!) })).not.toContain("SECRET-header");
 	});
 });
+
+// ------------------------------------------------------------------------------------------------------------------------------ R5
+
+describe("R5: a one-page export from the dialog knows the excerpt chain of the whole notebook", () => {
+	const ex = (id: string, asset: string, source: { page: string; x: number; y: number; width: number; height: number }): PageElement =>
+		({ id, type: "excerpt", x: 50, y: 300, width: 200, height: 100, asset, source: { notebook: "Demo", doc: "d", ...source } });
+	const p2 = page({ id: "p2" });
+	const p3 = page({ id: "p3", elements: [ex("B", "snapB", { page: "p2", x: 120, y: 120, width: 50, height: 20 })] });
+	const p5 = page({ id: "p5", elements: [ex("A", "snapSECRET-A", { page: "p3", x: 60, y: 310, width: 50, height: 30 })] });
+
+	it("the SVG of the last page alone has no picture of the covered region; the control has it", async () => {
+		const request = (redact: ExportOptions["redact"]) => ({ format: "svg" as const, scope: "page" as const, pageIndex: 2, layers: "both" as const, redact });
+		const c = fakeApp();
+		await runExport(c.app, notebookFile(), [p2, p3, p5], request({ p2: [far] }), fakeMedia(), {});
+		expect(readable([...c.files.values()][0]!)).toContain("PIXELS of snapSECRET-A");
+		const r = fakeApp();
+		await runExport(r.app, notebookFile(), [p2, p3, p5], request({ p2: [box] }), fakeMedia(), {});
+		expect(r.files.size).toBe(1);
+		expect(readable([...r.files.values()][0]!)).not.toContain("snapSECRET-A");
+	});
+});

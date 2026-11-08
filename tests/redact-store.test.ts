@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { REDACT_KEY, REDACT_MAX_NOTEBOOKS, loadRedactState, normaliseRedactStore, redactKey, saveRedactState } from "../src/ui/redact-store";
+import {
+	QUARANTINE_MAX_CHARS, REDACT_KEY, REDACT_MAX_NOTEBOOKS, REDACT_PRESENT_KEY, REDACT_QUARANTINE_KEY, loadRedactState, normaliseRedactStore, redactKey,
+	resetRedactStorage, saveRedactState, takeRedactStoreNotice,
+} from "../src/ui/redact-store";
 import { EMPTY_REDACT_STATE } from "../src/model/redact";
 
 const good = { x: 10, y: 10, width: 40, height: 40 };
@@ -39,6 +42,9 @@ describe("the redaction boxes kept on this device", () => {
 		expect(loadRedactState(app, "nb-1")).toEqual({ ...EMPTY_REDACT_STATE, unreadable: true });
 		expect(saveRedactState(app, "nb-1", { on: true, boxes: { p1: [good] } }, 100).stored).toBe(true);
 		expect(loadRedactState(app, "nb-1")).toEqual({ on: true, boxes: { p1: [good] } });
+		// R3: the value that could not be read is kept aside, and the other notebooks stay unreadable.
+		expect(data.get(REDACT_QUARANTINE_KEY)).toMatchObject({ raw: "garbage" });
+		expect(loadRedactState(app, "nb-2").unreadable).toBe(true);
 		// A broken entry of one notebook makes that one unreadable, and a save of another keeps it so.
 		const { app: other, data: d2 } = memory();
 		d2.set(REDACT_KEY, { "nb-1": { on: true, at: 1, boxes: "torn" }, "nb-2": { on: true, at: 1, boxes: { p1: [good] } } });
@@ -106,12 +112,116 @@ describe("the redaction boxes kept on this device", () => {
 		expect(loadRedactState(later, "another odd id ü")).toEqual(EMPTY_REDACT_STATE);
 	});
 
-	it("drops bad notebook ids, bad rows and unusable boxes, and ignores a missing id", () => {
-		const store = normaliseRedactStore({ "bad id": { on: true, at: 1, boxes: { p1: [good] } }, ok: { on: "yes", at: "x", boxes: { p1: [good, { x: 1 }] } }, empty: { on: true, at: 1, boxes: {} }, num: 5 });
+	it("drops bad rows and unusable boxes, reads a value of another shape as nothing usable, and ignores a missing id", () => {
+		const store = normaliseRedactStore({ ok: { on: "yes", at: "x", boxes: { p1: [good, { x: 1 }] } }, empty: { on: true, at: 1, boxes: {} } });
 		expect(Object.keys(store)).toEqual(["ok"]);
 		expect(store.ok).toEqual({ on: false, at: 0, boxes: { p1: [good] } });
+		// A key or a value this store never writes: the whole value is another format (the R3 tests: it reads as unreadable).
+		expect(normaliseRedactStore({ "bad id": { on: true, at: 1, boxes: { p1: [good] } }, ok: { on: true, at: 1, boxes: { p1: [good] } } })).toEqual({});
+		expect(normaliseRedactStore({ ok: { on: true, at: 1, boxes: { p1: [good] } }, num: 5 })).toEqual({});
 		const { app } = memory();
 		expect(loadRedactState(app, null)).toEqual(EMPTY_REDACT_STATE);
 		expect(() => saveRedactState(app, undefined, { on: true, boxes: { p1: [good] } })).not.toThrow();
+	});
+});
+
+/** The same device in a new session (the session copies are per app object). */
+const later = (data: Map<string, unknown>) => ({
+	loadLocalStorage: (k: string) => data.get(k) ?? null,
+	saveLocalStorage: (k: string, v: unknown) => { if (v === null) data.delete(k); else data.set(k, JSON.parse(JSON.stringify(v))); },
+});
+
+describe("review fix R3: a store this version cannot read fails closed, with a way back", () => {
+	it("a corrupt value: every notebook is unreadable, a copy is kept aside, the value is not overwritten by a read, one notice is due", () => {
+		const { app, data } = memory();
+		data.set(REDACT_KEY, "garbage");
+		expect(loadRedactState(app, "nb-a").unreadable).toBe(true);
+		expect(loadRedactState(app, "nb-b").unreadable).toBe(true);
+		expect(data.get(REDACT_KEY)).toBe("garbage");
+		expect(data.get(REDACT_QUARANTINE_KEY)).toMatchObject({ raw: "garbage" });
+		expect(takeRedactStoreNotice(app)).toBe(true);
+		expect(takeRedactStoreNotice(app)).toBe(false);
+		// Done in the dialog of A: A is set again (also in a new session); B stays refused.
+		expect(saveRedactState(app, "nb-a", { on: true, boxes: { p1: [good] } }, 10).stored).toBe(true);
+		const next = later(data);
+		expect(loadRedactState(next, "nb-a")).toEqual({ on: true, boxes: { p1: [good] } });
+		expect(loadRedactState(next, "nb-b").unreadable).toBe(true);
+	});
+
+	it("a value of a future version (another shape) is unreadable for every notebook, never 'no boxes'", () => {
+		const future = { version: 2, notebooks: { "nb-a": { on: true, boxes: { p1: [good] } } } };
+		const { app, data } = memory();
+		data.set(REDACT_KEY, future);
+		expect(loadRedactState(app, "nb-a").unreadable).toBe(true);
+		expect(loadRedactState(app, "nb-z").unreadable).toBe(true);
+		expect(JSON.parse((data.get(REDACT_QUARANTINE_KEY) as { raw: string }).raw)).toEqual(future);
+		// An object entry with none of the fields this store writes is another format too.
+		const { app: other, data: d2 } = memory();
+		d2.set(REDACT_KEY, { notebooks: { "nb-a": {} } });
+		expect(loadRedactState(other, "nb-a").unreadable).toBe(true);
+	});
+
+	it("a value the platform dropped (missing although the sentinel says it was written) is unreadable", () => {
+		const { app, data } = memory();
+		saveRedactState(app, "nb-a", { on: true, boxes: { p1: [good] } }, 1);
+		expect(data.get(REDACT_PRESENT_KEY)).toBe(1);
+		data.delete(REDACT_KEY); // what a platform that cannot parse the stored text returns
+		expect(loadRedactState(later(data), "nb-a").unreadable).toBe(true);
+		// Control: with nothing ever written there is nothing to refuse.
+		expect(loadRedactState(memory().app, "nb-a")).toEqual(EMPTY_REDACT_STATE);
+	});
+
+	it("Done with no boxes while the store is quarantined keeps an explicit 'none' for that notebook only", () => {
+		const { app, data } = memory();
+		data.set(REDACT_KEY, 42);
+		saveRedactState(app, "nb-a", { on: false, boxes: {} }, 5);
+		const next = later(data);
+		expect(loadRedactState(next, "nb-a")).toEqual(EMPTY_REDACT_STATE);
+		expect(loadRedactState(next, "nb-b").unreadable).toBe(true);
+	});
+
+	it("nothing is written over the value when its copy cannot be kept aside", () => {
+		const data = new Map<string, unknown>([[REDACT_KEY, "garbage"]]);
+		const app = {
+			loadLocalStorage: (k: string) => data.get(k) ?? null,
+			saveLocalStorage: (k: string, v: unknown) => { if (k === REDACT_QUARANTINE_KEY) throw new Error("full"); data.set(k, v); },
+		};
+		expect(saveRedactState(app, "nb-a", { on: true, boxes: { p1: [good] } }, 1).stored).toBe(false);
+		expect(data.get(REDACT_KEY)).toBe("garbage");
+		// The boxes still cover this session's exports.
+		expect(loadRedactState(app, "nb-a")).toEqual({ on: true, boxes: { p1: [good] } });
+		expect(loadRedactState(app, "nb-b").unreadable).toBe(true);
+	});
+
+	it("the copy kept aside is bounded and never replaced by a later unreadable value", () => {
+		const { app, data } = memory();
+		data.set(REDACT_KEY, "x".repeat(QUARANTINE_MAX_CHARS + 50));
+		loadRedactState(app, "nb-a");
+		const kept = data.get(REDACT_QUARANTINE_KEY) as { raw: string; truncated?: true };
+		expect(kept.raw).toHaveLength(QUARANTINE_MAX_CHARS);
+		expect(kept.truncated).toBe(true);
+		data.set(REDACT_KEY, "other");
+		loadRedactState(later(data), "nb-a");
+		expect((data.get(REDACT_QUARANTINE_KEY) as { raw: string }).raw).toHaveLength(QUARANTINE_MAX_CHARS);
+	});
+
+	it("Reset redaction storage forgets everything: no notebook is refused or has boxes afterwards", () => {
+		const { app, data } = memory();
+		data.set(REDACT_KEY, "garbage");
+		saveRedactState(app, "nb-a", { on: true, boxes: { p1: [good] } }, 1);
+		expect(resetRedactStorage(app)).toBe(true);
+		for (const k of [REDACT_KEY, REDACT_PRESENT_KEY, REDACT_QUARANTINE_KEY]) expect(data.has(k)).toBe(false);
+		expect(loadRedactState(app, "nb-a")).toEqual(EMPTY_REDACT_STATE);
+		expect(loadRedactState(app, "nb-b")).toEqual(EMPTY_REDACT_STATE);
+	});
+
+	it("control: a readable store never makes a copy aside and never refuses", () => {
+		const { app, data } = memory();
+		saveRedactState(app, "nb-a", { on: true, boxes: { p1: [good] } }, 1);
+		saveRedactState(app, "nb-a", { on: true, boxes: {} }, 2);
+		expect(data.has(REDACT_QUARANTINE_KEY)).toBe(false);
+		expect(data.has(REDACT_PRESENT_KEY)).toBe(false);
+		expect(loadRedactState(later(data), "nb-b")).toEqual(EMPTY_REDACT_STATE);
+		expect(takeRedactStoreNotice(app)).toBe(false);
 	});
 });

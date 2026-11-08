@@ -5,7 +5,7 @@
 // view/export-markdown.ts.
 import { Modal, Setting, type App, type ToggleComponent } from "obsidian";
 import { t, type MessageKey } from "../i18n";
-import { redactPage, redactionOf } from "../ink/redact";
+import { redactPage, redactionOf, withExcerptChains } from "../ink/redact";
 import { boxesOf, countBoxes, countPages, type Redactions, type RedactState } from "../model/redact";
 import { attachLongPressHelp, resolveHelp } from "../ui/long-press-help";
 import { EXPORT_LAYERS, type ExportFormat, type ExportLayers, type ExportScope } from "../ink/export-layers";
@@ -255,7 +255,10 @@ export class ExportModal extends Modal {
 	private pageAt(index: number): Page | undefined {
 		const page = this.host.pages?.()[index];
 		const boxes = this.activeRedactions();
-		return page && boxes ? redactPage(page, boxesOf(boxes, page.id), boxes) : page;
+		if (!page || !boxes) return page;
+		// Review fix (R5): excerpt chains over the whole notebook, like the export.
+		const set = withExcerptChains(this.host.pages?.() ?? [page], boxes) ?? boxes;
+		return redactPage(page, boxesOf(set, page.id), set);
 	}
 
 	/** Shows the choices the format and the scope need, and the sentence that says what will happen. */

@@ -10,7 +10,7 @@ import type { HeaderLayout } from "../ink/page-header";
 import { DEFAULT_PNG_SCALE } from "../model/export-pages";
 import { cleanPagesForExport, resolveCleanOptions, type CleanExportOptions } from "../model/clean-export";
 import { backgroundRect } from "../model/margins";
-import { burnKey, burnPlan } from "../ink/redact";
+import { burnKey, burnPlan, withExcerptChains } from "../ink/redact";
 import { countBoxes, type Redactions } from "../model/redact";
 import { announceRedaction, withRedaction } from "./export-redact";
 import { recordPluginWrite } from "../storage/plugin-written";
@@ -322,7 +322,8 @@ export async function runExport(app: App, notebook: TFile, allPages: readonly Pa
 	// Its choice is the one the reader saw: no hint about switched-off boxes; boxes it holds are readable (in memory at least).
 	delete base.redactOff;
 	if (request.redact && countBoxes(request.redact) > 0) {
-		base.redact = request.redact;
+		// Review fix (R5): excerpt chains over every page of the notebook, also when only a range is exported.
+		base.redact = withExcerptChains(allPages, request.redact) ?? request.redact;
 		delete base.redactBlocked;
 	} else delete base.redact;
 	const opts: ExportOptions = { ...base, layers: request.layers, ...(splits ? { split: request.split! } : {}) };
