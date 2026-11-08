@@ -80,6 +80,8 @@ import { defaultMarkdownFolder, exportMarkdown, siblingFolder } from "./export-m
 import { MakeTaskModal, runMakeTask, type TaskRequest } from "./selection-task";
 import { runInsertIntoNote } from "./selection-insert";
 import { AreaExportModal } from "./export-area";
+import { HandInModal } from "./hand-in";
+import { suggestedCourse } from "../timetable/current";
 import { taskCropRect } from "../model/selection-task";
 import { Mentions } from "./mentions";
 import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
@@ -2179,6 +2181,19 @@ export class NotebookView extends FileView {
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
 			},
 		}, { scope: scope === "selection" && useSel ? "selection" : "page" }).open();
+	}
+
+	/** 0.24 (#334): "Hand in…": pages as a PDF with a cover, after a check for blank pages and open placeholders. */
+	openHandIn(): void {
+		const doc = this.session?.doc;
+		const file = this.file;
+		if (!doc || !file || doc.pages.length === 0) return;
+		new HandInModal({
+			app: this.app, file, media: this.media, options: () => this.exportOptions(),
+			pages: () => this.renderPagesOf(doc), picked: [], current: this.currentPageIndex(),
+			course: suggestedCourse(file.path) ?? "",
+			goToPage: (index) => this.goToPage(index),
+		}).open();
 	}
 
 	/** wave 0.9 (382): the dialog of the Markdown export (folder, resolution). */

@@ -119,6 +119,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "htmlexport", theme, device, lowLatency: false });
 // 0.23 exportarea (#280): export of the written area or the selection as transparent PNG or SVG (dev/harness/exportarea-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "exportarea", theme, device, lowLatency: false });
+// 0.24 handin (#334): the Hand in dialog and its cover (dev/harness/handin-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "handin", theme, device, lowLatency: false });
 // 0.20 share (#30): Share page… dialog and both branches of the share (dev/harness/share-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "share", theme, device, lowLatency: false });
 // Quick tabs (0.18, #227): the strip with pinned pages, Back, a gone page, another notebook; tablet and phone, light and dark.
@@ -394,6 +396,7 @@ async function main() {
 				else if (s.doc === "cleanexport") report = await cdp.evaluate("window.harness.checkCleanExport()", 60000);
 				else if (s.doc === "htmlexport") report = await cdp.evaluate("window.harness.checkHtmlExport()", 60000);
 				else if (s.doc === "exportarea") report = await cdp.evaluate("window.harness.checkExportArea()", 60000);
+				else if (s.doc === "handin") report = await cdp.evaluate("window.harness.checkHandIn()", 60000); // 0.24 handin
 				else if (s.doc === "ghostlines") report = await cdp.evaluate("window.harness.checkGhostlines()", 60000);
 				else if (s.doc === "pagetime") report = await cdp.evaluate("window.harness.checkPagetime()", 60000);
 				else if (s.doc === "pens") report = await cdp.evaluate("window.harness.checkPens()", 90000);
@@ -503,6 +506,20 @@ async function main() {
 						problems.push(`dropfiles ${state} screenshot: ${e.message}`);
 					}
 					await cdp.evaluate("window.harness.dropRelease()");
+				}
+			}
+			// 0.24 handin: a screenshot of the dialog (all pages chosen, with the pre-flight) and of the cover page.
+			if (s.doc === "handin") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of await cdp.evaluate("window.harness.handinStates")) {
+					try {
+						await cdp.evaluate(`window.harness.handinShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `handin-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`handin ${state} screenshot: ${e.message}`);
+					}
+					await cdp.evaluate("window.harness.closeHandIn()");
 				}
 			}
 			// 0.21 signstamp: a screenshot of each state (dialog, pad, dialog with the signature, signature placed).

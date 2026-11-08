@@ -627,7 +627,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### Thesis, assignments, sharing
 332. **P3** Thesis mode: chapters, numbered figures, bibliography, single export.
 333. **P3** Export numbered figures as separate high-resolution files.
-334. **P2** Assignment hand-in: export chosen pages as a PDF with a cover (name, course, date) after checking blank pages and open placeholders.
+334. **P2** 🧪 Assignment hand-in: export chosen pages as a PDF with a cover (name, course, date) after checking blank pages and open placeholders.
 335. **P3** "For correction" export: wide margins and line numbers for the teacher.
 336. **P3** Export pages as 16:9 slides.
 337. **P3** Timelapse video or GIF of the writing, from the replay feature.

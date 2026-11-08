@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### handin
+- **Hand in… (#334).** A dialog (notebook menu, Export & share sheet, command palette) that exports chosen pages as one PDF with a generated cover page first: your name (remembered on this device only), the course (prefilled from the timetable class linked to the notebook), the assignment title and the date. A grid of page pictures with checkboxes chooses the pages (the page in view at first; All / None). Below it a live pre-flight lists blank pages among the chosen ones and what is still open: gaps, questions and homework not done, unticked checkboxes, notes that say TODO and empty template boxes. Each row jumps to its page; *Leave out the blank pages* unticks them; the main button turns into *Export anyway* while anything is open. The PDF is the ordinary export, saved next to the notebook as `<notebook> hand-in.pdf` (never over an existing file), recorded as plugin-written, and offered to the share sheet when the device has one. No format change.
+
 ## 0.23.0 — 2026-11-08
 
 Eight features: saved views, export of the written area or the selection, dimensional analysis of formulas, balancing of chemical reactions, an automatic formula sheet, a welcome-back card, notebooks ordered by the active term and clean-up of pen hooks and stray dots. The notebook format moves to version 21 (saved views): the migration from version 20 is automatic, and 0.22 and older open a v21 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

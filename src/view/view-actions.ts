@@ -425,6 +425,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"export-png": (v) => v.openExportDialog(undefined, "png"),
 	// 0.23 (#280): written area and selection as transparent pictures
 	"export-area": (v) => v.openAreaExport("page"),
+	"hand-in": (v) => v.openHandIn(),
 	"selection-export-area": (v) => v.openAreaExport("selection"),
 	"print": (v) => {
 		if (canPrint()) v.openExportDialog(undefined, "print");
