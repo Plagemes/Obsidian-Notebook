@@ -80,6 +80,7 @@ import { taskCropRect } from "../model/selection-task";
 import { Mentions } from "./mentions";
 import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
 import { AddToIndexModal, BookIndexModal, currentIndex, termSpellings } from "./book-index";
+import { FormulaSheetModal } from "./formula-sheet";
 import { normalizeIndexPrefix } from "../model/book-index";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { MeaningTools } from "./colour-meaning";
@@ -2299,6 +2300,16 @@ export class NotebookView extends FileView {
 		if (!this.shownDoc() || !file) return;
 		new BookIndexModal({
 			app: this.app, file, docId: this.shownDoc()?.id, prefix: normalizeIndexPrefix(this.host.settings.indexPrefix),
+			pages: () => this.shownDoc()?.pages ?? [], goTo: (index, y) => this.scrollToPage(index, y),
+		}).open();
+	}
+
+	/** 0.23 (#249): the formula sheet: every equation in reading order, written to a note next to the notebook. */
+	openFormulaSheet(): void {
+		const file = this.file;
+		if (!this.shownDoc() || !file) return;
+		new FormulaSheetModal({
+			app: this.app, file, docId: this.shownDoc()?.id,
 			pages: () => this.shownDoc()?.pages ?? [], goTo: (index, y) => this.scrollToPage(index, y),
 		}).open();
 	}

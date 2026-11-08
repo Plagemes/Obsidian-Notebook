@@ -3467,3 +3467,18 @@ Manual steps (real Obsidian; nothing here is verified on Android). You need a cl
 |---|---|---|---|---|---|
 | Automatic lecture header (#210): course, lecturer, room, date and start time as two grouped text boxes at the top, one undo step | yes | slot choice (in progress, lead time, overlap, linked to another notebook, no class, nearest), fields in English and Italian, free-area search, plan, History step and locked page: `tests/lecture-header.test.ts`; view and chip: harness `doc=lecthead` | | | not tried on Android; time zones are covered by the rule that class times are local wall-clock times, not by running under other zones |
 | Setting Off / Ask / Automatic and the four fields; command *Insert lecture header* | yes | settings read: `tests/lecture-header.test.ts`; command and chip: harness `doc=lecthead` | | | |
+
+### 0.23 — formulasheet: automatic formula sheet (#249; steps 2360-2379)
+
+Formula sheet (roadmap #249). *Formula sheet…* (page sheet, notebook menu, command *Build formula sheet*) lists every equation of the notebook in reading order (LaTeX source and a page chip that jumps) and writes them into `<Notebook> — Formulas.md` next to the notebook: a heading with a link per page and a `$$…$$` block per formula (`\tag{n}` for a numbered one). Only the region between the `notebook-formulas` markers is rewritten; the notebook file is never written and the document format does not change. Implemented, not verified on hardware.
+
+2360. In a notebook with equations on three pages (one numbered, two on the same row), open *Formula sheet…*. Expect: the formulas in reading order (rows top to bottom, then left to right), a chip per page with formulas; a chip closes the dialog and goes to that page.
+2361. Tap *Build formula sheet*. Expect: a notice with the path and count; `<Notebook> — Formulas.md` next to the notebook, rendering each formula as maths in Obsidian, with a working link to each page.
+2362. Add text above and below the generated region in that note, add an equation in the notebook, build again. Expect: the new formula appears; your text above and below is unchanged.
+2363. Delete one of the two `notebook-formulas` marker lines in the note and build again. Expect: a notice that the note was left untouched; the note is not changed.
+2364. Create a note with the same name and no markers, then build. Expect: a notice that it is not a formula sheet; the note is unchanged.
+2365. Open the notebook with no equations. Expect: the dialog says there are none and no note is created.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Formula sheet (#249): equations collected in reading order into `<Notebook> — Formulas.md` (`$$` blocks, link to each page, `\tag{n}` for numbered ones); owner marker with path and document id, only the region is rewritten inside `vault.process`, a note without markers, with an unpaired marker or recording another notebook is never rewritten, recorded in plugin-written | yes | collection order, escaping of `$`, `-->` and blank lines, section, marker safety and note-name choice: `tests/formula-sheet.test.ts`; dialog and vault side: harness `doc=formulasheet` | | | one notebook at a time (no course/folder-wide sheet yet); formulas are written as LaTeX, typeset by Obsidian |

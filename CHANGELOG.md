@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### formulasheet
+- **Automatic formula sheet (#249).** *Formula sheet…* (page sheet, notebook menu, command *Build formula sheet*) collects every equation of the notebook in reading order and writes `<Notebook> — Formulas.md` next to it: a heading with a link per page and a `$$…$$` block per formula (`\tag{n}` for numbered ones). The note is owned by the plugin through `notebook-formulas` markers that record the notebook's path and document id; a rebuild replaces only that region (re-read inside `vault.process`), and a note without markers, with an unpaired marker or recording another notebook is never rewritten. No document format change; the notebook file is never written.
+
 ## 0.22.0 — 2026-11-08
 
 Seven features: three new pens, optional cloud sync with Google Drive or OneDrive, two-way page references, colours with meaning, instant axes, custom covers and an automatic lecture header. The notebook format moves to version 20 (the new pen tools and the nib angle): the migration from version 19 is automatic, and 0.21 and older open a v20 notebook read-only and never overwrite it. Cloud sync is off by default and uses your own OAuth client; the plugin ships no client ID or secret.
