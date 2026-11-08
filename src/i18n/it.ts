@@ -4465,4 +4465,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.trimHooks": "Taglia gli uncini mentre scrivi",
 	"settings.trimHooks.desc": "Toglie il minuscolo uncino a inizio o fine linea quando alzi la penna. Gli angoli restano.",
 	"trim.undone": "Uncino rimesso. Annulla ancora per togliere il tratto.",
+	// 0.24 tagsuggest
+	"tagSuggest.title": "Suggeriti",
+	"tagSuggest.add": "Aggiungi il tag {tag}",
+	"settings.tagSuggestions": "Suggerisci i tag",
+	"settings.tagSuggestions.desc": "Quando modifichi i tag, ne propone alcuni dal corso, dai quaderni vicini, dal testo e dai segni.",
 };

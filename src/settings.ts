@@ -156,6 +156,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	lookUpWidth: number;
 	/** 0.18 (#186): copying pages to another notebook also leaves a "Copied to" chip on the original page (the dialog starts with this). */
 	copyLinkReverse: boolean;
+	/** 0.24 (#411): suggest tags from the course, sibling notebooks, text and markers when editing tags. */
+	tagSuggestions: boolean;
 	// wave p1a: input
 	/** Edge rejection: touches that start within `edgeRejectionPx` of a selected edge of the page area are ignored. */
 	edgeRejection: boolean;
@@ -368,6 +370,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	lookUpNote: "",
 	lookUpWidth: LOOKUP_WIDTH_DEFAULT,
 	copyLinkReverse: false,
+	tagSuggestions: true,
 	edgeRejection: false,
 	edgeRejectionPx: 24,
 	edgeLeft: true,
@@ -526,6 +529,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.lookUpNote === "string") s.lookUpNote = d.lookUpNote.trim();
 	if (typeof d.lookUpWidth === "number") s.lookUpWidth = clampLookUpWidth(d.lookUpWidth);
 	if (typeof d.copyLinkReverse === "boolean") s.copyLinkReverse = d.copyLinkReverse;
+	if (typeof d.tagSuggestions === "boolean") s.tagSuggestions = d.tagSuggestions;
 	if (typeof d.edgeRejection === "boolean") s.edgeRejection = d.edgeRejection;
 	if (typeof d.edgeRejectionPx === "number" && d.edgeRejectionPx >= EDGE_WIDTH_MIN && d.edgeRejectionPx <= EDGE_WIDTH_MAX) s.edgeRejectionPx = d.edgeRejectionPx;
 	if (typeof d.edgeLeft === "boolean") s.edgeLeft = d.edgeLeft;

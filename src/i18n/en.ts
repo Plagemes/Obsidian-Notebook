@@ -4463,6 +4463,11 @@ export const en = {
 	"settings.trimHooks": "Trim hooks as you write",
 	"settings.trimHooks.desc": "Cuts the tiny tick at the start or end of a line when the pen lifts. Corners stay.",
 	"trim.undone": "Hook put back. Undo again to remove the stroke.",
+	// 0.24 tagsuggest
+	"tagSuggest.title": "Suggested",
+	"tagSuggest.add": "Add tag {tag}",
+	"settings.tagSuggestions": "Suggest tags",
+	"settings.tagSuggestions.desc": "While editing tags, offer a few from the course, nearby notebooks, the text and the markers.",
 } as const;
 
 export type MessageKey = keyof typeof en;

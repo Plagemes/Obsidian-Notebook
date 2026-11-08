@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### tagsuggest
+- **Tags suggested from context (#411).** When you edit the tags of a notebook, or of a page, up to six suggestion chips appear: the course of the class linked to the notebook or its folder (timetable), tags that other notebooks in the same folder use, frequent words of the typed text and titles (English and Italian stop-words ignored), and what is on the page (questions, homework, definitions, theorems...). One tap adds the tag through the same path as before (notebook tags and page tags are still undo steps in the notebook). Computed on the device from what is already there: no AI, no network. New setting *Suggest tags* (Integration). The document format is unchanged.
+
 ## 0.23.0 — 2026-11-08
 
 Eight features: saved views, export of the written area or the selection, dimensional analysis of formulas, balancing of chemical reactions, an automatic formula sheet, a welcome-back card, notebooks ordered by the active term and clean-up of pen hooks and stray dots. The notebook format moves to version 21 (saved views): the migration from version 20 is automatic, and 0.22 and older open a v21 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

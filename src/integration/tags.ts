@@ -1,5 +1,8 @@
 import { AbstractInputSuggest, getAllTags, Modal, Setting, type App, type Plugin, type TFile } from "obsidian";
 import { t } from "../i18n";
+import { documentSignals, pageSignals, tagSuggestionsFor, type PageSignals } from "../model/tag-context";
+import { setPageTagSuggestProvider } from "../view/tag-suggest-provider";
+import type { Timetable } from "../timetable/schedule";
 import { addTypedTags, isObsidianTag, normalizeTagList, parseTagInput, suggestTags, tagsFromVault, tagKey, type TagCount } from "../model/tags";
 import type { NotebookSettings } from "../settings";
 import { NotebookView } from "../view/notebook-view";
@@ -19,6 +22,8 @@ import { showNotice } from "../view/notice";
 export interface TagsHost extends Plugin {
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
+	/** The class timetable (0.24 tagsuggest: the course of a notebook is suggested as a tag). */
+	timetable?: { data?(): Timetable | null };
 }
 
 let host: TagsHost | null = null;
@@ -28,7 +33,18 @@ export function registerTags(plugin: TagsHost): void {
 	host = plugin;
 	plugin.register(() => {
 		host = null;
+		setPageTagSuggestProvider(null);
 	});
+	// 0.24 (#411): the page tag editor (view/outline.ts) asks for its suggested tags here.
+	setPageTagSuggestProvider((i) => tagSuggestionsFor({
+		enabled: plugin.settings.tagSuggestions,
+		timetable: plugin.timetable?.data?.() ?? null,
+		notebookPath: i.path,
+		siblings: i.notebookTags.length > 0 ? [i.notebookTags] : [],
+		signals: pageSignals(i.page),
+		existing: i.existing,
+		style: "page",
+	}));
 	plugin.addCommand({
 		id: "edit-tags",
 		name: t("command.editTags"),
@@ -76,6 +92,7 @@ export function editNotebookTags(app: App, view: NotebookView): void {
 	openTagEditor(app, {
 		file,
 		current: view.document?.meta?.tags ?? [],
+		context: { path: file.path, signals: documentSignals(view.document) },
 		onSave: (tags) => {
 			if (!view.applyMetaPatch({ tags })) throw new Error(t("host.metaRejected"));
 		},
@@ -88,6 +105,13 @@ export interface TagEditorOptions {
 	current: readonly string[];
 	/** Tags known to the library but maybe not (yet) to Obsidian: suggested too. */
 	libraryTags?: readonly string[];
+	/** 0.24 (#411): what the suggested tags are worked out from (the setting can turn them off). Absent: none. */
+	context?: {
+		path: string | null;
+		/** Tags of the other notebooks of the same folder. */
+		siblings?: ReadonlyArray<readonly string[]>;
+		signals?: PageSignals;
+	};
 	/** Receives the tags: the existing ones as they were (minus those removed), then the new ones, normalised. May return a promise; the companion note is refreshed when it settles. */
 	onSave: (tags: string[]) => void | Promise<void>;
 }
@@ -119,13 +143,14 @@ class TagSuggest extends AbstractInputSuggest<string> {
 	}
 }
 
-class TagEditorModal extends Modal {
+export class TagEditorModal extends Modal {
 	private tags: string[];
 	private chipsEl!: HTMLElement;
 	private inputEl!: HTMLInputElement;
 	private errorEl!: HTMLElement;
 	private hintEl!: HTMLElement;
 	private readonly candidates: TagCount[];
+	private suggestEl: HTMLElement | null = null;
 
 	constructor(app: App, private readonly opts: TagEditorOptions) {
 		super(app);
@@ -159,6 +184,8 @@ class TagEditorModal extends Modal {
 				this.renderChips();
 			}
 		});
+		this.suggestEl = this.contentEl.createDiv({ cls: "notebook-tags-suggest" });
+		this.renderSuggestions();
 		this.errorEl = this.contentEl.createDiv({ cls: "notebook-tags-error" });
 		this.contentEl.createDiv({ cls: "notebook-tags-desc", text: t("tags.editor.desc") });
 		this.hintEl = this.contentEl.createDiv({ cls: "notebook-tags-hint" });
@@ -176,6 +203,7 @@ class TagEditorModal extends Modal {
 
 	private renderChips(): void {
 		this.chipsEl.empty();
+		this.renderSuggestions();
 		if (this.tags.length === 0) {
 			this.chipsEl.createSpan({ cls: "notebook-tags-none", text: t("tags.editor.none") });
 			return;
@@ -194,6 +222,35 @@ class TagEditorModal extends Modal {
 				this.inputEl.focus();
 			});
 		});
+	}
+
+	/** 0.24 (#411): up to six tags from the course, nearby notebooks, text and markers; one tap adds one. */
+	private renderSuggestions(): void {
+		const el = this.suggestEl;
+		if (!el) return;
+		el.empty();
+		const ctx = this.opts.context;
+		const plugin = host;
+		if (!ctx || !plugin || !plugin.settings.tagSuggestions) return;
+		const tags = tagSuggestionsFor({
+			enabled: true,
+			timetable: plugin.timetable?.data?.() ?? null,
+			notebookPath: ctx.path,
+			siblings: ctx.siblings,
+			signals: ctx.signals,
+			existing: this.tags,
+		});
+		if (tags.length === 0) return;
+		el.createSpan({ cls: "notebook-tags-suggest-title", text: t("tagSuggest.title") });
+		for (const tag of tags) {
+			const chip = el.createEl("button", { cls: "notebook-tags-chip notebook-tags-chip-suggest", attr: { type: "button", "aria-label": t("tagSuggest.add", { tag }) } });
+			chip.createSpan({ text: `#${tag}` });
+			chip.createSpan({ cls: "notebook-tags-x", text: "+" });
+			chip.addEventListener("click", () => {
+				this.add([tag]);
+				this.inputEl.focus();
+			});
+		}
 	}
 
 	/** Adds what is in the field (one or several tags). Entries that cannot be tags stay in the field with a message. */

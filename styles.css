@@ -19092,3 +19092,37 @@ body.notebook-style-obsidian {
 	color: var(--nb-text-muted);
 	font-size: var(--nb-fs-meta);
 }
+
+/* ===== 0.24 tagsuggest ===== */
+.notebook-tags-suggest {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+	margin-top: 10px;
+}
+
+.notebook-tags-suggest:empty {
+	display: none;
+}
+
+.notebook-tags-suggest-title {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	margin-right: 2px;
+}
+
+.notebook-tags-chip.notebook-tags-chip-suggest {
+	background: transparent;
+	border: 1px dashed var(--background-modifier-border-hover);
+	color: var(--text-normal);
+}
+
+.notebook-tags-chip.notebook-tags-chip-suggest:hover {
+	border-style: solid;
+	border-color: var(--interactive-accent);
+}
+
+.notebook-tags-chip-suggest .notebook-tags-x {
+	color: var(--interactive-accent);
+}
