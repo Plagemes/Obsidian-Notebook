@@ -84,7 +84,9 @@ export async function checkSlideback(api: SlidebackCheckApi): Promise<{ ok: bool
 		// The recent-symbols strip (0.21) is also centred at the top: the pill sits just below it, never over it.
 		const strip = p?.parentElement?.querySelector<HTMLElement>(".notebook-symbol-strip:not(.notebook-hidden)");
 		const stripRect = strip?.getBoundingClientRect();
-		add("the pill is small and sits at the top, off the writing area", !!rect && !!body && rect.height <= 48 && rect.top - body.top < (stripRect ? 110 : 40) && rect.width < body.width);
+		// The lecture chip shifts the top pieces down on a phone (--nb-top-shift): measure the pill from there.
+		const topShift = p ? Number.parseFloat(getComputedStyle(p).getPropertyValue("--nb-top-shift")) || 0 : 0;
+		add("the pill is small and sits at the top, off the writing area", !!rect && !!body && rect.height <= 48 && rect.top - body.top - topShift < (stripRect ? 110 : 40) && rect.width < body.width);
 		add("the pill does not overlap the symbols strip", !rect || !stripRect || rect.top >= stripRect.bottom - 1, stripRect && rect ? `strip bottom ${Math.round(stripRect.bottom)}, pill top ${Math.round(rect.top)}` : "no strip");
 
 		// Back.

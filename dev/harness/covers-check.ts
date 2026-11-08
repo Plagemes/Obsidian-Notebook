@@ -203,7 +203,7 @@ export async function checkCovers(api: CoversCheckApi): Promise<{ ok: boolean; r
 		await frames(2);
 		add("image: applying is not possible before a picture is chosen", buttonByText("Use this cover")?.disabled === true);
 		buttonByText("Choose an image…")!.click();
-		await waitFor(() => !!dialogEl()?.querySelector(".nb-cover-slider"));
+		await waitFor(() => !!dialogEl()?.querySelector(".nb-cover-slider") && frameStats().spread > 40);
 		add("image: the chosen photo shows in the frame with a zoom slider", !!dialogEl()?.querySelector(".nb-cover-slider") && frameStats().spread > 40, JSON.stringify(frameStats()));
 		add("image: a big photo is reduced for editing and says so", /Reduced to 1600 × 1200/.test(dialogEl()?.textContent ?? ""), (dialogEl()?.textContent ?? "").slice(0, 200));
 		buttonByText("Cancel")!.click();
