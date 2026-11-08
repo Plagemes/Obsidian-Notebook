@@ -18588,3 +18588,38 @@ body.notebook-style-obsidian {
 		backdrop-filter: none;
 	}
 }
+
+/* ===== 0.22 integration ===== */
+/* Floating pills of this wave that can share a corner. Every rule looks at what is in `.notebook-body` (:has), because the pills
+   are created on demand in any order. Top centre: symbols strip (8px, about 50px high), "Back to slide" pill. Top right: the
+   "Referenced on" chip. Bottom left: the minimap when it is parked there, the colour-filter pill, the lecture-header chip. */
+
+/* The "Back to slide" pill (about 42px high) takes the top centre and, on a narrow screen, the width of the "Referenced on" chip:
+   the chip and its list go below it (and below the symbols strip when that is shown too). */
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-slide-back) > .notebook-page-refs {
+	top: 58px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-slide-back) > .notebook-page-refs-list {
+	top: 96px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-slide-back):has(> .notebook-symbol-strip:not(.notebook-hidden)) > .notebook-page-refs {
+	top: 114px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-slide-back):has(> .notebook-symbol-strip:not(.notebook-hidden)) > .notebook-page-refs-list {
+	top: 152px;
+}
+
+/* The lecture-header chip and the colour-filter pill share the bottom-left corner: the chip sits above the pill (36px + 12px). */
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-meaning-pill) > .notebook-lecture-header-offer {
+	bottom: 60px;
+}
+
+/* A minimap parked at the bottom left (the map is at most 168px wide) keeps the corner: the pill and the chip move to its right. */
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-minimap[data-corner="bl"]:not(.notebook-hidden)) > .nb-meaning-pill,
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-minimap[data-corner="bl"]:not(.notebook-hidden)) > .notebook-lecture-header-offer {
+	left: 204px;
+	max-width: calc(100% - 216px);
+}

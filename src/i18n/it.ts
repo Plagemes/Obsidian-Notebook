@@ -4021,7 +4021,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.cloudSyncProvider.onedrive": "OneDrive",
 	"settings.cloudSyncAccount": "Account",
 	"settings.cloudSyncClientId": "ID client",
-	"settings.cloudSyncClientId.gdrive": "Il tuo client OAuth di Google. Ogni dispositivo deve usare questo stesso ID client: Google gli lascia vedere solo la cartella «Notebook sync» creata da questo client.",
+	"settings.cloudSyncClientId.gdrive": "Il tuo client OAuth di Google. Ogni dispositivo deve usare lo stesso ID client.",
 	"settings.cloudSyncClientId.onedrive": "L'ID della tua app Microsoft (client). Usa lo stesso su ogni dispositivo.",
 	"settings.cloudSyncSecret": "Segreto client",
 	"settings.cloudSyncSecret.desc": "Google lo richiede per l'accesso. Resta solo su questo dispositivo.",

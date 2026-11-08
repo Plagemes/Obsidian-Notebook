@@ -4019,7 +4019,7 @@ export const en = {
 	"settings.cloudSyncProvider.onedrive": "OneDrive",
 	"settings.cloudSyncAccount": "Account",
 	"settings.cloudSyncClientId": "Client ID",
-	"settings.cloudSyncClientId.gdrive": "Your own Google OAuth client. Every device must use this same client ID: Google only lets it see the “Notebook sync” folder that this client created.",
+	"settings.cloudSyncClientId.gdrive": "Your own Google OAuth client. Every device must use this same client ID.",
 	"settings.cloudSyncClientId.onedrive": "Your own Microsoft app (client) ID. Use the same one on every device.",
 	"settings.cloudSyncSecret": "Client secret",
 	"settings.cloudSyncSecret.desc": "Google needs it to sign in. Kept on this device only.",
