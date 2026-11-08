@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### papersuggest
+- **Suggested paper for a new page (#409).** The **+** strip highlights the paper the notebook and the course point to, with a short reason on the chip: *Like the last 5 pages* (a run of one paper), *Like most of the last 6 pages*, *Alternating, like the last pages* (ruled, grid, ruled, grid), *Usual for Analysis* (what was added while that class was in progress, kept on this device), *Usual in this notebook*. If the suggested paper is not among the usual chips it takes the place of the weakest one; the same-paper chip and the slide chip stay. It never adds anything by itself and never replaces your choice. New setting *Suggest a paper for new pages* (Pages), on by default.
+- **Code.** Pure, Node-tested ranker `src/model/paper-suggest.ts` (no `obsidian` import): a list of candidates with a score and a structured reason, with an `extra` input so another feature (a profile paper, score `PROFILE_SCORE`) outranks history. The course habit is a bounded per-device value in local storage. No format change; notebooks are only read. English and Italian.
+
 ## 0.24.0 — 2026-11-08
 
 Eight features: filled shapes and dashed or dotted lines, joining of broken strokes, a context-ordered actions sheet, explanations on long press of an icon, tag suggestions, an adaptive page navigator, global bookmarks across notebooks and a hand-in dialog. The notebook format moves to version 22 (filled shapes and dashed or dotted lines): the migration from version 21 is automatic, and 0.23 and older open a v22 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

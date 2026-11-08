@@ -171,6 +171,9 @@ import { WelcomeBack } from "./welcome-back";
 import { PageRefs } from "./page-refs";
 import { SmartAddStrip } from "./smart-add";
 import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
+import {
+	COURSE_PAPER_KEY, courseUsageOf, normaliseCoursePaperStore, rememberCoursePaper, suggestPaper, type CoursePaperStore, type PaperCandidate,
+} from "../model/paper-suggest";
 import { createMarker, isRegion, visibleStrokes } from "../model/markers";
 import type { PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
@@ -938,6 +941,7 @@ export class NotebookView extends FileView {
 			context: () => this.smartAddContext(),
 			add: (choice) => this.addSmartChoice(choice),
 			more: () => this.openPageMenu(this.currentPageIndex()),
+			suggest: () => this.paperSuggestion(),
 		});
 		// Registered before the pointer controller: the ruler gesture swallows the touches that move the ruler.
 		this.rulerGesture = new RulerGesture(this.stage, {
@@ -2063,13 +2067,46 @@ export class NotebookView extends FileView {
 		return { paper: page.paper.kind, hasBackground: !!page.background, nearbyPapers: nearbyPapers(doc.pages, this.currentPageIndex()), slide: referenceSlideOf(this), exercisePaper: loadExercisePaper(this.app) };
 	}
 
+	/** 0.25 (409): the paper the "+" strip highlights, from the last pages and the course; null when the setting is off or nothing stands out. Reads the notebook, never changes it. */
+	private paperSuggestion(): PaperCandidate | null {
+		const doc = this.session?.doc;
+		if (!doc || !this.host.settings.paperSuggest || !this.editable()) return null;
+		const name = suggestedCourse(this.file?.path);
+		const course = name ? { name, usage: courseUsageOf(this.coursePapers(), name) } : null;
+		return suggestPaper({ pages: doc.pages.map((p) => p.paper.kind), index: this.currentPageIndex(), course });
+	}
+
+	/** The paper habit per course of this device (bounded, damaged data reads as empty). */
+	private coursePapers(): CoursePaperStore {
+		try {
+			return normaliseCoursePaperStore(this.app.loadLocalStorage(COURSE_PAPER_KEY));
+		} catch {
+			return {};
+		}
+	}
+
+	/** Remembers on this device that a page with this paper was added while this course was in progress. */
+	private noteCoursePaper(paper: PaperKind): void {
+		const course = suggestedCourse(this.file?.path);
+		if (!course || !this.host.settings.paperSuggest) return;
+		try {
+			this.app.saveLocalStorage(COURSE_PAPER_KEY, rememberCoursePaper(this.coursePapers(), course, paper, Date.now()));
+		} catch {
+			// A convenience: losing it only changes the suggestion.
+		}
+	}
+
 	private addSmartChoice(choice: SmartAddChoice): boolean {
 		const index = this.currentPageIndex();
 		const before = this.session?.doc?.pages.length ?? 0;
+		const sameKind = this.session?.doc?.pages[index]?.paper.kind;
 		if (choice.id === "slide") return runPdfSideAction(this, "pdf-side-add-page");
 		if (choice.id === "same") this.addPageAfter(index);
 		else if (choice.paper) this.addPageWithPaper(choice.paper, index);
-		return (this.session?.doc?.pages.length ?? 0) > before;
+		const added = (this.session?.doc?.pages.length ?? 0) > before;
+		const paper = choice.id === "same" ? sameKind : choice.paper;
+		if (added && paper) this.noteCoursePaper(paper);
+		return added;
 	}
 
 	/** Inserts a blank page (size and paper of the page at `index`) after it. */

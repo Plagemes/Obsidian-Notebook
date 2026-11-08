@@ -4637,4 +4637,14 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"handIn.export": "Esporta PDF",
 	"handIn.exportAnyway": "Esporta comunque",
 	"handIn.fixHint": "La finestra si chiude quando vai a una pagina; riaprila dal menu del quaderno quando hai finito.",
+	// 0.25 papersuggest
+	"settings.paperSuggest": "Suggerisci una carta per le nuove pagine",
+	"settings.paperSuggest.desc": "Il + evidenzia la carta delle ultime pagine o della lezione, e perché.",
+	"paperSuggest.recent": "Come le ultime {n} pagine",
+	"paperSuggest.recentMost": "Come la maggior parte delle ultime {n} pagine",
+	"paperSuggest.pattern": "Alternata, come le ultime pagine",
+	"paperSuggest.course": "Di solito per {course}",
+	"paperSuggest.notebook": "Di solito in questo quaderno",
+	"paperSuggest.profile": "La carta del tuo profilo",
+	"paperSuggest.suggested": "Suggerita: {reason}",
 };

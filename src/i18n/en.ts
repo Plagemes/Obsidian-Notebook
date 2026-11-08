@@ -4635,6 +4635,16 @@ export const en = {
 	"handIn.export": "Export PDF",
 	"handIn.exportAnyway": "Export anyway",
 	"handIn.fixHint": "The dialog closes when you go to a page; open it again from the notebook menu when you are done.",
+	// 0.25 papersuggest
+	"settings.paperSuggest": "Suggest a paper for new pages",
+	"settings.paperSuggest.desc": "The + strip highlights the paper your last pages or class use, and why.",
+	"paperSuggest.recent": "Like the last {n} pages",
+	"paperSuggest.recentMost": "Like most of the last {n} pages",
+	"paperSuggest.pattern": "Alternating, like the last pages",
+	"paperSuggest.course": "Usual for {course}",
+	"paperSuggest.notebook": "Usual in this notebook",
+	"paperSuggest.profile": "Your profile paper",
+	"paperSuggest.suggested": "Suggested: {reason}",
 } as const;
 
 export type MessageKey = keyof typeof en;

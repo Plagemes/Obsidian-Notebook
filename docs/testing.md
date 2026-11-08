@@ -3809,3 +3809,21 @@ Manual steps (real Obsidian; nothing here is verified on Android). Use a noteboo
 | Hand in…: page grid with checkboxes, cover fields (name remembered per device, course from the timetable, title, date) | yes | page choice, cover layout and its PDF: `tests/hand-in.test.ts`; harness `doc=handin` (real dialog, remembered name, grid) | | | the page panel's own multi-selection is not read yet: the dialog starts on the page in view |
 | Pre-flight: blank pages, open gaps/questions/homework, unticked checkboxes, TODO notes, empty template boxes, with links to fix and "export anyway" | yes | `tests/hand-in.test.ts`; harness `doc=handin` (rows, leave out, link) | | | |
 | PDF with generated cover first, saved next to the notebook under a free name, recorded as plugin-written, optional share sheet | yes | harness `doc=handin` (written through a stand-in vault, second export `hand-in 2.pdf`, cover plus chosen pages) | | | share sheet depends on the WebView |
+
+### 0.25 — papersuggest: suggested paper for a new page (roadmap #409; steps 2740-2759)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook you can freely add pages to, and for the course steps a timetable with a class in progress linked to that notebook.
+
+2740. **A run.** Open a notebook whose last pages all use the same paper (for example grid) and tap **+**. The strip shows that paper first, highlighted, with the reason *Like the last 5 pages*. Nothing is added until you tap a chip.
+2741. **A pattern.** In a notebook that alternates two papers (ruled, grid, ruled, grid), tap **+** on a grid page: the highlighted chip is the ruled page, reason *Alternating, like the last pages*. Tap it: a ruled page is added after the current one; one undo takes it away.
+2742. **Most of the last pages.** With five ruled pages and one grid page among the last six, the ruled chip is highlighted with *Like most of the last 6 pages*.
+2743. **Mixed notebook.** With three different papers in a row and no course, the strip is the usual one: no highlight, no reason.
+2744. **Course.** With a class in progress linked to the notebook, add several pages of one paper (for example millimetre) while it is on. On a page of another paper, **+** now highlights millimetre with *Usual for <course>*. The habit is kept on this device only.
+2745. **Setting.** Settings, *Pages*, *Suggest a paper for new pages* off: **+** shows the plain strip, nothing highlighted. On again: the highlight comes back.
+2746. **Never forced.** Tap a different chip than the highlighted one, or *More…*: that is what happens; the suggestion only changes which chip is marked.
+2747. **Slide strip.** Beside a PDF, the *Notes for this slide* chip stays first; the suggested paper is highlighted after it.
+2748. **Looks.** Light and dark theme, phone width (chips stack, the reason stays on the chip) and tablet width, Italian (*Come le ultime 5 pagine*, *Di solito per <corso>*).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Suggested paper highlighted in the "+" strip with a short reason (run, alternation, most of the last pages, course habit, whole notebook); setting to turn off; ranking returns candidates with scores and reasons so a profile paper can outrank history; no format change, notebooks are only read | yes | ranking, pattern, course store and strip merge: `tests/paper-suggest.test.ts`; harness `doc=papersuggest` (real view and strip) | | | the profile paper is not wired yet (the ranker accepts it as an extra candidate) |

@@ -19544,3 +19544,21 @@ body.notebook-style-obsidian {
 	display: flex;
 	justify-content: flex-start;
 }
+
+/* ===== 0.25 papersuggest ===== */
+.nb-ui.nb-smart-add .nb-chip.nb-smart-suggested {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-smart-add .nb-chip.nb-smart-suggested .nb-smart-reason {
+	color: var(--nb-text-muted);
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.nb-ui.nb-smart-add .nb-chip.nb-smart-suggested .nb-smart-reason::before {
+	content: "\00b7";
+	margin-right: 6px;
+}
