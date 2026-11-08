@@ -4463,6 +4463,18 @@ export const en = {
 	"settings.trimHooks": "Trim hooks as you write",
 	"settings.trimHooks.desc": "Cuts the tiny tick at the start or end of a line when the pen lifts. Corners stay.",
 	"trim.undone": "Hook put back. Undo again to remove the stroke.",
+	// 0.24 shapefill (#37)
+	"shapeStyle.fill": "Fill",
+	"shapeStyle.fill.none": "No fill",
+	"shapeStyle.fill.solid": "Solid",
+	"shapeStyle.fill.tint": "Tint",
+	"shapeStyle.fill.color": "Fill colour",
+	"shapeStyle.fill.sameAsLine": "Same as the line",
+	"shapeStyle.line": "Line",
+	"shapeStyle.line.solid": "Solid",
+	"shapeStyle.line.dashed": "Dashed",
+	"shapeStyle.line.dotted": "Dotted",
+	"shapeStyle.title": "Shape style",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -1,4 +1,4 @@
-import { RENDER_INK, type Point, type Stroke, type Tool } from "../model/types";
+import { RENDER_INK, type Point, type ShapeDash, type Stroke, type Tool } from "../model/types";
 import { addInkPath, InkBuilder, SvgPathSink, type PathSink } from "./ink-geometry";
 import { strokeOutline, strokeSvgPath } from "./stroke-shape";
 
@@ -237,7 +237,9 @@ export function polygonSvgPath(xy: readonly number[]): string {
  * SVG path of a stroke for LOD `level` at `width` (for one-off drawing such as thumbnails, where the width can
  * differ from the stroke's); the exact path when there is nothing to simplify.
  */
-export function lodSvgPath(stroke: Pick<Stroke, "points" | "width" | "tool" | "render"> & { nib?: number }, width: number, level: number): string {
+export function lodSvgPath(stroke: Pick<Stroke, "points" | "width" | "tool" | "render"> & { nib?: number; dash?: ShapeDash }, width: number, level: number): string {
+	// v22: a dashed or dotted shape has nothing to simplify (its runs are short): its exact path.
+	if (stroke.dash !== undefined) return strokeSvgPath({ ...stroke, width });
 	if (stroke.render === RENDER_INK) {
 		const nodes = lodNodes(stroke.points, width, stroke.tool, level, stroke.nib);
 		if (!nodes) return strokeSvgPath({ ...stroke, width });

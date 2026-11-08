@@ -56,6 +56,7 @@ import { capturePosition, positionFromState, restoreViewport, type SavedPosition
 import { captureRegion, restoreRegion, type ViewRegion } from "../ink/view-region";
 import { PageMode } from "./page-mode";
 import { cloneMeta, createId, createPage, createStroke } from "../model/document";
+import { newShapeStyle } from "../ink/shape-style";
 import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
 import { backgroundRect } from "../model/margins";
 import {
@@ -5528,7 +5529,7 @@ export class NotebookView extends FileView {
 		if (!page) return;
 		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.tools.penWidth, this.shiftDown);
 		if (points.length < 2) return;
-		const stroke = freezeStroke(createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"));
+		const stroke = freezeStroke({ ...createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"), ...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine) });
 		this.addStrokes(shape.pageIndex, page, [stroke], false);
 	}
 
@@ -5544,9 +5545,10 @@ export class NotebookView extends FileView {
 	private pushShapeLive(): void {
 		const s = this.shapeDrag;
 		if (!s) return;
+		const points = shapePoints(this.tools.shapeKind, s.a, s.b, this.tools.penWidth, this.shiftDown);
 		this.renderer?.setLive({
-			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.tools.penWidth,
-			points: shapePoints(this.tools.shapeKind, s.a, s.b, this.tools.penWidth, this.shiftDown), predicted: [],
+			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.tools.penWidth, points, predicted: [],
+			...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine),
 		});
 	}
 

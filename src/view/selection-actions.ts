@@ -9,6 +9,8 @@ import { planCleanup, type CleanupPlan } from "../ink/hook-clean";
 import { selectableItems } from "../model/groups";
 import type { PageBox } from "../ink/layout";
 import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
+import { batchShapeStyle, commonShapeStyle, planShapeStyle, shapeAbilities, type ShapeStyleRequest } from "../ink/shape-restyle";
+import { renderShapeStyle } from "./shape-style-row";
 import { AddAsset, AddElement, AddPage, Batch, ReplaceElement, type Command } from "../model/history";
 import type { Asset, ImageElement, NotebookDocument, Page, PageElement, Stroke } from "../model/types";
 import { decodePhoto, PhotoDecodeError, photoSize } from "../scan/decode";
@@ -117,6 +119,8 @@ export class SelectionActions {
 		const ability = restyleAbilities(all.strokes, all.elements);
 		if (ability.inkColor || ability.inkWidth) this.styleRow(sel, "ink", ability.inkColor, ability.inkWidth);
 		if (ability.highlighterColor) this.styleRow(sel, "highlighter", true, ability.highlighterWidth);
+		// 0.24 (#37): the fill and the line style of the shapes in the selection.
+		this.shapeRow(all.strokes);
 		this.el.toggleClass("notebook-hidden", !this.host.editable() || this.styleRows.childElementCount === 0);
 	}
 
@@ -141,6 +145,53 @@ export class SelectionActions {
 				b.createSpan({ cls: `notebook-width-dot notebook-width-${highlighter ? "h" : "p"}${i}` });
 			});
 		}
+	}
+
+	/** 0.24 (#37): fill (closed shapes) and line style (every shape) of the shapes in the selection; nothing for a selection without a shape. */
+	private shapeRow(strokes: readonly Stroke[]): void {
+		const ability = shapeAbilities(strokes);
+		if (!ability.fill && !ability.line) return;
+		const common = commonShapeStyle(strokes);
+		const row = this.styleRows.createDiv({ cls: "notebook-toolbar-group notebook-shape-style", attr: { role: "group", "aria-label": t("shapeStyle.title") } });
+		renderShapeStyle(row, {
+			showFill: ability.fill,
+			showLine: ability.line,
+			fill: common.fill,
+			fillColor: common.fillColor,
+			line: common.line,
+			colours: PEN_COLORS,
+			editable: this.host.editable(),
+		}, {
+			setFill: (fill) => this.restyleShape({ fill }),
+			setFillColor: (fillColor) => this.restyleShape({ fillColor }),
+			setLine: (line) => this.restyleShape({ line }),
+		});
+	}
+
+	/** Applies a shape style to the selected shapes as ONE undo step (every page of a selection that crossed pages), keeping the selection. */
+	private restyleShape(req: ShapeStyleRequest): void {
+		const sel = this.host.selection();
+		const doc = this.host.doc();
+		if (!sel || !doc || !this.host.editable()) return;
+		const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])];
+		const plans = parts.flatMap((part) => {
+			const page = doc.pages[part.pageIndex];
+			if (!page) return [];
+			// Groups come whole and the ink a collapsed note keeps hidden is not offered here: the selection is already made of selectable items.
+			const picked = selectableItems(page, { strokes: part.strokes.filter((s) => page.strokes.includes(s)), elements: [] });
+			const plan = planShapeStyle(page, picked.strokes, req);
+			return plan ? [{ part, plan }] : [];
+		});
+		if (plans.length === 0) return;
+		if (!this.host.execute(batchShapeStyle(plans.map((p) => p.plan.command)))) return;
+		const next = (part: PagePart): PagePart => {
+			const found = plans.find((p) => p.part === part);
+			if (!found) return part;
+			const changed = new Map(found.plan.strokes.map((s) => [s.id, s]));
+			return { pageIndex: part.pageIndex, strokes: part.strokes.map((s) => changed.get(s.id) ?? s), elements: part.elements };
+		};
+		const [first, ...rest] = parts.map(next) as [PagePart, ...PagePart[]];
+		this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
 	}
 
 	private rawButton(parent: HTMLElement, label: string, onClick: () => void): HTMLButtonElement {

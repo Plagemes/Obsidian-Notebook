@@ -7,6 +7,8 @@ import { DEFAULT_ERASER_SIZE } from "./favourites";
 import { SHAPE_KINDS, type ShapeKind } from "./view-helpers";
 import { attachQuickTabGesture } from "./quick-tabs";
 import { kindHasNib, NIB_STEP, normaliseNib, PEN_KINDS, type PenKind } from "../ink/pen-kinds";
+import type { FillMode, LineStyle } from "../ink/shape-restyle";
+import { renderShapeStyle } from "./shape-style-row";
 
 export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
 export type EraserMode = "stroke" | "segment" | "area";
@@ -44,6 +46,10 @@ export interface ToolbarState {
 	penKind: PenKind;
 	/** 0.22 (#35): nib angle in degrees of new fountain pen and marker strokes (45 is the default). */
 	nibAngle: number;
+	/** 0.24 (#37): the fill of new closed shapes (none, solid or a translucent tint), its colour (null: the colour of the line) and the line style (solid, dashed or dotted). */
+	shapeFill: FillMode;
+	shapeFillColor: string | null;
+	shapeLine: LineStyle;
 }
 
 export const DEFAULT_TOOLS: ToolbarState = {
@@ -62,6 +68,9 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	selectMode: "lasso",
 	penKind: "pen",
 	nibAngle: 45,
+	shapeFill: "none",
+	shapeFillColor: null,
+	shapeLine: "solid",
 };
 
 export interface ToolbarActions {
@@ -154,6 +163,8 @@ export class Toolbar {
 	private readonly filterGroup: HTMLElement;
 	private readonly filterButtons = new Map<EraseFilterKind, HTMLButtonElement>();
 	private readonly shapeGroup: HTMLElement;
+	/** 0.24 (#37): fill and line style of the shape tool. */
+	private readonly shapeStyleEl: HTMLElement;
 	private readonly selectGroup: HTMLElement;
 	private readonly selectButtons = new Map<SelectMode, HTMLButtonElement>();
 	private readonly shapeButtons = new Map<ShapeKind, HTMLButtonElement>();
@@ -259,6 +270,7 @@ export class Toolbar {
 			const [icon, label] = SHAPE_DEFS[kind];
 			this.shapeButtons.set(kind, this.iconButton(this.shapeGroup, icon, label, () => this.set({ shapeKind: kind })));
 		}
+		this.shapeStyleEl = this.optionsEl.createDiv({ cls: "notebook-shape-style" });
 		this.eraserGroup = this.row(this.optionsEl);
 		this.eraserGroup.addClass("notebook-segmented");
 		this.eraserButtons.set("stroke", this.textButton(this.eraserGroup, "tool.eraser.stroke", () => this.set({ eraserMode: "stroke" })));
@@ -529,6 +541,24 @@ export class Toolbar {
 		for (const [kind, b] of this.shapeButtons) {
 			b.toggleClass("is-active", kind === s.shapeKind);
 			b.disabled = !this.editable;
+		}
+		// 0.24 (#37): fill (closed shapes only: the rectangle and the ellipse) and line style of the shape tool.
+		this.shapeStyleEl.toggleClass("notebook-hidden", s.tool !== "shape");
+		this.shapeStyleEl.empty();
+		if (s.tool === "shape") {
+			renderShapeStyle(this.shapeStyleEl, {
+				showFill: s.shapeKind === "rectangle" || s.shapeKind === "ellipse",
+				showLine: true,
+				fill: s.shapeFill,
+				fillColor: s.shapeFillColor === null ? "line" : s.shapeFillColor.toLowerCase(),
+				line: s.shapeLine,
+				colours: PEN_COLORS,
+				editable: this.editable,
+			}, {
+				setFill: (shapeFill) => this.set({ shapeFill }),
+				setFillColor: (c) => this.set({ shapeFillColor: c === "line" ? null : c }),
+				setLine: (shapeLine) => this.set({ shapeLine }),
+			});
 		}
 
 		const inking = s.tool === "pen" || s.tool === "highlighter" || s.tool === "shape";

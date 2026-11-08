@@ -17,6 +17,7 @@ import { drawCheckbox } from "./checkbox-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { inkAlpha, inkBlend, strokeSvgPath } from "./stroke-shape";
+import { fillAlpha, fillPathD, isFilled } from "./shape-style";
 
 export interface RasterInputs {
 	/** The PDF page or picture under the page, already drawn at a suitable size; null when there is none or it failed. */
@@ -91,9 +92,6 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 			if ((stroke.hidden && !inputs.hiddenInk) || noteInk?.has(stroke.id)) continue;
 			const path = strokePath2D(stroke, inputs.paths);
 			if (!path) continue;
-			ctx.fillStyle = stroke.color;
-			ctx.globalAlpha = inkAlpha(stroke.tool);
-			ctx.globalCompositeOperation = inkBlend(stroke.tool);
 			// v9: ink bound to a graph is clipped to its frame, as on screen.
 			const clip = strokeClip(stroke, clips);
 			if (clip) {
@@ -101,9 +99,19 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 				ctx.beginPath();
 				ctx.rect(clip.x, clip.y, clip.width, clip.height);
 				ctx.clip();
-				ctx.fill(path);
-				ctx.restore();
-			} else ctx.fill(path);
+			}
+			// v22 (#37): the fill of a closed shape lies under its line.
+			if (isFilled(stroke)) {
+				ctx.fillStyle = stroke.fill!;
+				ctx.globalAlpha = fillAlpha(stroke);
+				ctx.globalCompositeOperation = "source-over";
+				ctx.fill(new Path2D(fillPathD(stroke.points)));
+			}
+			ctx.fillStyle = stroke.color;
+			ctx.globalAlpha = inkAlpha(stroke.tool);
+			ctx.globalCompositeOperation = inkBlend(stroke.tool);
+			ctx.fill(path);
+			if (clip) ctx.restore();
 		}
 		ctx.globalAlpha = 1;
 		ctx.globalCompositeOperation = "source-over";

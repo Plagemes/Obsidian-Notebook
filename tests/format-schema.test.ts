@@ -1,7 +1,7 @@
-// docs/schema/notebook-v21.schema.json against what the serializer really writes (roadmap #167).
+// docs/schema/notebook-v22.schema.json against what the serializer really writes (roadmap #167).
 // The schema is a published contract for other tools: a document the plugin writes must always satisfy it, and a document that
 // breaks one of the writer's rules must not. The validator is a small dependency-free one (tests/json-schema-lite.ts).
-import schemaText from "../docs/schema/notebook-v21.schema.json?raw";
+import schemaText from "../docs/schema/notebook-v22.schema.json?raw";
 import guide from "../docs/format.md?raw";
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
@@ -72,6 +72,8 @@ function fullDocument(): NotebookDocument {
 		// v20: the new pens (always render 2) and the nib angle.
 		stroke("st-fountain", { tool: "fountain", render: 2, nib: 120 }), stroke("st-brush", { tool: "brush", render: 2, width: 6 }), stroke("st-marker", { tool: "marker", render: 2, width: 10, nib: 0 }),
 		stroke("st-a"), stroke("st-b"), stroke("st-c"),
+		// v22: a filled and dashed shape, a solid-filled dotted one (strokes 9 and 10 of page 1).
+		stroke("st-shape-tint", { tool: "shape", render: 1, fill: "#2563eb", fillTint: true, dash: "dashed" }), stroke("st-shape-solid", { tool: "shape", render: 1, fill: "#ff0000", dash: "dotted" }),
 	];
 	const graph: GraphElement = {
 		id: "el-graph", type: "graph", x: 40, y: 400, width: 300, height: 200,
@@ -142,7 +144,7 @@ function fullDocument(): NotebookDocument {
 	return doc;
 }
 
-describe("notebook-v21.schema.json: what the serializer writes validates", () => {
+describe("notebook-v22.schema.json: what the serializer writes validates", () => {
 	it("is a well-formed draft 2020-12 schema for the current format version", () => {
 		expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
 		expect((getAt(schema as Raw, ["properties", "version", "const"]))).toBe(CURRENT_VERSION);
@@ -187,7 +189,7 @@ describe("notebook-v21.schema.json: what the serializer writes validates", () =>
 	});
 });
 
-describe("notebook-v21.schema.json: invalid documents are refused", () => {
+describe("notebook-v22.schema.json: invalid documents are refused", () => {
 	const base = (): Raw => parseRaw(written(fullDocument()));
 	const bad = (name: string, edit: (raw: Raw) => void): void => {
 		it(name, () => {
@@ -283,6 +285,13 @@ describe("notebook-v21.schema.json: invalid documents are refused", () => {
 	bad("nib above 179", set(["pages", 0, "strokes", 3, "nib"], 180));
 	bad("nib negative", set(["pages", 0, "strokes", 3, "nib"], -1));
 	bad("nib fractional", set(["pages", 0, "strokes", 3, "nib"], 45.5));
+	// v22: the fill and the line style of a shape.
+	bad("fill on a pen", set(["pages", 0, "strokes", 0, "fill"], "#112233"));
+	bad("dash on a highlighter", set(["pages", 0, "strokes", 1, "dash"], "dashed"));
+	bad("fill that is not a colour", set(["pages", 0, "strokes", 9, "fill"], "blue"));
+	bad("an unknown line style", set(["pages", 0, "strokes", 9, "dash"], "dashdot"));
+	bad("a tint without a fill", set(["pages", 0, "strokes", 2, "fillTint"], true));
+	bad("a tint that is false", set(["pages", 0, "strokes", 9, "fillTint"], false));
 	// Elements.
 	bad("element of an unknown type", set(["pages", 0, "elements", 0, "type"], "video"));
 	bad("text without text", del(["pages", 0, "elements", 0, "text"]));
@@ -367,7 +376,7 @@ describe("docs/format.md", () => {
 	});
 
 	it("names the schema file and the version it describes", () => {
-		expect(guide).toContain("schema/notebook-v21.schema.json");
+		expect(guide).toContain("schema/notebook-v22.schema.json");
 		expect(guide).toContain(`version ${CURRENT_VERSION}`);
 	});
 });

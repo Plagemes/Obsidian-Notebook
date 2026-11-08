@@ -1,5 +1,5 @@
-import type { ExcerptElement, Page, PageElement, Point, Stroke, TextElement, Tool } from "../model/types";
-import { isNewPen, MM, RENDER_INK } from "../model/types";
+import type { ExcerptElement, Page, PageElement, Point, ShapeDash, Stroke, TextElement, Tool } from "../model/types";
+import { isNewPen, MM, RENDER_FREEHAND, RENDER_INK } from "../model/types";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
@@ -18,7 +18,8 @@ import { minorVisible, paperPattern, PAPER_COLORS } from "./paper";
 import { visiblePages, type Layout, type PageBox } from "./layout";
 import { rulerEdge, rulerTicks, type Ruler } from "./ruler";
 import { inkPath, type InkBuilder } from "./ink-geometry";
-import { HIGHLIGHTER_ALPHA, MARKER_ALPHA, strokePath } from "./stroke-shape";
+import { HIGHLIGHTER_ALPHA, MARKER_ALPHA, strokePath, strokeSvgPath } from "./stroke-shape";
+import { fillAlpha, fillPathD, isFilled } from "./shape-style";
 import { addLodNodesPath, lodLevel, lodNodes, lodPolygon } from "./lod";
 import { LazyWet } from "./lazy-wet";
 import { WetInk, type PageTransform } from "./wet-ink";
@@ -157,6 +158,10 @@ export interface LiveStroke {
 	width: number;
 	/** Format v20: the nib angle of a fountain pen or a marker (absent = 45). */
 	nib?: number;
+	/** Format v22 (#37): the fill colour of a closed shape being drawn, whether it is a tint, and the line style of a dashed or dotted shape. */
+	fill?: string;
+	fillTint?: true;
+	dash?: ShapeDash;
 	points: readonly Point[];
 	predicted: readonly Point[];
 }
@@ -367,6 +372,8 @@ export class Renderer {
 	private readonly wetRelease: Array<{ wet: WetInk; frames: number }> = [];
 
 	private readonly paths = new WeakMap<Stroke, Path2D>();
+	/** v22 (#37): the polygon of the fill of a closed shape, by stroke. */
+	private readonly fillPaths = new WeakMap<Stroke, Path2D>();
 	/** Paths of strokes drawn from simplified points, per LOD level (drawing cache only, see ink/lod.ts). */
 	private readonly lodPaths = new WeakMap<Stroke, Array<Path2D | null | undefined>>();
 	/** Level of detail for committed strokes: set by each full static redraw from the zoom. */
@@ -1296,8 +1303,12 @@ export class Renderer {
 		if (live && live.points.length > 0 && boxes[live.pageIndex]) this.guarded(ctx, "live stroke", () => {
 			this.beginPage(ctx, boxes[live.pageIndex]!);
 			const points = live.predicted.length ? [...live.points, ...live.predicted] : live.points;
+			// v22 (#37): the fill of the closed shape being dragged lies under its line (a dashed line is drawn as its runs).
+			if (live.fill !== undefined && isFilled({ tool: live.tool, fill: live.fill, points })) this.fillShape(ctx, live.fill, live.fillTint === true, points);
 			this.setInk(ctx, live.tool, live.color);
-			if (isNewPen(live.tool)) {
+			if (live.dash !== undefined && live.tool === "shape") {
+				ctx.fill(new Path2D(strokeSvgPath({ points, width: live.width, tool: live.tool, render: RENDER_FREEHAND, dash: live.dash })));
+			} else if (isNewPen(live.tool)) {
 				// The new pens have no perfect-freehand outline: the same geometry as the wet ink, rebuilt from the points.
 				const path = new Path2D();
 				inkPath(path, points, live.width, live.tool, live.nib);
@@ -1487,9 +1498,27 @@ export class Renderer {
 	/** `lod` > 0: the path comes from simplified points (committed strokes of a zoomed-out view only; 0 = exact). */
 	private fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, lod = 0): void {
 		const path = (lod > 0 ? this.lodPath(stroke, lod) : null) ?? this.exactPath(stroke);
+		// v22 (#37): the fill of a closed shape lies under its line.
+		if (isFilled(stroke)) this.fillShape(ctx, stroke.fill!, stroke.fillTint === true, stroke.points, stroke);
 		this.setInk(ctx, stroke.tool, stroke.color);
 		ctx.fill(path);
 		if (stroke.tool === "highlighter" || stroke.tool === "marker") this.setInk(ctx, "pen", stroke.color);
+	}
+
+	/**
+	 * v22 (#37): paints the inside of a closed shape (the polygon through `points`) with `colour`, solid or as the translucent tint. The colour goes through
+	 * the same night mapping as the ink, and the dimming of the colours-with-meaning view applies. `cached`: a committed stroke, whose polygon is remembered.
+	 */
+	private fillShape(ctx: CanvasRenderingContext2D, colour: string, tint: boolean, points: readonly Point[], cached?: Stroke): void {
+		let path = cached ? this.fillPaths.get(cached) : undefined;
+		if (!path) {
+			path = new Path2D(fillPathD(points));
+			if (cached) this.fillPaths.set(cached, path);
+		}
+		ctx.fillStyle = this.inkColor("shape", colour);
+		ctx.globalAlpha = fillAlpha({ fillTint: tint ? true : undefined }) * (this.dimNow ? DIM_ALPHA : 1);
+		ctx.globalCompositeOperation = "source-over";
+		ctx.fill(path);
 	}
 
 	private exactPath(stroke: Stroke): Path2D {
@@ -1514,6 +1543,8 @@ export class Renderer {
 	}
 
 	private buildLodPath(stroke: Stroke, lod: number): Path2D | null {
+		// v22: a dashed or dotted shape is drawn exactly (its runs are short; there is nothing to simplify).
+		if (stroke.dash !== undefined) return null;
 		if (stroke.render === RENDER_INK) {
 			const nodes = lodNodes(stroke.points, stroke.width, stroke.tool, lod, stroke.nib);
 			if (!nodes) return null;
@@ -1531,6 +1562,8 @@ export class Renderer {
 	}
 
 	private buildPath(stroke: Stroke, points: readonly Point[]): Path2D {
+		// v22 (#37): a dashed or dotted shape is its runs, each an outline of its own.
+		if (stroke.dash !== undefined && stroke.tool === "shape") return new Path2D(strokeSvgPath({ points, width: stroke.width, tool: stroke.tool, render: stroke.render, dash: stroke.dash }));
 		if (stroke.render === RENDER_INK) {
 			const path = new Path2D();
 			inkPath(path, points, stroke.width, stroke.tool, stroke.nib);

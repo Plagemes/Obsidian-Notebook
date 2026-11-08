@@ -35,7 +35,7 @@ import { pageTimesProblem } from "./page-times";
 import { normalizePosition } from "./position";
 import { freezeElement, freezeStroke, liveGroups, parse, readPageComments, readPageStates, readSlides, readViews, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
-	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, PAPER_SPACING, RENDER_FREEHAND, RENDER_INK, RENDER_VERSIONS, TOOLS, type Tool,
+	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, isShapeDash, PAPER_SPACING, RENDER_FREEHAND, RENDER_INK, RENDER_VERSIONS, TOOLS, type Tool,
 	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageComment, type PageElement, type PageStates, type ReadingPosition, type SavedView, type SlideRef, type Stroke,
 } from "./types";
 
@@ -408,6 +408,12 @@ function fixStroke(v: unknown, slides: ReadonlySet<string>): RawObject | null {
 	};
 	// v20: the nib angle of a fountain pen or a marker stays when it is valid.
 	if (isNibPen(tool) && isNibAngle(v.nib)) out.nib = v.nib;
+	// v22: the fill and the line style of a shape stay when they are valid (and only on the shape tool).
+	if (tool === "shape" && typeof v.fill === "string" && COLOR_RE.test(v.fill)) {
+		out.fill = v.fill;
+		if (v.fillTint === true) out.fillTint = true;
+	}
+	if (tool === "shape" && isShapeDash(v.dash)) out.dash = v.dash;
 	// v8 invisible ink stays invisible: a repaired solution is not revealed.
 	if (v.hidden === true) out.hidden = true;
 	// v12: the link stays when it names an entry of the salvaged table; a dangling one is dropped (the ink stays).
@@ -487,7 +493,7 @@ function fixMathElement(v: RawObject, assets: Record<string, Asset>): RawObject 
 }
 
 function strokeKey(s: Stroke): string {
-	return JSON.stringify([s.tool, s.color, s.width, s.render, s.hidden === true, s.points, s.nib ?? null]);
+	return JSON.stringify([s.tool, s.color, s.width, s.render, s.hidden === true, s.points, s.nib ?? null, s.fill ?? null, s.fillTint === true, s.dash ?? null]);
 }
 
 function elementKey(e: PageElement): string {

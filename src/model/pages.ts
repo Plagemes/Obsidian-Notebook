@@ -40,6 +40,10 @@ export function copyStroke(s: Stroke, id: string = s.id, slide?: string | null, 
 	if (g !== undefined) copy.group = g;
 	// v20: the nib angle of a fountain pen or a marker.
 	if (s.nib !== undefined) copy.nib = s.nib;
+	// v22: the fill and the line style of a shape.
+	if (s.fill !== undefined) copy.fill = s.fill;
+	if (s.fillTint !== undefined) copy.fillTint = s.fillTint;
+	if (s.dash !== undefined) copy.dash = s.dash;
 	return freezeStroke(copy);
 }
 
