@@ -111,6 +111,13 @@ export async function checkClipImage(api: ClipImageCheckApi): Promise<{ ok: bool
 	route = await withNavigator({ share: () => Promise.reject(Object.assign(new Error("x"), { name: "AbortError" })) }, () => copyAsImage(host(app, page), "page", "white", { imageClipboard: false, shareFiles: true }));
 	add("closing the share sheet stops, with a notice and no saved copy", route === null && written.length === before && api.notices.some((n) => /cancelled/i.test(n)));
 
+	// A share that comes too long after the tap (the browser wants a fresh one): no file is saved, one notice asks for a new tap.
+	const beforeTap = written.length;
+	const noticesBefore = api.notices.length;
+	route = await withNavigator({ share: () => Promise.reject(Object.assign(new Error("x"), { name: "NotAllowedError" })) }, () => copyAsImage(host(app, page), "page", "white", { imageClipboard: false, shareFiles: true }));
+	const tapNotices = api.notices.slice(noticesBefore).filter((n) => !/^working/i.test(n) && !/preparing|drawing/i.test(n));
+	add("a share that needs a new tap saves nothing and asks for one tap", route === null && written.length === beforeTap && tapNotices.filter((n) => /tap/i.test(n)).length === 1 && !tapNotices.some((n) => /saved|copied/i.test(n)), tapNotices.join(" | "));
+
 	const empty = await copyAsImage(host(app, createPage(PAGE_SIZES.a4)), "page", "white", both);
 	add("an empty page is refused with a notice", empty === null && api.notices.some((n) => /nothing written/i.test(n)));
 
