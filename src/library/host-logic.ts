@@ -2,7 +2,7 @@ import { copyBookmarkInfoMap } from "../model/bookmarks";
 import { unlinkChecklist } from "../model/checklist";
 import { cloneMeta } from "../model/document";
 import { parse, serializeChecked } from "../model/serialize";
-import { DEFAULT_META, type NotebookMeta } from "../model/types";
+import { DEFAULT_META, type Asset, type NotebookMeta } from "../model/types";
 
 /** Name of the disposable library index inside the plugin folder. */
 export const LIBRARY_INDEX_FILE = "library-index.json";
@@ -85,4 +85,20 @@ export function patchNotebookId(json: string, id: string): MetaPatchResult {
 	const out = serializeChecked({ ...parsed.doc, id, pages });
 	if (!out.ok) return { ok: false, message: out.message };
 	return { ok: true, text: out.text, changed: parsed.doc.id !== id || unlinked, migrated: parsed.migratedFrom !== null || (parsed.dropped ?? 0) > 0 };
+}
+
+/**
+ * 0.22 (covers): like `patchNotebookMeta`, and also registers `asset` (the baked cover picture) in the document so that
+ * `meta.coverArt = { kind: "image", asset }` has something to point at. The picture is the only thing added; everything else
+ * in the file is kept. Never produces text for a file that fails to parse or fails the round-trip check.
+ */
+export function patchNotebookCover(json: string, asset: Asset | null, patch: Partial<NotebookMeta>): MetaPatchResult {
+	const parsed = parse(json);
+	if (!parsed.ok) return { ok: false, message: parsed.message };
+	const assets = asset ? { ...(parsed.doc.assets ?? {}), [asset.id]: asset } : parsed.doc.assets;
+	const doc = { ...parsed.doc, ...(assets ? { assets } : {}), meta: mergeMeta(parsed.doc.meta, patch) };
+	const out = serializeChecked(doc);
+	if (!out.ok) return { ok: false, message: out.message };
+	const migrated = parsed.migratedFrom !== null || (parsed.dropped ?? 0) > 0;
+	return { ok: true, text: out.text, changed: migrated || out.text !== json, migrated };
 }
