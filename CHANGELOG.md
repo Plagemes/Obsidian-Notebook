@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+### covers
+- **Custom covers (#53).** *Change cover…* (library card menu and the notebook tab menu) opens one dialog with four sources: a generated *Pattern* (families, colour, new variation), an *Image* from the vault or the device, a *Page* of the notebook (stepper) and five designed *Templates* (Classic, Band, Frame, Minimal, Poster) that put the notebook name on generated art. Images and pages are moved and zoomed in the 3:4 frame (drag, wheel, pinch, slider, arrow keys). Nothing is written until *Use this cover*: the picture is baked small (540 x 720 JPEG), stored as a content-addressed asset in `_assets` and set as the existing `meta.coverArt` image cover, so there is **no format change** and no new sidecar. An open notebook takes it as one undo step; a closed one through the safe read-patch-write; a picture this action created is trashed again if the change fails. Large photos are reduced to 1600 px for editing (Android memory). Crop maths `src/model/cover-crop.ts`, templates `src/model/cover-template.ts`, painting `src/ui/cover-compose.ts`, dialog `src/library/cover-dialog.ts`. Tests: `tests/cover-crop.test.ts`, `tests/cover-template.test.ts`.
 ## 0.21.0 — 2026-11-08
 
 Eight features: a start and end time on every page, scheduled backups, a documented file format with a JSON Schema, an interactive HTML export, a back-of-book index, a reusable signature and date stamp, a way back to the current slide and a strip of recent symbols; plus the review fixes carried over from 0.20. The notebook format moves to version 19 (page start and end times): the migration from version 18 is automatic, and 0.20 and older open a v19 notebook read-only and never overwrite it.

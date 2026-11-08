@@ -158,7 +158,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 52. **P2** Coloured sections inside a notebook (tab dividers, as in OneNote).
 
 ### Library
-53. **P2** Custom covers (image or template).
+53. **P2** 🧪 Custom covers (image or template).
 54. **P2** 🧪 Pinned notebooks, manual order and an archive that hides notebooks without deleting them.
 55. **P3** Study statistics: writing time per notebook and per day, kept on the device.
 

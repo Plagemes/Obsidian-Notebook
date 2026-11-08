@@ -492,3 +492,6 @@ A floating `modal-shell`-like card over the page area (`src/view/ref-window.ts`,
 
 ## Recent symbols (0.21, roadmap #212)
 A floating pill (`.notebook-symbol-strip`, `src/view/symbol-strip.ts`, styles in the 0.21 symbols block) at the top centre of the page area: up to 12 round 40 px buttons, a character in the text font or a small SVG of a saved symbol in the text colour; the armed button uses the active-tool colours and a muted "Tap the page" hint follows. While armed a transparent catcher covers the page (outside the stage) and takes one tap. Same raised surface, border and shadow as the contextual bar; scrolls sideways on a phone.
+
+## Change cover (0.22, roadmap #53)
+One dialog on the modal shell (`src/library/cover-dialog.ts`): the 3:4 frame (a canvas, with the card's spine) on the left, source chips (Pattern, Image, Page, Template) and their controls on the right; on a phone the frame sits on top. Swatches, style tiles and zoom/pager controls are 40 px targets in the `.nb-ui` scope (`styles.css`, block `0.22 covers`).

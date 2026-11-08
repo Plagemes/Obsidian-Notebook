@@ -17806,3 +17806,204 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-slide-back {
 	top: 66px;
 }
+
+/* ===== 0.22 covers ===== */
+.nb-ui .nb-cover-edit {
+	display: grid;
+	grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+	gap: 20px;
+	align-items: start;
+}
+
+.nb-ui .nb-cover-stage {
+	display: flex;
+	justify-content: center;
+}
+
+.nb-ui .nb-cover-frame {
+	position: relative;
+	width: 100%;
+	max-width: 240px;
+	aspect-ratio: 3 / 4;
+	border-radius: var(--nb-radius-m);
+	overflow: hidden;
+	background: var(--nb-tile);
+	border: 1px solid var(--nb-border-strong);
+	box-shadow: var(--nb-shadow-float);
+}
+
+.nb-ui .nb-cover-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+	touch-action: none;
+	cursor: grab;
+	outline: none;
+}
+
+.nb-ui .nb-cover-canvas:focus-visible {
+	box-shadow: inset 0 0 0 2px var(--nb-accent);
+}
+
+.nb-ui .nb-cover-canvas:active {
+	cursor: grabbing;
+}
+
+/* The spine the library card draws, so the preview matches the card. */
+.nb-ui .nb-cover-spine {
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 7%;
+	pointer-events: none;
+	background: linear-gradient(90deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0));
+}
+
+.nb-ui .nb-cover-side {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	min-width: 0;
+}
+
+.nb-ui .nb-cover-modes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.nb-ui .nb-cover-controls {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.nb-ui .nb-cover-group {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui .nb-cover-label {
+	font-size: var(--nb-fs-label);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-cover-styles,
+.nb-ui .nb-cover-swatches,
+.nb-ui .nb-cover-templates {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.nb-ui .nb-cover-style {
+	width: 48px;
+	height: 64px;
+	padding: 4px;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-tile);
+	border: 1px solid var(--nb-border);
+	box-shadow: none;
+}
+
+.nb-ui .nb-cover-style img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	border-radius: 4px;
+}
+
+.nb-ui .nb-cover-style.is-active,
+.nb-ui .nb-cover-template.is-active {
+	border-color: var(--nb-accent);
+	box-shadow: 0 0 0 2px var(--nb-accent-strong);
+}
+
+.nb-ui .nb-cover-swatch {
+	width: 40px;
+	height: 40px;
+	min-width: 40px;
+	padding: 0;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-cover-swatch, var(--nb-tile));
+	border: 2px solid transparent;
+	box-shadow: none;
+}
+
+.nb-ui .nb-cover-swatch.is-active {
+	border-color: var(--nb-panel);
+	box-shadow: 0 0 0 2px var(--nb-accent);
+}
+
+.nb-ui .nb-cover-template {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	height: auto;
+	padding: 6px;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-tile);
+	border: 1px solid var(--nb-border);
+	box-shadow: none;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-cover-template canvas {
+	display: block;
+	width: 60px;
+	height: 80px;
+	border-radius: 4px;
+}
+
+.nb-ui .nb-cover-template-name {
+	font-size: var(--nb-fs-label);
+}
+
+.nb-ui .nb-cover-actions,
+.nb-ui .nb-cover-zoom,
+.nb-ui .nb-cover-pager {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.nb-ui .nb-cover-slider {
+	flex: 1 1 120px;
+	min-width: 100px;
+	height: var(--nb-target);
+	accent-color: var(--nb-accent);
+}
+
+.nb-ui .nb-cover-page {
+	width: 72px;
+	min-height: var(--nb-target);
+	text-align: center;
+}
+
+.nb-ui .nb-cover-of {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-cover-dialog .nb-icon-btn:disabled {
+	opacity: 0.4;
+}
+
+@media (max-width: 560px) {
+	.nb-ui .nb-cover-edit {
+		grid-template-columns: minmax(0, 1fr);
+		justify-items: center;
+	}
+
+	.nb-ui .nb-cover-frame {
+		max-width: 200px;
+	}
+
+	.nb-ui .nb-cover-side {
+		width: 100%;
+	}
+}
+/* ===== end 0.22 covers ===== */
