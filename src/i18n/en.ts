@@ -4452,6 +4452,13 @@ export const en = {
 	"welcomeBack.gap": "Gap, p. {n}",
 	"welcomeBack.more": "and {n} more",
 	"welcomeBack.dismiss": "Dismiss",
+	// 0.23 hookclean
+	"cleanup.action": "Clean up strokes",
+	"command.cleanUp": "Clean up the selected strokes (hooks and stray dots)",
+	"cleanup.done": "Cleaned up: {hooks} hooks trimmed, {dots} stray dots removed.",
+	"cleanup.nothing": "Nothing to clean up in the selection.",
+	"settings.trimHooks": "Trim hooks as you write",
+	"settings.trimHooks.desc": "Cuts the tiny tick at the start or end of a line when the pen lifts. Corners stay.",
 } as const;
 
 export type MessageKey = keyof typeof en;

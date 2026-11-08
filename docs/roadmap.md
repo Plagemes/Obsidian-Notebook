@@ -601,7 +601,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### Writing and pen
 313. **P2** Automatic joining of broken strokes caused by tiny pen dropouts.
-314. **P2** Cleanup of hooks and stray dots at the start and end of strokes.
+314. **P2** 🧪 Cleanup of hooks and stray dots at the start and end of strokes.
 315. **P2** Thumb bar: a finger of the free hand switches tools while the pen keeps writing.
 316. **P2** Editable Bézier curves with handles, for precise drawings.
 317. **P3** Freehand arrows: any drawn curve can get an arrowhead.

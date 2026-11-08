@@ -4454,4 +4454,11 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"welcomeBack.gap": "Lacuna, p. {n}",
 	"welcomeBack.more": "e altre {n}",
 	"welcomeBack.dismiss": "Chiudi",
+	// 0.23 hookclean
+	"cleanup.action": "Pulisci i tratti",
+	"command.cleanUp": "Pulisci i tratti selezionati (uncini e puntini isolati)",
+	"cleanup.done": "Pulizia fatta: {hooks} uncini tolti, {dots} puntini isolati rimossi.",
+	"cleanup.nothing": "Niente da pulire nella selezione.",
+	"settings.trimHooks": "Taglia gli uncini mentre scrivi",
+	"settings.trimHooks.desc": "Toglie il minuscolo uncino a inizio o fine linea quando alzi la penna. Gli angoli restano.",
 };

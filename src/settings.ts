@@ -242,6 +242,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	notebookTabs: boolean;
 	/** After the pen lifts near the right margin of ruled or grid paper, the view moves to the start of the next line (353). Off by default. */
 	autoLineBreak: boolean;
+	/** 0.23 (#314): when the pen lifts, a tiny hook at the start or the end of the line is cut off the saved stroke (ink/hook-clean.ts). Off by default. */
+	trimHooks: boolean;
 	// 0.15 (#75): automatic page header / footer
 	// 0.16 (#90): highlights digest
 	/** How the digest note of the highlights is grouped: by page or by colour. */
@@ -400,6 +402,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	pageTurnerKeys: true,
 	notebookTabs: false,
 	autoLineBreak: false,
+	trimHooks: false,
 	digestGroup: "page",
 	colourMeanings: [],
 	meaningTolerance: "normal",
@@ -561,6 +564,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
+	if (typeof d.trimHooks === "boolean") s.trimHooks = d.trimHooks;
 	if (d.digestGroup === "page" || d.digestGroup === "colour") s.digestGroup = d.digestGroup;
 	s.colourMeanings = parseLegend(d.colourMeanings);
 	if (isToleranceName(d.meaningTolerance)) s.meaningTolerance = d.meaningTolerance;

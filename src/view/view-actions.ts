@@ -175,6 +175,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"snap-toggle": (v) => v.toggleSnap(),
 	"select-by-style": (v) => v.arrangeTools?.pickStyle(),
 	"selection-similar": (v) => v.arrangeTools?.menu("similar"),
+	"selection-cleanup": (v) => v.selectionTools?.cleanUp(),
 	// 0.15 (241): drawings with states
 	"selection-part": (v) => v.stateTools?.makePartFromSelection(),
 	"states-toggle": (v) => v.stateTools?.toggle(),

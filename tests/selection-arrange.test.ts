@@ -449,11 +449,11 @@ describe("registry and bar placement (wave 0.10)", () => {
 	const idsOf = (c: UiContext, kind: "all" | "page" = "all") =>
 		buildSheet(c, { kind, usage: {}, now: 0, label: (a) => a.id }).flatMap((s) => s.actions.map((a) => a.id));
 
-	it("puts select similar, align and transform on the second row of a selection bar, within the width", () => {
+	it("puts select similar, align, clean up (0.23) and transform on the second row of a selection bar, within the width", () => {
 		for (const width of [360, 800, 1280]) {
 			const bar = contextBar(sel(3, 1), width, {}, 0)!;
 			expect(bar.kind).toBe("selection");
-			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-transform-menu"]);
+			expect(bar.second, String(width)).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-transform-menu"]);
 			// The first row keeps its basics (the layer moves stay where wave 0.9 put them).
 			expect(bar.actions).toContain("selection-copy");
 		}
@@ -461,7 +461,7 @@ describe("registry and bar placement (wave 0.10)", () => {
 	});
 
 	it("offers only what applies: align needs two things, similar needs ink, transform needs a selection", () => {
-		expect(contextBar(sel(1), 800, {}, 0)!.second).toEqual(["selection-similar", "selection-transform-menu"]);
+		expect(contextBar(sel(1), 800, {}, 0)!.second).toEqual(["selection-similar", "selection-cleanup", "selection-transform-menu"]);
 		expect(contextBar(sel(0, 1, 1), 800, {}, 0)!.second).toEqual(["selection-transform-menu"]);
 		expect(contextBar(sel(0, 2, 2), 800, {}, 0)!.second).toEqual(["selection-align-menu", "selection-transform-menu"]);
 		// Nothing selected: no second row at all.
