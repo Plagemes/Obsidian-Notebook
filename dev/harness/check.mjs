@@ -125,6 +125,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tagsuggest", theme, device, lowLatency: false });
 // 0.24 handin (#334): the Hand in dialog and its cover (dev/harness/handin-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "handin", theme, device, lowLatency: false });
+// 0.26 redact (#285): redaction before export, the Redact dialog and its row in the export dialog (dev/harness/redact-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "redact", theme, device, lowLatency: false });
 // 0.20 share (#30): Share page… dialog and both branches of the share (dev/harness/share-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "share", theme, device, lowLatency: false });
 // Quick tabs (0.18, #227): the strip with pinned pages, Back, a gone page, another notebook; tablet and phone, light and dark.
@@ -449,6 +451,7 @@ async function main() {
 				else if (s.doc === "clipimage") report = await cdp.evaluate("window.harness.checkClipImage()", 60000); // 0.25 clipimage
 				else if (s.doc === "tagsuggest") report = await cdp.evaluate("window.harness.checkTagSuggest()", 60000); // 0.24 tagsuggest
 				else if (s.doc === "handin") report = await cdp.evaluate("window.harness.checkHandIn()", 60000); // 0.24 handin
+				else if (s.doc === "redact") report = await cdp.evaluate("window.harness.checkRedact()", 90000); // 0.26 redact
 				else if (s.doc === "ghostlines") report = await cdp.evaluate("window.harness.checkGhostlines()", 60000);
 				else if (s.doc === "pagetime") report = await cdp.evaluate("window.harness.checkPagetime()", 60000);
 				else if (s.doc === "pens") report = await cdp.evaluate("window.harness.checkPens()", 90000);
@@ -573,6 +576,20 @@ async function main() {
 						problems.push(`handin ${state} screenshot: ${e.message}`);
 					}
 					await cdp.evaluate("window.harness.closeHandIn()");
+				}
+			}
+			// 0.26 redact: a screenshot of the export dialog's row, of the editor over a plain page and over a scanned one.
+			if (s.doc === "redact") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of await cdp.evaluate("window.harness.redactStates")) {
+					try {
+						await cdp.evaluate(`window.harness.redactShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `redact-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`redact ${state} screenshot: ${e.message}`);
+					}
+					await cdp.evaluate("window.harness.closeRedact()");
 				}
 			}
 			// 0.21 signstamp: a screenshot of each state (dialog, pad, dialog with the signature, signature placed).

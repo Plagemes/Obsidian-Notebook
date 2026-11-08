@@ -3,11 +3,12 @@
 // an image. Where the WebView has no image clipboard the PNG goes to the share sheet; where that is missing too a copy is saved next to
 // the notebook (by the area export, recorded as plugin-written). Every outcome shows a notice: nothing fails silently. Document only read.
 import { t } from "../i18n";
-import { planArea, type AreaPlan, type AreaScope } from "../ink/export-area";
+import type { AreaPlan, AreaScope } from "../ink/export-area";
 import { afterFailure, CLIP_RETRY_MS, clipRoutes, clipScale, failureOf, failureOnRetry, needsWhite, type ClipBackground, type ClipCapabilities, type ClipFailure, type ClipRoute } from "../ink/clip-image";
 import { scaleDpi } from "../model/export-pages";
 import { canShareFiles, classifyShareError, shareMime } from "../model/share-page";
-import { saveArea, type AreaHost } from "./export-area";
+import { redacted, planWithRedaction, saveArea, type AreaHost } from "./export-area";
+import { announceRedaction } from "./export-redact";
 import { showNotice } from "./notice";
 import { PageImageRenderer } from "./page-images";
 import { pageSignature } from "./view-helpers";
@@ -82,12 +83,13 @@ let ready: { key: string; picture: ClipPicture; at: number } | null = null;
  * only where the device allows it. Never throws; returns the route that worked, or null.
  */
 export async function copyAsImage(host: AreaHost, scope: AreaScope, background: ClipBackground, caps: ClipCapabilities = clipCapabilities()): Promise<ClipRoute | null> {
-	const hidden = host.exportOptions.hiddenInk?.(host.page) ?? false;
-	const plan = planArea(host.page, scope === "selection" ? host.selection : null, hidden);
+	// 0.26 (#285): the picture is made from the page with the redaction boxes applied.
+	const plan = planWithRedaction(host, scope);
 	if (!plan) {
 		showNotice(t(scope === "selection" ? "exportArea.emptySelection" : "exportArea.empty"), 6000);
 		return null;
 	}
+	if (redacted(plan)) announceRedaction([host.page], host.exportOptions);
 	const routes = clipRoutes(caps);
 	let route: ClipRoute | null = routes[0] ?? null;
 	// The picture is drawn once. With an image clipboard it is handed over as a promise, so the tap's permission is still valid.

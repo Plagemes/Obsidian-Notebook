@@ -528,7 +528,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 284. **P3** Import from other apps (Samsung Notes, Goodnotes, OneNote) where the format allows it (to be researched).
 
 ### Privacy and sharing
-285. **P2** Redaction before export: cover personal data or parts not to share.
+285. **P2** 🧪 Redaction before export: cover personal data or parts not to share. *Redact…* in the export dialog: boxes drawn on a page preview, kept per notebook on the device; ink is cut at a box, text, pictures, equations and notes that touch one are dropped whole, PDF and picture backgrounds are burned in as flat images; applied by PDF, SVG, HTML, PNG, print, Markdown, hand-in, share, written-area and copy-as-image alike (0.26).
 286. **P3** Safe presentation: show only chosen pages; the rest of the notebook stays hidden.
 287. **P2** "What changed": opening a notebook edited on another device shows the differences.
 288. **P3** Duplicate or similar pages: find slides imported twice and duplicated pages.

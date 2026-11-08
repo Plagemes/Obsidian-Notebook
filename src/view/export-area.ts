@@ -6,11 +6,14 @@ import { Modal, Setting, normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { AREA_SCALES, DEFAULT_AREA_SCALE, areaSuffix, areaSvg, planArea, type AreaFormat, type AreaPlan, type AreaScale, type AreaScope } from "../ink/export-area";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
+import { redactPage, redactionOf } from "../ink/redact";
 import type { Page, PageElement, Stroke } from "../model/types";
 import { scaleDpi } from "../model/export-pages";
+import { boxesOf, rectsOverlap } from "../model/redact";
 import { recordPluginWrite } from "../storage/plugin-written";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 import { collectPageImages, freePath, jpegDataUrl, type ExportOptions } from "./export";
+import { announceRedaction } from "./export-redact";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { PageImageRenderer, type PageImageOptions } from "./page-images";
@@ -76,10 +79,34 @@ export async function drawAreaPicture(host: AreaHost, plan: AreaPlan, request: A
 	}
 }
 
+/**
+ * 0.26 (#285): the plan of one export with the page's redaction boxes applied (`host.exportOptions.redact`). The area is measured on the
+ * redacted page, so what was cut away does not widen the picture. For a selection only the boxes that touch the area of the selection are
+ * used: the picture shows nothing else, and boxes elsewhere on the page must not widen it. Null when there is nothing written.
+ */
+export function planWithRedaction(host: AreaHost, scope: AreaScope): AreaPlan | null {
+	const hidden = host.exportOptions.hiddenInk?.(host.page) ?? false;
+	const selection = scope === "selection" ? host.selection : null;
+	const plain = planArea(host.page, selection, hidden);
+	const boxes = boxesOf(host.exportOptions.redact, host.page.id);
+	if (!plain || boxes.length === 0) return plain;
+	const r = plain.rect;
+	const near = selection ? boxes.filter((b) => rectsOverlap(b, { x: r.x - INK_REACH, y: r.y - INK_REACH, width: r.width + 2 * INK_REACH, height: r.height + 2 * INK_REACH })) : boxes;
+	if (near.length === 0) return plain;
+	return planArea(host.page, selection, hidden, undefined, (drawn) => redactPage(drawn, near));
+}
+
+/** Pt around the area of a selection within which a box can still touch what is drawn (the widest pen reaches about this far). */
+const INK_REACH = 24;
+
+/** Whether the plan draws redaction boxes (the notice that says so is shown only then). */
+export function redacted(plan: AreaPlan): boolean {
+	return redactionOf(plan.page).length > 0;
+}
+
 /** The plan of a request, or null (and a notice) when there is nothing written to export. */
 function planOf(host: AreaHost, scope: AreaScope): AreaPlan | null {
-	const hidden = host.exportOptions.hiddenInk?.(host.page) ?? false;
-	const plan = planArea(host.page, scope === "selection" ? host.selection : null, hidden);
+	const plan = planWithRedaction(host, scope);
 	if (!plan) showNotice(t(scope === "selection" ? "exportArea.emptySelection" : "exportArea.empty"), 6000);
 	return plan;
 }
@@ -99,6 +126,7 @@ export async function saveArea(host: AreaHost, request: AreaRequest, quiet = fal
 		if (picture.png) await host.app.vault.createBinary(path, await picture.png.arrayBuffer());
 		else await host.app.vault.create(path, picture.svg ?? "");
 		if (!quiet) showNotice(t("export.done", { path }));
+		if (!quiet && redacted(plan)) announceRedaction([host.page], host.exportOptions);
 		if (picture.skipped > 0) showNotice(t("export.skipped", { n: String(picture.skipped) }), 8000);
 		return path;
 	} catch (e) {
@@ -126,6 +154,7 @@ export async function copyArea(host: AreaHost, request: AreaRequest): Promise<bo
 			await navigator.clipboard.write([new ClipboardItem({ "image/png": picture.png })]);
 		} else await navigator.clipboard.writeText(picture.svg ?? "");
 		showNotice(t("exportArea.copied"), 4000);
+		if (redacted(plan)) announceRedaction([host.page], host.exportOptions);
 		return true;
 	} catch (e) {
 		console.error("[notebook] copy area", e);
@@ -198,7 +227,7 @@ export class AreaExportModal extends Modal {
 
 	/** The sentence that says what will be written and how big it is. */
 	private describe(): void {
-		const plan = planArea(this.host.page, this.request.scope === "selection" ? this.host.selection : null, this.host.exportOptions.hiddenInk?.(this.host.page) ?? false);
+		const plan = planWithRedaction(this.host, this.request.scope);
 		if (!plan) {
 			this.note?.setText(t(this.request.scope === "selection" ? "exportArea.emptySelection" : "exportArea.empty"));
 			return;

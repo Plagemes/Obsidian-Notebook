@@ -19885,3 +19885,42 @@ body.notebook-style-obsidian {
 .nb-ui.notebook-tidy-panel .notebook-tidy-line.is-warn {
 	color: var(--nb-danger);
 }
+
+/* ===== 0.26 redact ===== */
+/* The dialog where boxes are drawn over what must not leave the notebook (view/redact-dialog.ts) and the row that opens it in the export dialog. */
+.nb-ui.notebook-redact-modal .nb-redact-hint { margin-bottom: var(--nb-space-2, 8px); }
+.nb-ui.notebook-redact-modal .nb-redact-bar {
+	display: flex; align-items: center; justify-content: space-between; gap: var(--nb-space-2, 8px); margin-bottom: var(--nb-space-2, 8px);
+}
+.nb-ui.notebook-redact-modal .nb-redact-where { flex: 1 1 auto; min-width: 0; text-align: center; }
+.nb-ui.notebook-redact-modal .nb-redact-page { font-weight: 600; color: var(--nb-text); }
+.nb-ui.notebook-redact-modal .nb-redact-count { font-size: var(--nb-fs-meta); color: var(--nb-text-muted); }
+.nb-ui.notebook-redact-modal .nb-redact-tools { display: flex; flex-wrap: wrap; gap: var(--nb-space-2, 8px); margin-bottom: var(--nb-space-2, 8px); }
+.nb-ui.notebook-redact-modal .nb-redact-tool.is-active { background: var(--nb-accent-bg); border-color: var(--nb-accent); color: var(--nb-accent); }
+.nb-ui.notebook-redact-modal .nb-redact-nav:disabled,
+.nb-ui.notebook-redact-modal .nb-redact-tool:disabled { opacity: 0.4; cursor: default; }
+.nb-ui.notebook-redact-modal .nb-redact-scroll {
+	max-height: min(62vh, 640px); overflow: auto; padding: var(--nb-space-2, 8px);
+	border-radius: var(--nb-radius-tile); background: var(--nb-tile); box-shadow: inset 0 0 0 1px var(--nb-border);
+}
+.nb-ui.notebook-redact-modal .nb-redact-stage {
+	position: relative; margin: 0 auto; background: #fff; border-radius: 2px; box-shadow: 0 0 0 1px var(--nb-border);
+	width: min(100%, calc(58vh * var(--nb-redact-ar, 0.7))); min-width: min(100%, 15rem);
+}
+.nb-ui.notebook-redact-modal .nb-redact-img { display: block; width: 100%; height: auto; user-select: none; pointer-events: none; transition: opacity var(--nb-motion-fast) ease-out; }
+.nb-ui.notebook-redact-modal .nb-redact-stage.is-loading .nb-redact-img { opacity: 0.72; }
+.nb-ui.notebook-redact-modal .nb-redact-layer { position: absolute; inset: 0; cursor: crosshair; touch-action: pan-y pinch-zoom; }
+.nb-ui.notebook-redact-modal .nb-redact-layer.is-finger { touch-action: none; }
+.nb-ui.notebook-redact-modal .nb-redact-box,
+.nb-ui.notebook-redact-modal .nb-redact-band {
+	position: absolute; box-sizing: border-box; pointer-events: none;
+	left: var(--nb-redact-l, 0); top: var(--nb-redact-t, 0); width: var(--nb-redact-w, 0); height: var(--nb-redact-h, 0);
+	border: 1.5px dashed var(--nb-accent);
+}
+.nb-ui.notebook-redact-modal .nb-redact-box { background: rgba(0, 0, 0, 0.28); }
+.nb-ui.notebook-redact-modal .nb-redact-band { background: var(--nb-accent-soft); }
+.nb-ui.notebook-redact-modal .nb-redact-x {
+	position: absolute; top: -13px; right: -13px; width: 28px; height: 28px; min-width: 28px; pointer-events: auto; cursor: pointer;
+}
+.nb-ui.notebook-redact-modal .nb-redact-x svg { width: 14px; height: 14px; }
+.nb-ui .nb-redact-open { white-space: nowrap; }
