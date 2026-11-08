@@ -12,6 +12,8 @@ import { folderOf, isInside, LibraryIndex, normalizeText, SORTS, type Highlight,
 import { openTagEditor } from "../integration/tags";
 import { openNotebookAtPage } from "../integration/open";
 import { ConfirmModal, CoverModal, FolderSuggestModal, PromptModal } from "./library-modals";
+import type { Timetable } from "../timetable/schedule";
+import { hasActiveTerm, hasTimetable, orderByTerm } from "./term-order";
 import { arrangeEntries, planMove, type LibraryMap, type LibraryOp } from "./library-state";
 import { LibraryStateBlockedError, type LibraryStateStore } from "./library-state-store";
 import { entryFromFile, filesToRead, type NotebookFileInfo } from "./scan";
@@ -112,6 +114,8 @@ export interface LibraryHost {
 	todaysPage?(): void;
 	/** Class in progress according to the timetable (wave 0.6), for the "Now: <course>" shortcut. */
 	nowClass?(): { course: string; room?: string } | null;
+	/** 0.23 (#416): the class timetable (null when there is none), for the "Active term" order. */
+	termTimetable?(): Timetable | null;
 	openNowClass?(): void;
 	/** Called when the library opens (offers the class in progress). */
 	libraryOpened?(): void;
@@ -261,6 +265,8 @@ export class LibraryView extends ItemView {
 	private index = new LibraryIndex();
 	private place: LibraryPlace;
 	private sort: LibrarySort = "modified";
+	/** 0.23 (#416): true once the user picked a sort (or one was saved before); until then an active term makes "Active term" the default. */
+	private sortChosen = false;
 	private search = "";
 	/** Search the whole library (true) or only the current view (false); null = automatic. */
 	private searchWide: boolean | null = null;
@@ -363,14 +369,17 @@ export class LibraryView extends ItemView {
 	}
 
 	getState(): Record<string, unknown> {
-		return { ...super.getState(), scope: this.place, sort: this.sort, layout: this.layoutMode, statDays: this.statDays };
+		return { ...super.getState(), scope: this.place, sort: this.sort, sortChosen: this.sortChosen, layout: this.layoutMode, statDays: this.statDays };
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		if (typeof state === "object" && state !== null) {
-			const s = state as { scope?: unknown; sort?: unknown; layout?: unknown; statDays?: unknown };
+			const s = state as { scope?: unknown; sort?: unknown; sortChosen?: unknown; layout?: unknown; statDays?: unknown };
 			this.place = parsePlace(s.scope, this.startPlace);
-			if (SORTS.includes(s.sort as LibrarySort)) this.sort = s.sort as LibrarySort;
+			if (SORTS.includes(s.sort as LibrarySort)) {
+				this.sort = s.sort as LibrarySort;
+				this.sortChosen = s.sortChosen === true || s.sort !== "modified";
+			}
 			if (s.layout === "grid" || s.layout === "list") {
 				this.layoutMode = s.layout;
 				this.cardsLayout = s.layout;
@@ -740,8 +749,46 @@ export class LibraryView extends ItemView {
 		}
 	}
 
+	/** 0.23 (#416): the class timetable, or null when there is none. */
+	private termTimetable(): Timetable | null {
+		try {
+			return this.host.termTimetable?.() ?? null;
+		} catch (e) {
+			console.error("[notebook] timetable for the term order", e);
+			return null;
+		}
+	}
+
+	/**
+	 * The sort in force. "Active term" falls back to the last-modified order without a timetable; and when the user has not
+	 * chosen a sort, a timetable with a dated term that includes today makes it the default.
+	 */
+	private effectiveSort(): LibrarySort {
+		const tt = this.termTimetable();
+		if (this.sort === "term") return hasTimetable(tt) ? "term" : "modified";
+		if (!this.sortChosen && this.sort === "modified" && hasActiveTerm(tt, new Date())) return "term";
+		return this.sort;
+	}
+
+	/** The sort the index understands ("term" is applied by the view on top of last-modified). */
+	private indexSort(): LibrarySort {
+		const s = this.effectiveSort();
+		return s === "term" ? "modified" : s;
+	}
+
+	/** The groups of the grid in the order in force: the active term's courses first when that sort applies. */
+	private arranged(found: LibraryEntry[], pinnedFirst: boolean): { pinned: LibraryEntry[]; rest: LibraryEntry[] } {
+		const sort = this.effectiveSort();
+		const out = arrangeEntries(found, this.keyOf, this.state, { manual: sort === "manual", pinnedFirst });
+		if (sort !== "term") return out;
+		const tt = this.termTimetable();
+		const now = new Date();
+		return { pinned: orderByTerm(out.pinned, (e) => e.path, tt, now), rest: orderByTerm(out.rest, (e) => e.path, tt, now) };
+	}
+
 	private setSort(sort: LibrarySort): void {
 		this.sort = sort;
+		this.sortChosen = true;
 		this.app.workspace.requestSaveLayout();
 	}
 
@@ -1666,8 +1713,10 @@ export class LibraryView extends ItemView {
 
 	private sortMenu(anchor: HTMLElement): void {
 		const menu = new Menu();
+		const shown = this.effectiveSort();
 		for (const s of SORTS) {
-			menu.addItem((i) => i.setTitle(t(`library.sort.${s}` as MessageKey)).setChecked(this.sort === s).onClick(() => {
+			if (s === "term" && !hasTimetable(this.termTimetable())) continue;
+			menu.addItem((i) => i.setTitle(t(`library.sort.${s}` as MessageKey)).setChecked(shown === s).onClick(() => {
 				this.setSort(s);
 				this.render();
 			}));
@@ -2272,7 +2321,7 @@ export class LibraryView extends ItemView {
 			}
 		}
 		const { scope, filter } = this.placeQuery(true);
-		const hits = this.index.search({ search: query, scope: wide ? "all" : scope, sort: this.sort, filter: wide ? this.notArchived : filter });
+		const hits = this.index.search({ search: query, scope: wide ? "all" : scope, sort: this.indexSort(), filter: wide ? this.notArchived : filter });
 		if (hits.length > 0) {
 			any = true;
 			const sec = el.createEl("section", { cls: "nb-section nb-search-group" });
@@ -2346,8 +2395,8 @@ export class LibraryView extends ItemView {
 	/** The notebooks of the current place, in the order of the sort. */
 	private placeEntries(): LibraryEntry[] {
 		const { scope, filter } = this.placeQuery(true);
-		const found = this.index.query({ scope, sort: this.sort, filter });
-		return arrangeEntries(found, this.keyOf, this.state, { manual: this.sort === "manual", pinnedFirst: false }).rest;
+		const found = this.index.query({ scope, sort: this.indexSort(), filter });
+		return this.arranged(found, false).rest;
 	}
 
 	private renderBoardPlace(el: HTMLElement): void {
@@ -2510,9 +2559,9 @@ export class LibraryView extends ItemView {
 	private renderGrid(el: HTMLElement, tree: FolderNode): void {
 		const archivedView = this.place === "archived";
 		const { scope, filter } = this.placeQuery(false);
-		const found = this.index.query({ scope, sort: this.sort, filter });
+		const found = this.index.query({ scope, sort: this.indexSort(), filter });
 		// Pinned notebooks first (not in Recent or the archive), then each group in manual order when that sort is chosen.
-		const { pinned, rest } = arrangeEntries(found, this.keyOf, this.state, { manual: this.sort === "manual", pinnedFirst: this.place !== "recent" && !archivedView });
+		const { pinned, rest } = this.arranged(found, this.place !== "recent" && !archivedView);
 		this.arrangement = { pinned: pinned.map((e) => e.path), rest: rest.map((e) => e.path) };
 		const folder = isFolderPlace(this.place) ? this.place.folder : null;
 		const subfolders = folder !== null ? (flattenTree(tree).find((n) => n.path === folder)?.children ?? []) : [];

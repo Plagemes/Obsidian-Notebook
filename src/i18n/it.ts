@@ -2098,6 +2098,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"libcheck.moveFailed": "{n} file non si sono potuti spostare: {error}",
 	"libcheck.incompleteNow": "Non è stato spostato nulla: alcuni file che potrebbero usarli non sono ancora scaricati.",
 	"library.sort.manual": "Ordine manuale",
+	// 0.23 termorder
+	"library.sort.term": "Semestre in corso",
 	"library.nav.archived": "Archiviati",
 	// 0.12 design system: Home, library, navigation rail, inbox bell
 	"nav.label": "Navigazione dei quaderni",

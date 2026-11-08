@@ -3467,3 +3467,19 @@ Manual steps (real Obsidian; nothing here is verified on Android). You need a cl
 |---|---|---|---|---|---|
 | Automatic lecture header (#210): course, lecturer, room, date and start time as two grouped text boxes at the top, one undo step | yes | slot choice (in progress, lead time, overlap, linked to another notebook, no class, nearest), fields in English and Italian, free-area search, plan, History step and locked page: `tests/lecture-header.test.ts`; view and chip: harness `doc=lecthead` | | | not tried on Android; time zones are covered by the rule that class times are local wall-clock times, not by running under other zones |
 | Setting Off / Ask / Automatic and the four fields; command *Insert lecture header* | yes | settings read: `tests/lecture-header.test.ts`; command and chip: harness `doc=lecthead` | | | |
+
+### 0.23 — termorder (notebooks ordered by the active term, #416; steps 2420-2439)
+
+Manual steps (real Obsidian; nothing here is verified on Android). You need a timetable with classes linked to notebooks or course folders, at least one with *From* and *To* dates around today.
+
+2420. **Default.** With a class whose dates include today and no sort ever chosen, open the Library: the sort menu shows *Active term* checked, and the notebooks of the courses of the term come first, the course whose next class is soonest at the top.
+2421. **Order.** Then come the notebooks of classes whose term is over (or not started), then the notebooks linked to no course. Inside each group the most recently changed first.
+2422. **Your choice wins.** Pick *Last modified*, close and reopen the Library: it stays on *Last modified*. Pick *Active term* again: the term order returns.
+2423. **No timetable.** Delete the timetable (or empty it): the sort menu has no *Active term* entry and the Library is by last change. A saved *Active term* choice falls back to last change.
+2424. **Undated classes.** With only classes without dates, the default stays *Last modified*; *Active term* is in the menu and puts the linked notebooks first.
+2425. **Manual order.** From the term order, drag a notebook: the order switches to *Manual order* as shown, nothing else changes.
+2426. **Search and Italian.** A search is ordered the same way; in Italian the entry reads *Semestre in corso*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Library sort *Active term* (courses of the term by next class, other courses, the rest); hidden without a timetable; default only with a dated term and no chosen sort | yes | pure ordering: `tests/term-order.test.ts`; order, menu and fallback: harness `doc=termorder` | | | |

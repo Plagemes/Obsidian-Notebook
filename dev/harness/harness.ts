@@ -97,6 +97,7 @@ import { linkbackApi } from "./linkback-check";
 import { checkSlideback, slidebackShot } from "./slideback-check";
 import { checkPagerefs, pagerefsShot } from "./pagerefs-check";
 import { checkLecthead, lectheadShot } from "./lecthead-check";
+import { checkTermOrder, installTermTimetable } from "./termorder-check";
 import { checkPillstack, pillstackShot } from "./pillstack-check";
 import { checkSymbols } from "./symbols-check";
 import { checkBackups } from "./backups-check";
@@ -2202,7 +2203,8 @@ async function interactLibrary(): Promise<Record<string, unknown>> {
 async function main(): Promise<void> {
 	applyTheme();
 	applySize();
-	if (params.get("doc") === "library" || params.get("doc") === "empty") {
+	if (params.get("doc") === "library" || params.get("doc") === "empty" || params.get("doc") === "termorder") {
+		if (params.get("doc") === "termorder") installTermTimetable(); // 0.23 termorder
 		libraryHarness = await openLibraryHarness(app, librarySurface, params.get("doc") === "empty", homeVariant);
 		return;
 	}
@@ -2275,3 +2277,12 @@ Object.assign(harnessApi, { checkLecthead: () => checkLecthead({ get view() { re
 
 // 0.22 review fix: every floating pill at once (doc=pillstack, pillstack-check.ts).
 Object.assign(harnessApi, { checkPillstack: () => checkPillstack({ get view() { return view; }, open, frames, penStroke, errors, notices }), pillstackShot: () => pillstackShot({ get view() { return view; }, open, frames, penStroke, errors, notices }) });
+
+// 0.23 termorder: the Library's "Active term" order (doc=termorder, termorder-check.ts).
+harnessApi.checkTermOrder = async () => {
+	try {
+		return libraryHarness ? JSON.parse(JSON.stringify(await checkTermOrder(libraryHarness))) as unknown : { ok: false, results: [], errors: ["no library"], notices: [], env: {} };
+	} catch (e) {
+		return { ok: false, results: [], errors: [`termorder check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} };
+	}
+};

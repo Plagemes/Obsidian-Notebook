@@ -743,7 +743,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 
 ### Library
 415. **P1** 🧪 Dynamic sections: Now, To complete, Changed on another device, Recent. (0.14: the first three are library dashboard panels, places, sidebar items with counts and Home chips; Recent is Home's Recent notes and the Recent filter; waiting for hardware verification)
-416. **P2** Notebooks ordered by the active term.
+416. **P2** 🧪 Notebooks ordered by the active term. (0.23: Library sort *Active term*, default only with a dated term around today and no chosen sort; uses the timetable link; waiting for hardware verification)
 
 ### PDF and lecture
 417. **P1** 🧪 Slide strip: for each slide, the exercise page after it, the margin note and the question on this slide.

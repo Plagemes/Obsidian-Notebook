@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### termorder
+- **Notebooks ordered by the active term (#416).** The Library sort menu has *Active term* (*Semestre in corso*): notebooks linked to a course of the term that includes today come first, the one whose next class is soonest first (then course order in the timetable), then notebooks of the courses whose term is over or not yet started, then every other notebook, each group by last change. The link is the one the timetable already has (a class's notebook or course folder); nothing new is stored and the document format is unchanged. The option is hidden without a timetable and falls back to last-modified. It becomes the default only when a class has dates around today and you have never chosen a sort; picking any sort (or having one saved) keeps your choice.
+
 ## 0.22.0 — 2026-11-08
 
 Seven features: three new pens, optional cloud sync with Google Drive or OneDrive, two-way page references, colours with meaning, instant axes, custom covers and an automatic lecture header. The notebook format moves to version 20 (the new pen tools and the nib angle): the migration from version 19 is automatic, and 0.21 and older open a v20 notebook read-only and never overwrite it. Cloud sync is off by default and uses your own OAuth client; the plugin ships no client ID or secret.

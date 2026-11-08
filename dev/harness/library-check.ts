@@ -5,6 +5,7 @@
  * scroll, 40 px targets, the sections of the surface); `libraryInteractions()` drives the rail, the quick actions, the
  * bell, search and the favourite star, and leaves the screen as it found it.
  */
+import type { Timetable } from "../../src/timetable/schedule";
 import { WorkspaceLeaf, type App } from "./obsidian-stub";
 import { LibraryView, type LibraryHost } from "../../src/library/library-view";
 import { HomeView } from "../../src/library/home-view";
@@ -242,6 +243,7 @@ export async function openLibraryHarness(app: App, surface: string, empty = fals
 				: { course: "Anatomia", room: "B2", target: { kind: "open", path: anatomia } }),
 		lastNotebook: () => ({ path: `${ROOT}/Fisiologia/Fisiologia cardiovascolare.notebook`, page: 3 }),
 		openNowClass: () => void calls.push("open-now-class"),
+		termTimetable: () => (window as unknown as { __nbTimetable?: Timetable | null }).__nbTimetable ?? null, // 0.23 termorder
 		newQuickPage: () => void calls.push("quick-page"),
 		importPdf: (folder) => void calls.push(`import-pdf:${folder}`),
 		scanToNotebook: (folder) => void calls.push(`scan:${folder}`),
