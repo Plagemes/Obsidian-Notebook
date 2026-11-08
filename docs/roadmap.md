@@ -651,7 +651,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 
 ### Writing and pen
 349. **P2** Pressure lock: while the pen button is held, the width stays constant (even lines).
-350. **P2** Pen width relative to zoom (option): the same width on screen at any zoom.
+350. **P2** 🧪 Pen width relative to zoom (option): the same width on screen at any zoom.
 351. **P2** Stroke taper settings: tapering at the start and end of a stroke.
 352. **P2** Write big, store small: write margin notes at a comfortable size and they are shrunk into place.
 353. **P2** 🧪 Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.

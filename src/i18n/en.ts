@@ -4949,6 +4949,11 @@ export const en = {
 	"help.straighten": "Turn lines that are nearly straight into clean straight lines between their ends. Curves are left alone. Undo puts them back.",
 	"histpanel.t.smooth": "Strokes smoothed",
 	"histpanel.t.straighten": "Strokes straightened",
+	// 0.26 zoomwidth
+	"settings.penWidthFollowsZoom": "Pen width follows zoom",
+	"settings.penWidthFollowsZoom.desc": "On: strokes look the chosen width at any zoom. Off: width is fixed on the page.",
+	"tool.widthZoom.hint": "{px} px on screen · {page} on page × zoom",
+	"tool.widthZoom.aria": "Width follows zoom: {px} pixels on screen, {page} page units",
 } as const;
 
 export type MessageKey = keyof typeof en;

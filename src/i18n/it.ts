@@ -4951,4 +4951,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.straighten": "Trasforma le linee quasi dritte in linee dritte e pulite tra i loro estremi. Le curve restano com'erano. Annulla le rimette com'erano.",
 	"histpanel.t.smooth": "Tratti levigati",
 	"histpanel.t.straighten": "Tratti raddrizzati",
+	// 0.26 zoomwidth
+	"settings.penWidthFollowsZoom": "Spessore della penna con lo zoom",
+	"settings.penWidthFollowsZoom.desc": "Attivo: il tratto ha lo spessore scelto a ogni zoom. Spento: spessore fisso sulla pagina.",
+	"tool.widthZoom.hint": "{px} px sullo schermo · {page} sulla pagina × zoom",
+	"tool.widthZoom.aria": "Spessore con lo zoom: {px} pixel sullo schermo, {page} unità di pagina",
 };

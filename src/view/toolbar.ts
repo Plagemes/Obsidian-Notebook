@@ -169,6 +169,8 @@ export class Toolbar {
 	private readonly optionsEl: HTMLElement;
 	private readonly colorGroup: HTMLElement;
 	private readonly widthGroup: HTMLElement;
+	private zoomHintEl: HTMLElement | null = null;
+	private zoomHint: { screen: number; page: number } | null = null;
 	private readonly eraserGroup: HTMLElement;
 	private readonly eraserButtons = new Map<EraserMode, HTMLButtonElement>();
 	private readonly filterGroup: HTMLElement;
@@ -691,6 +693,9 @@ export class Toolbar {
 				b.disabled = !this.editable;
 				b.createSpan({ cls: `notebook-width-dot notebook-width-${highlighter ? "h" : "p"}${i}` });
 			});
+			// 0.26 zoomwidth (#350): with "Pen width follows zoom" on, the on-screen width and a "× zoom" hint.
+			this.zoomHintEl = this.widthGroup.createSpan({ cls: "notebook-zoom-hint notebook-hidden" });
+			this.paintZoomHint();
 		}
 
 		if (s.tool === "text") {
@@ -702,6 +707,24 @@ export class Toolbar {
 				b.createSpan({ cls: `notebook-text-size-glyph notebook-text-size-${i}`, text: "A" });
 			});
 		}
+	}
+
+	/** 0.26 zoomwidth (#350): `null` hides the hint (option off); otherwise the effective on-screen width and the stored page width. */
+	setZoomHint(hint: { screen: number; page: number } | null): void {
+		const same = hint === this.zoomHint || (hint && this.zoomHint && hint.screen === this.zoomHint.screen && hint.page === this.zoomHint.page);
+		this.zoomHint = hint;
+		if (!same) this.paintZoomHint();
+	}
+
+	private paintZoomHint(): void {
+		const el = this.zoomHintEl;
+		const h = this.zoomHint;
+		if (!el) return;
+		el.toggleClass("notebook-hidden", !h);
+		if (!h) return;
+		const n = (v: number) => String(Math.round(v * 10) / 10);
+		el.setText(t("tool.widthZoom.hint", { px: n(h.screen), page: n(h.page) }));
+		el.setAttribute("aria-label", t("tool.widthZoom.aria", { px: n(h.screen), page: n(h.page) }));
 	}
 
 	/** The angle in the nib row: the number and the little bar that leans like the nib. */

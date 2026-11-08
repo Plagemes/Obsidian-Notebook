@@ -4098,3 +4098,22 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a stylu
 | PDF / picture background burned in (PDF, SVG, HTML, PNG, print, Markdown, share, area), also in a background-only export; the cached page is not changed | yes | burn plan and fake media in `tests/redact-export.test.ts`; pixels (PNG renderer, JPEG, area PNG) in harness `doc=redact` | | | pages with a PDF background lose their text layer (trade-off) |
 | Where it applies: export dialog (switch decides), hand-in, share, Markdown, area / copy as image, quick page exports, pictures put into notes, highlights digest | yes | `tests/redact-export.test.ts`; harness `doc=redact` | | | PDF annotation digest, extract pages, auto PDF copy not covered |
 | Long-press help (English and Italian) on every new control; Italian texts | yes | harness `doc=redact`; i18n parity tests | | | |
+
+### 0.26 — zoomwidth: pen width follows zoom (roadmap #350; steps 2920-2939)
+
+Implemented, not verified on hardware. No format change: strokes keep plain page-unit widths. Manual steps (real Obsidian on an Android tablet, S Pen):
+
+2920. **Default.** *Settings > Writing > Pen width follows zoom* is off on a fresh install. Zoom in a lot and write: the line looks thicker than at fit width (as before).
+2921. **On.** Turn it on, zoom in about 4x and write with the pen at width 3: the line looks like a width 3 line at fit width (about 3 px on screen); zoom out to fit and the same stroke is now much thinner on the page. Write again at the new zoom: it looks the same as before.
+2922. **Live equals saved.** While writing, the live ink is as thick as the finished stroke: nothing jumps when the pen lifts.
+2923. **Hint.** Open the pen options with it on: next to the widths a line reads "N px on screen · M on page × zoom"; pinch to zoom and the numbers follow. With it off the line is hidden.
+2924. **Extremes.** At the lowest zoom the line does not become a blob; at the highest zoom it does not vanish (stored width is clamped to 0.1 to 48 page units).
+2925. **Pens.** Fountain pen, brush and marker follow the same rule; the nib angle and pressure response are unchanged.
+2926. **Shapes and highlighter.** Line, arrow and shapes, and the stroke highlighter, follow the rule. The area highlighter (a rectangle) and the eraser sizes are unchanged.
+2927. **Old ink.** Turning the option on or off never changes strokes already written; undo, redo, export and another device show them as saved.
+2928. **Looks.** Light and dark, tablet and phone: the hint fits in the pen options without moving the width buttons. Italian texts.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pen width follows zoom (setting, off by default; stored width = chosen / zoom, clamped) | yes | `tests/zoom-width.test.ts`; harness `doc=zoomwidth` | | | |
+| Pen options hint (on-screen width, "× zoom") | yes | harness `doc=zoomwidth` | | | |
