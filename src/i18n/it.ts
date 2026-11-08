@@ -4465,4 +4465,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.trimHooks": "Taglia gli uncini mentre scrivi",
 	"settings.trimHooks.desc": "Toglie il minuscolo uncino a inizio o fine linea quando alzi la penna. Gli angoli restano.",
 	"trim.undone": "Uncino rimesso. Annulla ancora per togliere il tratto.",
+	// 0.24 strokejoin
+	"joinstrokes.action": "Unisci i tratti spezzati",
+	"command.joinStrokes": "Unisci i tratti spezzati nella selezione (linee interrotte dalla penna)",
+	"joinstrokes.done": "Uniti {n} tratti spezzati.",
+	"joinstrokes.nothing": "Nessun tratto spezzato da unire nella selezione.",
 };

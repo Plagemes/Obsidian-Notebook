@@ -600,7 +600,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 312. **P2** Virtual notebook: gathers pages from several notebooks by tag or rule without copying them; browse and export it like a real notebook.
 
 ### Writing and pen
-313. **P2** Automatic joining of broken strokes caused by tiny pen dropouts.
+313. **P2** 🧪 Automatic joining of broken strokes caused by tiny pen dropouts (an explicit selection action, *Join broken strokes*; nothing is joined while writing).
 314. **P2** 🧪 Cleanup of hooks and stray dots at the start and end of strokes.
 315. **P2** Thumb bar: a finger of the free hand switches tools while the pen keeps writing.
 316. **P2** Editable Bézier curves with handles, for precise drawings.

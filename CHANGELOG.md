@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### strokejoin
+- **Join broken strokes (#313).** When the pen briefly loses contact in the middle of a line, the line is saved as two strokes. Select the ink and tap *Join broken strokes* (second row of the selection bar, All actions sheet, command *Join broken strokes in the selection*): each pair that is one gesture split by a dropout becomes one stroke, in one undo step, with a notice that counts the joints. A chain of several fragments becomes one stroke.
+- **Conservative on purpose.** Two strokes are joined only when they are neighbours in the page order, in the same style (tool, colour, width, nib, render version, slide) and the same group, both are real lines (a dot is never a fragment), the end of the first and the start of the second are a few points apart (a small multiple of the pen width and of the point spacing, and a small share of the shorter piece), the direction is continuous (no sharp turn: the corner of an L, a V and a dash pattern stay apart) and the pressure does not jump. Words, letters, the dot of an *i*, dashes and intentional pen lifts are never joined. Highlighter and marker strokes are not touched.
+- **Safe.** The joined stroke keeps the id, style, group and nib of the first piece and the points of all pieces unchanged (still `[x, y, pressure]` in page coordinates); the page order and the page times do not move; a locked page refuses it; the ink a collapsed sticky note keeps hidden, and strokes of a group that would shrink to one member or that holds a locked element, are skipped. Nothing is joined while writing and *Clean up strokes* does not join (they stay two separate actions). No setting, no document format change.
+- **Code.** Pure, Node-tested module `src/ink/stroke-join.ts` (no `obsidian` import); the action in `src/view/selection-actions.ts` (`joinBroken`) and the registry (`selection-join`); English and Italian.
+
 ## 0.23.0 — 2026-11-08
 
 Eight features: saved views, export of the written area or the selection, dimensional analysis of formulas, balancing of chemical reactions, an automatic formula sheet, a welcome-back card, notebooks ordered by the active term and clean-up of pen hooks and stray dots. The notebook format moves to version 21 (saved views): the migration from version 20 is automatic, and 0.22 and older open a v21 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

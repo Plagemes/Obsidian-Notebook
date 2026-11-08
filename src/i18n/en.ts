@@ -4463,6 +4463,11 @@ export const en = {
 	"settings.trimHooks": "Trim hooks as you write",
 	"settings.trimHooks.desc": "Cuts the tiny tick at the start or end of a line when the pen lifts. Corners stay.",
 	"trim.undone": "Hook put back. Undo again to remove the stroke.",
+	// 0.24 strokejoin
+	"joinstrokes.action": "Join broken strokes",
+	"command.joinStrokes": "Join broken strokes in the selection (lines the pen dropped out of)",
+	"joinstrokes.done": "Joined {n} broken strokes.",
+	"joinstrokes.nothing": "No broken strokes to join in the selection.",
 } as const;
 
 export type MessageKey = keyof typeof en;

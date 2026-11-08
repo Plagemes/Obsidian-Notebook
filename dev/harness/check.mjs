@@ -169,6 +169,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "termorder", surface: "library", theme, device, lowLatency: false });
 // 0.23 hookclean (#314): clean-up of hooks and stray dots (dev/harness/hookclean-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "hookclean", theme, device, lowLatency: false });
+// 0.24 strokejoin (#313): join broken strokes (dev/harness/strokejoin-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "strokejoin", theme, device, lowLatency: false });
 // Recent symbols (0.21, #212): the strip, a tapped character and a saved symbol placed pen-sized, tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "symbols", theme, device, lowLatency: false });
 // 0.21 backups: scheduled zip backups and their settings rows (dev/harness/backups-check.ts), tablet and phone, dark and light.
@@ -378,6 +380,7 @@ async function main() {
 				else if (s.doc === "dimcheck") report = await cdp.evaluate("window.harness.checkDimcheck()", 90000); // 0.23 dimcheck
 				else if (s.doc === "termorder") report = await cdp.evaluate("window.harness.checkTermOrder()", 90000);
 				else if (s.doc === "hookclean") report = await cdp.evaluate("window.harness.checkHookclean()", 90000); // 0.23 hookclean
+				else if (s.doc === "strokejoin") report = await cdp.evaluate("window.harness.checkStrokejoin()", 90000); // 0.24 strokejoin
 				else if (s.doc === "pillstack") report = await cdp.evaluate("window.harness.checkPillstack()", 90000); // 0.22 review fix: all the floating pills at once
 				else if (s.doc === "welcomeback") report = await cdp.evaluate("window.harness.checkWelcomeback()", 90000); // 0.23 welcomeback
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
