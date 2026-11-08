@@ -3655,3 +3655,25 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 | Fill and dashes drawn in the static layer, the live preview, PNG, SVG (also HTML and the area export), PDF and thumbnails; golden hashes of old strokes unchanged | yes | `tests/shape-style.test.ts`, `tests/pens-golden.test.ts`; harness `doc=shapefill` | | | the canvas and the PDF were not compared pixel by pixel on a device |
 | Shape tool options (fill none / solid / tint with colours, line solid / dashed / dotted) | yes | harness `doc=shapefill` | | | recognised shapes (hold the pen) are drawn plain and styled afterwards from the bar |
 | Selection restyle of fill and line: one undo step through `UpdateItems`, freehand ink untouched, refuses a locked page | yes | `tests/model-v22.test.ts` (History); harness `doc=shapefill` | | | |
+
+### 0.24 — strokejoin: join broken strokes (#313; steps 2460-2479)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen). The synthetic strokes of the automated tests are perfect; the point of these steps is to see how a real pen dropout looks and whether the rules in `src/ink/stroke-join.ts` (`JOIN_RULES`) match it.
+
+2460. **A real dropout.** Write long lines and words quickly until a line shows a tiny break (the pen skipped). Lasso the area and tap *Join broken strokes* in the second row of the bar: the break is closed, the notice says how many joints were made, the line is otherwise as written. One *Undo* brings the two strokes back.
+2461. **Nothing else joins.** Write two words close together, an L and a V in two strokes, a dashed line, an *i* with its dot, a full stop after a word, and a letter written in two strokes (a *t* with its bar, an *x*): select everything and run the action. None of them is joined, and the notice says there was nothing to join (if one is joined, note the pen, the width and the gap).
+2462. **A chain.** Press harder and faster to get a line cut in three or more pieces: they become one stroke in one step.
+2463. **Pens.** Repeat with the fountain pen (the nib angle is kept) and the brush; strokes of different colours, widths or nibs are never joined; the highlighter and the marker are not touched.
+2464. **Order and layers.** Draw a line, draw something else over it, then draw the continuation of the line: the pieces are not neighbours, so they are not joined. Bring the continuation next to the first piece with *Send to back* / *Bring to front* and they are.
+2465. **Groups and locks.** Group a broken line with another item and select only the line: the whole group is considered and the group stays. Lock the page and run the action: the lock notice appears and nothing changes. Unlock and run it again.
+2466. **Hidden ink.** Collapse a sticky note that holds a broken line, select the note and run the action: the ink the note hides is not changed.
+2467. **Several pages.** Lasso across a page break and run the action: both pages are handled and one *Undo* undoes both.
+2468. **Command, sheet and one stroke.** *Join broken strokes in the selection* in the command palette and *Join broken strokes* in the All actions sheet (Selection) do the same; with fewer than two strokes selected they are not offered.
+2469. **Together with Clean up.** Run *Clean up strokes* and then *Join broken strokes* on the same selection: two separate undo steps. A hook cut by the first never makes the second join something it would not have joined.
+2470. **Languages and looks.** Switch the plugin to Italian: the action, the command and the notices are translated. Light and dark theme, phone and tablet width: the action sits in the second row of the bar with the others and nothing is cut off.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Dropout detection between neighbouring strokes: same style and group, small gap relative to pen width, point spacing and piece length, continuous direction, no pressure jump; dots, words, corners, dashes untouched | yes | `tests/stroke-join.test.ts` (synthetic strokes, jittery wavy lines, negatives) | | yes | thresholds (`JOIN_RULES`) are tuned on synthetic strokes only |
+| Join broken strokes: one undo step, keeps the first id, style, group, nib and position; chains; refuses a locked page; page times unmoved; hidden sticky ink and locked groups skipped | yes | `tests/stroke-join.test.ts` (History: execute, undo, redo, locked page, page times); harness `doc=strokejoin` | | | |
+| Selection action, command and sheet entry (`selection-join`, from two strokes on) | yes | `tests/selection-arrange.test.ts`; harness `doc=strokejoin` | | | |

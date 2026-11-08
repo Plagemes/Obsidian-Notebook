@@ -234,6 +234,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-similar", label: "select.similar", icon: "check-check", group: "selection", surfaces: ["context"], contexts: ["selection"], second: true, priority: 62, scope: "view", when: hasInk },
 	// 0.23 (#314): hooks at the ends of strokes and stray dots, cleaned in one undo step.
 	{ id: "selection-cleanup", label: "cleanup.action", icon: "sparkles", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 58, scope: "view", command: "command.cleanUp", when: hasInk, keywords: "clean tidy hook tick dot bounce stray trim pulisci uncino puntino" },
+	// 0.24 (#313): strokes that a tiny pen dropout split in two are joined, in one undo step (needs two strokes).
+	{ id: "selection-join", label: "joinstrokes.action", icon: "merge", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 58, scope: "view", command: "command.joinStrokes", when: (c) => (c.selection?.strokes ?? 0) >= 2, keywords: "join merge broken split dropout gap line connect unisci spezzato tratto interruzione" },
 	// 0.15 states (#241): the selected ink becomes a part of the drawing, which the states of the page move together (view/states-tools.ts).
 	{ id: "selection-part", label: "states.makePart", icon: "group", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.makePart", when: hasInk, keywords: "states part group figure physics stati parte gruppo" },
 	{ id: "select-same-colour", label: "select.sameColour", icon: "palette", group: "selection", surfaces: ["sheet"], priority: 48, scope: "view", command: "command.selectSameColour", when: hasInk, keywords: "similar color all" },

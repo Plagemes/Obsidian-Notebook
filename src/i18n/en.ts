@@ -4475,6 +4475,11 @@ export const en = {
 	"shapeStyle.line.dashed": "Dashed",
 	"shapeStyle.line.dotted": "Dotted",
 	"shapeStyle.title": "Shape style",
+	// 0.24 strokejoin
+	"joinstrokes.action": "Join broken strokes",
+	"command.joinStrokes": "Join broken strokes in the selection (lines the pen dropped out of)",
+	"joinstrokes.done": "Joined {n} broken strokes.",
+	"joinstrokes.nothing": "No broken strokes to join in the selection.",
 } as const;
 
 export type MessageKey = keyof typeof en;

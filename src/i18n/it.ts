@@ -4477,4 +4477,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"shapeStyle.line.dashed": "Tratteggiata",
 	"shapeStyle.line.dotted": "Punteggiata",
 	"shapeStyle.title": "Stile della forma",
+	// 0.24 strokejoin
+	"joinstrokes.action": "Unisci i tratti spezzati",
+	"command.joinStrokes": "Unisci i tratti spezzati nella selezione (linee interrotte dalla penna)",
+	"joinstrokes.done": "Uniti {n} tratti spezzati.",
+	"joinstrokes.nothing": "Nessun tratto spezzato da unire nella selezione.",
 };

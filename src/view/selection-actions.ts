@@ -6,6 +6,7 @@ import { measureText } from "../ink/renderer";
 import { withoutPinnedInk, withPinnedInk } from "../ink/attach";
 import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
 import { planCleanup, type CleanupPlan } from "../ink/hook-clean";
+import { planJoin, type JoinPlan } from "../ink/stroke-join";
 import { selectableItems } from "../model/groups";
 import type { PageBox } from "../ink/layout";
 import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
@@ -274,6 +275,47 @@ export class SelectionActions {
 		const hooks = plans.reduce((n, p) => n + p.plan.trimmed, 0);
 		const dots = plans.reduce((n, p) => n + p.plan.removed, 0);
 		showNotice(t("cleanup.done", { hooks: String(hooks), dots: String(dots) }));
+	}
+
+	// --- join broken strokes (0.24, #313) ---
+
+	/**
+	 * Joins the strokes of the selection that a tiny pen dropout split in two (neighbours in the page order, same style, the end of one
+	 * meeting the start of the next along the same direction) into one stroke each, as ONE undo step. Groups come whole
+	 * (`selectableItems`); the ink a collapsed note keeps hidden is never touched (`planJoin`); a locked page refuses the step in the
+	 * history, which says so. The selection stays on the joined strokes. Always the person's choice: nothing is joined while writing.
+	 */
+	joinBroken(): void {
+		const sel = this.host.selection();
+		const doc = this.host.doc();
+		if (!sel || !doc || !this.host.editable()) return;
+		const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])];
+		const plans: Array<{ part: PagePart; plan: JoinPlan }> = [];
+		for (const part of parts) {
+			const page = doc.pages[part.pageIndex];
+			if (!page) continue;
+			const onPage = new Set(page.strokes);
+			const elements = part.elements.filter((e) => page.elements?.includes(e));
+			const picked = selectableItems(page, { strokes: part.strokes.filter((s) => onPage.has(s)), elements });
+			const plan = planJoin(page, picked.strokes);
+			if (plan) plans.push({ part, plan });
+		}
+		if (plans.length === 0) {
+			showNotice(t("joinstrokes.nothing"));
+			return;
+		}
+		const cmd = plans.length === 1 ? plans[0]!.plan.command : new Batch("Join broken strokes", plans.map((p) => p.plan.command));
+		if (!this.host.execute(cmd)) return;
+		const next = (part: PagePart): PagePart => {
+			const found = plans.find((p) => p.part === part);
+			if (!found) return part;
+			const strokes = part.strokes.flatMap((s) => (found.plan.changes.has(s) ? (found.plan.changes.get(s) ?? []) : [s]));
+			return { pageIndex: part.pageIndex, strokes, elements: part.elements };
+		};
+		const [first, ...rest] = parts.map(next) as [PagePart, ...PagePart[]];
+		this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
+		const joints = plans.reduce((n, p) => n + p.plan.joints, 0);
+		showNotice(t("joinstrokes.done", { n: String(joints) }));
 	}
 
 	// --- copy, cut, duplicate ---
