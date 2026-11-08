@@ -50,14 +50,30 @@ export function clipRoutes(caps: ClipCapabilities): ClipRoute[] {
 	return routes;
 }
 
-/** What to do after a route failed: the next one, or stop (the user closed the share sheet on purpose). */
-export function afterFailure(routes: readonly ClipRoute[], failed: ClipRoute, cancelled: boolean): ClipRoute | null {
-	if (cancelled) return null;
+/** Why a route failed, as far as the next step is concerned: the user closed the share sheet, the browser wants a fresh tap, or anything else. */
+export type ClipFailure = "cancelled" | "needs-tap" | "other";
+
+/** The one notice an outcome gets: nothing was copied on purpose, a new tap is needed, the next way is being tried, or nothing worked. */
+export type ClipNotice = "cancelled" | "needsTap" | "fallback" | "failed";
+
+/**
+ * What to do after a route failed: the next one to try (null: stop) and the one notice to show. A share that came too long after the tap
+ * (`needs-tap`) is not a reason to save a file the user did not ask for: it stops and asks for a new tap. A closed sheet stops too.
+ */
+export function afterFailure(routes: readonly ClipRoute[], failed: ClipRoute, failure: ClipFailure): { route: ClipRoute | null; notice: ClipNotice } {
+	if (failure === "cancelled") return { route: null, notice: "cancelled" };
+	if (failure === "needs-tap") return { route: null, notice: "needsTap" };
 	const i = routes.indexOf(failed);
-	return i >= 0 && i + 1 < routes.length ? routes[i + 1]! : null;
+	const next = i >= 0 && i + 1 < routes.length ? routes[i + 1]! : null;
+	return next ? { route: next, notice: "fallback" } : { route: null, notice: "failed" };
 }
 
 /** Whether the picture needs to be painted onto white (transparent PNGs show black in some apps). */
 export function needsWhite(background: ClipBackground): boolean {
 	return background === "white";
+}
+
+/** How a classified share error counts for the next step (`classifyShareError`): only a closed sheet and a missing tap are special. */
+export function failureOf(outcome: "cancelled" | "needs-tap" | "unsupported" | "failed"): ClipFailure {
+	return outcome === "cancelled" ? "cancelled" : outcome === "needs-tap" ? "needs-tap" : "other";
 }

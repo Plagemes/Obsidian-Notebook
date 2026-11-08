@@ -4,7 +4,7 @@
 // the notebook (by the area export, recorded as plugin-written). Every outcome shows a notice: nothing fails silently. Document only read.
 import { t } from "../i18n";
 import { planArea, type AreaPlan, type AreaScope } from "../ink/export-area";
-import { afterFailure, clipRoutes, clipScale, needsWhite, type ClipBackground, type ClipCapabilities, type ClipRoute } from "../ink/clip-image";
+import { afterFailure, clipRoutes, clipScale, failureOf, needsWhite, type ClipBackground, type ClipCapabilities, type ClipFailure, type ClipRoute } from "../ink/clip-image";
 import { scaleDpi } from "../model/export-pages";
 import { canShareFiles, classifyShareError, shareMime } from "../model/share-page";
 import { saveArea, type AreaHost } from "./export-area";
@@ -90,7 +90,6 @@ export async function copyAsImage(host: AreaHost, scope: AreaScope, background: 
 	const working = showNotice(t("export.working"), 0);
 	try {
 		while (route) {
-			let cancelled = false;
 			try {
 				if (route === "clipboard") {
 					const item = new ClipboardItem({ "image/png": picture().then((p) => p.png) });
@@ -107,7 +106,7 @@ export async function copyAsImage(host: AreaHost, scope: AreaScope, background: 
 					showNotice(t("clipImage.shared"), 4000);
 					return "share";
 				}
-				const path = await saveArea(host, { scope, format: "png", scale: 2 });
+				const path = await saveArea(host, { scope, format: "png", scale: 2 }, true);
 				if (path) {
 					showNotice(t("clipImage.saved", { path }), 9000);
 					return "save";
@@ -115,15 +114,14 @@ export async function copyAsImage(host: AreaHost, scope: AreaScope, background: 
 				return null; // saveArea already told why
 			} catch (e) {
 				console.warn("[notebook] copy as image", route, e);
-				if (route === "share") cancelled = classifyShareError(e) === "cancelled";
-				const next = afterFailure(routes, route, cancelled);
-				if (cancelled) {
-					showNotice(t("clipImage.cancelled"), 4000);
-					return null;
-				}
-				if (next) showNotice(t("clipImage.fallback", { error: errorText(e) }), 6000);
+				const failure: ClipFailure = route === "share" ? failureOf(classifyShareError(e)) : "other";
+				const next = afterFailure(routes, route, failure);
+				// One notice per outcome. A share that needs a new tap keeps the vault clean: the picture is drawn again on the next tap.
+				if (next.notice === "cancelled") showNotice(t("clipImage.cancelled"), 4000);
+				else if (next.notice === "needsTap") showNotice(t("clipImage.needsTap"), 9000);
+				else if (next.notice === "fallback") showNotice(t("clipImage.fallback", { error: errorText(e) }), 6000);
 				else showNotice(t("clipImage.failed", { error: errorText(e) }), 9000);
-				route = next;
+				route = next.route;
 			}
 		}
 		return null;

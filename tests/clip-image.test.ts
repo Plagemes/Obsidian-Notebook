@@ -5,8 +5,9 @@ import { ACTIONS, baseContext } from "../src/ui/actions";
 import { ACTION_HELP } from "../src/ui/help-text";
 import { contextBoost } from "../src/ui/context-rank";
 import {
-	CLIP_MAX_PIXELS, CLIP_MAX_SIDE, CLIP_MIN_SCALE, CLIP_SCALE, afterFailure, clipRoutes, clipScale, isClipBackground, needsWhite,
+	CLIP_MAX_PIXELS, CLIP_MAX_SIDE, CLIP_MIN_SCALE, CLIP_SCALE, afterFailure, clipRoutes, clipScale, failureOf, isClipBackground, needsWhite,
 } from "../src/ink/clip-image";
+import { classifyShareError } from "../src/model/share-page";
 import { planArea } from "../src/ink/export-area";
 import { layerFlags } from "../src/ink/export-layers";
 import { createArea } from "../src/model/area";
@@ -41,12 +42,30 @@ describe("routes and fallback", () => {
 	it("always ends with a saved copy, so it never fails silently", () => {
 		expect(clipRoutes({ imageClipboard: false, shareFiles: false })).toEqual(["save"]);
 	});
-	it("moves to the next route on failure, and stops when the user cancelled the share sheet", () => {
+	it("moves to the next route on failure, with the one notice for that outcome", () => {
 		const routes = clipRoutes({ imageClipboard: true, shareFiles: true });
-		expect(afterFailure(routes, "clipboard", false)).toBe("share");
-		expect(afterFailure(routes, "share", false)).toBe("save");
-		expect(afterFailure(routes, "save", false)).toBeNull();
-		expect(afterFailure(routes, "share", true)).toBeNull();
+		expect(afterFailure(routes, "clipboard", "other")).toEqual({ route: "share", notice: "fallback" });
+		expect(afterFailure(routes, "share", "other")).toEqual({ route: "save", notice: "fallback" });
+		expect(afterFailure(routes, "save", "other")).toEqual({ route: null, notice: "failed" });
+		const noShare = clipRoutes({ imageClipboard: true, shareFiles: false });
+		expect(afterFailure(noShare, "clipboard", "other")).toEqual({ route: "save", notice: "fallback" });
+	});
+	it("a closed share sheet stops with its notice, and a share that needs a new tap never saves a file", () => {
+		const routes = clipRoutes({ imageClipboard: false, shareFiles: true });
+		expect(routes).toEqual(["share", "save"]);
+		expect(afterFailure(routes, "share", "cancelled")).toEqual({ route: null, notice: "cancelled" });
+		expect(afterFailure(routes, "share", "needs-tap")).toEqual({ route: null, notice: "needsTap" });
+		// Every share error class maps to one of the three, and the save route is not offered for a missing tap.
+		expect(failureOf(classifyShareError({ name: "AbortError" }))).toBe("cancelled");
+		expect(failureOf(classifyShareError({ name: "NotAllowedError" }))).toBe("needs-tap");
+		expect(failureOf(classifyShareError({ name: "NotSupportedError" }))).toBe("other");
+		expect(failureOf(classifyShareError({ name: "TypeError" }))).toBe("other");
+		expect(failureOf(classifyShareError(new Error("boom")))).toBe("other");
+		for (const failure of ["cancelled", "needs-tap"] as const) expect(afterFailure(routes, "share", failure).route).toBeNull();
+	});
+	it("the new-tap notice has both texts", () => {
+		expect(enSrc).toContain("\"clipImage.needsTap\"");
+		expect(itSrc).toContain("\"clipImage.needsTap\"");
 	});
 	it("background values", () => {
 		expect(isClipBackground("white")).toBe(true);

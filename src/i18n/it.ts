@@ -4823,6 +4823,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"clipImage.shared": "Immagine inviata al menu di condivisione.",
 	"clipImage.saved": "Questo dispositivo non può copiare immagini, quindi è stato salvato un PNG: {path}",
 	"clipImage.cancelled": "Condivisione annullata. Non è stato copiato nulla.",
+	"clipImage.needsTap": "Il menu di condivisione richiede un nuovo tocco. Tocca di nuovo Copia come immagine per condividere l'immagine.",
 	"clipImage.fallback": "Impossibile copiare l'immagine ({error}). Provo un altro modo.",
 	"clipImage.failed": "Impossibile copiare l'immagine: {error}",
 	"settings.clipImageBackground": "Sfondo delle immagini copiate",

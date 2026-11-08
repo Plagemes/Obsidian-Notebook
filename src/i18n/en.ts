@@ -4821,6 +4821,7 @@ export const en = {
 	"clipImage.shared": "Picture sent to the share sheet.",
 	"clipImage.saved": "This device cannot copy pictures, so a PNG was saved: {path}",
 	"clipImage.cancelled": "Sharing cancelled. Nothing was copied.",
+	"clipImage.needsTap": "The share sheet needs a fresh tap. Tap Copy as image again to share the picture.",
 	"clipImage.fallback": "Could not copy the picture ({error}). Trying another way.",
 	"clipImage.failed": "Could not copy the picture: {error}",
 	"settings.clipImageBackground": "Background of copied pictures",
