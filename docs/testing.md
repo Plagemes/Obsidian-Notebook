@@ -3886,3 +3886,21 @@ Manual steps (real Obsidian; nothing here is verified on Android). Use a page of
 |---|---|---|---|---|---|
 | Align to baseline (#93): words found from stroke gaps, lines from baselines, descender-aware baseline, one straight baseline per line (level, or a clear slope kept), ruled paper snaps to the ruled line, rigid y-only moves in one undo step | yes | `tests/baseline.test.ts` (synthetic words with descenders, punctuation, two lines, slopes, ruled paper, groups, locks, pinned ink, undo, page times, jitter, a 20-line page); harness `doc=baseline` | | | rotation of a slanted line (translation only for now); not tried on real handwriting |
 | Selection bar and sheet entry, command, long-press help, context ranking (higher on ruled paper), Italian | yes | `tests/selection-arrange.test.ts`, `tests/long-press-help.test.ts`, `tests/context-rank.test.ts` | | | |
+### 0.25 — profiles: Lecture and Study writing profiles (roadmap #219; steps 2680-2699)
+2680. **Chip.** Pen tool, tap it again for the options: next to the pen set chip there is a "Profile" chip (lightning icon), "No profile" at first. Long-press it: a help bubble explains it.
+2681. **Lecture.** Chip, Lecture: the strip shows thin ballpoint pens, the chip says Lecture and is highlighted. Settings > Writing: Stabilization is 1; Default paper is Ruled. Create a new notebook: it starts on ruled paper.
+2682. **Study.** Chip, Study: fountain pens on the strip, Stabilization 6, Default paper Grid. Write: lines are visibly smoother than with Lecture.
+2683. **Nothing else changes.** Switch profiles on a notebook with writing: strokes, paper of existing pages and the page count do not change; undo history is unaffected. It also works on a read-only notebook.
+2684. **Own profile.** Set pens, stabilization and paper as you like, chip > "Save current setup as a profile...", name it. Switch to Lecture, then back to your profile: everything returns. Chip > Update (with it active) and Delete work; Lecture and Study have no Update or Delete.
+2685. **Drift.** Move the Stabilization slider after switching: the chip goes back to "No profile".
+2686. **Commands.** Command palette and All actions: "Writing profile: Lecture", "...: Study", "...: next" (cycles Lecture, Study, your own). During a class "Lecture" is at the top of "For this page".
+2687. **Lecture mode.** Settings > Writing, "Lecture profile in lecture mode" on: start a lecture (manual or automatic): the profile becomes Lecture. Off: nothing switches.
+2688. **Reopen.** Close and reopen the notebook and restart Obsidian: the active profile and your own profiles are still there.
+2689. **Italian.** Switch to Italian: chip, menu, commands, help and setting are translated.
+2690. **Phone and tablet, light and dark.** The chip wraps next to the pen set chip without overflow.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Built-in Lecture and Study profiles, own profiles saved from the current setup (pens, stabilization, paper), apply, update, delete | yes | `tests/writing-profiles.test.ts` (apply, save, limits, lenient reader, cycling); harness `doc=profiles` | | | optional toolbar density per profile |
+| Chip on the pen options, commands, long-press help, context rank | yes | `tests/writing-profiles.test.ts` (actions, help, rank); harness `doc=profiles` (chip, switching, document untouched) | | | |
+| Lecture mode switches to the Lecture profile (setting, off by default) | yes | `tests/writing-profiles.test.ts` (`switchOnLecture`); harness `doc=profiles` | | | |

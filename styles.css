@@ -19656,3 +19656,12 @@ body.notebook-style-obsidian {
 	font-size: var(--nb-fs-meta);
 	font-weight: 600;
 }
+/* ===== 0.25 profiles ===== */
+.nb-ui.notebook-profile-chip.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-soft, var(--nb-tile));
+}
+
+.nb-ui.notebook-profile-chip.is-active .notebook-penset-icon {
+	color: var(--nb-accent);
+}

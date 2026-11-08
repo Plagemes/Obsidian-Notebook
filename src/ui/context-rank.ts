@@ -65,6 +65,9 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// The tool in hand: "eraser-…" options come first with the eraser, and so on.
 	if (TOOL_PREFIXES[c.tool].some((p) => a.id.startsWith(p))) boost += 22;
 	if (c.presenting && a.id === "present") boost += 30;
+	// 0.25 (#219): the Lecture profile comes first during a class (until it is the one in use); Study only leans forward outside a class.
+	if (a.id === "profile-lecture") boost += c.lecture && c.profile !== "lecture" ? 30 : 0;
+	if (a.id === "profile-study") boost += !c.lecture && c.profile !== "study" ? 8 : 0;
 	if (c.comments?.panel && a.id.startsWith("comment")) boost += 15;
 	// 0.25 (#93): lining the words up fits ink on ruled paper above all (the words go onto the ruled line).
 	if (a.id === "selection-baseline" && hasSelection && c.page?.kind === "ruled") boost += 10;

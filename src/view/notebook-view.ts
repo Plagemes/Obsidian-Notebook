@@ -205,6 +205,8 @@ import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
 import { PenSetControls, setForOpen, type PenSetHost } from "./pen-set-controls";
+import { ProfileControls, type ProfileHost } from "./profile-controls";
+import { activeProfile, addProfile, applyPatch, deleteProfile, ensureProfileSet, findProfile, nextProfileId, profileName, profileSetId, switchOnLecture, updateProfile, type CurrentState } from "./writing-profiles";
 import { favouritePatch } from "./favourites";
 import { MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, slotsOf, withSetPens, type PenSet } from "./pen-sets";
 import { PdfReading, type ReadingHost } from "./pdf-reading";
@@ -564,6 +566,8 @@ export class NotebookView extends FileView {
 	/** 0.15 pen sets: the switcher in the pen options and the set the strip shows now (null: the favourite pens); not saved. */
 	private penSetUi: PenSetControls | null = null;
 	private activePenSetId: string | null = null;
+	/** 0.25 profiles (#219): the chip that switches the writing profile (on the pen options row). */
+	private profileUi: ProfileControls | null = null;
 	/** Wave 0.6: PDF search, snapping highlighter, hide annotations, dimmed backgrounds (pdf-reading.ts). */
 	private reading: PdfReading | null = null;
 	/** 0.16: select and copy the text of a PDF page (#45), follow the links of PDF pages and list the PDF outline (#46). */
@@ -833,7 +837,11 @@ export class NotebookView extends FileView {
 		this.mountPenLinks(this.textEditor);
 		this.pens = new PenControls(this.toolbar, this.stage, this.penStore());
 		this.penSetUi = new PenSetControls(this.toolbar.penSetsEl, this.penSetHost());
-		this.pens.onRefresh = () => this.penSetUi?.refresh();
+		this.profileUi = new ProfileControls(this.toolbar.penSetsEl, this.profileHost());
+		this.pens.onRefresh = () => {
+			this.penSetUi?.refresh();
+			this.profileUi?.refresh();
+		};
 		this.ui = new ViewUi({
 			app: this.app, root: this.contentEl, body: this.body, toolbar: this.toolbar,
 			context: (pageIndex) => this.uiContext(pageIndex),
@@ -902,7 +910,10 @@ export class NotebookView extends FileView {
 			},
 			changed: () => this.refreshUi(),
 			ended: (end) => this.onLectureEnd(end),
-			started: (cls, pageAdded) => this.lectureHeader?.lectureStarted(cls, pageAdded),
+			started: (cls, pageAdded) => {
+				this.lectureHeader?.lectureStarted(cls, pageAdded);
+				this.profileForLecture();
+			},
 			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
 		this.mountExcerpts();
@@ -1166,6 +1177,7 @@ export class NotebookView extends FileView {
 		this.pens?.destroy();
 		this.pens = null;
 		this.penSetUi = null;
+		this.profileUi = null;
 		this.refWindow?.destroy();
 		this.refWindow = null;
 		this.pdfText?.destroy();
@@ -2051,12 +2063,106 @@ export class NotebookView extends FileView {
 	/** A notebook was opened: use the set of the notebook, else of its nearest folder, else the favourite pens. */
 	private loadPenSetForNotebook(file: TFile): void {
 		const s = this.host.settings;
-		const set = setForOpen({ sets: s.penSets, folders: s.penSetFolders, notebooks: s.penSetNotebooks }, this.session?.doc?.id ?? null, file.path);
+		let set = setForOpen({ sets: s.penSets, folders: s.penSetFolders, notebooks: s.penSetNotebooks }, this.session?.doc?.id ?? null, file.path);
+		// 0.25 profiles: with no set for the notebook or its folder, the strip keeps the pens of the writing profile in use.
+		const prof = set ? null : activeProfile(s.writingProfiles, s);
+		const made = prof ? ensureProfileSet(s.penSets, prof, profileName(prof, (k) => t(k))) : null;
+		if (made) {
+			if (made.sets.length !== s.penSets.length) s.penSets = made.sets;
+			set = made.sets.find((x) => x.id === made.id) ?? null;
+		}
 		this.activePenSetId = set?.id ?? null;
 		// The first pen of the set is taken only when a pen or the highlighter is in use (an eraser or lasso stays).
 		const first = set ? slotsOf(set, s.favouritePens)[0] : undefined;
 		if (first && (this.tools.tool === "pen" || this.tools.tool === "highlighter")) this.toolbar.update(favouritePatch(first) as Partial<ToolbarState>);
 		this.pens?.refresh();
+	}
+
+	// --- writing profiles (0.25, #219) ---
+
+	/** The profile in use for the quick-action check mark and the context rank ("" when none, or the settings were changed since). */
+	activeWritingProfileId(): string {
+		return activeProfile(this.host.settings.writingProfiles, this.host.settings)?.id ?? "";
+	}
+
+	private profileHost(): ProfileHost {
+		const s = (): NotebookSettings => this.host.settings;
+		const persist = (): void => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+		return {
+			app: this.app,
+			custom: () => s().writingProfiles,
+			active: () => activeProfile(s().writingProfiles, s()),
+			apply: (id) => this.applyWritingProfile(id),
+			saveAs: (name) => {
+				const next = addProfile(s().writingProfiles, name, this.profileState());
+				if (!next) return false;
+				s().writingProfiles = next.profiles;
+				s().writingProfileActive = next.id;
+				persist();
+				return true;
+			},
+			update: (id) => {
+				const state = this.profileState();
+				s().writingProfiles = updateProfile(s().writingProfiles, id, state);
+				s().writingProfileActive = id;
+				// The pens the profile put on the strip live in its pen set: keep that set in step with what was saved.
+				const p = findProfile(s().writingProfiles, id);
+				if (p && s().penSets.some((x) => x.id === profileSetId(p))) s().penSets = withSetPens(s().penSets, profileSetId(p), state.pens);
+				persist();
+			},
+			remove: (id) => {
+				s().writingProfiles = deleteProfile(s().writingProfiles, id);
+				if (s().writingProfileActive === id) s().writingProfileActive = "";
+				persist();
+			},
+			available: () => this.file !== null,
+		};
+	}
+
+	/** The pens, smoothing and paper in use now (what "Save as a profile" stores). */
+	private profileState(): CurrentState {
+		const s = this.host.settings;
+		return { pens: this.penStore().favourites(), penSetId: this.activePenSetId, stabilization: s.stabilization, paper: s.defaultPaper };
+	}
+
+	/**
+	 * Switches to a writing profile: the strip shows its pens, the smoothing and the default paper of new notebooks follow it.
+	 * Tools and defaults only: no stroke, page or document is read or changed, so it also works on a read-only notebook.
+	 */
+	applyWritingProfile(id: string, quiet = false): void {
+		const s = this.host.settings;
+		const p = findProfile(s.writingProfiles, id);
+		if (!p) return;
+		const patch = applyPatch(p);
+		s.stabilization = patch.stabilization;
+		s.defaultPaper = patch.defaultPaper;
+		s.writingProfileActive = patch.writingProfileActive;
+		const name = profileName(p, (k) => t(k));
+		const made = ensureProfileSet(s.penSets, p, name);
+		if (made) {
+			s.penSets = made.sets;
+			this.activePenSetId = made.id;
+			const set = s.penSets.find((x) => x.id === made.id);
+			const first = set ? slotsOf(set, s.favouritePens)[0] : undefined;
+			if (first && (this.tools.tool === "pen" || this.tools.tool === "highlighter")) this.toolbar.update(favouritePatch(first) as Partial<ToolbarState>);
+		}
+		this.filter.params = stabilizationParams(s.stabilization);
+		this.pens?.refresh();
+		this.profileUi?.refresh();
+		this.refreshUi();
+		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+		if (!quiet) showNotice(t("profiles.switched", { name }), 2500);
+	}
+
+	/** Switches to the next profile (Lecture, Study, then the user's own, round again). */
+	applyNextWritingProfile(): void {
+		const s = this.host.settings;
+		this.applyWritingProfile(nextProfileId(s.writingProfiles, this.activeWritingProfileId()));
+	}
+
+	/** Lecture mode started: switch to the Lecture profile when the setting asks for it. */
+	private profileForLecture(): void {
+		if (switchOnLecture(this.host.settings.writingProfileOnLecture, this.host.settings)) this.applyWritingProfile("lecture");
 	}
 
 	/** Switches between continuous scrolling and one page at a time, staying on the page in view. */
@@ -3787,6 +3893,7 @@ export class NotebookView extends FileView {
 			notebook: { pdfPages: hasPdfPages(pages), backgrounds: hasBackgrounds(pages) },
 			lecture: this.lectureMode?.on ?? false,
 			presenting: this.presenting,
+			profile: this.activeWritingProfileId(),
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false, selectText: this.pdfText?.active ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },

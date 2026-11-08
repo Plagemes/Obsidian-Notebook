@@ -228,6 +228,8 @@ const WRITING: SettingSpec[] = [
 		id: "defaultNibAngle", section: "writing", order: 72, name: "settings.defaultNibAngle", desc: "settings.defaultNibAngle.desc", keywords: "nib angle fountain marker calligraphy punta angolo",
 		control: { type: "slider", min: 0, max: 175, step: 5, format: suffix("°") }, parent: "defaultPenKind", visible: (s) => s.defaultPenKind === "fountain" || s.defaultPenKind === "marker",
 	},
+	// 0.25 profiles (#219): Lecture / Study / custom writing profiles (view/writing-profiles.ts); the switcher is on the pen options chip row
+	{ id: "writingProfileOnLecture", section: "writing", order: 73, name: "settings.profileOnLecture", desc: "settings.profileOnLecture.desc", keywords: "profile lecture study fast careful switch pens stabilization paper profilo lezione studio", control: { type: "toggle" } },
 	{ id: "eraseAreaElements", section: "writing", group: ADVANCED, order: 10, name: "settings.eraseAreaElements", desc: "settings.eraseAreaElements.desc", control: { type: "toggle" } },
 	{ id: "dateStampFormat", section: "writing", group: ADVANCED, order: 20, name: "settings.dateStamp", desc: "settings.dateStamp.desc", control: { type: "text", placeholder: DEFAULT_SETTINGS.dateStampFormat } },
 	{ id: "signDateMode", section: "writing", group: ADVANCED, order: 21, name: "settings.signDateMode", desc: "settings.signDateMode.desc", control: { type: "dropdown", options: (tr) => ({ locale: tr("settings.signDateMode.locale"), iso: tr("settings.signDateMode.iso"), custom: tr("settings.signDateMode.custom") }) }, keywords: "signature date sign firma data" },
@@ -653,6 +655,8 @@ export const PEN_BUTTON_EXTENSIONS: SettingSpec[] = [
  */
 export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>> = {
 	favouritePens: "edited on the toolbar (long press on a favourite, radial menu)",
+	writingProfiles: "saved from the profile chip on the pen options (Save current as a profile)",
+	writingProfileActive: "set when a profile is switched to (chip, command, or lecture mode)",
 	eraserSize: "the eraser's size, edited in its tool options",
 	recentColours: "history of the colour picker",
 	penButtonWindowsMigrated: "set by the app once the old 150 ms default of the before-window was read as the new one",

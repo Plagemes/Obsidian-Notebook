@@ -93,6 +93,8 @@ export interface UiContext {
 	comments?: { panel: boolean; total: number; open: number; drawing?: boolean };
 	/** 0.24 (#424): presentation mode is on. Optional (off when absent). */
 	presenting?: boolean;
+	/** 0.25 (#219): the writing profile in use ("" none, "lecture", "study" or a custom id). Optional (none when absent). */
+	profile?: string;
 	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
 	openNotebooks?: number;
 	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */
@@ -434,6 +436,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "toggle-pages-panel", label: "tool.pages", icon: "panel-left", group: "view", surfaces: ["toolbar"], priority: 100, scope: "view", command: "command.toggleNavigator", readOnly: true, checked: (c) => c.toggles.navigator },
 	{ id: "toggle-ruler", label: "tool.ruler", icon: "ruler", group: "view", surfaces: ["quick", "radial", "sheet"], priority: 50, scope: "view", command: "command.toggleRuler", checked: (c) => c.toggles.ruler },
 	{ id: "pen-only", label: "pens.penOnly", icon: "pen-tool", group: "view", surfaces: ["quick", "sheet"], priority: 42, scope: "view", command: "command.penOnly", readOnly: true, checked: (c) => c.toggles.penOnly, keywords: "finger touch palm" },
+	// 0.25 profiles (#219): one tap switches the pens, the stabilization and the paper of new notebooks (view/writing-profiles.ts). They change tools and defaults only, so they work on a read-only notebook too.
+	{ id: "profile-lecture", label: "profiles.action.lecture", icon: "zap", group: "view", surfaces: ["sheet"], priority: 40, scope: "view", command: "command.profileLecture", readOnly: true, checked: (c) => c.profile === "lecture", keywords: "profile lecture fast class quick pens stabilization paper profilo lezione veloce" },
+	{ id: "profile-study", label: "profiles.action.study", icon: "graduation-cap", group: "view", surfaces: ["sheet"], priority: 39, scope: "view", command: "command.profileStudy", readOnly: true, checked: (c) => c.profile === "study", keywords: "profile study careful slow neat pens stabilization paper profilo studio accurato" },
+	{ id: "profile-next", label: "profiles.action.next", icon: "repeat", group: "view", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.profileNext", readOnly: true, keywords: "profile switch next custom cycle profilo cambia successivo" },
 	// wave 0.10 (51): read-only mode of this view. The toolbar shows a button while it is on (tap to switch it off); the sheet and the command toggle it.
 	{ id: "toggle-read-only", label: "readonly.toggle", icon: "lock", group: "view", surfaces: ["sheet"], priority: 44, scope: "view", command: "command.readOnly", readOnly: true, checked: (c) => !!c.toggles.readOnly, keywords: "lock protect accidental marks reading view only sola lettura blocca proteggi" },
 	// wave 0.8: pen gestures. The mode toggle is a quick slot (the "move to page" gesture starts
