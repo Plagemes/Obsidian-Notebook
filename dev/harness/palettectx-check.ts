@@ -54,8 +54,10 @@ export async function checkPalettectx(api: PalettectxCheckApi): Promise<{ ok: bo
 	await api.frames(2);
 	await openSheet(api);
 	// A wide toolbar already shows the fitting actions (quick slots, selection bar), and the section never repeats them.
+	// The History group (Action history, 0.25) is always in the sheet and comes before the selection ones; it is not what this checks.
+	const lead = titles().filter((x) => x !== "History")[0];
 	const here = titles()[0] === "For this page";
-	add("with the lasso the sheet opens with 'For this page', or everything that fits is already on the toolbar", here || titles()[0] === "Selection", titles().join(", "));
+	add("with the lasso the sheet opens with 'For this page', or everything that fits is already on the toolbar", here || lead === "Selection", titles().join(", "));
 	const ids = firstSectionIds();
 	add("its rows are at most five", !here || (ids.length > 0 && ids.length <= 5), ids.join(","));
 	add("every row is a working button", Array.from(sheet()?.querySelectorAll<HTMLButtonElement>(".notebook-sheet-section:first-child button.notebook-menu-item") ?? []).every((b) => b.textContent && !b.disabled));
