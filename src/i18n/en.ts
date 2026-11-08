@@ -1809,6 +1809,15 @@ export const en = {
 	"settings.toolbarSize.compact": "Compact",
 	"settings.toolbarSize.normal": "Normal",
 	"settings.toolbarSize.large": "Large",
+	// 0.25 toolfade
+	"settings.toolFade": "Toolbar while writing",
+	"settings.toolFade.desc": "Dims the toolbar and floating pills while the pen writes; a touch brings them back.",
+	"settings.toolFadeSeconds.desc": "Seconds of writing before the bars dim, and of rest before they return.",
+	"settings.toolFadeFirstTouch.desc": "A finger touch on a dimmed bar only restores it; it does not press the button.",
+	"settings.toolFade.off": "Always shown",
+	"settings.toolFade.writing": "Fade while writing",
+	"settings.toolFadeSeconds": "Fade delay",
+	"settings.toolFadeFirstTouch": "First touch only brings the bars back",
 	"settings.pageTurnerKeys": "Turn pages with keys",
 	"settings.pageTurnerKeys.desc": "Arrows, PageUp, PageDown, space and Bluetooth clickers.",
 	// wave 0.9: text and objects

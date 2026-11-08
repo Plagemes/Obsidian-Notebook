@@ -27,6 +27,7 @@ import { WELCOME_HOURS_MAX, WELCOME_HOURS_MIN } from "../model/welcome-back";
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 import { SYMBOL_COUNT_MAX, SYMBOL_COUNT_MIN } from "../ui/symbol-rank";
+import { TOOL_FADE_SECONDS_MAX, TOOL_FADE_SECONDS_MIN } from "../ui/tool-fade";
 import { CLOUD_INTERVAL_MAX, CLOUD_LARGE_MAX_MB, CLOUD_MOBILE_MAX_MB, CLOUD_MOBILE_MIN_MB } from "../sync/settings";
 
 export type SettingKey = keyof NotebookSettings;
@@ -604,6 +605,19 @@ const APPEARANCE: SettingSpec[] = [
 	{ id: "adaptLearn", section: "appearance", order: 32, name: "settings.adaptLearn", desc: "settings.adaptLearn.desc", control: { type: "toggle" }, keywords: "adaptive toolbar learn notebook course usage frequent adattiva impara quaderno corso" },
 	{ id: "adaptSelection", section: "appearance", order: 33, name: "settings.adaptSelection", desc: "settings.adaptSelection.desc", control: { type: "toggle" }, keywords: "adaptive selection bar ink image text lasso adattiva selezione" },
 	{ id: "toolbarReset", section: "appearance", order: 34, name: "settings.toolbarReset", desc: "settings.toolbarReset.desc", control: { type: "action", run: "toolbar-reset", button: "settings.toolbarReset.button" }, keywords: "adaptive toolbar pinned pin reset forget learned fissate azzera dimentica" },
+	// 0.25 toolfade (#399): the bars step back while the pen writes.
+	{
+		id: "toolFade", section: "appearance", order: 35, name: "settings.toolFade", desc: "settings.toolFade.desc", keywords: "toolbar fade hide writing dim barra sfuma nascondi scrittura",
+		control: { type: "dropdown", options: options([["off", "settings.toolFade.off"], ["writing", "settings.toolFade.writing"]]) },
+	},
+	{
+		id: "toolFadeSeconds", section: "appearance", order: 36, name: "settings.toolFadeSeconds", desc: "settings.toolFadeSeconds.desc", keywords: "toolbar fade delay seconds ritardo secondi",
+		control: { type: "slider", min: TOOL_FADE_SECONDS_MIN, max: TOOL_FADE_SECONDS_MAX, step: 1, format: suffix("s") }, parent: "toolFade", visible: (s) => s.toolFade !== "off",
+	},
+	{
+		id: "toolFadeFirstTouch", section: "appearance", order: 37, name: "settings.toolFadeFirstTouch", desc: "settings.toolFadeFirstTouch.desc", keywords: "toolbar fade first touch tap primo tocco",
+		control: { type: "toggle" }, parent: "toolFade", visible: (s) => s.toolFade !== "off",
+	},
 	{ id: "userName", section: "appearance", order: 15, name: "settings.userName", desc: "settings.userName.desc", keywords: "name nome greeting saluto home", control: { type: "text", placeholder: "Alex" } },
 	{ id: "nightMode", section: "appearance", order: 40, name: "settings.nightMode", desc: "settings.nightMode.desc", control: { type: "toggle" }, keywords: "dark scuro" },
 	// 0.13: just-in-time tips.
