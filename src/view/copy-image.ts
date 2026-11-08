@@ -114,7 +114,7 @@ export async function copyAsImage(host: AreaHost, scope: AreaScope, background: 
 				}
 				return null; // saveArea already told why
 			} catch (e) {
-				console.error("[notebook] copy as image", route, e);
+				console.warn("[notebook] copy as image", route, e);
 				if (route === "share") cancelled = classifyShareError(e) === "cancelled";
 				const next = afterFailure(routes, route, cancelled);
 				if (cancelled) {
