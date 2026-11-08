@@ -42,6 +42,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"snap-toggle": "help.snap",
 	"share-selection": "help.shareSelection",
 	"selection-export-area": "help.exportSelection",
+	"selection-copy-image": "help.clipImageSelection",
+	"page-copy-image": "help.clipImagePage",
 	"selection-look-up": "help.lookUp",
 	"selection-make-task": "help.makeTask",
 	"comment-selection": "help.comment",

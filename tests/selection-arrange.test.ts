@@ -445,6 +445,8 @@ describe("placement plan", () => {
 });
 
 describe("registry and bar placement (wave 0.10)", () => {
+	// 0.25 (#277): Copy as image is the last button of the second row; it shows from tablet width and sits in the sheet on a phone bar.
+	const pinned = (id: string): boolean => id !== "selection-copy-image";
 	const sel = (strokes: number, elements = 0, images = 0) => baseContext({ tool: "lasso", selection: { strokes, elements, images } });
 	const idsOf = (c: UiContext, kind: "all" | "page" = "all") =>
 		buildSheet(c, { kind, usage: {}, now: 0, label: (a) => a.id }).flatMap((s) => s.actions.map((a) => a.id));
@@ -459,7 +461,7 @@ describe("registry and bar placement (wave 0.10)", () => {
 		for (const width of [360, 800, 1280]) {
 			const bar = contextBar(sel(3, 1), width, {}, 0)!;
 			expect(bar.kind).toBe("selection");
-			expect(bar.second, String(width)).toEqual(secondRow(width));
+			expect(bar.second?.filter(pinned), String(width)).toEqual(secondRow(width));
 			// The first row keeps its basics (the layer moves stay where wave 0.9 put them).
 			expect(bar.actions).toContain("selection-copy");
 		}
@@ -467,9 +469,9 @@ describe("registry and bar placement (wave 0.10)", () => {
 	});
 
 	it("offers only what applies: align needs two things, similar needs ink, transform needs a selection", () => {
-		expect(contextBar(sel(1), 800, {}, 0)!.second).toEqual(["selection-similar", "selection-cleanup", "selection-transform-menu"]);
-		expect(contextBar(sel(0, 1, 1), 800, {}, 0)!.second).toEqual(["selection-transform-menu"]);
-		expect(contextBar(sel(0, 2, 2), 800, {}, 0)!.second).toEqual(["selection-align-menu", "selection-transform-menu"]);
+		expect(contextBar(sel(1), 800, {}, 0)!.second?.filter(pinned)).toEqual(["selection-similar", "selection-cleanup", "selection-transform-menu"]);
+		expect(contextBar(sel(0, 1, 1), 800, {}, 0)!.second?.filter(pinned)).toEqual(["selection-transform-menu"]);
+		expect(contextBar(sel(0, 2, 2), 800, {}, 0)!.second?.filter(pinned)).toEqual(["selection-align-menu", "selection-transform-menu"]);
 		// Nothing selected: no second row at all.
 		expect(contextBar(baseContext({ tool: "lasso" }), 800, {}, 0)).not.toHaveProperty("second");
 	});
@@ -478,7 +480,7 @@ describe("registry and bar placement (wave 0.10)", () => {
 		const withReaction = baseContext({ tool: "lasso", selection: { strokes: 3, elements: 1, images: 0, reactions: 1 } });
 		for (const width of [360, 800, 1280]) {
 			const bar = contextBar(withReaction, width, {}, 0)!;
-			expect(bar.second, String(width)).toEqual(secondRow(width));
+			expect(bar.second?.filter(pinned), String(width)).toEqual(secondRow(width));
 			// On a narrow bar the chem action overflows into the sheet (priority 57); from tablet width it sits on the first row.
 			if (width >= 800) expect(bar.actions, String(width)).toContain("chem-balance");
 			expect(bar.second).not.toContain("chem-balance");
@@ -648,5 +650,21 @@ describe("review fixes (selection tools)", () => {
 		const loose = bar(110, 210, 20);
 		page.strokes.push(loose);
 		expect(inkOwnership(page, [loose], [g], undefined, false).owner.has(loose)).toBe(false);
+	});
+});
+
+describe("Copy as image on the selection bar (0.25)", () => {
+	const sel = (strokes: number, elements = 0) => baseContext({ tool: "lasso", selection: { strokes, elements, images: 0 } });
+	it("is the last button of the second row from tablet width, and always in the All actions sheet", () => {
+		for (const width of [800, 1280]) expect(contextBar(sel(2), width, {}, 0)!.second!.slice(-1)[0], String(width)).toBe("selection-copy-image");
+		// A phone bar has five places: the five older actions keep them, Align to baseline and Copy as image are in the sheet.
+		expect(contextBar(sel(3), 360, {}, 0)!.second).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu"]);
+		expect(contextBar(sel(2), 800, {}, 0)!.second).toEqual(["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu", "selection-baseline", "selection-copy-image"]);
+		const ids = buildSheet(sel(2), { kind: "all", usage: {}, now: 0, label: (a) => a.id }).flatMap((s) => s.actions.map((a) => a.id));
+		expect(ids).toContain("selection-copy-image");
+		expect(ids).toContain("page-copy-image");
+		// Nothing selected: the selection action is not offered.
+		const none = buildSheet(baseContext({ tool: "lasso" }), { kind: "all", usage: {}, now: 0, label: (a) => a.id }).flatMap((s) => s.actions.map((a) => a.id));
+		expect(none).not.toContain("selection-copy-image");
 	});
 });

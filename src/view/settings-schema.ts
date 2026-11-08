@@ -486,6 +486,14 @@ const SYNC: SettingSpec[] = [
 
 const companionOn: Predicate = (s) => s.companionNotes;
 
+// 0.25 clipimage (#277)
+const CLIP: SettingSpec[] = [
+	{
+		id: "clipImageBackground", section: "integration", order: 44, name: "settings.clipImageBackground", desc: "settings.clipImageBackground.desc", keywords: "copy image clipboard background white transparent copia immagine appunti sfondo bianco trasparente",
+		control: { type: "dropdown", options: options([["white", "settings.clipImageBackground.white"], ["transparent", "settings.clipImageBackground.transparent"]]) },
+	},
+];
+
 const INTEGRATION: SettingSpec[] = [
 	{ id: "notebookTabs", section: "integration", order: 10, name: "settings.notebookTabs", desc: "settings.notebookTabs.desc", control: { type: "toggle" } },
 	{ id: "companionNotes", section: "integration", order: 20, name: "settings.companion", desc: "settings.companion.desc", control: { type: "toggle" }, keywords: "markdown dataview bases" },
@@ -670,7 +678,7 @@ export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>
 	pinnedQuick: "edited on the toolbar (press and hold a quick action, or a row of All actions); Reset the adaptive toolbar clears it",
 };
 
-const ALL: SettingSpec[] = [...WRITING, ...INPUT, ...PAGES, ...READING, ...LIBRARY, ...SYNC, ...INTEGRATION, ...STUDY, ...APPEARANCE, ...DIAGNOSTICS];
+const ALL: SettingSpec[] = [...WRITING, ...INPUT, ...PAGES, ...READING, ...LIBRARY, ...SYNC, ...INTEGRATION, ...CLIP, ...STUDY, ...APPEARANCE, ...DIAGNOSTICS];
 
 /** Every row of the tab, with the extensions, in display order (section, then main / groups / Advanced, then order). */
 export function settingSpecs(): SettingSpec[] {

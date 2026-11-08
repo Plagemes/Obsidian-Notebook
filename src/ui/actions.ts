@@ -493,6 +493,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.24 handin (#334): hand in chosen pages as a PDF with a cover, after a pre-flight check.
 	{ id: "hand-in", label: "handIn.menu", icon: "graduation-cap", group: "share", surfaces: ["sheet", "notebook"], priority: 26.2, scope: "view", command: "command.handIn", readOnly: true, keywords: "hand in assignment submit cover pdf homework consegna compito copertina" },
 	{ id: "selection-export-area", label: "exportArea.selection", icon: "crop", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40.3, scope: "view", command: true, readOnly: true, when: hasSelection, keywords: "export selection transparent png svg esporta selezione trasparente" },
+	// 0.25 clipimage (#277): the written area, or the selection, copied to the system clipboard as a picture
+	{ id: "page-copy-image", label: "clipImage.page", icon: "image", group: "share", surfaces: ["sheet", "notebook"], priority: 26.4, scope: "view", command: "command.clipImagePage", readOnly: true, keywords: "copy clipboard image picture paste whatsapp mail written area copia appunti immagine incolla area scritta" },
+	{ id: "selection-copy-image", label: "clipImage.selection", icon: "image", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 55, scope: "view", command: "command.clipImageSelection", readOnly: true, when: hasSelection, keywords: "copy clipboard image picture paste whatsapp mail selection copia appunti immagine incolla selezione" },
 	{ id: "print", label: "export.print.menu", icon: "printer", group: "share", surfaces: ["sheet", "notebook"], priority: 26, scope: "view", command: "command.print", readOnly: true, when: (c) => !!c.canPrint, keywords: "paper printer stampa carta" },
 
 	// --- notebooks: the library, the ribbon and the palette.
