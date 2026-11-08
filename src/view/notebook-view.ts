@@ -2967,7 +2967,9 @@ export class NotebookView extends FileView {
 		const stored = this.redactState();
 		if (stored.unreadable) {
 			// Review fix (R3): the first time in a session, one notice says what happened and what to do (the refusals point there too).
-			if (takeRedactStoreNotice(this.app)) showNotice(t("redact.storeDamaged"), 15000);
+			// Review fix (T6): it says a copy was kept only when there was something to copy.
+			const problem = takeRedactStoreNotice(this.app);
+			if (problem) showNotice(t(problem === "lost" ? "redact.storeLost" : "redact.storeDamaged"), 15000);
 			return { redactBlocked: true };
 		}
 		// Review fix (R5): the chains of excerpts are found over the whole notebook once, so a writer given one page still knows them.
