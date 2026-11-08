@@ -459,7 +459,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
     - Placeholders left during the lecture (#201) are filled by the matching slides.
 236. **P2** Completion walkthrough: a guided tour of the gaps and open questions.
 237. **P2** A classmate's notes side by side with yours for the same lecture (PDF or photos).
-238. **P2** One-step page tidy-up: align, straighten and compact spacing.
+238. **P2** 🧪 One-step page tidy-up: align, straighten and compact spacing. (0.26: *Tidy up* on the selection or the whole page; words onto a baseline, line starts onto a margin, oversized gaps closed; one undo step.)
 239. **P2** 🧪 Clean notes export: the lecture as a PDF without placeholders or markers, ready to share.
 240. **P2** Lecture shared with the study group: at the end, a rule exports the clean notes to a shared (Drive) folder.
 

@@ -3980,3 +3980,25 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Pure marked-page logic (kinds, reasons, counts) | yes | `tests/nav-marked.test.ts` | | | markers resolved (done) still count as marked |
 | Per-notebook choice in bounded device-local storage (corrupt falls back to all pages) | yes | `tests/nav-marked.test.ts`; harness `doc=markedview` | | | |
 | Marked-only list with badges, sub-filters by kind, empty message, long-press help | yes | harness `doc=markedview` | | | |
+### 0.26 — tidy: one-step page tidy-up (roadmap #238; steps 2820-2839)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real hand). Use a notebook page with several lines of your own handwriting written a little crooked, with different left margins and a few big gaps; then a ruled page. Keep a page with a picture, a text box and an underlined heading for the "leaves alone" steps.
+
+2820. **From the page menu.** Open the page menu (page indicator or a thumbnail's menu) and choose *Tidy up page*. A small sheet opens: three rows with a checkbox each, a count on the right of each, *Keep paragraph breaks* under the last, and a *What will change* tile. Long-press the entry: the explanation appears (English and Italian).
+2821. **Preview, then cancel.** Switch the rows on and off: the counts and the tile follow. Tap *Cancel* (or the close button): the page is exactly as before and nothing is in the history panel.
+2822. **Tidy up.** Tap *Tidy up*: crooked words in a line sit on one baseline, the starts of the lines share one margin (an indent stays an indent), and a large hole between two paragraphs shrinks to about one blank line. A notice says how many words, line starts and gaps changed. The strokes only moved: same shape, size and pressure.
+2823. **One undo.** Undo once: everything is back. Redo does it all again. The history panel shows one step, *Page tidied up*.
+2824. **Second run.** Run *Tidy up page* again: the tile says *Nothing to tidy up with these choices* and the button is disabled.
+2825. **On a selection.** Select a few lines with the lasso: the second row of the bar (tablet width) has *Tidy up*; on a phone it is in the All actions sheet. The sheet says how many strokes are selected; only they move, and they stay selected afterwards.
+2826. **Keep paragraph breaks.** With it on, a gap of one blank line is kept and a bigger gap shrinks to one blank line. Off: every gap closes to the usual line spacing. Lines never touch or overlap.
+2827. **Ruled paper.** On ruled paper the words go onto the rules, lines move by whole rules only, and the margin is the paper's margin line when your writing was next to it.
+2828. **Leaves alone.** On a page with a picture, a text box, a shape, a highlighter stroke, a locked element, an underline under a line of text and a collapsed sticky note with ink: none of those move. A line that has an underline, a drawing or an object in its way stays where it is; the lines around it still tidy.
+2829. **Locked page.** Lock the page: the sheet says *This page is locked* and *Tidy up* is disabled.
+2830. **Remembered.** Switch a row off, close the sheet, open it again (and after restarting Obsidian): the choice is still there on this device.
+2831. **Nothing selected.** With nothing selected, the command *Tidy up the selection or the page* (palette) opens the sheet for the page in view; with a selection it opens it for the selection.
+2832. **Looks.** Light and dark theme, phone and tablet width, Italian (*Riordina*, *Riordina la pagina*).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Tidy-up engine: words onto a baseline (existing engine), line starts onto a common margin (paper margin on ruled paper), oversized gaps closed with paragraph breaks kept, whole rules on ruled paper, rigid moves only, one undo step, no page-time change, no format change | yes | `tests/tidy.test.ts`: two paragraphs, crooked lines, big gaps, ruled paper, a locked box in the way, groups, hidden ink, areas, second run, one undo, page times, locked page | | yes | thresholds tuned on synthetic writing only |
+| Sheet with the three steps, counts, summary, remembered choices, cancellable; selection bar (second row from tablet width) and sheet entry, page menu entry, command, long-press help, context ranking, history title | yes | `tests/tidy.test.ts` (registry, texts, ranking), `tests/selection-arrange.test.ts`; harness `doc=tidy` | | yes | not tried on Android; a line cut in two by the line finder is joined back by position only |
