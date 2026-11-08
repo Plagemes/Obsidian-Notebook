@@ -14,6 +14,7 @@
  * Tags, the lock and the other page fields are not drawn, so they are left alone.
  */
 import { withoutPinnedInk } from "../ink/attach";
+import { pageCopy } from "./states";
 import type { Page, PageElement } from "./types";
 
 export interface CleanExportOptions {
@@ -63,7 +64,8 @@ export function cleanPageForExport(page: Page, options: CleanExportOptions = {})
 	const kept = elements.filter((el) => !dropsElement(el, o));
 	const dropComments = o.comments && (page.comments?.length ?? 0) > 0;
 	if (kept.length === elements.length && !dropComments) return page;
-	const next: Page = { ...page };
+	// A live view of a page with states keeps its id, size and background only through its prototype: `pageCopy` keeps them.
+	const next: Page = pageCopy(page);
 	if (kept.length !== elements.length) {
 		// The ink a collapsed note keeps hidden goes with the note: without it the strokes would be drawn once the note is gone.
 		const hiddenByNotes = elements.filter((el) => el.type === "sticky" && el.collapsed === true && dropsElement(el, o));

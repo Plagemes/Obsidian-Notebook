@@ -128,6 +128,13 @@ export interface ExportOptions {
 	 * what lies under a box is left out of the file, the box is drawn solid black. Absent: nothing is covered.
 	 */
 	redact?: Redactions;
+	/**
+	 * Review fix (P4): the notebook's redaction boxes could not be read on this device (and none are held in memory). Every writer then
+	 * refuses to write (`withRedaction` throws), whatever the boxes would have covered: it is never known that nothing was covered.
+	 */
+	redactBlocked?: true;
+	/** Review fix (P10): how many boxes the notebook keeps switched off; non-dialog exports say once that they are off. */
+	redactOff?: number;
 }
 
 /**
@@ -312,8 +319,12 @@ export async function runExport(app: App, notebook: TFile, allPages: readonly Pa
 	const base: ExportOptions = { ...options };
 	if (clean && resolveCleanOptions(clean).comments) delete base.comments;
 	// 0.26 (#285): the dialog decides what is covered; each writer applies it to the pages it is given (`withRedaction`).
-	if (request.redact && countBoxes(request.redact) > 0) base.redact = request.redact;
-	else delete base.redact;
+	// Its choice is the one the reader saw: no hint about switched-off boxes; boxes it holds are readable (in memory at least).
+	delete base.redactOff;
+	if (request.redact && countBoxes(request.redact) > 0) {
+		base.redact = request.redact;
+		delete base.redactBlocked;
+	} else delete base.redact;
 	const opts: ExportOptions = { ...base, layers: request.layers, ...(splits ? { split: request.split! } : {}) };
 	if (jobs.length === 0) return;
 	if (request.format === "png") {

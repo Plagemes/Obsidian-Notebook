@@ -7,7 +7,7 @@ import { t } from "../i18n";
 import { MAX_PRINT_PAGES, planPrint } from "../model/export-pages";
 import type { Page } from "../model/types";
 import type { ExportOptions } from "./export";
-import { announceRedaction, withRedaction } from "./export-redact";
+import { announceRedaction, redactionRefused, withRedaction } from "./export-redact";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { PageImageRenderer } from "./page-images";
@@ -30,6 +30,7 @@ let printing = false;
  * dialog was opened. The container is removed when the dialog closes (`afterprint`), and anyway when `print()` returns.
  */
 export async function printPages(everyPage: readonly Page[], indices: readonly number[], media: NotebookMedia | null, base: ExportOptions = {}): Promise<boolean> {
+	if (redactionRefused(base)) return false; // review fix (P4)
 	// 0.26 (#285): the pages with the redaction boxes applied; what is printed is what the boxes leave.
 	const { pages: all, options } = withRedaction(everyPage, base);
 	if (!canPrint()) {

@@ -53,7 +53,7 @@ await api.insertImage(file, 1, "Attachments/diagram.png", { width: 300 });
 
 ### `api.exportPdf(file, options?)`
 
-Writes a PDF of the whole notebook next to it (`Physics.pdf`, ` 2`… if taken) and returns `{ path, pages, skippedImages }`. PDF pages and images that cannot be loaded are left out and counted in `skippedImages`; with `{ strict: true }` the call throws `export-incomplete` and writes nothing instead. For an open notebook the current, possibly unsaved content is exported.
+Writes a PDF of the whole notebook next to it (`Physics.pdf`, ` 2`… if taken) and returns `{ path, pages, skippedImages }`. PDF pages and images that cannot be loaded are left out and counted in `skippedImages`; with `{ strict: true }` the call throws `export-incomplete` and writes nothing instead. For an open notebook the current, possibly unsaved content is exported. Redaction boxes (0.26): while the notebook's *Apply the boxes* switch is on on this device, the PDF is written with the boxes applied, as the Export dialog would; when the stored boxes cannot be read the call throws `export-failed` and writes nothing (it never exports without them).
 
 ### `api.getNotebookInfo(file)`
 

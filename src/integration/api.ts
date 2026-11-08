@@ -17,6 +17,9 @@ import { VaultDocumentIO } from "../storage/vault-io";
 import { recordPluginWrite } from "../storage/plugin-written";
 import type { EditContext } from "../view/edit-context";
 import { collectPageImages, freePath } from "../view/export";
+import { withRedaction } from "../view/export-redact";
+import { loadRedactState } from "../ui/redact-store";
+import { isArmed } from "../model/redact";
 import { NotebookMedia, storeAsset } from "../view/media";
 import { t } from "../i18n";
 import { validPageId } from "../zettel/subpath";
@@ -460,13 +463,20 @@ class NotebookApiImpl implements NotebookApi {
 		if (options?.strict !== undefined && typeof options.strict !== "boolean") throw invalid("options.strict", "expected true or false");
 		const f = this.resolve(file);
 		const doc = await this.document(f);
+		// 0.26 review fix (#285, P7): the redaction boxes kept for this notebook on this device cover this PDF too when they are switched
+		// on, as they do every other export that is not the export dialog; boxes that cannot be read refuse the PDF.
+		const stored = loadRedactState(this.app, doc.id);
+		if (stored.unreadable) {
+			throw new NotebookApiError("export-failed", `The redaction boxes of "${f.path}" could not be read on this device, so no PDF was written. Open the notebook, Export… › Redact… and press Done to set them again.`, { path: f.path });
+		}
+		const { pages } = withRedaction(doc.pages, isArmed(stored) ? { redact: stored.boxes } : {});
 		const media = new NotebookMedia(this.app, () => doc, () => this.settings.folder, () => undefined);
 		try {
-			const { images, skipped } = await collectPageImages(media, doc.pages);
+			const { images, skipped } = await collectPageImages(media, pages);
 			if (skipped > 0 && options?.strict) {
 				throw new NotebookApiError("export-incomplete", `${skipped} PDF page(s) or image(s) could not be loaded, so no PDF was written.`, { skipped });
 			}
-			const bytes = pagesToPdf(doc.pages, { paper: true, title: f.basename, images: (p) => images.get(p) ?? [] });
+			const bytes = pagesToPdf(pages, { paper: true, title: f.basename, images: (p) => images.get(p) ?? [] });
 			const path = freePath(this.app, f, "", "pdf");
 			recordPluginWrite(this.app, [path]);
 			await this.app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);

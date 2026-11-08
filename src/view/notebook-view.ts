@@ -105,10 +105,11 @@ import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
 import { SharePageModal, type ShareHost } from "./share-page"; // 0.20 (#30)
 import { exportPdf, runExport, type ExportOptions } from "./export";
-import { withRedaction } from "./export-redact"; // 0.26 redact (#285)
+import { announceRedactionOff, redactionRefused, withRedaction } from "./export-redact"; // 0.26 redact (#285)
 import { RedactModal } from "./redact-dialog";
 import { loadRedactState, saveRedactState } from "../ui/redact-store";
-import { isArmed, type RedactState } from "../model/redact";
+import { boxesOf, countBoxes, isArmed, rectsOverlap, type RedactState } from "../model/redact";
+import { headerAfterRedaction } from "../ink/redact";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
@@ -791,6 +792,8 @@ export class NotebookView extends FileView {
 			},
 			store: () => this.host.meanings ?? null, docId: () => this.session?.doc?.id ?? null, file: () => this.file, renderer: () => this.renderer,
 			pages: () => { const doc = this.shownDoc(); return doc ? this.renderPagesOf(doc) : []; },
+			// Review fix (P6): the digest by colour writes its pictures and PDF text from the pages with the redaction boxes applied.
+			digestPages: () => { const doc = this.shownDoc(); return doc ? this.redactedPages(this.renderPagesOf(doc)) : null; },
 			media: () => this.media,
 			render: () => {
 				const options = this.exportOptions();
@@ -2486,9 +2489,26 @@ export class NotebookView extends FileView {
 		return loadRedactState(this.app, this.session?.doc?.id);
 	}
 
+	/**
+	 * Review fix (P4): a set that this device could not store (or read back) is still held for this session and covers every export; the
+	 * reader is told once. Switched-off sets forgotten to make room are told too.
+	 */
 	private saveRedact(state: RedactState): void {
-		saveRedactState(this.app, this.session?.doc?.id, state);
+		const id = this.session?.doc?.id;
+		if (!id) return;
+		const result = saveRedactState(this.app, id, state);
+		if (result.evicted > 0) showNotice(t("redact.evicted", { n: String(result.evicted) }), 8000);
+		if (result.stored) {
+			this.redactSaveWarned = false;
+			return;
+		}
+		if (this.redactSaveWarned) return;
+		this.redactSaveWarned = true;
+		showNotice(t(result.full ? "redact.full" : "redact.saveFailed"), 12000);
 	}
+
+	/** Review fix (P4): the reader has been told that the boxes of this notebook are held for this session only. */
+	private redactSaveWarned = false;
 
 	/** 0.26 (#285): the dialog where boxes are drawn over the parts of the pages that must not leave the notebook (nothing in the notebook changes). */
 	private openRedact(pageIndex: number, closed: () => void): void {
@@ -2503,9 +2523,13 @@ export class NotebookView extends FileView {
 		}).open();
 	}
 
-	/** The page as an export draws it, with the redaction boxes of this notebook applied when they are on (pictures that go into notes use it). */
-	private redactedPage(page: Page): Page {
-		return withRedaction([page], this.exportOptions()).pages[0] ?? page;
+	/**
+	 * The page as an export draws it, with the redaction boxes of this notebook applied when they are on (pictures that go into notes use
+	 * it). The excerpts of covered regions of other pages are left out too. Review fix (P4): null, after a notice, when the boxes cannot be
+	 * read: the caller writes nothing.
+	 */
+	private redactedPage(page: Page): Page | null {
+		return this.redactedPages([page])?.[0] ?? null;
 	}
 
 	/** 0.23 (#280): the dialog that exports the written area of the current page, or the selection, as a transparent PNG or SVG. */
@@ -2531,6 +2555,9 @@ export class NotebookView extends FileView {
 		const shown = this.renderPagesOf(doc)[pageIndex];
 		if (!shown) return null;
 		const options = this.exportOptions();
+		// Review fix (P4): boxes that cannot be read refuse the picture (the plan refuses too); switched-off ones give a hint (P10).
+		if (redactionRefused(options)) return null;
+		announceRedactionOff(options);
 		return {
 			scope: scope === "selection" && useSel ? "selection" : "page",
 			host: {
@@ -2611,9 +2638,11 @@ export class NotebookView extends FileView {
 		const page = doc.pages[sel.pageIndex];
 		const shown = this.renderPagesOf(doc)[sel.pageIndex];
 		if (!bounds || !page || !shown) return;
+		const drawn = this.redactedPage(shown);
+		if (!drawn) return;
 		const options = this.exportOptions();
 		void runInsertIntoNote({
-			app: this.app, file, settings: this.host.settings, page: this.redactedPage(shown), pageNumber: sel.pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media, kind,
+			app: this.app, file, settings: this.host.settings, page: drawn, pageNumber: sel.pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media, kind,
 			exportOptions: options,
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
@@ -2634,14 +2663,18 @@ export class NotebookView extends FileView {
 		if (!bounds || !page || !shown) return;
 		const crop = taskCropRect(bounds, page);
 		const options = this.exportOptions();
-		new MakeTaskModal(this.app, this.host.settings, sel.pageIndex + 1, (request) => void runMakeTask({
-			app: this.app, file, settings: this.host.settings, page: this.redactedPage(shown), pageNumber: sel.pageIndex + 1, crop, media: this.media,
-			render: {
-				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
-				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
-			},
-			...(options.prepare ? { prepare: options.prepare } : {}),
-		}, request)).open();
+		new MakeTaskModal(this.app, this.host.settings, sel.pageIndex + 1, (request) => {
+			const drawn = this.redactedPage(shown);
+			if (!drawn) return;
+			void runMakeTask({
+				app: this.app, file, settings: this.host.settings, page: drawn, pageNumber: sel.pageIndex + 1, crop, media: this.media,
+				render: {
+					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				},
+				...(options.prepare ? { prepare: options.prepare } : {}),
+			}, request);
+		}).open();
 	}
 
 	/** 0.19 (#228): the Figures gallery: every picture and figure cut-out of the section, the notebook or some pages (read-only). */
@@ -2667,15 +2700,23 @@ export class NotebookView extends FileView {
 				const page = doc?.pages[index];
 				const shown = doc ? this.renderPagesOf(doc)[index] : undefined;
 				if (!page || !shown) return;
+				const drawn = this.redactedPage(shown);
+				if (!drawn) return;
 				const options = this.exportOptions();
 				void runInsertIntoNote({
-					app: this.app, file, settings: this.host.settings, page: this.redactedPage(shown), pageNumber: index + 1, media: this.media, kind: "png", exportOptions: options,
+					app: this.app, file, settings: this.host.settings, page: drawn, pageNumber: index + 1, media: this.media, kind: "png", exportOptions: options,
 					crop: taskCropRect({ minX: entry.x, minY: entry.y, maxX: entry.x + entry.width, maxY: entry.y + entry.height }, page),
 					render: {
 						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 						...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
 					},
 				});
+			},
+			copyRefused: (entry) => {
+				const options = this.redactOptions();
+				if (options.redactBlocked) return t("redact.unreadable");
+				const r = { x: entry.x, y: entry.y, width: entry.width, height: entry.height };
+				return boxesOf(options.redact, entry.pageId).some((b) => rectsOverlap(b, r)) ? t("redact.figureCovered") : null;
 			},
 			openOriginal: (entry) => {
 				const asset = this.shownDoc()?.assets?.[entry.asset];
@@ -2700,14 +2741,18 @@ export class NotebookView extends FileView {
 		if (!bounds || !page || !shown) return;
 		const crop = taskCropRect(bounds, page);
 		const options = this.exportOptions();
-		new LookUpWordModal(this.app, sel.pageIndex + 1, (word) => void runLookUp({
-			app: this.app, file, settings: this.host.settings, page: this.redactedPage(shown), pageNumber: sel.pageIndex + 1, crop, media: this.media,
-			render: {
-				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
-				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
-			},
-			...(options.prepare ? { prepare: options.prepare } : {}),
-		}, word)).open();
+		new LookUpWordModal(this.app, sel.pageIndex + 1, (word) => {
+			const drawn = this.redactedPage(shown);
+			if (!drawn) return;
+			void runLookUp({
+				app: this.app, file, settings: this.host.settings, page: drawn, pageNumber: sel.pageIndex + 1, crop, media: this.media,
+				render: {
+					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				},
+				...(options.prepare ? { prepare: options.prepare } : {}),
+			}, word);
+		}).open();
 	}
 
 	/** 0.19 (#213): the read-only sheet of this notebook's "Look up later" entries, each with a jump to its page. */
@@ -2746,9 +2791,12 @@ export class NotebookView extends FileView {
 	openBookIndex(): void {
 		const file = this.file;
 		if (!this.shownDoc() || !file) return;
+		// Review fix (0.26 #285): the index note is written from the pages with the redaction boxes applied (a term marked under a box is
+		// not listed); nothing is offered when the boxes cannot be read.
+		if (!this.redactedPages([])) return;
 		new BookIndexModal({
 			app: this.app, file, docId: this.shownDoc()?.id, prefix: normalizeIndexPrefix(this.host.settings.indexPrefix),
-			pages: () => this.shownDoc()?.pages ?? [], goTo: (index, y) => this.scrollToPage(index, y),
+			pages: () => this.redactedPages(this.shownDoc()?.pages ?? [], true) ?? [], goTo: (index, y) => this.scrollToPage(index, y),
 		}).open();
 	}
 
@@ -2756,9 +2804,11 @@ export class NotebookView extends FileView {
 	openFormulaSheet(): void {
 		const file = this.file;
 		if (!this.shownDoc() || !file) return;
+		// Review fix (P9): an equation under a redaction box is not written into the sheet; nothing is offered when the boxes cannot be read.
+		if (!this.redactedPages([])) return;
 		new FormulaSheetModal({
 			app: this.app, file, docId: this.shownDoc()?.id,
-			pages: () => this.shownDoc()?.pages ?? [], goTo: (index, y) => this.scrollToPage(index, y),
+			pages: () => this.redactedPages(this.shownDoc()?.pages ?? [], true) ?? [], goTo: (index, y) => this.scrollToPage(index, y),
 		}).open();
 	}
 
@@ -2814,8 +2864,11 @@ export class NotebookView extends FileView {
 		const doc = this.session?.doc;
 		const file = this.file;
 		if (!doc || !file) return;
-		// 0.26 (#285): the digest's pictures are drawn from the pages with the redaction boxes applied.
-		const pages = [...withRedaction(this.renderPagesOf(doc), this.exportOptions()).pages];
+		// 0.26 (#285): the digest's pictures are drawn from the pages with the redaction boxes applied (review fix P5: and the PDF words
+		// a box touches are not quoted, see runHighlightsDigest); nothing is written when the boxes cannot be read.
+		const redacted = this.redactedPages(this.renderPagesOf(doc));
+		if (!redacted) return;
+		const pages = [...redacted];
 		if (digestCounts(pages).regions === 0) {
 			showNotice(t("digest.none"), 6000);
 			return;
@@ -2876,19 +2929,41 @@ export class NotebookView extends FileView {
 	exportOptions(): ExportOptions {
 		const doc = this.session?.doc;
 		const header = this.exportHeader();
-		const stored = this.redactState();
-		const redact = isArmed(stored) ? stored : null;
 		return {
 			hiddenInk: (page) => this.markers?.isRevealed(page) ?? false, boxLabel: translatedBoxLabel,
 			// v9: equations without a cached outline are typeset first; numbers count over the whole notebook.
 			prepare: (pages) => this.math?.prepareExport(pages) ?? Promise.resolve(),
 			...(doc ? { equationNumbers: equationNumbers(doc.pages) } : {}),
-			...(header ? { header } : {}),
+			// Review fix (P11): the header of a page a box covers is left out wherever the page drawn is the redacted copy, including the
+			// pictures that go into notes, which draw it with these options and not through `withRedaction`.
+			...(header ? { header: (page: Page) => headerAfterRedaction(header(page), page) } : {}),
 			// 0.18 (#86): the margin comments as notes in the PDF, when the setting asks for them.
 			...(this.host.settings.commentsInPdf ? { comments: pdfCommentLabels() } : {}),
-			// 0.26 (#285): the redaction boxes of this notebook, when the reader has them switched on (every writer applies them to its pages).
-			...(redact ? { redact: redact.boxes } : {}),
+			...this.redactOptions(),
 		};
+	}
+
+	/**
+	 * 0.26 (#285): the redaction part of the export options: the boxes of this notebook when the reader has them switched on (every writer
+	 * applies them to its pages). Review fixes: boxes that cannot be read make every writer refuse (P4); boxes kept switched off give a hint (P10).
+	 */
+	private redactOptions(): Pick<ExportOptions, "redact" | "redactBlocked" | "redactOff"> {
+		const stored = this.redactState();
+		if (stored.unreadable) return { redactBlocked: true };
+		if (isArmed(stored)) return { redact: stored.boxes };
+		const off = countBoxes(stored.boxes);
+		return off > 0 ? { redactOff: off } : {};
+	}
+
+	/**
+	 * The pages with the redaction boxes applied, for the writers that take pages and no export options (formula sheet, book index,
+	 * the colour digest). Null, after a notice, when the boxes cannot be read (nothing may be written then).
+	 */
+	private redactedPages(pages: readonly Page[], quiet = false): readonly Page[] | null {
+		const options = this.redactOptions();
+		if (quiet ? options.redactBlocked === true : redactionRefused(options)) return null;
+		if (!quiet) announceRedactionOff(options);
+		return withRedaction(pages, options).pages;
 	}
 
 	/** v9: equations and graphs of this view (null before the view is open). */
@@ -3100,9 +3175,11 @@ export class NotebookView extends FileView {
 		const page = doc?.pages[pageIndex];
 		const shown = doc ? this.renderPagesOf(doc)[pageIndex] : undefined;
 		if (!doc || !file || !page || !shown) return Promise.resolve(null);
+		const drawn = this.redactedPage(shown);
+		if (!drawn) return Promise.resolve(null);
 		const options = this.exportOptions();
 		return runMakeTask({
-			app: this.app, file, settings: this.host.settings, page: this.redactedPage(shown), pageNumber: pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media,
+			app: this.app, file, settings: this.host.settings, page: drawn, pageNumber: pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media,
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
@@ -3671,9 +3748,9 @@ export class NotebookView extends FileView {
 				if (indices.length > 0) await runMovePages(ctx, this.host.settings, indices);
 			},
 			exportPages: async (pages, suffix) => {
-				// 0.26 (#285): no other option is passed here, but the redaction boxes of the notebook still cover what the file would show.
-				const stored = this.redactState();
-				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media, isArmed(stored) ? { redact: stored.boxes } : {});
+				// 0.26 (#285): no other option is passed here, but the redaction boxes of the notebook still cover what the file would show (and
+				// boxes that cannot be read refuse the file, review fix P4).
+				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media, this.redactOptions());
 			},
 		};
 	}
