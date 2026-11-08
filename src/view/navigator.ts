@@ -6,7 +6,7 @@ import { rangeIds } from "../model/page-ops";
 import { pageHasTag, pageTagCounts } from "../model/page-tags";
 import type { Page } from "../model/types";
 import { writing } from "../ink/writing-guard";
-import { classifyPages, nextMode, pageRowTime, pageRowTitle, resolveLayout, type NavLayout, type NavMode } from "../ui/nav-adapt";
+import { classifyPages, nextMode, pageRowTime, pageRowTitle, resolveLayout, ThumbCache, type NavLayout, type NavMode } from "../ui/nav-adapt";
 import { renderOutline, type OutlineHost } from "./outline";
 import { pageSignature } from "./view-helpers";
 
@@ -61,8 +61,8 @@ export class PageNavigator {
 	private outlineMode = false;
 	private tagFilter: string | null = null;
 	private outlineCategory: string | null = null;
-	/** Cached thumbnails by `pageId@width`. */
-	private readonly thumbs = new Map<string, { key: string; url: string }>();
+	/** Cached thumbnails: bounded, one width per page, released when the panel closes. */
+	private readonly thumbs = new ThumbCache();
 	private layoutButton: HTMLButtonElement | null = null;
 	private layout: NavLayout = "normal";
 	/** Bumped on every rebuild: a chunked build that finds another number stops. */
@@ -185,7 +185,7 @@ export class PageNavigator {
 
 	/** Forgets cached thumbnails (all, or those of `pageIds`) and redraws the list. */
 	invalidate(pageIds?: Iterable<string>): void {
-		if (pageIds) for (const id of pageIds) for (const w of [THUMB_WIDTH, LARGE_WIDTH, LIST_WIDTH]) this.thumbs.delete(`${id}@${w}`);
+		if (pageIds) for (const id of pageIds) this.thumbs.drop(id);
 		else this.thumbs.clear();
 		this.refresh();
 	}
@@ -285,8 +285,8 @@ export class PageNavigator {
 			setIcon(item.createDiv({ cls: "notebook-navigator-check" }), "check");
 			const img = item.createEl("img", { cls: "notebook-navigator-thumb", attr: { alt: t("nav.page", { n: String(index + 1) }), draggable: "false" } });
 			img.setCssProps({ "--notebook-thumb-ratio": String(Math.min(page.height / page.width, MAX_ASPECT)) });
-			const cached = this.thumbs.get(`${page.id}@${this.widthOf(this.layout)}`);
-			if (cached && cached.key === this.thumbKey(page)) img.src = cached.url;
+			const cached = this.thumbs.get(page.id, this.widthOf(this.layout), this.thumbKey(page));
+			if (cached) img.src = cached;
 			// v7: the bookmark title and the page tags under the thumbnail.
 			const details = marks.has(page.id) ? info?.[page.id] : undefined;
 			if (list) {
@@ -503,6 +503,7 @@ export class PageNavigator {
 		this.observer.disconnect();
 		this.drag?.ghost.remove();
 		this.drag = null;
+		this.thumbs.clear(); // the data URLs go with the panel
 		this.el.remove();
 	}
 
@@ -522,23 +523,17 @@ export class PageNavigator {
 
 	/** The thumbnail of `page` if it is already drawn and still current (roadmap 50: the fast scrollbar's preview reuses this cache). */
 	cachedThumbnail(page: Page): string | null {
-		for (const w of [THUMB_WIDTH, LARGE_WIDTH, LIST_WIDTH]) {
-			const cached = this.thumbs.get(`${page.id}@${w}`);
-			if (cached && cached.key === this.thumbKey(page)) return cached.url;
-		}
-		return null;
+		return this.thumbs.peek(page.id, this.thumbKey(page));
 	}
 
 	/** The thumbnail of `page`: the cached one, or drawn now and cached (the same cache as the panel's list). */
 	thumbnailOf(page: Page, width: number = THUMB_WIDTH): string {
 		const key = this.thumbKey(page);
-		const slot = `${page.id}@${width}`;
-		let cached = this.thumbs.get(slot);
-		if (!cached || cached.key !== key) {
-			cached = { key, url: this.host.thumbnail(page, width) };
-			this.thumbs.set(slot, cached);
-		}
-		return cached.url;
+		const cached = this.thumbs.get(page.id, width, key);
+		if (cached !== null) return cached;
+		const url = this.host.thumbnail(page, width);
+		this.thumbs.set(page.id, width, key, url);
+		return url;
 	}
 
 	/** Mouse/pen: drag immediately. Touch: long-press, then drag; a quick swipe scrolls the list. */

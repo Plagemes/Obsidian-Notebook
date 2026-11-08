@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	classifyPages, MAX_NAV_NOTEBOOKS, modeOf, nextMode, normaliseNavModes, pageRowTime, pageRowTitle, resolveLayout, withMode,
+	classifyPages, MAX_NAV_NOTEBOOKS, MAX_THUMBS, modeOf, nextMode, normaliseNavModes, pageRowTime, pageRowTitle, resolveLayout, ThumbCache, withMode,
 } from "../src/ui/nav-adapt";
 import type { Page } from "../src/model/types";
 
@@ -57,12 +57,12 @@ describe("pageRowTitle and time", () => {
 
 describe("stored modes", () => {
 	it("drops bad data", () => {
-		expect(normaliseNavModes(null)).toEqual({});
-		expect(normaliseNavModes([1])).toEqual({});
-		expect(normaliseNavModes({ a: "list", b: "weird", "bad id!": "list" })).toEqual({ a: "list" });
+		expect(normaliseNavModes(null)).toEqual([]);
+		expect(normaliseNavModes([1])).toEqual([]);
+		expect(normaliseNavModes({ a: "list", b: "weird", "bad id!": "list" })).toEqual([["a", "list"]]);
 	});
 	it("remembers, replaces and clears a choice", () => {
-		let s = withMode({}, "n1", "list");
+		let s = withMode([], "n1", "list");
 		expect(modeOf(s, "n1")).toBe("list");
 		s = withMode(s, "n1", "thumbs");
 		expect(modeOf(s, "n1")).toBe("thumbs");
@@ -71,10 +71,81 @@ describe("stored modes", () => {
 		expect(modeOf(s, null)).toBe("auto");
 	});
 	it("is bounded, forgetting the oldest", () => {
-		let s = {};
+		let s: ReturnType<typeof withMode> = [];
 		for (let i = 0; i < MAX_NAV_NOTEBOOKS + 20; i++) s = withMode(s, `n${i}`, "list");
-		expect(Object.keys(s)).toHaveLength(MAX_NAV_NOTEBOOKS);
+		expect(s).toHaveLength(MAX_NAV_NOTEBOOKS);
 		expect(modeOf(s, "n0")).toBe("auto");
 		expect(modeOf(s, `n${MAX_NAV_NOTEBOOKS + 19}`)).toBe("list");
+	});
+});
+
+describe("stored modes: order and the earlier object format (W12)", () => {
+	it("forgets the oldest even when ids look like integers", () => {
+		let s: ReturnType<typeof withMode> = [];
+		// Integer-like ids are enumerated first by an object whatever the order they were added in.
+		for (let i = 0; i < MAX_NAV_NOTEBOOKS + 5; i++) s = withMode(s, String(1000 - i), "list");
+		expect(s).toHaveLength(MAX_NAV_NOTEBOOKS);
+		expect(modeOf(s, "1000")).toBe("auto");
+		expect(modeOf(s, String(1000 - (MAX_NAV_NOTEBOOKS + 4)))).toBe("list");
+		expect(s[s.length - 1]![0]).toBe(String(1000 - (MAX_NAV_NOTEBOOKS + 4)));
+	});
+	it("a changed choice becomes the newest", () => {
+		let s = withMode([], "a", "list");
+		s = withMode(s, "b", "list");
+		s = withMode(s, "a", "thumbs");
+		expect(s).toEqual([["b", "list"], ["a", "thumbs"]]);
+	});
+	it("reads the object an earlier build stored, and its own pair list back", () => {
+		const old = normaliseNavModes({ a: "list", b: "thumbs" });
+		expect(old).toEqual([["a", "list"], ["b", "thumbs"]]);
+		expect(normaliseNavModes(JSON.parse(JSON.stringify(old)))).toEqual(old);
+		expect(normaliseNavModes([["a", "list"], ["a", "thumbs"], ["x", "weird"], "no", ["too", "many", "items"]])).toEqual([["a", "thumbs"]]);
+	});
+});
+
+describe("ThumbCache (W12)", () => {
+	it("is bounded: the least recently used go first", () => {
+		const c = new ThumbCache(3);
+		c.set("a", 120, "k", "A");
+		c.set("b", 120, "k", "B");
+		c.set("c", 120, "k", "C");
+		expect(c.get("a", 120, "k")).toBe("A"); // a is used again
+		c.set("d", 120, "k", "D");
+		expect(c.size).toBe(3);
+		expect(c.get("b", 120, "k")).toBeNull();
+		expect(c.get("a", 120, "k")).toBe("A");
+		expect(c.get("d", 120, "k")).toBe("D");
+	});
+	it("never holds more than the bound, however many widths and pages", () => {
+		const c = new ThumbCache();
+		for (let i = 0; i < MAX_THUMBS * 3; i++) for (const w of [60, 120, 240]) c.set(`p${i}`, w, "k", "u");
+		expect(c.size).toBe(MAX_THUMBS);
+	});
+	it("a thumbnail is current only for the page content it was drawn for", () => {
+		const c = new ThumbCache();
+		c.set("a", 120, "v1", "A1");
+		expect(c.get("a", 120, "v2")).toBeNull();
+		expect(c.peek("a", "v2")).toBeNull();
+		expect(c.peek("a", "v1")).toBe("A1");
+	});
+	it("other widths of a page are kept while current and dropped when the page changed", () => {
+		const c = new ThumbCache();
+		c.set("a", 60, "v1", "S");
+		c.set("a", 120, "v1", "M");
+		expect(c.get("a", 60, "v1")).toBe("S");
+		c.set("a", 120, "v2", "M2");
+		expect(c.get("a", 60, "v1")).toBeNull();
+		expect(c.size).toBe(1);
+	});
+	it("drop forgets every width of one page only, clear forgets all", () => {
+		const c = new ThumbCache();
+		c.set("a", 60, "k", "1");
+		c.set("a", 120, "k", "2");
+		c.set("ab", 60, "k", "3");
+		c.drop("a");
+		expect(c.size).toBe(1);
+		expect(c.peek("ab", "k")).toBe("3");
+		c.clear();
+		expect(c.size).toBe(0);
 	});
 });

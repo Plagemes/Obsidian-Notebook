@@ -76,26 +76,107 @@ export const MAX_NAV_NOTEBOOKS = 100;
 
 const NOTEBOOK_ID = /^[A-Za-z0-9_.-]{1,80}$/;
 
-/** Stored choices in order of age: the last key is the newest. */
-export type NavModes = Readonly<Record<string, "thumbs" | "list">>;
+/**
+ * Stored choices as `[notebook id, mode]` pairs in order of age: the last pair is the newest. A list, not an object: object keys that look like
+ * integers are enumerated first whatever the order they were added in, which would make "forget the oldest" forget the wrong ones.
+ */
+export type NavModes = ReadonlyArray<readonly [string, "thumbs" | "list"]>;
 
-/** Whatever was stored, as a valid, bounded map (bad ids and values dropped, the oldest forgotten). */
+/**
+ * Whatever was stored, as a valid, bounded list (bad ids and values dropped, one pair per notebook, the oldest forgotten). Reads the pair list and
+ * the plain object an earlier build stored.
+ */
 export function normaliseNavModes(data: unknown): NavModes {
-	if (typeof data !== "object" || data === null || Array.isArray(data)) return {};
-	const rows = Object.entries(data as Record<string, unknown>).filter(([id, v]) => NOTEBOOK_ID.test(id) && (v === "thumbs" || v === "list"));
-	return Object.fromEntries(rows.slice(-MAX_NAV_NOTEBOOKS)) as NavModes;
+	if (typeof data !== "object" || data === null) return [];
+	const rows: unknown[] = Array.isArray(data) ? data : Object.entries(data as Record<string, unknown>);
+	const out: Array<readonly [string, "thumbs" | "list"]> = [];
+	for (const row of rows) {
+		if (!Array.isArray(row) || row.length !== 2) continue;
+		const [id, mode] = row as [unknown, unknown];
+		if (typeof id !== "string" || !NOTEBOOK_ID.test(id) || (mode !== "thumbs" && mode !== "list")) continue;
+		const at = out.findIndex((r) => r[0] === id);
+		if (at >= 0) out.splice(at, 1); // a later pair for the same notebook replaces the earlier one and counts as newer
+		out.push([id, mode]);
+	}
+	return out.slice(-MAX_NAV_NOTEBOOKS);
 }
 
 /** The mode chosen for a notebook (auto when none). */
 export function modeOf(store: NavModes, notebookId: string | null): NavMode {
-	return (notebookId ? store[notebookId] : undefined) ?? "auto";
+	return (notebookId ? store.find((r) => r[0] === notebookId)?.[1] : undefined) ?? "auto";
 }
 
 /** The store with `mode` chosen for a notebook (auto removes the choice); the newest choice goes last. */
 export function withMode(store: NavModes, notebookId: string, mode: NavMode): NavModes {
 	if (!NOTEBOOK_ID.test(notebookId)) return store;
-	const rest = Object.fromEntries(Object.entries(store).filter(([id]) => id !== notebookId));
-	return normaliseNavModes(mode === "auto" ? rest : { ...rest, [notebookId]: mode });
+	const rest = store.filter((r) => r[0] !== notebookId);
+	return normaliseNavModes(mode === "auto" ? rest : [...rest, [notebookId, mode]]);
+}
+
+// ------------------------------------------------------------------------------------------------------ thumbnail cache
+
+/** Page thumbnails kept at most (data URLs: the memory of a large notebook on a tablet). */
+export const MAX_THUMBS = 200;
+/** Between a page id and a width in a cache slot (a character no page id contains). */
+const SEP = "\u0000";
+
+/**
+ * The navigator's thumbnails by page and width (data URLs: the memory of a big notebook on a tablet). Bounded: the least recently used go first, so
+ * three widths per page can never grow with the size of the notebook, and a thumbnail of a page that has changed is dropped when the page is drawn again.
+ */
+export class ThumbCache {
+	private readonly map = new Map<string, { key: string; url: string }>();
+
+	constructor(private readonly max = MAX_THUMBS) {}
+
+	private static slot(pageId: string, width: number): string {
+		return `${pageId}${SEP}${width}`;
+	}
+
+	get size(): number {
+		return this.map.size;
+	}
+
+	/** The thumbnail of the page at `width` when it is drawn and still current (`key` says what the page looks like now), else null. */
+	get(pageId: string, width: number, key: string): string | null {
+		const slot = ThumbCache.slot(pageId, width);
+		const hit = this.map.get(slot);
+		if (!hit || hit.key !== key) return null;
+		this.map.delete(slot);
+		this.map.set(slot, hit); // most recently used goes last
+		return hit.url;
+	}
+
+	/** Whether any width of the page is drawn and current (does not count as a use). */
+	peek(pageId: string, key: string): string | null {
+		for (const [slot, hit] of this.map) if (slot.startsWith(`${pageId}${SEP}`) && hit.key === key) return hit.url;
+		return null;
+	}
+
+	set(pageId: string, width: number, key: string, url: string): void {
+		// The page changed: its thumbnails at other widths are out of date and go; current ones at other widths stay (a layout switch and the
+		// scrollbar preview use more than one width), within the bound.
+		const prefix = `${pageId}${SEP}`;
+		for (const [slot, hit] of [...this.map]) if (slot.startsWith(prefix) && hit.key !== key) this.map.delete(slot);
+		const own = ThumbCache.slot(pageId, width);
+		this.map.delete(own);
+		this.map.set(own, { key, url });
+		while (this.map.size > this.max) {
+			const oldest = this.map.keys().next();
+			if (oldest.done) break;
+			this.map.delete(oldest.value);
+		}
+	}
+
+	/** Forgets every width of the page. */
+	drop(pageId: string): void {
+		const prefix = `${pageId}${SEP}`;
+		for (const slot of [...this.map.keys()]) if (slot.startsWith(prefix)) this.map.delete(slot);
+	}
+
+	clear(): void {
+		this.map.clear();
+	}
 }
 
 export interface NavStorage {
@@ -107,7 +188,7 @@ export function loadNavModes(app: NavStorage): NavModes {
 	try {
 		return normaliseNavModes(app.loadLocalStorage(NAV_MODE_KEY));
 	} catch {
-		return {};
+		return [];
 	}
 }
 
