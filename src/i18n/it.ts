@@ -4956,4 +4956,10 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.penWidthFollowsZoom.desc": "Attivo: il tratto ha lo spessore scelto a ogni zoom. Spento: spessore fisso sulla pagina.",
 	"tool.widthZoom.hint": "{px} px sullo schermo · {page} sulla pagina × zoom",
 	"tool.widthZoom.aria": "Spessore con lo zoom: {px} pixel sullo schermo, {page} unità di pagina",
+	// 0.26 ctxpalette
+	"colour.ctx.page": "In questa pagina",
+	"colour.ctx.slide": "Dalla slide",
+	"colour.ctx.swatch": "{colour} ({hex})",
+	"help.colourCtxPage": "Un colore già usato in questa pagina, dal più usato. Toccalo per scrivere o disegnare di nuovo con quel colore. I colori che hai già tra i Colori recenti non si ripetono, e un colore con un significato mostra la sua etichetta.",
+	"help.colourCtxSlide": "Un colore principale della slide o dell'immagine dietro questa pagina, ricavato dalla sua immagine. Toccalo per abbinare l'inchiostro alla slide. Il bianco della carta è escluso.",
 };

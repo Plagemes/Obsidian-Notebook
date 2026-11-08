@@ -225,13 +225,13 @@ import type { PracticeHooks, PracticeProvider, PracticeViewHost } from "./practi
 import { NotebookTabs } from "./notebook-tabs";
 import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
 import { hasBackgrounds, hasPdfPages } from "./reading-logic";
-import { ColourTools, type PageInk } from "./colour-tools";
+import { ColourTools, type PageColourContext, type PageInk } from "./colour-tools";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
 import { pageKindOf } from "../ui/page-kind";
 import { loadNavModes, modeOf, saveNavMode } from "../ui/nav-adapt";
 import { loadMarked, markedOf, saveMarked } from "../ui/nav-marked";
-import { MATCH_TOLERANCE, TOLERANCES } from "../model/colour-meaning";
+import { MATCH_TOLERANCE, matchMeaning, TOLERANCES } from "../model/colour-meaning";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { kindTool, strokeNib } from "../ink/pen-kinds";
@@ -1074,6 +1074,7 @@ export class NotebookView extends FileView {
 			},
 			notify: (text) => showNotice(text, 2500),
 			inkAt: (x, y) => this.inkAtPoint(x, y),
+			pageContext: () => this.paletteContext(), // 0.26 ctxpalette (#394)
 		});
 		this.lastTool.note(this.tools.tool);
 		this.gestures = new GestureInput(this.stage, {
@@ -3113,6 +3114,29 @@ export class NotebookView extends FileView {
 	/** Colour picker and eyedroppers of this view (null before the view is open). */
 	get colourTools(): ColourTools | null {
 		return this.colour;
+	}
+
+	/** 0.26 ctxpalette (#394): the page in view and its background for the colour picker's context rows (nothing is rendered for it). */
+	private paletteContext(): PageColourContext | null {
+		const page = this.session?.doc?.pages[this.currentPageIndex()];
+		if (!page) return null;
+		const bg = page.background;
+		const media = this.media;
+		const legend = this.meaningTools?.legend() ?? [];
+		const tolerance = TOLERANCES[this.host.settings.meaningTolerance] ?? MATCH_TOLERANCE;
+		return {
+			usage: page,
+			slideKey: bg ? `${bg.kind}:${bg.asset}:${bg.kind === "pdf" ? bg.page : 0}` : null,
+			slide: () => {
+				if (!bg || !media) return null;
+				if (bg.kind === "image") return media.image(bg.asset);
+				return (media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null;
+			},
+			labelOf: (hex) => {
+				const i = matchMeaning(hex, legend, tolerance);
+				return i >= 0 ? legend[i]?.label : undefined;
+			},
+		};
 	}
 
 	/** The strokes in view of the page under a screen point, with the point in page coordinates (style eyedropper); null off the pages. */

@@ -203,6 +203,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "opacity", theme, device, lowLatency: false });
 // 0.26 smooth (#66): Smooth and Straighten strokes (dev/harness/smooth-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "smooth", theme, device, lowLatency: false });
+// 0.26 ctxpalette (#394): the colour picker's context rows on a PDF page and a written page (dev/harness/ctxpalette-check.ts), tablet and phone, light and dark (dist/shots/ctxpalette-*.png, ctxpalettew-*.png).
+for (const doc of ["ctxpalette", "ctxpalettew"]) for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc, theme, device, lowLatency: false });
 // 0.25 baseline (#93): Align to baseline (dev/harness/baseline-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "baseline", theme, device, lowLatency: false });
 // 0.25 papersuggest (#409): suggested paper in the "+" strip (dev/harness/papersuggest-check.ts).
@@ -424,6 +426,7 @@ async function main() {
 				else if (s.doc === "shapefill") report = await cdp.evaluate("window.harness.checkShapefill()", 90000); // 0.24 shapefill
 				else if (s.doc === "areahl") report = await cdp.evaluate("window.harness.checkAreahl()", 90000); // 0.25 areahl
 				else if (s.doc === "opacity") report = await cdp.evaluate("window.harness.checkOpacity()", 90000); // 0.26 opacity
+				else if (s.doc === "ctxpalette" || s.doc === "ctxpalettew") report = await cdp.evaluate("window.harness.checkCtxpalette()", 90000); // 0.26 ctxpalette
 				else if (s.doc === "papersuggest") report = await cdp.evaluate("window.harness.checkPapersuggest()", 90000); // 0.25 papersuggest
 				else if (s.doc === "strokejoin") report = await cdp.evaluate("window.harness.checkStrokejoin()", 90000); // 0.24 strokejoin
 				else if (s.doc === "profiles") report = await cdp.evaluate("window.harness.checkProfiles()", 90000); // 0.25 profiles

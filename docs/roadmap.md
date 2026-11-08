@@ -715,7 +715,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 ### Toolbar and tools
 392. **P1** 🧪 Toolbar by page type: PDF slide → snapping highlighter, PDF search, margins; ruled page → pen and text; grid → ruler and shapes (extends the PDF and image-page contextual bars).
 393. **P1** 🧪 Toolbar that learns per notebook or course: quick slots and favourites ranked by what is used in that notebook (today use counts are per device).
-394. **P2** Context palette: the slide's colours plus the colours already used on the page.
+394. **P2** 🧪 Context palette: the colour picker shows "On this page" (colours already used here, by use) and, on a PDF or picture page, "From the slide" (dominant colours of the background). Waiting for hardware verification.
 395. **P3** Suggested pen width from the paper spacing and the zoom level.
 396. **P3** Likely next tool one tap away, from the sequence of tools you usually use.
 397. **P3** Adaptive radial menu: sectors ordered by frequency of use, plus a wedge of recent actions.

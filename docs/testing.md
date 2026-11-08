@@ -4117,3 +4117,23 @@ Implemented, not verified on hardware. No format change: strokes keep plain page
 |---|---|---|---|---|---|
 | Pen width follows zoom (setting, off by default; stored width = chosen / zoom, clamped) | yes | `tests/zoom-width.test.ts`; harness `doc=zoomwidth` | | | |
 | Pen options hint (on-screen width, "× zoom") | yes | harness `doc=zoomwidth` | | | |
+
+### 0.26 — ctxpalette: context palette in the colour picker (roadmap #394; steps 2900-2919)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+2900. **Page row.** On a written page with ink in several colours, open the colour picker (colour row, last button). Under *Recent colours* an *On this page* row shows the colours used here, the most used first.
+2901. **Elements count.** Add a text box, a marker and an area highlight in new colours and reopen the picker: they appear in the row; a sticky note's paper colour does not.
+2902. **No repeats.** Pick a custom colour so it is in the recent colours: it is no longer in *On this page*. Two slightly different reds on the page show as one.
+2903. **Slide row.** On a PDF page with colour in it, *From the slide* shows its main colours (not the paper white). Move to another page and reopen: its own colours show. Reopening on the same page is instant.
+2904. **Written page.** On a page with no PDF or picture, there is no *From the slide* row; a page with no ink has no *On this page* row.
+2905. **Tap.** Tap a swatch: the pen (or the highlighter, as for the toolbar swatches) takes that colour; the recent colours do not change.
+2906. **Meanings.** With a colour meaning defined (Settings, colours with meaning), the swatch of that colour is a pill showing its label.
+2907. **Help.** Long-press a swatch with a finger: an explanation of its row appears (English and Italian).
+2908. **Not in the way.** Writing with the pen while the picker is open stays smooth; a large PDF page does not stall when the picker opens.
+2909. **Looks.** Light and dark theme, phone and tablet width, Italian (*In questa pagina*, *Dalla slide*).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure usage ranking, ΔE dedupe, dominant colours (median cut + k-means), cache | yes | `tests/context-palette.test.ts` | | | |
+| *On this page* and *From the slide* rows in the colour picker, meaning labels, long-press help, no format change | yes | harness `doc=ctxpalette` (PDF page) and `doc=ctxpalettew` (written page) | | | the rows follow the page the picker was opened on (not a page turned to later) |

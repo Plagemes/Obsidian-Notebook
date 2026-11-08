@@ -4954,6 +4954,12 @@ export const en = {
 	"settings.penWidthFollowsZoom.desc": "On: strokes look the chosen width at any zoom. Off: width is fixed on the page.",
 	"tool.widthZoom.hint": "{px} px on screen · {page} on page × zoom",
 	"tool.widthZoom.aria": "Width follows zoom: {px} pixels on screen, {page} page units",
+	// 0.26 ctxpalette
+	"colour.ctx.page": "On this page",
+	"colour.ctx.slide": "From the slide",
+	"colour.ctx.swatch": "{colour} ({hex})",
+	"help.colourCtxPage": "A colour already used on this page, most used first. Tap it to write or draw in it again. Colours you kept in Recent colours are not repeated, and a colour with a meaning shows its label.",
+	"help.colourCtxSlide": "A main colour of the slide or picture behind this page, found from its picture. Tap it to match your ink to the slide. The paper white is left out.",
 } as const;
 
 export type MessageKey = keyof typeof en;
