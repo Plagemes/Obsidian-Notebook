@@ -193,7 +193,8 @@ export class NotebookLibraryHost implements LibraryHost {
 	/** Roadmap #19: the notebook templates folder is not part of the library, wherever the setting puts it. */
 	isHiddenPath(path: string): boolean {
 		const s = this.plugin.settings;
-		return isWithin(path, notebookTemplatesFolder(s));
+		// 0.21 (#127): nor is the zip backups folder.
+		return isWithin(path, notebookTemplatesFolder(s)) || isWithin(path, s.zipBackupFolder);
 	}
 
 	/** Roadmap #19: "Save as notebook template" for a library card (what an open view holds, else the file). */

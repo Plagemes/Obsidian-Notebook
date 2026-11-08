@@ -49,3 +49,21 @@ export interface EditContextSource {
 export function isEditContextSource(view: unknown): view is EditContextSource {
 	return typeof view === "object" && view !== null && typeof (view as { editContext?: unknown }).editContext === "function";
 }
+
+/**
+ * 0.21 (R1): records a change, then runs the steps that follow it (refresh the layout, mark changed, scroll). Once the change is
+ * recorded those steps can never make the call fail: the History already holds the step and the next save writes it, so a flow
+ * that reads a failure (a drop that trashes the files it wrote) must not see one. A throwing step is logged and the others still run.
+ * `record` itself may throw or return false: then nothing follows and the result is what it said.
+ */
+export function executeThenSettle(record: () => boolean, steps: ReadonlyArray<(done: boolean) => void>): boolean {
+	const done = record();
+	for (const step of steps) {
+		try {
+			step(done);
+		} catch (e) {
+			console.error("[notebook] step after a recorded change failed", e);
+		}
+	}
+	return done;
+}

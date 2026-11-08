@@ -18,7 +18,7 @@ import {
 import { FIT, panView, pinchFactor, rasterWidth, refit, shouldRedraw, zoomView, type ContentView } from "../ui/ref-window-pan";
 import { whenIdle } from "../storage/idle";
 import { showNotice } from "./notice";
-import { movesContent, pageLabel, stepIndex, type ReferenceKind, type ReferenceRequest } from "./ref-window-logic";
+import { keepIndex, movesContent, pageLabel, stepIndex, type ReferenceKind, type ReferenceRequest } from "./ref-window-logic";
 import { openSource, type RefSource, type SourceDeps } from "./ref-window-sources";
 
 /** Local storage key of the remembered place (per device, never synced). */
@@ -570,11 +570,14 @@ export class RefWindow {
 		if (fw <= 0) return;
 		const seq = ++this.drawSeq;
 		this.setBusy(true);
-		const count = source.pageCount();
-		this.index = Math.min(Math.max(0, this.index), Math.max(0, count - 1));
-		const px = rasterWidth(fw, this.content.scale, window.devicePixelRatio || 1, this.aspect);
 		const holder = createDiv();
 		try {
+			// A notebook whose lending pane went away is read from the file first, so the page count is real and the window
+			// keeps its page when it is still there (0.21 R4), instead of clamping to page 1 against a count of 0.
+			if (source.prepare) await source.prepare();
+			if (seq !== this.drawSeq || !this.layer) return;
+			this.index = keepIndex(this.index, source.pageCount());
+			const px = rasterWidth(fw, this.content.scale, window.devicePixelRatio || 1, this.aspect);
 			const drawn = await source.render(this.index, px, holder);
 			if (seq !== this.drawSeq || !this.layer) return;
 			this.layer.empty();

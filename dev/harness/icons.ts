@@ -70,6 +70,8 @@ const P: Record<string, string> = {
 	"panel-left": "M4 4h16v16H4z M9 4v16",
 	"pencil": "M4 20l1-4L16 5l3 3L8 19z M14 7l3 3",
 	"highlighter": "M9 15l-3 3h-3l3-3 M9 15l8-8 3 3-8 8z M12 18l-3-3",
+	"signature": "M2 18c3-8 5-12 7-12 2 0 1 6-1 9-1 2 1 2 3 0 1-1 2-3 3-3 1 0 0 3 1 3 2 0 3-2 4-2 M2 21h20",
+	"undo-2": "M9 14L4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
 	"eraser": "M7 20h11 M4 15l9-9 6 6-7 7H8z M9 10l6 6",
 	// wave 0.10: selection tools
 	"box-select": "M5 3a2 2 0 0 0-2 2 M19 3a2 2 0 0 1 2 2 M21 19a2 2 0 0 1-2 2 M5 21a2 2 0 0 1-2-2 M9 3h1 M9 21h1 M14 3h1 M14 21h1 M3 9v1 M21 9v1 M3 14v1 M21 14v1",

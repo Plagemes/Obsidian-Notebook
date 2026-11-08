@@ -73,8 +73,8 @@ export async function checkReading(api: ReadingCheckApi): Promise<{ ok: boolean;
 	const entries = [...document.querySelectorAll(".notebook-sheet .notebook-menu-item")].map((b) => b.textContent ?? "");
 	add("the All actions sheet offers search, hide annotations and dim", ["Search PDF text", "Hide annotations", "Dim backgrounds"].every((l) => entries.some((e) => e.includes(l))), entries.join(" | "));
 	v.ui.sheet.close();
-	/** The content of the notebook (the modification time moves with every save and is not compared). */
-	const content = (): string => JSON.stringify([v.document.pages, v.document.assets]);
+	/** The content of the notebook (the modification time moves with every save and the page times (v19) with every drawn stroke: neither is compared). */
+	const content = (): string => JSON.stringify([v.document.pages, v.document.assets], (key, value: unknown) => (key === "startAt" || key === "endAt" ? undefined : value));
 	const before = content();
 
 	// 1. Search.

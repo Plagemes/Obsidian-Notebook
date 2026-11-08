@@ -214,6 +214,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "excerpt-to-page", label: "excerpt.toPage", icon: "crop", group: "insert", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 46, scope: "view", command: "excerpt.command.toPage", keywords: "excerpt clip cut region quote anchor pdf estratto ritaglio citazione" },
 	{ id: "excerpt-copy", label: "excerpt.copy", icon: "clipboard-copy", group: "insert", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 44, scope: "view", command: "excerpt.command.copy", keywords: "excerpt clip region another notebook estratto copia quaderno" },
 	{ id: "stamps-save-selection", label: "stamps.save", icon: "stamp", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 50, scope: "view", when: hasSelection },
+	// 0.21 (212): the lasso selection as a symbol of the quick strip.
+	{ id: "symbols-save-selection", label: "symbols.save", icon: "sigma", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 30, scope: "view", when: hasSelection, keywords: "symbol maths formula simbolo" },
 	// wave 0.9 (357): layer order of the selection. Front and back are the strongest moves, so they rank higher in a narrow bar.
 	...([
 		["front", "bring-to-front", 52, "command.layerFront"], ["back", "send-to-back", 51, "command.layerBack"],
@@ -378,6 +380,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// --- lecture: the contextual bar while a class of the timetable is on.
 	{ id: "new-lecture", label: "page.newLecture", icon: "graduation-cap", group: "lecture", surfaces: ["context", "sheet"], contexts: ["lecture"], priority: 70, scope: "view", command: "command.newLecture" },
 	// 0.14 (401): switches lecture mode on or off by hand (the rule starts it from the timetable); the contextual bar follows it.
+	// 0.21 slideback (#225): palette command only (assign a hotkey in Obsidian); it applies once something was written during a lecture.
+	{ id: "slide-back", label: "command.slideBack", icon: "corner-up-left", group: "lecture", surfaces: ["palette"], priority: 40, scope: "view", command: true, readOnly: true, keywords: "lecture slide return current page lezione diapositiva torna" },
 	{ id: "lecture-mode", label: "command.lectureMode", icon: "graduation-cap", group: "lecture", surfaces: ["sheet"], priority: 72, scope: "view", command: true, readOnly: true, checked: (c) => c.lecture, keywords: "class timetable lesson classe orario" },
 	{ id: "exercise-paper", label: "page.exercisePaper", icon: "palette", group: "lecture", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.exercisePaper", readOnly: true },
 	// wave 0.8: markers (#201-#203, #209) and structured boxes (#204): the next tap or drag on a page places one. Also on the radial dial (shapes ring → Markers).
@@ -473,6 +477,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	global("library-check", "command.libraryCheck", "hard-drive", "app", ["sheet", "notebook", "library", "palette"], 15),
 	// 0.15 storage (128): size of each notebook, unused / duplicate / heavy files, old backups.
 	global("storage-manager", "command.storage", "database", "app", ["notebook", "library", "palette"], 15),
+	// 0.21 backups (#127): a zip of every notebook, its assets and sidecars in the backup folder.
+	global("backup-now", "command.backupNow", "archive", "app", ["palette"], 15),
 
 	// --- diagnostics: settings tab and palette.
 	global("pen-button-test", "command.penTest", "pen-tool", "dev", ["palette"], 5),
@@ -511,6 +517,8 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// wave 0.10: clipboard and stamps (356 date and time stamp, 362 clipboard shared between devices)
 	{ id: "insert-date-stamp", label: "datestamp.action", icon: "calendar-clock", group: "insert", surfaces: ["sheet"], priority: 48, scope: "view", command: "datestamp.command", keywords: "date time stamp timestamp clock now data ora" },
+	// 0.21 (154): reusable signature and date
+	{ id: "sign-and-date", label: "sign.action", icon: "signature", group: "insert", surfaces: ["sheet", "palette"], priority: 49, scope: "view", command: "sign.command", keywords: "signature sign date stamp firma firmare data pdf document" },
 	{ id: "selection-copy-devices", label: "clipshare.copy", icon: "monitor-smartphone", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 48, scope: "view", command: true, when: hasSelection, keywords: "clipboard tablet phone sync share vault appunti" },
 	// 0.16 (78): move the selection to another page (one undo step), or copy it there.
 	{ id: "selection-move-page", label: "movePage.move", icon: "arrow-right-to-line", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 43, scope: "view", command: true, when: hasSelection, keywords: "move send page another sposta pagina selezione" },
@@ -520,6 +528,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.19 (#213): the circled word goes to the "Look up later" list, with its picture; the sheet lists this notebook's entries.
 	{ id: "selection-look-up", label: "lookup.action", icon: "book-search", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 39, scope: "view", command: true, when: hasSelection, keywords: "look up later word dictionary list circle cerca dopo parola elenco" },
 	{ id: "look-up-list", label: "lookup.sheet.menu", icon: "book-search", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 23, scope: "view", command: "command.lookUpList", readOnly: true, keywords: "look up later list words dictionary cerca dopo elenco parole" },
+	// 0.21 (#187): back-of-book index.
+	{ id: "selection-add-to-index", label: "bookindex.action", icon: "book-a", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 38, scope: "view", command: true, when: hasSelection, keywords: "index back of book term glossary indice analitico termine" },
+	{ id: "book-index", label: "bookindex.menu", icon: "book-a", group: "share", surfaces: ["sheet", "notebook"], priority: 22, scope: "view", command: "command.bookIndex", readOnly: true, keywords: "index back of book terms pages glossary indice analitico termini pagine" },
 	// 0.18 (#86): margin comments: a comment anchored to the selection's region, or to a rectangle drawn on the page; the side panel lists them.
 	{ id: "comment-selection", label: "comments.action", icon: "message-square-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40, scope: "view", command: "comments.command.selection", when: hasSelection, enabled: pageOpen, keywords: "comment note margin review annotation commento nota margine revisione" },
 	{ id: "comment-region", label: "comments.region", icon: "square-dashed", group: "insert", surfaces: ["sheet", "palette"], priority: 46, scope: "view", command: true, enabled: pageOpen, keywords: "comment region rectangle margin note review commento regione rettangolo margine" },

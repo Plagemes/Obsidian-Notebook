@@ -7,7 +7,8 @@
  * (`planClosedEdit`), the same way "Move to notebook…" writes a closed destination.
  */
 import { createDocument, createId, createPage } from "../model/document";
-import { AddAsset, AddElement, InsertPages, type Command } from "../model/history";
+import { AddAsset, AddElement, collectAdds, InsertPages, type Command } from "../model/history";
+import { stampPages } from "../model/page-times";
 import { parse, serializeChecked } from "../model/serialize";
 import { lockedChanges, snapshotLocked } from "../model/page-lock";
 import { normalizeTagList } from "../model/tags";
@@ -539,6 +540,10 @@ export function planClosedEdit<R>(before: string, prepare: Prepare<R>, now: Date
 	if (hit.length > 0) {
 		return { ok: false, error: new NotebookApiError("page-locked", "The edit would change a locked page. Unlock it in the notebook first; nothing was written.", { ids: hit }) };
 	}
+	// v19: the pages an element was added to start and end now (as the open notebook's history stamps them).
+	const added = new Set<string>();
+	for (const command of plan.commands) collectAdds(command, added, new Set());
+	stampPages(doc, added, now.getTime());
 	doc.modifiedAt = now.toISOString();
 	const checked = serializeChecked(doc, true);
 	if (!checked.ok) return { ok: false, error: new NotebookApiError("write-failed", `The result did not pass validation, so nothing was written: ${checked.message}`) };

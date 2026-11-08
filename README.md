@@ -193,6 +193,7 @@ Notebooks behave like part of your vault.
 - Link or embed a single page: `[[Physics.notebook#p3]]`, `![[Physics.notebook#p3]]` or a `notebook` code block; `obsidian://notebook` links for other apps.
 - Optional companion notes so Obsidian search, the graph, tags and Dataview see your notebooks.
 - Obsidian tags, Obsidian bookmarks to a page, commands for the mobile toolbar, a [public API](docs/api.md) for Templater, QuickAdd and Dataview.
+- A documented file format with a [JSON Schema](docs/format.md), so other tools can read notebooks.
 - Interface in English and Italian.
 
 ### Privacy & safety
@@ -257,10 +258,10 @@ No. Everything, including the generated art and the statistics, is computed by o
 ## Roadmap
 
 <p>
-  <a href="https://plagemes.github.io/Obsidian-Notebook/"><img src="https://img.shields.io/badge/roadmap-191%20of%20438%20shipped-3DD68C" alt="Roadmap: 191 of 438 features shipped"></a>
+  <a href="https://plagemes.github.io/Obsidian-Notebook/"><img src="https://img.shields.io/badge/roadmap-199%20of%20438%20shipped-3DD68C" alt="Roadmap: 199 of 438 features shipped"></a>
 </p>
 
-As of 0.20.0 the roadmap has **191 features shipped**, **0 in progress** and **247 to do** (plus 5 deferred and 30 dropped). The live page is rebuilt from [docs/roadmap.md](docs/roadmap.md) on every change, with filters, search and the most requested features.
+As of 0.21.0 the roadmap has **199 features shipped**, **0 in progress** and **239 to do** (plus 5 deferred and 30 dropped). The live page is rebuilt from [docs/roadmap.md](docs/roadmap.md) on every change, with filters, search and the most requested features.
 
 <p>
   <a href="https://plagemes.github.io/Obsidian-Notebook/"><img src="https://img.shields.io/badge/Open_the_live_roadmap-6D8BFF?style=for-the-badge" alt="Open the live roadmap"></a>
@@ -274,7 +275,7 @@ As of 0.20.0 the roadmap has **191 features shipped**, **0 in progress** and **2
 - **Found a bug?** [Report it](https://github.com/Plagemes/Obsidian-Notebook/issues/new?template=bug_report.yml). Reports from Android tablets with a pen help most.
 - **Want to code?** Read [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/development.md](docs/development.md). Please follow the [Code of Conduct](CODE_OF_CONDUCT.md); security issues go through [SECURITY.md](SECURITY.md).
 
-<sub><b>Status:</b> v0.20.0 (document format 18), early development. The automated tests and the browser harness pass, but Notebook has not been verified on Android hardware yet; what is verified, and how to test it, is in <a href="docs/testing.md">docs/testing.md</a>.</sub>
+<sub><b>Status:</b> v0.21.0 (document format 19), early development. The automated tests and the browser harness pass, but Notebook has not been verified on Android hardware yet; what is verified, and how to test it, is in <a href="docs/testing.md">docs/testing.md</a>.</sub>
 
 ## Licence
 

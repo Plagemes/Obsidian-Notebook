@@ -1,0 +1,692 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v19.schema.json",
+  "title": "Notebook document, format version 19",
+  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 19). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
+  "type": "object",
+  "required": ["format", "version", "id", "createdAt", "modifiedAt", "meta", "assets", "pages"],
+  "properties": {
+    "format": { "const": "obsidian-notebook", "description": "Always this string. Distinguishes the file from any other JSON." },
+    "version": { "const": 19, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
+    "id": { "type": "string", "minLength": 1, "description": "Document id (a UUID when available). Survives renames and copies made with 'Make a copy'." },
+    "createdAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time the notebook was created." },
+    "modifiedAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time of the last content save." },
+    "meta": { "$ref": "#/$defs/meta" },
+    "position": { "$ref": "#/$defs/position" },
+    "slides": {
+      "type": "array",
+      "description": "v12: the slides (a page of a PDF shown beside the notes) that strokes refer to through Stroke.slide. Written only when a stroke refers to one.",
+      "items": { "$ref": "#/$defs/slideRef" }
+    },
+    "assets": {
+      "type": "object",
+      "description": "v4: files in `<notebooks folder>/_assets/`, keyed by asset id (which equals the key). Always written, possibly empty.",
+      "additionalProperties": { "$ref": "#/$defs/asset" },
+      "propertyNames": { "pattern": "^[0-9a-f]+$" }
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "description": "At least one page, shown stacked vertically in this order. Page ids are unique; stroke, element and comment ids are unique across the document (comments within their page).",
+      "items": { "$ref": "#/$defs/page" }
+    }
+  },
+
+  "$defs": {
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "description": "#rrggbb"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A non-empty identifier (a UUID when available)."
+    },
+    "boundedId64": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "positive": { "type": "number", "exclusiveMinimum": 0 },
+    "timeMs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Milliseconds since 1970-01-01T00:00:00Z." },
+    "true": { "const": true, "description": "Written only when true; absent means false." },
+
+    "meta": {
+      "type": "object",
+      "description": "Library metadata of the notebook. Always written.",
+      "required": ["tags", "favorite", "cover", "bookmarks"],
+      "properties": {
+        "tags": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Notebook tags (no duplicates)." },
+        "favorite": { "type": "boolean" },
+        "cover": { "$ref": "#/$defs/color", "description": "Cover colour." },
+        "bookmarks": { "type": "array", "items": { "$ref": "#/$defs/id" }, "description": "Ids of bookmarked pages (only pages that exist)." },
+        "bookmarkInfo": {
+          "type": "object",
+          "description": "v7: details of bookmarks keyed by page id. Only for ids in `bookmarks`. Written only when not empty.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string", "maxLength": 200 },
+              "color": { "$ref": "#/$defs/color" },
+              "category": { "type": "string", "maxLength": 60, "description": "\"important\", \"review\" or a custom name." }
+            }
+          }
+        },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500, "description": "v11: short description shown in the library." },
+        "coverArt": { "$ref": "#/$defs/coverArt" }
+      }
+    },
+
+    "coverArt": {
+      "description": "v11: what the cover shows on top of the colour `meta.cover`.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "style", "seed"],
+          "properties": {
+            "kind": { "const": "art" },
+            "style": { "enum": ["contours", "cells", "waves", "branches", "flow", "orbits", "grid"] },
+            "seed": { "type": "string", "minLength": 1, "maxLength": 200 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "asset"],
+          "properties": {
+            "kind": { "const": "image" },
+            "asset": { "$ref": "#/$defs/id", "description": "Id of an image asset of this document." }
+          }
+        }
+      ]
+    },
+
+    "position": {
+      "type": "object",
+      "description": "v7: where the notebook was last read. Written only when present, and only when its page exists.",
+      "required": ["page", "at"],
+      "properties": {
+        "page": { "$ref": "#/$defs/id" },
+        "y": { "type": "number", "exclusiveMinimum": 0, "description": "Page y (pt) at the top of the view; absent = top of the page." },
+        "at": { "type": "string", "minLength": 1, "description": "ISO time the reader was there." }
+      }
+    },
+
+    "slideRef": {
+      "type": "object",
+      "description": "v12: one page of one PDF shown beside the notes while ink was written.",
+      "required": ["id", "source", "page"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 16 },
+        "source": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Content-addressed id of the PDF." },
+        "page": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "1-based page of the PDF." },
+        "path": { "type": "string", "minLength": 1, "maxLength": 1024, "description": "Vault path of a plain PDF (a hint)." }
+      }
+    },
+
+    "asset": {
+      "type": "object",
+      "required": ["id", "kind", "path", "name", "bytes"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[0-9a-f]+$", "description": "Content hash (lowercase hex), also the file name without extension." },
+        "kind": { "enum": ["pdf", "image"] },
+        "path": { "type": "string", "minLength": 1, "description": "Vault path when stored; resolved again by id if the file moved." },
+        "name": { "type": "string", "description": "Original file name, for display." },
+        "bytes": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+      }
+    },
+
+    "page": {
+      "type": "object",
+      "required": ["id", "width", "height", "paper", "strokes"],
+      "dependentRequired": { "startAt": ["endAt"], "endAt": ["startAt"] },
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "width": { "$ref": "#/$defs/positive", "description": "Page width, pt (A4 = 595.28)." },
+        "height": { "$ref": "#/$defs/positive", "description": "Page height, pt (A4 = 841.89). Orientation follows from width > height." },
+        "paper": {
+          "type": "object",
+          "required": ["kind", "spacing"],
+          "properties": {
+            "kind": { "enum": ["blank", "ruled", "grid", "dotted", "millimetre", "cornell", "music", "isometric", "hexagonal", "calligraphy", "planner-day", "planner-week"] },
+            "spacing": { "type": "number", "minimum": 0.5, "description": "Pattern spacing, pt (meaning depends on the kind; unused for blank)." }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "description": "v7: page tags, without '#', trimmed, no case-insensitive duplicates. Written only when not empty.",
+          "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+        },
+        "background": { "$ref": "#/$defs/background" },
+        "margins": {
+          "type": "object",
+          "description": "v6: blank space around the background, pt. left + right < width and bottom < height.",
+          "required": ["left", "right", "bottom"],
+          "properties": {
+            "left": { "type": "number", "minimum": 0 },
+            "right": { "type": "number", "minimum": 0 },
+            "bottom": { "type": "number", "minimum": 0 }
+          }
+        },
+        "infinite": { "type": "boolean", "description": "v4: the page grows downwards while writing near its bottom edge." },
+        "locked": { "$ref": "#/$defs/true", "description": "v14: a finished page that refuses every edit until unlocked." },
+        "startAt": { "type": "integer", "minimum": 0, "maximum": 8640000000000000, "description": "v19: when the first ink or element was added to the page, ms since 1970. Written together with `endAt`, never alone; `endAt` is not before `startAt` (a rule a schema cannot express, see docs/format.md)." },
+        "endAt": { "type": "integer", "minimum": 0, "maximum": 8640000000000000, "description": "v19: when the last ink or element was added to the page, ms since 1970. Written together with `startAt`." },
+        "states": { "$ref": "#/$defs/pageStates" },
+        "comments": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "description": "v16: margin comments, a flat list; each reply names its comment in `parent`. Written only when not empty.",
+          "items": { "$ref": "#/$defs/comment" }
+        },
+        "elements": {
+          "type": "array",
+          "minItems": 1,
+          "description": "v4: objects drawn above the background and below the ink, in drawing order. Written only when not empty.",
+          "items": { "$ref": "#/$defs/element" }
+        },
+        "strokes": {
+          "type": "array",
+          "description": "The ink, in the order it was written. Always written, possibly empty.",
+          "items": { "$ref": "#/$defs/stroke" }
+        }
+      }
+    },
+
+    "background": {
+      "description": "v4: what is drawn under the paper pattern and the ink. `asset` names an entry of the document `assets` of the matching kind.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "asset", "page"],
+          "properties": {
+            "kind": { "const": "pdf" },
+            "asset": { "$ref": "#/$defs/id" },
+            "page": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "1-based page of the PDF." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "asset"],
+          "properties": {
+            "kind": { "const": "image" },
+            "asset": { "$ref": "#/$defs/id" }
+          }
+        }
+      ]
+    },
+
+    "stroke": {
+      "type": "object",
+      "description": "One vector stroke. Points are page coordinates, never screen coordinates.",
+      "required": ["id", "tool", "color", "width", "render", "points"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "tool": { "enum": ["pen", "highlighter", "shape"] },
+        "color": { "$ref": "#/$defs/color" },
+        "width": { "$ref": "#/$defs/positive", "description": "Nominal diameter, pt." },
+        "render": { "enum": [1, 2], "description": "v5: 1 = perfect-freehand outline (frozen parameters), 2 = incremental wet-ink geometry." },
+        "hidden": { "$ref": "#/$defs/true", "description": "v8: invisible ink (not drawn or exported until the reader shows the solutions)." },
+        "slide": { "type": "string", "minLength": 1, "maxLength": 16, "description": "v12: id of an entry of the document `slides`." },
+        "group": { "type": "string", "minLength": 1, "maxLength": 64, "description": "v18: group id, scoped to the page; written only when the group has at least two members on the page." },
+        "points": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/point" }
+        }
+      }
+    },
+
+    "point": {
+      "type": "array",
+      "description": "[x, y, pressure]: x and y in page pt (rounded to 0.01), pressure in [0, 1] (rounded to 0.001; simulated from velocity when the device reports none).",
+      "prefixItems": [
+        { "type": "number" },
+        { "type": "number" },
+        { "type": "number", "minimum": 0, "maximum": 1 }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    },
+
+    "elementFlags": {
+      "description": "v18: flags every page element can carry.",
+      "properties": {
+        "group": { "type": "string", "minLength": 1, "maxLength": 64, "description": "Group id, scoped to the page; the group has at least two members (strokes and elements together)." },
+        "locked": { "$ref": "#/$defs/true", "description": "The element is fixed in place." },
+        "lockAt": { "$ref": "#/$defs/timeMs", "description": "When it was last locked or unlocked." }
+      }
+    },
+
+    "element": {
+      "description": "A page element. `type` selects the shape. Elements share the id space of strokes.",
+      "oneOf": [
+        { "$ref": "#/$defs/textElement" },
+        { "$ref": "#/$defs/imageElement" },
+        { "$ref": "#/$defs/markerElement" },
+        { "$ref": "#/$defs/boxElement" },
+        { "$ref": "#/$defs/equationElement" },
+        { "$ref": "#/$defs/graphElement" },
+        { "$ref": "#/$defs/excerptElement" },
+        { "$ref": "#/$defs/stickyElement" },
+        { "$ref": "#/$defs/checkboxElement" }
+      ]
+    },
+
+    "textElement": {
+      "description": "v4 text box: (x, y) is the top-left corner, `width` wraps the text, the height follows the content.",
+      "allOf": [{ "$ref": "#/$defs/elementFlags" }],
+      "type": "object",
+      "required": ["id", "type", "x", "y", "width", "text", "fontSize", "color"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "const": "text" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "$ref": "#/$defs/positive" },
+        "text": { "type": "string" },
+        "fontSize": { "type": "number", "exclusiveMinimum": 0, "maximum": 400, "description": "pt" },
+        "color": { "$ref": "#/$defs/color" }
+      }
+    },
+
+    "imageElement": {
+      "description": "v4 image placed on the page; `rotation` in radians around its centre.",
+      "allOf": [{ "$ref": "#/$defs/elementFlags" }],
+      "type": "object",
+      "required": ["id", "type", "asset", "x", "y", "width", "height", "rotation"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "const": "image" },
+        "asset": { "$ref": "#/$defs/id", "description": "Id of an image asset of the document." },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "$ref": "#/$defs/positive" },
+        "height": { "$ref": "#/$defs/positive" },
+        "rotation": { "type": "number" }
+      }
+    },
+
+    "markerElement": {
+      "description": "v8 marker: a 14 pt badge whose top-left corner is (x, y), optionally about a region width x height from that corner (both or neither).",
+      "allOf": [{ "$ref": "#/$defs/elementFlags" }],
+      "type": "object",
+      "required": ["id", "type", "kind", "x", "y"],
+      "dependentRequired": { "width": ["height"], "height": ["width"] },
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "const": "marker" },
+        "kind": { "enum": ["gap", "question", "important", "critical", "star", "homework"] },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "$ref": "#/$defs/positive" },
+        "height": { "$ref": "#/$defs/positive" },
+        "at": { "type": "string", "minLength": 1, "description": "ISO time it was placed." },
+        "done": { "$ref": "#/$defs/true", "description": "Resolved question, filled gap, homework done." },
+        "slide": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "Gap: 1-based PDF page in view when it was placed." },
+        "due": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Homework: due date YYYY-MM-DD (a real calendar date)." },
+        "text": { "type": "string", "minLength": 1, "maxLength": 300, "description": "One line (whitespace collapsed, trimmed)." }
+      }
+    },
+
+    "boxElement": {
+      "description": "v8 structured box: a labelled frame around a region, drawn under the ink.",
+      "allOf": [{ "$ref": "#/$defs/elementFlags" }],
+      "type": "object",
+      "required": ["id", "type", "kind", "x", "y", "width", "height"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "const": "box" },
+        "kind": { "enum": ["definition", "theorem", "example", "proof", "remark"] },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "$ref": "#/$defs/positive" },
+        "height": { "$ref": "#/$defs/positive" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 300, "description": "One line." }
+      }
+    },
+
+    "equationElement": {
+      "description": "v9 equation: LaTeX typeset with MathJax into the box width x height whose top-left corner is (x, y).",
+      "allOf": [{ "$ref": "#/$defs/elementFlags" }],
+      "type": "object",
+      "required": ["id", "type", "x", "y", "width", "height", "latex", "fontSize", "color"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "const": "equation" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "$ref": "#/$defs/positive" },
+        "height": { "$ref": "#/$defs/positive" },
+        "latex": { "type": "string", "pattern": "\\S", "maxLength": 4000, "description": "LaTeX source without $ delimiters; not blank; several lines allowed." },
+        "fontSize": { "type": "number", "exclusiveMinimum": 0, "maximum": 400, "description": "pt (the em of MathJax)" },
+        "color": { "$ref": "#/$defs/color" },
+        "inline": { "$ref": "#/$defs/true", "description": "Text style (absent: display style)." },
+        "numbered": { "$ref": "#/$defs/true", "description": "\"(n)\" is drawn at its right." },
+        "outline": { "type": "string", "maxLength": 600000, "description": "Cached vector outline of the glyphs: absolute `M x y`, `L x y`, `Z` commands only, in pt relative to (x, y), even-odd fill." }
+      }
+    },
+
+    "graphElement": {
+      "description": "v9 function graph: a frame width x height whose top-left corner is (x, y) showing `view` of the plane.",
+      "allOf": [{ "$ref": "#/$defs/elementFlags" }],
+      "type": "object",
+      "required": ["id", "type", "x", "y", "width", "height", "view", "functions"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "const": "graph" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 4000 },
+        "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 4000 },
+        "view": {
+          "type": "object",
+          "description": "Part of the plane shown, in graph units. xMin < xMax and yMin < yMax, spans at least 1e-9.",
+          "required": ["xMin", "xMax", "yMin", "yMax"],
+          "properties": {
+            "xMin": { "type": "number", "minimum": -1e12, "maximum": 1e12 },
+            "xMax": { "type": "number", "minimum": -1e12, "maximum": 1e12 },
+            "yMin": { "type": "number", "minimum": -1e12, "maximum": 1e12 },
+            "yMax": { "type": "number", "minimum": -1e12, "maximum": 1e12 }
+          }
+        },
+        "functions": {
+          "type": "array",
+          "maxItems": 12,
+          "description": "Function ids are unique within the graph.",
+          "items": { "$ref": "#/$defs/graphFunction" }
+        },
+        "params": {
+          "type": "array",
+          "maxItems": 12,
+          "description": "Parameters the expressions use (a slider each). Names are unique.",
+          "items": {
+            "type": "object",
+            "required": ["name", "value", "min", "max"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^\\p{L}[\\p{L}\\p{N}_]{0,15}$", "description": "A letter then letters, digits or _ (at most 16); not a function, constant, keyword or x, y, t, r." },
+              "value": { "type": "number" },
+              "min": { "type": "number" },
+              "max": { "type": "number", "description": "Greater than min." },
+              "step": { "$ref": "#/$defs/positive", "description": "Slider step (absent: continuous)." }
+            }
+          }
+        },
+        "axes": { "const": false, "description": "Axes hidden (written only when hidden)." },
+        "grid": { "const": false, "description": "Grid hidden (written only when hidden)." },
+        "xStep": { "$ref": "#/$defs/positive" },
+        "yStep": { "$ref": "#/$defs/positive" },
+        "xLabel": { "type": "string", "maxLength": 60 },
+        "yLabel": { "type": "string", "maxLength": 60 },
+        "degrees": { "$ref": "#/$defs/true", "description": "Trigonometric functions in degrees (absent: radians)." },
+        "table": {
+          "type": "object",
+          "description": "Table of values of the function `fn` (an id of this graph): `rows` values of x from `from`, `step` apart.",
+          "required": ["fn", "from", "step", "rows"],
+          "properties": {
+            "fn": { "$ref": "#/$defs/id" },
+            "from": { "type": "number" },
+            "step": { "type": "number", "not": { "const": 0 } },
+            "rows": { "type": "integer", "minimum": 1, "maximum": 50 }
+          }
+        }
+      }
+    },
+
+    "graphFunction": {
+      "type": "object",
+      "description": "One graphed function. Expressions are strings for the plugin's safe parser (never evaluated with eval); one that does not parse is not a format error.",
+      "required": ["id", "kind", "color"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "kind": { "enum": ["cartesian", "parametric", "polar", "implicit", "piecewise"] },
+        "color": { "$ref": "#/$defs/color" },
+        "expr": { "type": "string", "maxLength": 500, "description": "cartesian: y(x); polar: r(theta); implicit: `lhs = rhs` or F(x, y) = 0." },
+        "x": { "type": "string", "maxLength": 500, "description": "parametric: x(t)." },
+        "y": { "type": "string", "maxLength": 500, "description": "parametric: y(t)." },
+        "pieces": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "description": "piecewise: y(x); the first piece whose `when` holds applies, a piece without `when` applies otherwise.",
+          "items": {
+            "type": "object",
+            "required": ["expr"],
+            "properties": {
+              "expr": { "type": "string", "maxLength": 500 },
+              "when": { "type": "string", "maxLength": 500 }
+            }
+          }
+        },
+        "min": { "type": "number", "description": "Range of t (parametric) or theta (polar), or a restriction of x. Both or neither; min < max." },
+        "max": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 20, "description": "Line width, pt." },
+        "hidden": { "$ref": "#/$defs/true" },
+        "roots": { "$ref": "#/$defs/true" },
+        "extrema": { "$ref": "#/$defs/true" },
+        "intersections": { "$ref": "#/$defs/true" },
+        "tangent": { "type": "number", "description": "x of a tangent line." },
+        "area": {
+          "type": "object",
+          "description": "Area between the curve and the x axis from `from` to `to` (different).",
+          "required": ["from", "to"],
+          "properties": { "from": { "type": "number" }, "to": { "type": "number" } }
+        },
+        "label": { "type": "string", "description": "Shown in the legend." }
+      },
+      "dependentRequired": { "min": ["max"], "max": ["min"] },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "parametric" } }, "required": ["kind"] }, "then": { "required": ["x", "y"] } },
+        { "if": { "properties": { "kind": { "const": "piecewise" } }, "required": ["kind"] }, "then": { "required": ["pieces"] } },
+        { "if": { "properties": { "kind": { "enum": ["cartesian", "polar", "implicit"] } }, "required": ["kind"] }, "then": { "required": ["expr"] } }
+      ]
+    },
+
+    "excerptElement": {
+      "description": "v10 anchored excerpt: a region of a page shown in the box width x height whose top-left corner is (x, y).",
+      "allOf": [{ "$ref": "#/$defs/elementFlags" }],
+      "type": "object",
+      "required": ["id", "type", "x", "y", "width", "height", "source"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "const": "excerpt" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "$ref": "#/$defs/positive" },
+        "height": { "$ref": "#/$defs/positive" },
+        "source": {
+          "type": "object",
+          "description": "Where the region comes from, in the page coordinates of the source page.",
+          "required": ["notebook", "doc", "page", "x", "y", "width", "height"],
+          "properties": {
+            "notebook": { "type": "string", "minLength": 1, "maxLength": 1024, "description": "Vault path of the source notebook when the excerpt was made." },
+            "doc": { "type": "string", "minLength": 1, "maxLength": 200, "description": "`id` of the source document." },
+            "page": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Id of the source page." },
+            "x": { "type": "number" },
+            "y": { "type": "number" },
+            "width": { "$ref": "#/$defs/positive" },
+            "height": { "$ref": "#/$defs/positive" }
+          }
+        },
+        "asset": { "$ref": "#/$defs/id", "description": "Image asset holding a PNG snapshot of the region." }
+      }
+    },
+
+    "stickyElement": {
+      "description": "v15 sticky note: a coloured note, the box width x height whose top-left corner is (x, y). Ink written on it is ordinary page ink.",
+      "allOf": [{ "$ref": "#/$defs/elementFlags" }],
+      "type": "object",
+      "required": ["id", "type", "x", "y", "width", "height", "color", "fontSize"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "const": "sticky" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 48, "maximum": 900 },
+        "height": { "type": "number", "minimum": 48, "maximum": 900 },
+        "color": { "$ref": "#/$defs/color" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "fontSize": { "type": "number", "minimum": 5, "maximum": 72 },
+        "collapsed": { "$ref": "#/$defs/true", "description": "Shown as a small icon; its ink is hidden meanwhile." },
+        "ink": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20000,
+          "description": "Only while collapsed: ids of the strokes on the note when it was collapsed (strokes of the same page).",
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+
+    "checkboxElement": {
+      "description": "v17 handwritten checkbox: a square `size` pt on a side whose top-left corner is (x, y).",
+      "allOf": [{ "$ref": "#/$defs/elementFlags" }],
+      "type": "object",
+      "required": ["id", "type", "x", "y", "size", "color"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "const": "checkbox" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "size": { "type": "number", "minimum": 8, "maximum": 96 },
+        "color": { "$ref": "#/$defs/color" },
+        "checked": { "$ref": "#/$defs/true", "description": "Ticked." },
+        "at": { "$ref": "#/$defs/timeMs", "description": "When it was last ticked or unticked." },
+        "taskAt": { "$ref": "#/$defs/timeMs", "description": "When the task link was last set or removed." },
+        "label": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Typed name of the item." },
+        "task": {
+          "type": "object",
+          "description": "Link to a task line of an Obsidian note.",
+          "required": ["path", "block"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1, "maxLength": 500, "description": "Vault path of the note." },
+            "block": { "type": "string", "pattern": "^nb-[A-Za-z0-9]+$", "maxLength": 40, "description": "Block id (without ^) the plugin wrote at the end of the task line." }
+          }
+        }
+      }
+    },
+
+    "pageStates": {
+      "type": "object",
+      "description": "v13: parts of the drawing and the states they move between. Written only when there is a live part. The strokes keep their own points: a state is a transform applied when the page is drawn.",
+      "required": ["parts", "list"],
+      "properties": {
+        "parts": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "required": ["id", "pivot", "items"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1, "maxLength": 16 },
+              "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+              "pivot": {
+                "type": "array",
+                "prefixItems": [
+                  { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+                  { "type": "number", "minimum": -1000000, "maximum": 1000000 }
+                ],
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "[x, y] page point that rotation and scale turn around."
+              },
+              "items": { "type": "array", "minItems": 1, "maxItems": 5000, "items": { "$ref": "#/$defs/id" }, "description": "Stroke ids of this page; a stroke is in at most one part." }
+            }
+          }
+        },
+        "list": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "poses"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1, "maxLength": 16 },
+              "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+              "poses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "description": "Where one part is in this state, relative to how it was drawn; one pose per part.",
+                  "required": ["part"],
+                  "properties": {
+                    "part": { "$ref": "#/$defs/id" },
+                    "dx": { "type": "number", "minimum": -100000, "maximum": 100000 },
+                    "dy": { "type": "number", "minimum": -100000, "maximum": 100000 },
+                    "rot": { "type": "number", "minimum": -3600, "maximum": 3600, "description": "Degrees, clockwise on the page." },
+                    "scale": { "type": "number", "minimum": 0.01, "maximum": 100 },
+                    "hidden": { "$ref": "#/$defs/true" },
+                    "color": { "$ref": "#/$defs/color" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "active": { "$ref": "#/$defs/id", "description": "Id of the state the page shows; absent = the drawing as written." }
+      }
+    },
+
+    "comment": {
+      "description": "v16: a comment anchored to a region of the page, or a reply to one. Comment ids are at most 40 characters and unique on the page.",
+      "oneOf": [{ "$ref": "#/$defs/commentNote" }, { "$ref": "#/$defs/commentReply" }]
+    },
+
+    "commentNote": {
+      "type": "object",
+      "required": ["id", "region", "text", "author", "created"],
+      "not": { "required": ["parent"] },
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "region": {
+          "type": "object",
+          "description": "Box inside the page, pt, rounded to a tenth; sides at least 4 (less only on a page smaller than that).",
+          "required": ["x", "y", "width", "height"],
+          "properties": {
+            "x": { "type": "number", "minimum": 0 },
+            "y": { "type": "number", "minimum": 0 },
+            "width": { "$ref": "#/$defs/positive" },
+            "height": { "$ref": "#/$defs/positive" }
+          }
+        },
+        "text": { "type": "string", "maxLength": 4000, "description": "May be empty when there is a sketch." },
+        "sketch": {
+          "type": "object",
+          "description": "A small handwritten sketch kept inside the comment (not page ink), in a fixed 400 x 200 frame.",
+          "required": ["strokes"],
+          "properties": {
+            "strokes": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 40,
+              "items": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 800,
+                "description": "Flat [x0, y0, x1, y1, ...] integer list: x in 0..400, y in 0..200 (at most 3000 points per sketch).",
+                "items": { "type": "integer", "minimum": 0, "maximum": 400 }
+              }
+            }
+          }
+        },
+        "author": { "type": "string", "maxLength": 60, "description": "Name of the device that wrote it." },
+        "created": { "$ref": "#/$defs/timeMs" },
+        "edited": { "$ref": "#/$defs/timeMs" },
+        "resolved": { "$ref": "#/$defs/true" }
+      }
+    },
+
+    "commentReply": {
+      "type": "object",
+      "required": ["id", "parent", "text", "author", "created"],
+      "not": { "anyOf": [{ "required": ["region"] }, { "required": ["sketch"] }, { "required": ["resolved"] }] },
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "parent": { "type": "string", "minLength": 1, "maxLength": 40, "description": "Id of the comment (never of another reply) this answers." },
+        "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "author": { "type": "string", "maxLength": 60 },
+        "created": { "$ref": "#/$defs/timeMs" },
+        "edited": { "$ref": "#/$defs/timeMs" }
+      }
+    }
+  }
+}

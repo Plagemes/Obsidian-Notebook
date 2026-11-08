@@ -300,7 +300,7 @@ export function planCrossPageTransform(input: CrossPageTransformInput): CrossPag
 			const dest = pages[to]!;
 			const at = lengthOf.get(to) ?? dest.strokes.length;
 			lengthOf.set(to, at + 1);
-			add.push(new AddStroke(dest.id, moved, at));
+			add.push(new AddStroke(dest.id, moved, at, false));
 			removals.push({ page: part.pageIndex, index, command: new ReplaceStroke(page.id, stroke, [], index) });
 			if (selected) partFor(to).strokes.push(moved);
 			reparented++;
@@ -321,7 +321,7 @@ export function planCrossPageTransform(input: CrossPageTransformInput): CrossPag
 			const dest = pages[to]!;
 			const at = elementLengthOf.get(to) ?? dest.elements?.length ?? 0;
 			elementLengthOf.set(to, at + 1);
-			add.push(new AddElement(dest.id, moved, at));
+			add.push(new AddElement(dest.id, moved, at, false));
 			// Elements are found by identity, so the removal needs no index; it still goes last.
 			removals.push({ page: part.pageIndex, index: Number.MAX_SAFE_INTEGER, command: new RemoveElement(page.id, el) });
 			partFor(to).elements.push(moved);

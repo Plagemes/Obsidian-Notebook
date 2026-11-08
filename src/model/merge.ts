@@ -25,6 +25,9 @@
  *   just enough in the same step so it stays visible: wider margins on a page with a background
  *   (`SetPageMargins`: its own ink moves with the background), a larger plain page, or more height on an
  *   infinite page (`SetPageSize`, which follows the margin rule).
+ * - v19: the start and end time of a common page are the earliest start and the latest end of the two (`mergedTimes`,
+ *   model/page-times.ts); a page that only the copy has comes with its times. A merge that brings ink or elements onto a page sets its
+ *   times itself (`SetPageTimes`), so the history never stamps the moment of the merge on the page.
  * - v18: the group of a stroke or an element and the lock of an element are state, not content (`mergedFlags`, model/groups.ts):
  *   membership of a group is united by id (an item in no group in the main notebook joins the copy's group; groups only grow, deletions
  *   are not inferred), and the later lock decision (`lockAt`) wins, a tie that disagrees keeping the lock (counted in `flagsUpdated`).
@@ -61,6 +64,7 @@ import { AddAsset, AddElement, AddPage, AddStroke, Batch, SetMeta, SetPageMargin
 import { SetMarkerDone } from "./marker-commands";
 import { commentCovered, copyComments, mergeComments, SetPageComments, shiftComments } from "./comments";
 import { exemptFromLocks, SetPageLocked } from "./page-lock";
+import { mergedTimes, pageTimes, putPageTimes, sameTimes, SetPageTimes } from "./page-times";
 import { slideMerger } from "./slide-links";
 import { remapStates, SetPageStates } from "./states";
 import { boxBounds, markerBounds } from "./markers";
@@ -114,6 +118,8 @@ export interface MergeSummary {
 	checkboxesUpdated: number;
 	/** v18: items both have whose group or lock is taken from the copy (a group they were not in, a later lock or unlock). */
 	flagsUpdated: number;
+	/** v19: common pages whose start or end time is widened to the copy's (counted only when the page brings no ink: a times-only difference is still a change to merge). */
+	timesUpdated: number;
 }
 
 export interface MergePlan {
@@ -319,7 +325,7 @@ function carriedInk(e: PageElement, strokeMap: ReadonlyMap<string, string>, adde
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0, timesUpdated: 0,
 	};
 	const commands: Command[] = [];
 	// v12: the copy's slide ids in the main notebook's table.
@@ -487,6 +493,7 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 	for (const page of other.pages) {
 		const target = mainPages.get(page.id);
 		if (target) {
+			const commandsBefore = commands.length;
 			if (pageSettingsKey(target) !== pageSettingsKey(page)) summary.pageSettingsDiffer++;
 			const tags = unionPageTags(target.tags, page.tags);
 			const tagsAdded = (tags?.length ?? 0) - (unionPageTags(target.tags, undefined)?.length ?? 0);
@@ -592,6 +599,13 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 			}
 			// v14: a page locked in either copy is locked in the result (the safer side: unlocking is one tap). Added last, after the ink.
 			if (page.locked && !target.locked) commands.push(new SetPageLocked(target.id, true));
+			// v19: the page spans the earliest start and the latest end of both copies. A merge that brings ink in sets the times itself (so
+			// the history does not stamp the merge's own moment on the page); one that brings none and changes nothing adds no step.
+			const mainTimes = pageTimes(target);
+			const spanned = mergedTimes(mainTimes, pageTimes(page));
+			const bringsContent = commands.slice(commandsBefore).some((c) => c instanceof AddStroke || c instanceof AddElement);
+			if (!sameTimes(spanned, mainTimes) || bringsContent) commands.push(new SetPageTimes(target.id, spanned));
+			if (!sameTimes(spanned, mainTimes) && !bringsContent) summary.timesUpdated++;
 			anchor = page.id;
 			continue;
 		}
@@ -628,6 +642,8 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		const addedStates = remapStates(page.states, (id) => strokeMap.get(id));
 		if (addedStates) added.states = addedStates;
 		if (page.locked) added.locked = true;
+		// v19: a page that only the copy has comes with its times.
+		putPageTimes(added, pageTimes(page));
 		const addedComments = copyComments(page.comments, page);
 		if (addedComments) added.comments = addedComments;
 		const at = anchor === null ? 0 : order.indexOf(anchor) + 1;
@@ -730,7 +746,7 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
 	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded
-		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated + s.flagsUpdated;
+		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated + s.flagsUpdated + s.timesUpdated;
 }
 
 /**

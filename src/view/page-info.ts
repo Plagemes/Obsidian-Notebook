@@ -49,6 +49,13 @@ export function infoRows(info: PageInfo): Array<[string, string]> {
 	rows.push([t("info.bookmark"), mark === null ? t("info.bookmark.no") : [t("info.bookmark.yes"), mark.title, mark.category].filter(Boolean).join(" · ")]);
 	const kinds = markerKindsPresent(info).map((k) => `${t(`markers.kind.${k}` as MessageKey)} ${info.markers.byKind[k]}`).join(", ");
 	rows.push([t("info.markers"), info.markers.total === 0 ? t("info.markers.none") : `${t("info.markers.value", { open: String(info.markers.open), total: String(info.markers.total) })} (${kinds})`]);
+	// v19 (#217): the page's own start and end time (this panel is asked for, so it shows them whatever the header setting says).
+	if (info.times) {
+		rows.push([t("info.started"), when(info.times.startAt)]);
+		rows.push([t("info.lastWritten"), when(info.times.endAt)]);
+	} else {
+		rows.push([t("info.started"), t("info.times.none")]);
+	}
 	const d = info.dates;
 	if (d.notebookCreated) rows.push([t("info.created"), when(d.notebookCreated)]);
 	if (d.notebookSaved) rows.push([t("info.saved"), when(d.notebookSaved)]);

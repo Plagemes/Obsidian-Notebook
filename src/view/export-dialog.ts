@@ -89,10 +89,10 @@ export class ExportModal extends Modal {
 		const shell = modalShell(this, { title: t("export.dialog.title"), icon: "file-output", size: "medium", cls: "notebook-export-modal" });
 		const contentEl = shell.body;
 		new Setting(contentEl).setName(t("export.dialog.format")).addDropdown((dd) => {
-			dd.addOption("pdf", "PDF").addOption("svg", "SVG").addOption("png", t("export.format.png"));
+			dd.addOption("pdf", "PDF").addOption("svg", "SVG").addOption("html", t("export.format.html")).addOption("png", t("export.format.png"));
 			if (this.host.canPrint) dd.addOption("print", t("export.format.print"));
 			dd.setValue(this.format).onChange((v) => {
-				this.format = v === "svg" || v === "png" || (v === "print" && this.host.canPrint) ? v : "pdf";
+				this.format = v === "svg" || v === "html" || v === "png" || (v === "print" && this.host.canPrint) ? v : "pdf";
 				this.refresh();
 			});
 		});
@@ -186,6 +186,7 @@ export class ExportModal extends Modal {
 		let key: MessageKey;
 		if (this.format === "png") key = "export.png.note";
 		else if (this.format === "print") key = "export.print.note";
+		else if (this.format === "html") key = "export.html.note";
 		else key = this.format === "svg" && (n ?? 1) > 1 ? "export.dialog.files.many" : "export.dialog.files.one";
 		this.fileDesc?.setText(t(key, { n: String(n ?? this.host.pageCount) }));
 	}

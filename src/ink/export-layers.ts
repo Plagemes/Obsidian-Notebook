@@ -29,8 +29,8 @@ export function layersSuffix(layers: ExportLayers | undefined): string {
 	return layers === "ink" ? " ink" : layers === "background" ? " background" : "";
 }
 
-/** `png` (wave 0.10, 81) writes one image per page into a vault folder; `print` writes nothing: it opens the system print dialog. */
-export type ExportFormat = "pdf" | "svg" | "png" | "print";
+/** `html` (0.21, #164) writes one self-contained interactive file with the pages of the choice. `png` (wave 0.10, 81) writes one image per page into a vault folder; `print` writes nothing: it opens the system print dialog. */
+export type ExportFormat = "pdf" | "svg" | "png" | "print" | "html";
 /** `range` (wave 0.10): the pages the user typed, passed to `planExport` as `range`. */
 export type ExportScope = "page" | "notebook" | "range";
 
@@ -62,7 +62,7 @@ export function planExport(
 		: Array.from({ length: pageCount }, (_, i) => i);
 	if (pages.length === 0) return [];
 	if (format === "png" || format === "print") return [{ format, pages, suffix: "" }];
-	if (format === "pdf") {
+	if (format === "pdf" || format === "html") {
 		const suffix = scope === "page" ? ` p${pageIndex + 1}${tail}` : scope === "range" ? `${rangeSuffix(pages)}${tail}` : tail;
 		return [{ format, pages, suffix }];
 	}

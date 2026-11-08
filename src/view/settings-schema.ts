@@ -25,6 +25,7 @@ import { INSERT_WIDTH_MAX, INSERT_WIDTH_MIN, INSERT_WIDTH_STEP } from "../model/
 import { LOOKUP_WIDTH_MAX, LOOKUP_WIDTH_MIN, LOOKUP_WIDTH_STEP } from "../model/look-up";
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
+import { SYMBOL_COUNT_MAX, SYMBOL_COUNT_MIN } from "../ui/symbol-rank";
 
 export type SettingKey = keyof NotebookSettings;
 
@@ -60,6 +61,8 @@ export const SECTIONS: readonly SectionSpec[] = [
 export interface SettingsContext {
 	/** The sync safety service is running (device name, sync check). */
 	sync: boolean;
+	/** The backup service is running (the "Back up now" row). */
+	backups?: boolean;
 	/** The timetable service is running. */
 	timetable: boolean;
 	/** The timetable has at least one class. */
@@ -101,7 +104,7 @@ export const GROUPS: readonly GroupSpec[] = [
 /** Runs of the action rows; the tab maps each id to what it does. */
 export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open";
 /** Rows drawn by the tab itself (no stored setting of their own). */
-export type SettingCustomId = "device-name" | "pen-key" | "device-info";
+export type SettingCustomId = "device-name" | "pen-key" | "device-info" | "backup-now";
 
 export type ControlSpec =
 	| { type: "toggle" }
@@ -191,6 +194,9 @@ const WRITING: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["offer", "settings.checklistDraw.offer"], ["auto", "settings.checklistDraw.auto"], ["off", "settings.checklistDraw.off"]]) },
 	},
 	{ id: "autoLineBreak", section: "writing", order: 60, name: "settings.autoLineBreak", desc: "settings.autoLineBreak.desc", control: { type: "toggle" } },
+	// 0.21 symbols
+	{ id: "symbolStrip", section: "writing", order: 62, name: "settings.symbolStrip", desc: "settings.symbolStrip.desc", keywords: "symbols maths math formula greek simboli matematica", control: { type: "toggle" } },
+	{ id: "symbolCount", section: "writing", order: 63, name: "settings.symbolCount", desc: "settings.symbolCount.desc", control: { type: "slider", min: SYMBOL_COUNT_MIN, max: SYMBOL_COUNT_MAX, step: 1 }, parent: "symbolStrip", visible: (s) => s.symbolStrip },
 	// 0.15 pen sets: named pens per subject, loaded with the notebook (view/pen-sets.ts)
 	{
 		id: "penSets", section: "writing", order: 70, name: "settings.penSets", desc: "settings.penSets.desc", keywords: "pens subject maths languages science favourites penne materia",
@@ -198,6 +204,8 @@ const WRITING: SettingSpec[] = [
 	},
 	{ id: "eraseAreaElements", section: "writing", group: ADVANCED, order: 10, name: "settings.eraseAreaElements", desc: "settings.eraseAreaElements.desc", control: { type: "toggle" } },
 	{ id: "dateStampFormat", section: "writing", group: ADVANCED, order: 20, name: "settings.dateStamp", desc: "settings.dateStamp.desc", control: { type: "text", placeholder: DEFAULT_SETTINGS.dateStampFormat } },
+	{ id: "signDateMode", section: "writing", group: ADVANCED, order: 21, name: "settings.signDateMode", desc: "settings.signDateMode.desc", control: { type: "dropdown", options: (tr) => ({ locale: tr("settings.signDateMode.locale"), iso: tr("settings.signDateMode.iso"), custom: tr("settings.signDateMode.custom") }) }, keywords: "signature date sign firma data" },
+	{ id: "signDateCustom", section: "writing", group: ADVANCED, order: 22, name: "settings.signDateCustom", desc: "settings.signDateCustom.desc", control: { type: "text", placeholder: DEFAULT_SETTINGS.signDateCustom }, keywords: "signature date sign firma data" },
 	{ id: "inkPrediction", section: "writing", group: ADVANCED, order: 30, name: "settings.inkPrediction", desc: "settings.inkPrediction.desc", control: { type: "toggle" }, keywords: "latency latenza" },
 	{ id: "lowLatencyInk", section: "writing", group: ADVANCED, order: 40, name: "settings.lowLatencyInk", desc: "settings.lowLatencyInk.desc", control: { type: "toggle" } },
 ];
@@ -306,6 +314,7 @@ const PAGES: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["left", "settings.headerAlign.left"], ["centre", "settings.headerAlign.centre"], ["right", "settings.headerAlign.right"]]) }, parent: "headerMode", visible: (s) => s.headerMode !== "off",
 	},
 	{ id: "headerInExport", section: "pages", group: "pageHeader", order: 60, name: "settings.headerInExport", desc: "settings.headerInExport.desc", control: { type: "toggle" }, parent: "headerMode", visible: (s) => s.headerMode !== "off" },
+	{ id: "headerPageTimes", section: "pages", group: "pageHeader", order: 70, name: "settings.headerPageTimes", desc: "settings.headerPageTimes.desc", control: { type: "toggle" } },
 ];
 
 const READING: SettingSpec[] = [
@@ -328,6 +337,8 @@ const READING: SettingSpec[] = [
 		id: "digestGroup", section: "reading", order: 60, name: "settings.digestGroup", desc: "settings.digestGroup.desc",
 		control: { type: "dropdown", options: options([["page", "settings.digestGroup.page"], ["colour", "settings.digestGroup.colour"]]) }, keywords: "highlights digest summary evidenziazioni riepilogo colour colore",
 	},
+	// 0.21 (#187): back-of-book index.
+	{ id: "indexPrefix", section: "reading", order: 61, name: "settings.indexPrefix", desc: "settings.indexPrefix.desc", control: { type: "text", placeholder: "#idx" }, keywords: "index back of book term prefix marker indice analitico prefisso" },
 
 	// 0.18 (#86): margin comments.
 	{ id: "commentMarkers", section: "reading", order: 70, name: "settings.commentMarkers", desc: "settings.commentMarkers.desc", control: { type: "toggle" }, keywords: "comments markers margin review commenti margine revisione" },
@@ -385,6 +396,16 @@ const LIBRARY: SettingSpec[] = [
 const SYNC: SettingSpec[] = [
 	{ id: "deviceName", section: "sync", order: 10, name: "settings.deviceName", desc: "settings.deviceName.desc", control: { type: "custom", render: "device-name" }, visible: (_s, ctx) => ctx.sync },
 	{ id: "syncCheck", section: "sync", order: 20, name: "settings.syncCheck", desc: "settings.syncCheck.desc", control: { type: "action", run: "sync-check", button: "sync.check.button" }, visible: (_s, ctx) => ctx.sync },
+	// 0.21 backups (#127): scheduled zip backups into a vault folder; the "Back up now" row shows the last time and result.
+	{
+		id: "zipBackupSchedule", section: "sync", order: 30, name: "settings.backupSchedule", desc: "settings.backupSchedule.desc",
+		control: { type: "dropdown", options: options([["off", "settings.backupSchedule.off"], ["daily", "settings.backupSchedule.daily"], ["weekly", "settings.backupSchedule.weekly"]]) },
+		keywords: "backup zip schedule automatic copy safety archive copia di sicurezza pianificata automatica giornaliera settimanale",
+		visible: (_s, ctx) => ctx.backups === true,
+	},
+	{ id: "zipBackupFolder", section: "sync", order: 31, name: "settings.backupFolder", desc: "settings.backupFolder.desc", control: { type: "folder", placeholder: DEFAULT_SETTINGS.zipBackupFolder }, parent: "zipBackupSchedule", visible: (s, ctx) => ctx.backups === true && s.zipBackupSchedule !== "off" },
+	{ id: "zipBackupKeep", section: "sync", order: 32, name: "settings.backupKeep", desc: "settings.backupKeep.desc", control: { type: "slider", min: 1, max: 30, step: 1 }, parent: "zipBackupSchedule", visible: (s, ctx) => ctx.backups === true && s.zipBackupSchedule !== "off" },
+	{ id: "backupNow", section: "sync", order: 40, name: "settings.backupNow", control: { type: "custom", render: "backup-now" }, keywords: "backup zip now copy safety archive copia di sicurezza adesso", visible: (_s, ctx) => ctx.backups === true },
 ];
 
 const companionOn: Predicate = (s) => s.companionNotes;
@@ -458,6 +479,8 @@ const STUDY: SettingSpec[] = [
 		id: "lectureMode", section: "study", group: "timetable", order: 30, name: "settings.lectureMode", desc: "settings.lectureMode.desc", keywords: "class lesson lecture classe lezione",
 		control: { type: "dropdown", options: options([["off", "settings.lectureMode.off"], ["ask", "settings.lectureMode.ask"], ["auto", "settings.lectureMode.auto"]]) },
 	},
+	// 0.21 slideback (#225): the pill back to where you last wrote during a lecture.
+	{ id: "slideBack", section: "study", group: "timetable", order: 31, name: "settings.slideBack", desc: "settings.slideBack.desc", control: { type: "toggle" }, keywords: "lecture slide back return current page lezione diapositiva torna" },
 	{ id: "zettelFolder", section: "study", group: "zettel", order: 10, name: "settings.zettelFolder", desc: "settings.zettelFolder.desc", control: { type: "folder", placeholder: DEFAULT_SETTINGS.zettelFolder } },
 	{
 		id: "zettelIdScheme", section: "study", group: "zettel", order: 20, name: "settings.zettelIdScheme", desc: "settings.zettelIdScheme.desc",

@@ -1,9 +1,10 @@
 /**
  * Page information (roadmap 379): what the file knows about one page, computed from the document. Pure. Nothing is
- * stored for it, so there is no format change: the dates are the ones the file has (the notebook's), and a page's own
- * last edit is known only on this device (the recent-pages log), which the caller passes in when it has it.
+ * stored for it: the dates are the ones the file has (the notebook's), a page's own last edit is known only on this device (the
+ * recent-pages log), which the caller passes in when it has it, and (v19, #217) the page's own start and end time are in the file.
  */
 import { elementAssetId } from "./excerpts";
+import { pageTimes, type PageTimes } from "./page-times";
 import { MARKER_KINDS, PAGE_SIZES, type MarkerKind, type NotebookDocument, type Page, type PageSizeName, type Tool } from "./types";
 
 export interface PageInfo {
@@ -26,6 +27,8 @@ export interface PageInfo {
 	tags: string[];
 	bookmark: { title?: string; category?: string } | null;
 	markers: { total: number; open: number; byKind: Partial<Record<MarkerKind, number>> };
+	/** v19 (#217): when the first ink or element was added to the page and when the last one was; null: not recorded (a page written before 0.21, or never written on). */
+	times: PageTimes | null;
 	dates: {
 		/** The notebook's: a page has no creation date of its own in the file. */
 		notebookCreated: string | null;
@@ -106,6 +109,7 @@ export function pageInfo(doc: NotebookDocument, index: number, editedHere: numbe
 		tags: [...(page.tags ?? [])],
 		bookmark: marked ? { ...(detail?.title ? { title: detail.title } : {}), ...(detail?.category ? { category: detail.category } : {}) } : null,
 		markers: { total: markers, open, byKind },
+		times: pageTimes(page),
 		dates: { notebookCreated: validDate(doc.createdAt), notebookSaved: validDate(doc.modifiedAt), pageEditedHere: editedHere !== null && Number.isFinite(editedHere) ? editedHere : null },
 	};
 }

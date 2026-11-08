@@ -348,7 +348,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 4965 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 5338 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -3022,3 +3022,202 @@ Ghost guide lines (roadmap #94). Settings, Writing: *Ghost guide lines* (off / w
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Ghost guide lines on blank paper (#94): baseline and next line inferred from the newest strokes, faint dashed overlay on the live layer, off / while writing / always, auto or fixed spacing, never saved or exported | yes | inference (baseline, line height, tilt tolerance, descenders, drawings as outliers, fallback to the last complete line, fixed spacing), segments, fade, settings: `tests/ghost-lines.test.ts`; harness `doc=ghostlines` | | | not tried with a real hand on a tablet; the thresholds (tilt 12 degrees, spacing from stroke height) are a guess |
+
+### 0.21 — pagetime (start and end time of a page, format v19; steps 2000-2019)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=pagetime`): `dev/harness/dist/shots/pagetime-*.png` (tablet and phone, light and dark). Notebooks saved by this version are format v19: 0.20 and older open them read-only.
+
+2000. **A fresh page has no times.** Open a notebook made with an older version (or a new blank page), tap the page number > *Page information*: *Page started* says *Not recorded yet*.
+2001. **The first stroke starts the page.** Write one word. Open *Page information*: *Page started* and *Page last written* show the time you wrote it (the same minute).
+2002. **Later writing moves only the end.** Wait a few minutes, write another word, add a text box or a picture: *Page started* is unchanged, *Page last written* moves to now.
+2003. **Undo leaves the times.** Undo the last stroke twice: the ink goes (two steps, no extra step for the times) and the times in the information are unchanged. Redo: still unchanged.
+2004. **Erasing does not stamp.** Erase a word, move an object on the page, change the paper: *Page last written* does not move.
+2005. **The header line.** Settings > Pages > Header: choose *Header*. Pages that have times show them after the page number (`3 / 12 · 3 Jun 14:05 – 15:20`); a page without times shows only the number. Turn *Show when a page was written* off: the times go from the line.
+2006. **The notebook map.** Open the notebook map: a card of a written page shows the times under its thumbnail; a long press or hover shows them in the tooltip (with the question or homework line if any). With the setting off the card shows nothing extra. A page without times has no line.
+2007. **Duplicate and template.** Duplicate a written page: the copy has no times (*Not recorded yet*) until you write on it. Save the notebook as a template and make a notebook from it: no page has times.
+2008. **Move keeps them.** Move a written page to another notebook (*Move pages*): in the other notebook its information shows the same times. *Copy* instead of move: the copy has none. Delete a page, restore it from the page trash: the times are back.
+2009. **Restore a version.** Restore an older version of a written page over it: the times still cover the whole span (earliest start, latest end).
+2010. **Two devices.** On two devices write on the same page without syncing, then *Merge conflicted copies*: the page's start is the earlier of the two and its end the later; the merge does not stamp the time of the merge. Undo the merge: the times are back to what they were.
+2011. **An older plugin.** Copy a notebook written with this version to a device with 0.20: it opens read-only with the "newer version" message and is not rewritten.
+2012. **An older notebook.** Open a notebook written with 0.20 (format v18): it opens, nothing is reported as repaired, no page has times; write on one page and only that page gets times.
+2013. **A large notebook.** Open a notebook of several thousand strokes: it opens page by page as before; the times of written pages are there.
+2014. **Read-only and locked pages.** In read-only mode nothing is stamped. On a locked page nothing can be added, so the times do not move; the information still shows them.
+2015. **Italian, dark, phone.** The labels (*Pagina iniziata*, *Ultima scrittura della pagina*, *Scritta …*) read in Italian; the line on the map card is readable in light and dark and does not overflow a narrow card.
+2016. **API.** Add an element to a page of a closed notebook through the API (`docs/api.md`): that page gets times from the time of the call.
+2017. **Recovery.** Damage a notebook file (cut it) and run *Repair*: the times of the salvaged pages are kept.
+2018. **Text edits and moved ink (review fix P4).** On a written page wait a minute, then type more text into an existing text box: *Page last written* moves to now. Move or recolour that box: it does not move. Select ink on page 2 (which has times) and move it to page 3: page 3's times do not change (page 2 keeps its own). Copy the selection to page 3 instead: page 3 is stamped, it is new ink.
+2019. **Merge then write then undo (review fix P1).** Merge a conflicted copy that widens a page's span, write a stroke, then Undo twice and Redo twice: the stroke is back and *Page last written* is still at or after the time you wrote it. A copy that differs only by a page's span shows *Merge* with the line *1 page times widened to the copy's* (not "nothing to merge").
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Page start and end time (#217, format v19): `startAt` / `endAt` on pages, stamped by the history after an added stroke or element or a text edit (no undo step, errors logged; clock window 2015-2100; ink moved in from another page or made from an equation does not stamp; the merge's times undo only while unchanged and redo widens; a times-only difference is a mergeable change; review fixes P1-P6), v18 to v19 migration, lenient read and strict write, staged loading, repair, copies (duplicate and template clear, move and trash keep), merge (earliest start, latest end), closed-notebook edit | yes | `tests/model-v19.test.ts`; harness `doc=pagetime` | | | not tried on a tablet; audio (M5) does not use the times yet |
+| Showing the times: header line, notebook map card (tooltip, label, line), page information, setting *Show when a page was written* | yes | `tests/model-v19.test.ts` (text, header, info); harness `doc=pagetime` (tablet and phone, light and dark) | | | |
+
+### 0.21 — carry: 0.20 review carry-over fixes (steps 2020-2039)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+2020. **Drop survives a late failure.** Drop a picture onto a page: the picture is placed, selected and one undo removes it; the file stays in `_assets` after save (nothing is trashed).
+2021. **Edited heading picture.** With *Headings as pictures* on, open a heading picture of the `(Headings)` folder in an image editor and change only its gamma or colour profile, save, then change that heading's ink and update the companion note: the edited file is left as it is and the new picture takes the next free name (`p3-h1 2.png`).
+2022. **Picture from 0.20.** A `(Headings)` picture written by 0.20 and not edited is rewritten in place when its heading changes (no extra numbered copy).
+2023. **Names run out.** Put 24 edited copies (`p3-h1.png`, `p3-h1 2.png`, ...) in the folder, change the heading and update: the companion note keeps linking to the previous picture and one notice explains why (once per session).
+2024. **Reference window keeps its page.** Open a reference window on page 6 of notebook B, then open notebook C in the pane that lent B: the window stays on page 6 of B (page 1 only if B has fewer pages), also after resizing it.
+2025. **File replaced under a rewrite.** (Hard to time by hand.) Sync or replace a heading picture just as the companion note updates: the replaced file is not overwritten.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Drop: steps after the recorded History step cannot fail the edit (R1) | yes | `executeThenSettle` with a throwing step: yes (`tests/carry-review-w20.test.ts`) | | | |
+| Heading picture checksum over every chunk but text/time, 0.20 pictures still recognised (R2) | yes | yes | | | |
+| Heading picture names: 24, then the previous picture stays linked with one notice (R3) | yes | plan logic: yes; notice: no | | | |
+| Reference window keeps its page when the lending pane changes notebook (R4) | yes | index rule: yes; window: no | | | |
+| Heading picture rewrite re-checks size and time right before the write (R5) | yes | fake vault: yes | | | |
+
+### 0.21 — schema: documented format with a JSON Schema (steps 1860-1879)
+
+Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v19.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
+
+1860. **Schema agrees with a real notebook.** Copy a notebook written on the tablet (with ink, a picture, a text box and a comment) to a PC and validate it with any draft 2020-12 validator (see the end of `docs/format.md`): no errors.
+1861. **Old file.** Open a notebook that was last saved by an older plugin version and edit it once, then validate it: it validates after that save (the file is rewritten as version 19 on the first edit).
+1862. **Guide.** Read `docs/format.md`: the file layout, the units, the list of elements and the folders `_assets` and `_meta` match what you see in the vault.
+1863. **Example.** Save the minimal example of `docs/format.md` as `Example.notebook` in the notebooks folder and open it: it opens, shows the text box and one pen stroke, and does not report a problem.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| JSON Schema of the document format v19 (#167) and the guide `docs/format.md` for third-party tools | yes | serializer output (new notebook, generated ink, a document with all nine element types and every optional field, a read and write round trip) validates against the schema; about 90 invalid documents (one broken rule each) are refused; the example of the guide validates and is read by the plugin: `tests/format-schema.test.ts` | | | rules a schema cannot express (unique ids, references, groups of two) are only described in the guide; the schema must be updated by hand when the format changes (the test fails until it is) |
+
+### 0.21 — htmlexport: Interactive HTML export (steps 1880-1899)
+
+Interactive HTML export (roadmap #164). *Export…*, format *Interactive HTML*. One self-contained `.html` file that opens in any browser without Obsidian. Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`HARNESS_DOC=htmlexport`): `dev/harness/dist/shots/` (the export dialog on Interactive HTML, tablet and phone, dark and light).
+
+1880. **The format.** Open *Export…* on a notebook of several pages: *Interactive HTML* is in the *Format* list; choosing it hides the PNG folder and shows a note that one file is written next to the notebook and nothing is loaded from the internet.
+1881. **Whole notebook.** Export it: one `<notebook>.html` appears next to the notebook (a notice gives the path). Open it in a desktop browser (double click, no Obsidian running): the first page is shown fitted to the width, with a page strip on the left (hidden on a phone-width window) and the title on top.
+1882. **Same drawing.** Compare a page with the SVG export of the same page: strokes, text boxes, images, boxes, markers and the paper pattern look the same; a wikilink on a text box shows its label.
+1883. **Zoom and pan.** Ctrl + wheel zooms around the cursor; the +/- buttons zoom; *Fit width* (or key 0) restores the fit; dragging with the mouse (or one finger on a tablet) pans; pinching with two fingers zooms. Strokes stay sharp at 8x.
+1884. **Pages and keys.** Next/Previous, the arrow keys, PageUp/PageDown, Home/End and a tap on a thumbnail change page; the address gets `#p3` and opening it later goes straight to that page; the browser Back button follows.
+1885. **Dark and light.** Switch the system theme: the bar and the strip follow; the paper of the pages stays white (as in every other export).
+1886. **Scope.** Export *This page* (file named `… p3.html`, one page) and *Some pages* `1, 4-5` (`… p1+4-5.html`, three pages). *Ink only* and *Background only* work; *Clean copy* leaves out the markers like the other formats.
+1887. **Links.** A text box with `[[<notebook name>#p3]]` is a link in the file that jumps to page 3 (if page 3 is in the file); a `[[https://example.com|site]]` link opens the address in a new tab; any other note link is plain text.
+1888. **Pictures.** A notebook with pictures and a PDF background: they appear in the file (as JPEG data inside it). A notebook whose pictures exceed about 32 MB shows a notice that some images were left out.
+1889. **No overwrite, no network.** Export again: a second file `… 2.html` is written, the first is untouched. Open the browser developer tools, Network tab: reloading the file makes no request.
+1890. **Big notebook.** Export a notebook of 100+ pages: Obsidian stays responsive while the notice counts the pages. Open the file: it opens at once; the thumbnails in the strip fill in as you scroll it (empty white boxes of the right shape until then).
+1891. **Print.** Printing the file from the browser (Ctrl+P) prints every page, one per sheet and fitted to the width, without the bar and strip; the page on screen is not duplicated and is still shown after the print dialog closes.
+1892. **Hostile text.** A notebook titled `<img src=x onerror=alert(1)>` and a text box with `<script>alert(1)</script>`: the exported file shows both as text and runs nothing.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Interactive HTML export (#164): one self-contained file with the inline SVG of each page, a vanilla-JS viewer (page strip, wheel/pinch zoom, pan, keyboard, fit width, light/dark), page links inside the file, web links, image size cap, no network (CSP), chunked build, never overwrites | yes | builder (escaping, clip ids, links, URL whitelist, image budget, valid script): `tests/export-html.test.ts`; harness `doc=htmlexport` drives the real viewer in an iframe | | | not opened on Android/Safari; the strip clones every page SVG when the file opens (slow to open for 500+ pages) |
+
+### 0.21 — bookindex: back-of-book index (steps 1900-1919)
+
+Back-of-book index (roadmap #187). Select a word or region with the lasso, choose *Add to index…* (selection bar or sheet), type a term. Internally this is an ordinary star marker whose label is `#idx <term>` (Settings, Reading: *Index term prefix*; no format change). *Back-of-book index…* (page sheet, notebook menu, command palette) lists the terms A-Z with a page chip each. Implemented, not verified on hardware.
+
+1900. **Add a term.** Circle a word with the lasso, choose *Add to index…*, type `Photosynthesis`, press Enter. A star marker appears over the selection; its label reads `#idx Photosynthesis`. Undo removes it in one step.
+1901. **Suggestions.** Select another word and open *Add to index…*: the terms already in use are listed; typing narrows them; a tap fills the field.
+1902. **Open the index.** *Back-of-book index…*: letters A-Z with the terms under them, `#` first for numbers and symbols, accents and case ignored when sorting (Élan sits with E). One chip per page.
+1903. **Sub-terms.** Add `Cell`, `Cell / Nucleus` and `Cell / Membrane`: Nucleus and Membrane are indented under Cell. A term used on several pages shows one chip per page; the same term typed with different case or accent is one line.
+1904. **Jump.** Tap a page chip: the dialog closes and the notebook shows that page, near the marked spot.
+1905. **Filter.** Type part of a word in the filter: only matching terms (with their parents) remain; clearing it shows everything.
+1906. **Write to note.** *Write to note*: the note `<Notebook> — Index.md` appears next to the notebook with the list and page links. Tap a link in Obsidian: the page opens.
+1907. **Only the region is rewritten.** Add text above and below the generated region in that note, add a term in the notebook, write again: the new term appears, your text is unchanged.
+1908. **Never touch a foreign note.** Replace the note with text of your own without the markers, write again: a notice says the note was left untouched.
+1909. **Custom prefix.** Change *Index term prefix* to `ix`: markers labelled `ix Foo` become terms; existing `#idx` markers stop being listed (nothing is deleted).
+1910. **Editing.** Tap an index marker, change its label: the index follows. Delete the marker: the term disappears.
+1911. **Locked page.** On a locked page *Add to index…* is refused like any other edit.
+1912. **Phone width.** The dialog fits the screen, chips are easy to hit with a finger.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Back-of-book index (#187): *Add to index…* creates a labelled star marker (no format change); dialog with A-Z sections, sub-terms, page chips that jump, filter | yes | prefix and label parsing, sorting with locale and accents, merging, sub-terms, filter: `tests/book-index.test.ts`; dialog: harness `doc=bookindex` | | | |
+| Back-of-book index, review W21 (D8): the generated region records its notebook (`<!-- notebook-index:start for=<path> -->`); a note that records another notebook is never rewritten, the index goes to `… — Index (2).md` | yes | marker round trip (paths with `--`, `>`, accents), replace refuses another notebook's region, choice of the numbered name: `tests/book-index.test.ts`; the vault side (`resolveIndexNotePath`) is not run in Obsidian | | | a notebook moved without its index note gets a `(2)` note; notes written before this change have a plain marker and are still replaced |
+| Review W21 round 2 (N1-N6): the index note's marker records the notebook's document id next to its path, so a rename or move keeps the note (a path-only marker whose path no longer exists is taken back; another id never is); an old backup over the device cap is not read or trashed; `_meta` sidecars are read with the changed-while-read check; the backup folder is validated and saved on change, a refused value is never persisted; retention text; a `full` heading picture is not cached under the current ink | ✅ | ✅ `tests/book-index.test.ts`, `tests/backup-run.test.ts`, `tests/backup-logic.test.ts`, `tests/review-w21-data.test.ts`; ❌ settings field behaviour (needs Obsidian) | | | |
+| Heading pictures and edit saving, review W21 (D6, D7, D9): new heading pictures carry the 0.20 and the 0.21 checksum; the full case keeps the previous link and is not re-read; the save is scheduled before the layout refresh after a change | yes | `tests/review-w21-data.test.ts` (both keys written and agreeing, edited picture detected, previous link kept in the full case); ❌ the view order in `afterHistoryChange` (needs Obsidian) | | | the previous link is remembered for the session only, not read back from the companion note |
+| Index written to `<Notebook> — Index.md`: only the generated region rewritten, foreign or unpaired notes untouched | yes | section building, escaping and replacement: `tests/book-index.test.ts`; vault write: harness | | | |
+| Index as a page at the end of the notebook | no | | | | not done: would need text boxes with page links in one undoable step; the note covers the use case |
+
+### 0.21 — signstamp: reusable signature and date stamp (steps 1920-1939)
+
+Implemented, not verified on hardware. Reference screenshots after `npm run harness:check` (`doc=signstamp`): `dev/harness/shots/design/signstamp-*`. No format change: the signature is an ordinary personal stamp called "My signature" (`<notebooks folder>/_stamps`).
+
+1920. **Open.** In the page sheet (Insert) choose *Sign and date* (also in the command palette). A dialog shows your signature, or says there is none yet.
+1921. **Draw.** *Draw signature* opens the pad. Sign on the line with the S Pen, a finger and a mouse: ink follows with no visible lag, *Undo* removes the last stroke, *Clear* all of them; *Save signature* is disabled until something is drawn.
+1922. **Saved as a stamp.** After saving, the dialog shows the signature and the stamp palette lists "My signature". Redrawing and saving again keeps the old file and uses the newest one.
+1923. **Place with the date.** With *Add today's date* on, *Place* puts the signature and the date text under it where the pen last touched (or the middle of the page in view). It is selected, so drag it: signature and date move together (one group).
+1924. **Place without the date.** Turn the date off: only the ink is placed. Turn the signature off by never drawing one: only the date text is placed.
+1925. **One undo step.** Undo removes signature and date together; redo puts them back. Placing twice gives two independent groups.
+1926. **Date format.** Settings, Writing, Advanced: *Signature date format* (your language, ISO, custom) and *Custom signature date pattern*. Check the date in the dialog follows them and the Italian UI writes Italian month names.
+1927. **Locked page.** On a locked page *Place* is refused with the "Page locked" notice and nothing is added.
+1928. **PDF notebook.** On a page that annotates a PDF, sign on the signature line and export to PDF: the ink and the date appear where they were placed.
+1929. **Look.** Light, dark, *Follow Obsidian theme*, phone and tablet width: the pad is light paper in every theme, every control has a label and works.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Signature pad and "My signature" stamp (#154): draw on a pad, saved as a personal stamp (vector strokes, no format change) | yes | pure logic: yes (`tests/signature.test.ts`); dialogs: harness (`doc=signstamp`) | | yes | |
+| Sign and date (#154): signature plus date text placed as one undo step with a fresh group; date format locale / ISO / custom (settings) | yes | `tests/signature.test.ts` (date text, fresh ids, group, undo, lock, page edge); view: harness | | yes | placing is at the last pen position or page centre, not by a tap target |
+
+### 0.21 — slideback: back to the current slide (steps 1940-1959)
+
+"Back to the current slide" (roadmap #225). Settings, Study, Timetable: *Back to the current slide* (on by default). Use a notebook with several pages and either a running lecture (lecture mode on) or a PDF shown beside the notes. Implemented, not verified on hardware.
+
+1940. **Nothing before you write.** Switch lecture mode on (the chip appears) and scroll around a notebook with no new ink: no button appears.
+1941. **Leaving the page.** Write a few words on a page, then scroll three or four pages down with a finger. A small pill at the top centre of the view reads *Back to current page* (or *Back to slide N* on a PDF page or beside a linked slide), with an up or down arrow towards the place you wrote. It appears when the scroll has stopped, not while you drag.
+1942. **Small scrolls.** Scroll less than half a screen away from where you wrote: no pill.
+1943. **Going back.** Tap the pill: the view returns to the place you wrote (the written line near the middle of the view) and the pill disappears. *Back* in the navigation history returns to where you were.
+1944. **Closing it.** Scroll away again and tap the *x*: the pill goes and stays away while you look elsewhere. Return to the written place and leave again: it comes back.
+1945. **Pen.** With the pen, write right below the pill's place: the pill never takes the pen and never blocks the writing area; drawing a stroke under it works.
+1946. **New place.** Write on another page: the pill now leads to that page.
+1947. **Slide beside notes.** Show a PDF beside the notes, write beside slide 5, scroll away: *Back to slide 5*.
+1948. **Command.** Command palette, *Back to the current slide or page*: it goes back (assign a hotkey in Obsidian's hotkey settings; there is no default). It is not offered before anything was written.
+1949. **Setting.** Turn *Back to the current slide* off: no pill, and the command is not offered.
+1950. **Lecture over.** Leaving lecture mode keeps the last place until you write elsewhere; ink written outside a lecture and not beside a slide does not move it.
+1951. **Light, dark, phone.** The pill reads in light and dark and fits a phone's width.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Back to the current slide (#225): the place last written during a lecture or beside a linked slide; a pill (and a command) appears when the view is half a screen or more away after the scroll settles, returns there like the notebook map's jump, can be closed, setting to turn it off; nothing is written to the notebook | yes | when to show (threshold, hysteresis, dismissal), return position, which ink counts, slide number from the link or the PDF page: `tests/slide-back.test.ts`; harness `doc=slideback` | | | not tried with a real hand on a tablet; the half-screen threshold is a guess |
+
+### 0.21 — symbols: recent symbols (steps 1960-1979)
+
+Recent symbols (roadmap #212). Settings, Writing: *Recent symbols* (on/off) and *Symbols shown* (3-12). A symbol is a small personal stamp (same `_stamps` store and format, no format change) or a typographic character; use counts are kept on this device only. Implemented, not yet verified on hardware.
+
+1960. **The strip.** Open a notebook: a pill with six buttons (∀ ∃ ∫ → ⇒ ≠) sits at the top centre of the page area. It is hidden in a read-only view and when *Recent symbols* is off.
+1961. **Insert a character.** Tap ≠, then tap the page with the S Pen: a text box with ≠ appears where you tapped, selected, in the current text size and pen colour. The button looks pressed (and says "Tap the page") until you tap the page, tap the button again or press Escape.
+1962. **One undo step.** Undo removes the character; redo brings it back.
+1963. **Ranking.** After using ≠ twice and π once, ≠ is the first button, then π; unused ones keep their order. After about two weeks without using one, newer habits overtake it.
+1964. **Save a symbol.** Draw a small sign (for example a hand-drawn ∑), select it with the lasso, choose *Save selection as symbol* (selection bar "…" or the All actions sheet), name it: it joins the strip as a small drawing. A selection larger than about 200 pt is refused with a message.
+1965. **Place it.** Tap the symbol, tap the page: it is drawn at about one text line high, in the current pen colour and width, selected as ONE group when it has several strokes; one undo removes all of it.
+1966. **Fresh copies.** Place it twice: moving one never moves the other; undo/redo twice leaves the notebook valid and saved.
+1967. **Stamps.** The same file appears in *Stamps*; renaming or deleting it there updates the strip the next time the strip refreshes (on opening the notebook or saving a symbol).
+1968. **Settings.** *Symbols shown* = 3 leaves three buttons; turning *Recent symbols* off removes the strip and any pending placement.
+1969. **Phone.** On a narrow screen the strip scrolls sideways rather than overflowing the page.
+1970. **Palm and pen.** While a symbol is armed, taps with the pen or a finger place it; the page does not scroll or zoom until you place it or cancel.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Recent symbols strip (#212): ranked by decayed use, device-local counts, typographic characters as text boxes | yes | yes (ranking, decay, bounds, scaling, placement ids/group/undo; harness) | | | |
+| Save selection as symbol, pen-sized placement of saved symbols (stamp store, one group, one undo step) | yes | yes | | | |
+| Settings: strip on/off, number of buttons | yes | yes (harness) | | | |
+
+### 0.21 — backups: scheduled zip backups (steps 1980-1999)
+
+Scheduled backups (roadmap #127). Settings, Sync & safety: *Scheduled backups* (off / every day / every week), *Backup folder* and *Backups to keep* (shown while a schedule is on), and the *Back up now* row, whose line shows the time and result of the last backup. Command palette: *Back up the notebooks now*. Implemented, not verified on hardware. Needs a vault with a few notebooks that have PDF or picture pages.
+
+1980. **Off by default.** A fresh install makes no backup and no folder. *Back up now* is there; *Backup folder* and *Backups to keep* appear only after you choose a schedule. The row says *No backup made on this device yet.*
+1981. **Back up now.** Tap *Back up now*: a notice shows progress ("N of M files"), the button reads *Backing up...* and is disabled, the notebook stays usable (write a few strokes while it runs). It ends with a notice naming `Notebook backup YYYYMMDD-HHmmss.zip`, the file count and the size. The file is in the backup folder, and the settings line shows the time, file count and size.
+1982. **The zip opens.** Copy the zip out of the vault (or open it with a file manager on the tablet): it unzips with any tool, with no password or error. It holds the `.notebook` files (with their folders), `_assets`, `_meta` and the templates, and not the trash, the `_backup` copies or the older zips. A notebook unzipped back into a new folder opens and looks the same.
+1983. **Unsaved changes.** Open a notebook, write a stroke and tap *Back up now* at once: the stroke is in the backup (open the unzipped copy).
+1984. **One at a time.** Tap *Back up now* twice quickly, or run the command while one is running: the second says *A backup is already running.* and nothing starts.
+1985. **Schedule.** Choose *Every day*. With no backup yet one is made a minute or two after the settings are saved or Obsidian is reopened (not while the pen is on the screen). Reopen Obsidian within the day: none is made. Change the device clock a day ahead (or wait a day): one is made. *Every week* waits seven days.
+1986. **Keep N.** Set *Backups to keep* to 2 and run *Back up now* four times (a minute apart): only the two newest zips remain; the older ones are in Obsidian's trash (or deleted, per your *Deleted files* setting).
+1987. **Only its own files.** Put a file of yours in the backup folder (`holiday.zip`, `notes.md`, a zip named `Notebook backup 2020.zip`, a subfolder): after more backups they are all still there.
+1988. **Folder.** Set *Backup folder* to another folder (typed or picked): the next backup goes there; the old folder is left as it is. Pointing it at a folder that your sync tool copies elsewhere is the way to get the zips off the device.
+1989. **Failure.** Fill the disk or make the folder read-only (desktop), then *Back up now*: a red notice and the settings line say it failed; older backups are all still there; a retry waits an hour on the schedule.
+1990. **Partial.** With a notebook that a sync client has not finished downloading (empty file), *Back up now* saves the rest and says how many files could not be read; the zip is named `... partial.zip`. The last complete backup is never trashed to make room for partial ones.
+1991. **Not in the library.** Unzip a backup into the backup folder: its notebooks are not listed in the library or Home, and no PDF placed there shows in the shared files inbox.
+1992. **Languages.** Switch the plugin to Italian: the rows, notices and the status line are translated.
+1993. **Large vault (Android).** On a vault of a few hundred MB: the backup finishes without freezing the pen or the toolbar. Above about 64 MB on a phone or tablet it stops with *too large* and writes nothing: that limit is for memory, say so if you hit it.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Scheduled zip backups (#127): off / daily / weekly into a vault folder, *Back up now*, keep the last N, last time and result in settings | yes | due-time (daily, weekly, other device's backup, clock in the future, failure retry), names, retention never trashing foreign files or the last complete backup, run order (flush, temp name, size check, rename, then trim), partial and failed runs leave old backups alone: `tests/backup-logic.test.ts`, `tests/backup-run.test.ts`, `tests/backup-wiring.test.ts` | | | memory limit of 64 MB on phones and tablets (the zip is built in memory); no Drive and no folder outside the vault (no Node/Electron); not tried on Android |
+| Scheduled backups, review W21 (D1-D5): the zip just written is always kept (names dated more than a day ahead rank oldest); a backup folder that is, holds, or is inside the notebooks folder, overlaps a templates folder or holds notebooks is refused (settings keep the previous folder; a run with one fails; `readSettings` falls back to the default); an old backup is trashed only after its zip comment is read; a notebook that changes during the read is read again once, then skipped and the backup is partial; mobile cap 64 MB | yes | `tests/backup-logic.test.ts` (retention with future-dated names and keep = 1, overlap rules, settings fallback), `tests/backup-run.test.ts` (new backup survives, overlap fails with nothing written or trashed, foreign file with a backup's name left alone, unreadable file never trashed, stale temp needs the record or the mark, racing read re-read once or skipped) | | | the notice in the settings and the check against real vault files are not run inside Obsidian; a backup over 512 MB is never trashed (it is not read to check the mark); an interrupted temporary file from another device stays |
+| Zip writer and reader (STORE, CRC-32, UTF-8 names, strict reader): `src/model/zip.ts` | yes | round trip, CRC, truncated and corrupt archives, name rules, entry limit; checked once against Windows `tar`: `tests/zip.test.ts` | | | no ZIP64 (at most 65 534 files and 4 GB) |

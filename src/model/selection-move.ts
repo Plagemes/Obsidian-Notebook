@@ -110,8 +110,8 @@ export function planMoveToPage(req: MoveRequest): MovePlan | { refused: MoveRefu
 	const removal = removeStrokes(source.id, source.strokes, strokes, "Move selection to page");
 	if (removal) commands.push(removal);
 	for (const e of elements) commands.push(new RemoveElement(source.id, e));
-	newStrokes.forEach((s, i) => commands.push(new AddStroke(target.id, s, target.strokes.length + i)));
-	newElements.forEach((e, i) => commands.push(new AddElement(target.id, e, (target.elements?.length ?? 0) + i)));
+	newStrokes.forEach((s, i) => commands.push(new AddStroke(target.id, s, target.strokes.length + i, false)));
+	newElements.forEach((e, i) => commands.push(new AddElement(target.id, e, (target.elements?.length ?? 0) + i, false)));
 	const ids = new Set(strokes.map((s) => s.id));
 	const leftParts = source.states ? source.states.parts.reduce((n, p) => n + p.items.filter((id) => ids.has(id)).length, 0) : 0;
 	if (leftParts > 0) commands.push(new SetPageStates(source.id, source.states, withoutItems(source.states, ids), "Move selection to page"));

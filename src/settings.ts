@@ -2,6 +2,7 @@ import type { PressureMode } from "./ink/pressure";
 import { defaultPenSets, MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, type PenSet } from "./view/pen-sets";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
+import { cleanSignDateCustom, DEFAULT_SIGN_DATE_CUSTOM, DEFAULT_SIGN_DATE_MODE, isSignDateMode, type SignDateMode } from "./ink/signature";
 import { EDGE_WIDTH_MAX, EDGE_WIDTH_MIN } from "./ink/edge-zones";
 import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } from "./ink/gesture-settings";
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
@@ -30,14 +31,17 @@ import { DEFAULT_BOARD_SETTINGS, readBoardSettings, type BoardSettings } from ".
 import { DEFAULT_SNAP_SETTINGS, readSnapSettings, type SnapSettings } from "./view/snap-settings";
 import { DEFAULT_GHOST_SETTINGS, readGhostSettings, type GhostSettings } from "./view/ghost-settings";
 import { DEFAULT_PDF_COPY_SETTINGS, readPdfCopySettings, type PdfCopySettings } from "./storage/pdf-copy-logic";
+import { backupFolderConflict, DEFAULT_BACKUP_FOLDER, DEFAULT_BACKUP_SETTINGS, readBackupSettings, type BackupSettings } from "./storage/backup-logic";
 import { isPlannerWeekStart, type PlannerWeekStart } from "./model/calendar";
+import { normalizeIndexPrefix } from "./model/book-index";
+import { clampSymbolCount } from "./ui/symbol-rank";
 
 /** Companion note settings (O1) are in storage/companion-path.ts, Zettelkasten settings in zettel/settings.ts, PDF reading settings in view/reading-settings.ts. */
 /** DESIGN.md §2.2: *Notebook* (its own tokens, the default) or *Follow Obsidian theme*. */
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, GhostSettings, PdfCopySettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, GhostSettings, PdfCopySettings, BackupSettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -115,6 +119,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	lectureLogHeading: string;
 	/** 0.20 refwindow (#107): the floating reference window snaps to the edges of the view when it is dropped near them. */
 	refWindowSnap: boolean;
+	/** 0.21 slideback (#225): a pill "Back to slide N" while scrolled away from where you last wrote during a lecture. */
+	slideBack: boolean;
 	/** 0.17 (#57): a task made from a selection gets its due date as the Tasks plugin's date emoji (else a Dataview field). */
 	taskDueEmoji: boolean;
 	/** 0.17 (#57): the note "Make task" can add to besides the daily note (vault path; empty = none configured). */
@@ -220,6 +226,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// 0.16 (#90): highlights digest
 	/** How the digest note of the highlights is grouped: by page or by colour. */
 	digestGroup: "page" | "colour";
+	/** 0.21 (#187): the label prefix that makes a marker an index term (one word). */
+	indexPrefix: string;
 	// 0.18 (#86): margin comments
 	/** Show the numbered markers of the comments in the page margin (a comment whose card is open is always shown). */
 	commentMarkers: boolean;
@@ -232,9 +240,18 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	headerTitle: boolean;
 	headerAlign: HeaderAlign;
 	headerInExport: boolean;
+	/** 0.21 (#217): show when a page was written (its start and end time) in the header line and on the notebook map. */
+	headerPageTimes: boolean;
 	// wave 0.10: clipboard and stamps
+	/** 0.21 (212): the strip of recent symbols, and how many buttons it has. */
+	symbolStrip: boolean;
+	symbolCount: number;
 	/** Format of the quick date and time stamp (356): tokens YYYY MM DD HH mm ss and so on, text in [brackets]. */
 	dateStampFormat: string;
+	// 0.21 signstamp
+	/** How the date of a "sign and date" stamp is written (154): the language's own form, ISO, or the custom pattern. */
+	signDateMode: SignDateMode;
+	signDateCustom: string;
 	// wave 0.10: colours
 	/** The last custom colours chosen with the colour picker or the eyedropper (newest first, `#rrggbb`). */
 	recentColours: string[];
@@ -299,6 +316,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	lectureLog: false,
 	lectureLogHeading: "## Lectures",
 	refWindowSnap: true, // 0.20 refwindow
+	slideBack: true, // 0.21 slideback
 	taskDueEmoji: true,
 	tasksNote: "",
 	checklistDraw: "offer",
@@ -343,6 +361,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	notebookTabs: false,
 	autoLineBreak: false,
 	digestGroup: "page",
+	indexPrefix: "#idx",
 	commentMarkers: true,
 	commentsInPdf: false,
 	headerMode: "off",
@@ -352,10 +371,15 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	headerTitle: false,
 	headerAlign: "centre",
 	headerInExport: true,
+	headerPageTimes: true,
 	dateStampFormat: DEFAULT_STAMP_FORMAT,
+	signDateMode: DEFAULT_SIGN_DATE_MODE,
+	signDateCustom: DEFAULT_SIGN_DATE_CUSTOM,
 	recentColours: [],
 	fastScrollbar: true,
 	minimapMode: "auto",
+	symbolStrip: true,
+	symbolCount: 6,
 	appearanceStyle: "notebook",
 	userName: "",
 	hintsEnabled: true,
@@ -382,6 +406,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	// 0.17 pdfcopy
 	...DEFAULT_PDF_COPY_SETTINGS,
 	pdfCopyNotebooks: {},
+	// 0.21 backups
+	...DEFAULT_BACKUP_SETTINGS,
 };
 
 /** Merges saved data over the defaults, ignoring values of the wrong type. */
@@ -429,6 +455,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.lectureLog === "boolean") s.lectureLog = d.lectureLog;
 	if (typeof d.lectureLogHeading === "string") s.lectureLogHeading = d.lectureLogHeading.trim().slice(0, 80); // normalised where it is used (an empty one means the default)
 	if (typeof d.refWindowSnap === "boolean") s.refWindowSnap = d.refWindowSnap; // 0.20 refwindow
+	if (typeof d.slideBack === "boolean") s.slideBack = d.slideBack; // 0.21 slideback
 	if (typeof d.taskDueEmoji === "boolean") s.taskDueEmoji = d.taskDueEmoji;
 	if (typeof d.tasksNote === "string") s.tasksNote = d.tasksNote.trim();
 	if (d.checklistDraw === "off" || d.checklistDraw === "offer" || d.checklistDraw === "auto") s.checklistDraw = d.checklistDraw;
@@ -477,14 +504,19 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
 	if (d.digestGroup === "page" || d.digestGroup === "colour") s.digestGroup = d.digestGroup;
+	if (typeof d.indexPrefix === "string") s.indexPrefix = normalizeIndexPrefix(d.indexPrefix);
 	if (typeof d.commentMarkers === "boolean") s.commentMarkers = d.commentMarkers;
 	if (typeof d.commentsInPdf === "boolean") s.commentsInPdf = d.commentsInPdf;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
-	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport"] as const) if (typeof d[k] === "boolean") s[k] = d[k];
+	for (const k of ["headerPageNumber", "headerPageTotal", "headerDate", "headerTitle", "headerInExport", "headerPageTimes"] as const) if (typeof d[k] === "boolean") s[k] = d[k];
 	if (typeof d.dateStampFormat === "string") s.dateStampFormat = cleanStampFormat(d.dateStampFormat);
+	if (isSignDateMode(d.signDateMode)) s.signDateMode = d.signDateMode;
+	if (typeof d.signDateCustom === "string") s.signDateCustom = cleanSignDateCustom(d.signDateCustom);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
+	if (typeof d.symbolStrip === "boolean") s.symbolStrip = d.symbolStrip;
+	s.symbolCount = clampSymbolCount(d.symbolCount);
 	if (isMinimapMode(d.minimapMode)) s.minimapMode = d.minimapMode;
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
@@ -509,6 +541,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readGhostSettings(d));
 	Object.assign(s, readBoardSettings(d));
 	Object.assign(s, readPdfCopySettings(d));
+	Object.assign(s, readBackupSettings(d)); // 0.21 backups
+	// A backup folder that overlaps the notebooks or the templates would hide them (review W21 D2): back to the default.
+	if (backupFolderConflict(s.zipBackupFolder, { notebooksFolder: s.folder, templatesFolder: s.templatesFolder, notebookTemplatesFolder: s.notebookTemplatesFolder }) !== null) s.zipBackupFolder = DEFAULT_BACKUP_FOLDER;
 	return s;
 }
 

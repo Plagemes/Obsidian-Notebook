@@ -47,7 +47,8 @@ import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { heavyReasons, pageLoad, planPageSplit } from "../ink/heavy-page";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
 import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
-import { drawHeader, exportHeaderFor, headerLayout, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
+import { drawHeader, exportHeaderFor, headerLayout, pageTimesText, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
+import { pageTimes } from "../model/page-times";
 import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
 import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
 import { PageMode } from "./page-mode";
@@ -78,6 +79,8 @@ import { runInsertIntoNote } from "./selection-insert";
 import { taskCropRect } from "../model/selection-task";
 import { Mentions } from "./mentions";
 import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
+import { AddToIndexModal, BookIndexModal, currentIndex, termSpellings } from "./book-index";
+import { normalizeIndexPrefix } from "../model/book-index";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -121,7 +124,7 @@ import { HeadingWarmer } from "./heading-warm";
 import { askPdfRange } from "./pdf-range-modal";
 import { attachDropFiles } from "./drop-files";
 import { runBoardShot } from "./board-shot";
-import type { EditContext } from "./edit-context";
+import { executeThenSettle, type EditContext } from "./edit-context";
 import { runNewLecture } from "./lecture";
 import { pickSlideRef } from "./lecture-logic";
 import { LectureModeController, routeLectureEnd, type LectureEnd } from "./lecture-mode";
@@ -149,9 +152,10 @@ import { SetPageLocked } from "../model/page-lock";
 import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
+import { SlideBack } from "./slide-back";
 import { SmartAddStrip } from "./smart-add";
 import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
-import { visibleStrokes } from "../model/markers";
+import { createMarker, isRegion, visibleStrokes } from "../model/markers";
 import type { PageToolsHost } from "./page-tools";
 import { RulerGesture } from "./ruler-gesture";
 import { BLANK_THUMBNAIL, ViewResilience, type ResilienceServices, type ResilienceViewHost } from "./resilience";
@@ -165,6 +169,9 @@ import { StatesTools } from "./states-tools";
 import { PresentationMode } from "./present-mode";
 import { SelectionArrange } from "./selection-arrange";
 import { StampPalette, type StampTarget } from "./stamp-palette";
+import { SignDialog } from "./sign-dialog";
+import { planSignature, signDateText } from "../ink/signature";
+import { SymbolStrip } from "./symbol-strip";
 import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
@@ -386,7 +393,7 @@ export class NotebookView extends FileView {
 		// 0.19: an undo or a redo that would leave a notebook the writer refuses is not done and leaves the history (the document is as before).
 		showNotice(step ? t("history.stepRefused", { message }) : t("history.refused", { message }), 10000);
 		if (step) this.updateHistoryButtons();
-	},() => this.userReadOnly, (ids) => this.pagesLocked(ids));
+	},() => this.userReadOnly, (ids) => this.pagesLocked(ids), () => Date.now());
 	/**
 	 * wave 0.10 (51): the user switched this view to read-only mode. Nothing changes the document while it is on: `editable()`
 	 * is false (tools, selection, insert, page operations and every registry action that needs editing), a finger only pans
@@ -488,6 +495,7 @@ export class NotebookView extends FileView {
 	/** One page at a time (#14); its gestures and animation live in page-mode.ts. */
 	private pageMode: PageMode | null = null;
 	private stamps: StampPalette | null = null;
+	private symbols: SymbolStrip | null = null;
 	/** ui redesign: quick slots, contextual bar and sheets built from the action registry (view-ui.ts). */
 	private ui: ViewUi | null = null;
 	private readonly objectInk = new ObjectInk();
@@ -497,6 +505,8 @@ export class NotebookView extends FileView {
 	private excerpts: ExcerptTools | null = null;
 	/** wave 0.9 (389): the chip that offers a page after a page in the middle of the notebook (view/page-offer.ts). */
 	private pageOffer: PageOffer | null = null;
+	/** 0.21 (#225): the pill back to the place last written during a lecture (view/slide-back.ts). */
+	slideBack: SlideBack | null = null;
 	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
 	lectureMode: LectureModeController | null = null;
 	/** wave 0.14 (410): the Smart "+" strip (view/smart-add.ts). */
@@ -751,6 +761,7 @@ export class NotebookView extends FileView {
 		});
 		this.mountSelectionActions();
 		this.mountStamps();
+		this.mountSymbols();
 		this.messageEl = this.contentEl.createDiv({ cls: "notebook-message" });
 		this.syncSafety = new ViewSyncSafety({
 			app: this.app, component: this, container: this.contentEl, before: this.body, service: this.host.syncSafety ?? null,
@@ -758,6 +769,7 @@ export class NotebookView extends FileView {
 			editingChanged: () => {
 				this.applyInput();
 				this.toolbar.setEditable(this.editable());
+				this.symbols?.sync();
 				this.updateHistoryButtons();
 				this.refreshUi();
 			},
@@ -768,6 +780,7 @@ export class NotebookView extends FileView {
 		});
 		this.messageEl.hide();
 		this.toolbar.setEditable(false);
+		this.symbols?.sync();
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
@@ -792,6 +805,22 @@ export class NotebookView extends FileView {
 		this.pageOffer = new PageOffer({
 			parent: () => this.body,
 			insertAfter: (pageId) => this.insertPageAfterId(pageId),
+		});
+		this.slideBack = new SlideBack({
+			parent: () => this.body,
+			enabled: () => this.host.settings.slideBack && this.layout !== null,
+			lectureOn: () => this.lectureMode?.on ?? false,
+			doc: () => this.session?.doc ?? null,
+			indexOf: (pageId) => this.session?.doc?.pages.findIndex((p) => p.id === pageId) ?? -1,
+			box: (index) => this.layout?.boxes[index] ?? null,
+			view: () => {
+				const r = this.visibleRect();
+				return this.viewSize.height > 0 ? { top: r.minY, bottom: r.maxY } : null;
+			},
+			goTo: (index, y) => {
+				this.recordJump(index);
+				this.scrollToPage(index, y);
+			},
 		});
 		this.smartAdd = new SmartAddStrip({
 			app: this.app,
@@ -1069,12 +1098,16 @@ export class NotebookView extends FileView {
 		this.penLinks = null;
 		this.pageOffer?.destroy();
 		this.pageOffer = null;
+		this.slideBack?.destroy();
+		this.slideBack = null;
 		this.smartAdd?.destroy();
 		this.smartAdd = null;
 		this.ui?.destroy();
 		this.ui = null;
 		this.stamps?.destroy();
 		this.stamps = null;
+		this.symbols?.destroy();
+		this.symbols = null;
 		this.objectInk.destroy();
 		this.math?.destroy();
 		this.excerpts?.destroy();
@@ -1503,6 +1536,7 @@ export class NotebookView extends FileView {
 		this.pens?.refresh();
 		this.scrollbar?.update();
 		this.minimap?.update();
+		this.symbols?.sync();
 		this.filter.params = stabilizationParams(settings.stabilization);
 		// wave 0.7: resilience (#346): safe mode turns low-latency ink and prediction off for this view.
 		const fast = this.resilience?.lowLatencyAllowed() !== false;
@@ -1517,6 +1551,7 @@ export class NotebookView extends FileView {
 		if (this.renderer) this.renderer.onFrame = settings.perfOverlay ? (t) => this.onFrame(t) : null;
 		this.reading?.settingsChanged();
 		this.lectureMode?.settingsChanged();
+		this.slideBack?.settingsChanged();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
 		this.display?.settingsChanged();
@@ -2143,6 +2178,41 @@ export class NotebookView extends FileView {
 		if (!file || !doc) return;
 		new LookUpSheet({ app: this.app, file, settings: this.host.settings, pages: () => this.shownDoc()?.pages ?? [], goTo: (index) => this.goToPage(index) }).open();	}
 
+	/** 0.21 (#187): "Add to index…" from the selection: a star marker over the selected region, labelled `<prefix> <term>` (one undoable step). */
+	addToIndexFromSelection(): void {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		if (!sel || !doc || !this.editable() || this.statesTools?.ownsSelection(sel)) return;
+		const page = doc.pages[sel.pageIndex];
+		const bounds = itemsBounds(withoutPinnedInk(sel.strokes, sel.elements), sel.elements, measureText);
+		if (!page || !bounds) return;
+		const prefix = normalizeIndexPrefix(this.host.settings.indexPrefix);
+		const pageId = page.id;
+		const x0 = Math.max(0, bounds.minX);
+		const y0 = Math.max(0, bounds.minY);
+		const rect = { x: x0, y: y0, width: Math.min(page.width, bounds.maxX) - x0, height: Math.min(page.height, bounds.maxY) - y0 };
+		new AddToIndexModal(this.app, prefix, termSpellings(currentIndex(doc.pages, prefix)), (label) => {
+			const live = this.session?.doc?.pages.find((p) => p.id === pageId);
+			if (!live || !this.editable()) return;
+			const region = isRegion(rect) ? rect : null;
+			const marker = createMarker("star", rect.x + rect.width / 2, rect.y + rect.height / 2, { region, at: new Date().toISOString(), text: label });
+			this.history.execute(new AddElement(pageId, marker, live.elements?.length ?? 0));
+			this.afterHistoryChange();
+			this.renderer?.invalidate();
+			showNotice(t("bookindex.added"), 3000);
+		}).open();
+	}
+
+	/** 0.21 (#187): the back-of-book index: terms A-Z with their pages, a jump on a tap, and a note written next to the notebook. */
+	openBookIndex(): void {
+		const file = this.file;
+		if (!this.shownDoc() || !file) return;
+		new BookIndexModal({
+			app: this.app, file, docId: this.shownDoc()?.id, prefix: normalizeIndexPrefix(this.host.settings.indexPrefix),
+			pages: () => this.shownDoc()?.pages ?? [], goTo: (index, y) => this.scrollToPage(index, y),
+		}).open();
+	}
+
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */
 	openMentions(): void {
 		this.mentions?.open();
@@ -2191,7 +2261,7 @@ export class NotebookView extends FileView {
 	private applyPageHeader(s: HeaderSettings): void {
 		const r = this.renderer;
 		if (!r) return;
-		const snap: HeaderSettings = { headerMode: s.headerMode, headerPageNumber: s.headerPageNumber, headerPageTotal: s.headerPageTotal, headerDate: s.headerDate, headerTitle: s.headerTitle, headerAlign: s.headerAlign, headerInExport: s.headerInExport };
+		const snap: HeaderSettings = { headerMode: s.headerMode, headerPageNumber: s.headerPageNumber, headerPageTotal: s.headerPageTotal, headerDate: s.headerDate, headerTitle: s.headerTitle, headerAlign: s.headerAlign, headerInExport: s.headerInExport, headerPageTimes: s.headerPageTimes };
 		const key = JSON.stringify(snap);
 		if (r === this.headerRenderer && key === this.headerKey) return;
 		this.headerRenderer = r;
@@ -2755,6 +2825,49 @@ export class NotebookView extends FileView {
 	}
 
 	/**
+	 * 0.21 (154): "Sign and date" opens the dialog with the saved signature; its Place puts the signature (and today's date
+	 * under it) where the pen last touched, or in the middle of the page in view, as one undo step. The result is selected so it
+	 * can be moved at once.
+	 */
+	openSignDialog(): void {
+		if (!this.editableDocument()) return;
+		this.commitText();
+		new SignDialog(this.app, {
+			app: this.app,
+			folder: () => this.host.settings.folder,
+			dateText: () => this.signDateNow(),
+			place: (signature, withDate) => this.placeSignature(signature, withDate),
+		}).open();
+	}
+
+	private signDateNow(): string {
+		return signDateText(new Date(), this.host.settings.signDateMode, this.host.settings.signDateCustom, getLanguage());
+	}
+
+	private placeSignature(signature: ClipContent | null, withDate: boolean): void {
+		const doc = this.editableDocument();
+		if (!doc) return;
+		const pen = this.lastPen;
+		const penIndex = pen ? doc.pages.findIndex((p) => p.id === pen.pageId) : -1;
+		const spot = stampSpot(pen && penIndex >= 0 ? { pageIndex: penIndex, x: pen.x, y: pen.y, at: pen.at } : null, Date.now(), doc.pages, this.currentPageIndex());
+		const page = spot ? doc.pages[spot.pageIndex] : undefined;
+		if (!spot || !page) return;
+		const plan = planSignature(signature, doc, page, [spot.x, spot.y], {
+			dateText: withDate ? this.signDateNow() : null, fontSize: this.tools.textSize, color: this.tools.penColor, measure: measureText,
+		});
+		if (!plan) return;
+		// History refuses the step on a locked page (and says why).
+		if (page.locked) {
+			this.pagesLocked([page.id]);
+			return;
+		}
+		this.history.execute(plan.command);
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+		this.selectItems(spot.pageIndex, plan.strokes, plan.elements);
+	}
+
+	/**
 	 * wave 0.10 (359): deletes a selection that spans several pages, one undo step. Like on a single page, the ink written
 	 * on (or bound to) a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
 	 */
@@ -3284,6 +3397,7 @@ export class NotebookView extends FileView {
 			editingChanged: () => {
 				this.applyInput();
 				this.toolbar.setEditable(this.editable());
+				this.symbols?.sync();
 				this.updateHistoryButtons();
 				this.refreshUi();
 			},
@@ -3629,10 +3743,13 @@ export class NotebookView extends FileView {
 			execute: (cmd, scrollTo) => {
 				this.commitText();
 				this.clearSelection();
-				const done = this.history.execute(cmd);
-				this.afterHistoryChange();
-				if (done && scrollTo !== undefined) this.scrollToPage(scrollTo);
-				return done;
+				// The History step is recorded first; what follows can never turn it into a failure (see executeThenSettle).
+				return executeThenSettle(() => this.history.execute(cmd), [
+					() => this.afterHistoryChange(),
+					(done) => {
+						if (done && scrollTo !== undefined) this.scrollToPage(scrollTo);
+					},
+				]);
 			},
 			flush: async () => (await this.flushNow()) && this.session === session && session.isSaved(),
 		};
@@ -3718,6 +3835,7 @@ export class NotebookView extends FileView {
 		this.messageEl.hide();
 		this.body.show();
 		this.toolbar.setEditable(false);
+		this.symbols?.sync();
 		this.setStatus(t("status.loading"), "pending");
 		if (!this.media) {
 			this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged(), (page) => this.statesTools?.viewPages([page])[0] ?? page);
@@ -3784,6 +3902,7 @@ export class NotebookView extends FileView {
 		this.penLinks?.reset();
 		this.checklist?.reset();
 		this.pageOffer?.reset();
+		this.slideBack?.documentChanged();
 		this.multiTap.reset();
 		this.stopHold();
 		this.textEditor?.close();
@@ -3802,6 +3921,7 @@ export class NotebookView extends FileView {
 			this.messageEl.hide();
 			this.body.show();
 			this.toolbar.setEditable(true);
+			this.symbols?.sync();
 			if (!this.media) {
 				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged(), (page) => this.statesTools?.viewPages([page])[0] ?? page);
 				// wave 0.7: resilience (#346): in safe mode the backgrounds come after the first paint.
@@ -3820,6 +3940,7 @@ export class NotebookView extends FileView {
 		} else {
 			this.body.hide();
 			this.toolbar.setEditable(false);
+			this.symbols?.sync();
 			this.layout = null;
 			this.renderer?.setDocument(null, null);
 			this.showProblem(problem);
@@ -3925,6 +4046,12 @@ export class NotebookView extends FileView {
 		// wave 0.10 (51): read-only mode never schedules a save (nothing changed; a stray call must not write the file).
 		if (this.userReadOnly) return;
 		this.session?.markChanged();
+		this.followChange();
+	}
+
+	/** What follows a change besides scheduling the save (the save itself is `session.markChanged()`). */
+	private followChange(): void {
+		if (this.userReadOnly) return;
 		this.headingWarm.touch();
 		// 0.19 (#103): the task lines of linked checkboxes follow the ticks a moment later.
 		this.checklist?.docChanged();
@@ -3938,12 +4065,14 @@ export class NotebookView extends FileView {
 	}
 
 	private afterHistoryChange(): void {
+		// The save is scheduled first (review W21 D6): if the layout or the viewport below throws, the recorded step is still written.
+		if (!this.userReadOnly) this.session?.markChanged();
 		this.renderer?.setGhost(null);
 		this.refreshLayout();
 		this.minimap?.invalidate();
 		// The document may be shorter now (page deleted or made smaller): keep the view inside it.
 		this.setViewport(this.viewport);
-		this.markChanged();
+		this.followChange();
 		this.updateHistoryButtons();
 		this.updatePageIndicator();
 		this.pageNav?.refresh();
@@ -4117,6 +4246,11 @@ export class NotebookView extends FileView {
 			},
 			goToAt: (index, y) => this.goToPageAt(index, y),
 			present: () => this.startPresentation(),
+			// 0.21 (#217): when each page was written (empty: the page has no times, or the setting hides them).
+			written: (page) => {
+				const times = this.host.settings.headerPageTimes ? pageTimes(page) : null;
+				return times ? pageTimesText(times, getLanguage()) : "";
+			},
 
 			setLocked: (pageId, value) => this.setLockedById(pageId, value),
 			canLock: () => !!this.editableDocument(),
@@ -4273,6 +4407,8 @@ export class NotebookView extends FileView {
 		this.updatePageIndicator();
 		this.scrollbar?.update();
 		this.minimap?.update();
+		this.slideBack?.viewChanged();
+		this.symbols?.sync();
 		this.overlayChanged?.();
 		for (const fn of this.overlayListeners) fn();
 	}
@@ -4851,7 +4987,37 @@ export class NotebookView extends FileView {
 		this.session?.gestureEnded();
 		// 0.14: the first stroke written during an automatic lecture is what adds its page (view/lecture-mode.ts). Deferred past the
 		// pointer handler so the contact is over; the document is only touched through the usual edit context.
-		if (!cancelled && badgeTap === null && boxTap === null && this.justCommitted) window.setTimeout(() => this.lectureMode?.wrote(), 0);
+		const committed = this.committedIds();
+		if (!cancelled && badgeTap === null && boxTap === null && committed) {
+			window.setTimeout(() => {
+				this.lectureMode?.wrote();
+				this.noteWrittenForSlideBack(committed);
+			}, 0);
+		}
+	}
+
+	/** Ids of the ink the last contact committed, or null (a method, so the callers' narrowing of the field does not apply). */
+	private committedIds(): ReadonlySet<string> | null {
+		return this.justCommitted?.ids ?? null;
+	}
+
+	/** 0.21 (#225): the ink just written (on the page in view or a neighbour) is the place the pill leads back to. */
+	private noteWrittenForSlideBack(ids: ReadonlySet<string>): void {
+		const pages = this.session?.doc?.pages;
+		if (!pages || !this.slideBack) return;
+		const at = this.currentPageIndex();
+		for (const i of [at, at - 1, at + 1]) {
+			const page = pages[i];
+			if (page && page.strokes.some((s) => ids.has(s.id))) {
+				this.slideBack.wrote(page, ids);
+				return;
+			}
+		}
+	}
+
+	/** 0.21 (#225): the command; true when there was a place to go back to. */
+	backToSlide(): boolean {
+		return this.slideBack?.goBack() ?? false;
 	}
 
 	private endGesture(cancelled: boolean): void {
@@ -5762,6 +5928,32 @@ export class NotebookView extends FileView {
 			},
 			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
 		});
+	}
+
+	// --- symbols (roadmap 212) ---
+
+	private mountSymbols(): void {
+		this.symbols = new SymbolStrip(this.body, {
+			app: this.app,
+			folder: () => this.host.settings.folder,
+			editable: () => this.editable(),
+			doc: () => this.session?.doc ?? null,
+			options: () => ({ show: this.host.settings.symbolStrip, count: this.host.settings.symbolCount }),
+			style: () => ({ color: this.tools.penColor, width: this.tools.penWidth, textSize: this.tools.textSize }),
+			pageAtClient: (x, y) => this.pageAtClient(x, y),
+			policy: () => this.policy,
+			captureSelection: () => this.captureSelectionClip(),
+			execute: (cmd) => {
+				this.history.execute(cmd);
+				this.afterHistoryChange();
+				this.renderer?.invalidate();
+			},
+			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
+		});
+	}
+
+	get symbolStripView(): SymbolStrip | null {
+		return this.symbols;
 	}
 
 	private captureSelectionClip(): ClipContent | null {

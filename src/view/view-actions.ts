@@ -56,6 +56,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (id === "selection-copy-devices") return !!view.uiContext().selection;
 	// 0.20 (#39): there has to be a locked element on the page in view.
 	if (id === "locked-elements") return (view.uiContext().page?.lockedElements ?? 0) > 0;
+	// 0.21 (#225): there has to be a place written during a lecture to go back to.
+	if (id === "slide-back") return view.slideBack?.available ?? false;
 	// 0.18 (#86): there has to be an open comment to go to.
 	if (id === "comment-next") return (view.uiContext().comments?.open ?? 0) > 0;
 	// wave 0.10 (81): there is no print dialog on a phone or tablet.
@@ -147,6 +149,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.19 (#213): look up later
 	"selection-look-up": (v) => v.lookUpFromSelection(),
 	"look-up-list": (v) => v.openLookUpList(),
+	"selection-add-to-index": (v) => v.addToIndexFromSelection(),
+	"book-index": (v) => v.openBookIndex(),
 	// 0.18 (#59): the selection as a picture in a note
 	"selection-insert-note": (v) => v.insertSelectionIntoNote("png"),
 	"selection-insert-note-svg": (v) => v.insertSelectionIntoNote("svg"),
@@ -155,6 +159,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"link-selection": (v) => v.linkSelection(),
 	"selection-open-link": (v) => v.openSelectionLink(),
 	"stamps-save-selection": (v) => v.stampPalette?.saveSelection(),
+	"symbols-save-selection": (v) => v.symbolStripView?.saveSelection(),
 	// v10: anchored excerpts
 	"excerpt-to-page": (v) => v.excerptTools?.excerptToPage(),
 	"excerpt-copy": (v) => v.excerptTools?.copyAsExcerpt(),
@@ -222,6 +227,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-lock": (v) => v.groupTools?.lockSelected(),
 	"locked-elements": onPage((v, _p, index) => v.groupTools?.openList(index)),
 	"insert-date-stamp": (v) => v.insertDateStamp(),
+	"sign-and-date": (v) => v.openSignDialog(),
 	"stamps": (v) => v.stampPalette?.toggle(),
 	"board-shot": (v) => void v.boardShot(),
 	"add-page": (v) => v.addPage(),
@@ -345,6 +351,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// lecture
 	"new-lecture": (v) => void v.newLecture(),
 	"lecture-mode": (v) => v.lectureMode?.toggle(),
+	"slide-back": (v) => void v.backToSlide(),
 	"exercise-paper": (v) => v.chooseExercisePaper(),
 
 	// markers, boxes, invisible ink (wave 0.8)

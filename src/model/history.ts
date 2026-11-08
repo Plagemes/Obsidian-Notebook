@@ -2,6 +2,7 @@ import { cloneMeta, findPage } from "./document";
 import { freezeElement } from "./serialize";
 import { marginsAfterResize, marginsOf, normalizeMargins, translateElement, translateStroke } from "./margins";
 import { lockedChanges, snapshotLocked } from "./page-lock";
+import { elementTextChanged, SetPageTimes, stampPages } from "./page-times";
 import { shiftComments } from "./comments";
 import { shiftPivots } from "./states";
 import type { Asset, NotebookDocument, NotebookMeta, Page, PageBackground, PageComment, PageElement, PageMargins, PageStates, Paper, Stroke } from "./types";
@@ -88,7 +89,8 @@ function pageOf(doc: NotebookDocument, pageId: string) {
 
 export class AddStroke implements Command {
 	readonly label = "Add stroke";
-	constructor(readonly pageId: string, readonly stroke: Stroke, readonly index: number) {}
+	/** `stamps`: false for ink that is not written now (moved in from another page, made from an equation): the page time is not moved (v19). */
+	constructor(readonly pageId: string, readonly stroke: Stroke, readonly index: number, readonly stamps = true) {}
 
 	apply(doc: NotebookDocument): void {
 		pageOf(doc, this.pageId).strokes.splice(this.index, 0, this.stroke);
@@ -475,7 +477,8 @@ export class AddElement implements Command {
 	readonly label = "Add element";
 	/** Not readonly: an upkeep change maps it (`remap`). */
 	element: PageElement;
-	constructor(readonly pageId: string, element: PageElement, readonly index: number) {
+	/** `stamps`: false for an element that is not added now (moved in from another page): the page time is not moved (v19). */
+	constructor(readonly pageId: string, element: PageElement, readonly index: number, readonly stamps = true) {
 		this.element = freezeElement(element);
 	}
 
@@ -808,6 +811,22 @@ function swapsSince(doc: NotebookDocument, before: ReadonlyArray<{ page: Page; s
 	return pairs;
 }
 
+/**
+ * v19: the ids of the pages `cmd` adds ink (`AddStroke`) or an element (`AddElement`) to, or changes the text of an element of
+ * (`ReplaceElement`: text box, sticky note, marker label, box title, equation, checkbox label; not a move or a restyle), in `added`,
+ * looking into batches and into the lock-exempt wrapper; and those it sets the times of itself (`SetPageTimes`), in `explicit`.
+ * An add built with `stamps = false` (ink moved in from another page, made from an equation) is not "written now" and is left out.
+ */
+export function collectAdds(cmd: Command, added: Set<string>, explicit: Set<string>): void {
+	if (cmd instanceof AddStroke || cmd instanceof AddElement) {
+		if (cmd.stamps) added.add(cmd.pageId);
+	} else if (cmd instanceof ReplaceElement) {
+		if (elementTextChanged(cmd.before, cmd.after)) added.add(cmd.pageId);
+	} else if (cmd instanceof SetPageTimes) explicit.add(cmd.pageId);
+	else if (cmd instanceof Batch) for (const c of cmd.commands) collectAdds(c, added, explicit);
+	else if ("inner" in cmd && typeof cmd.inner === "object" && cmd.inner !== null) collectAdds(cmd.inner as Command, added, explicit);
+}
+
 export class History {
 	private undoStack: Command[] = [];
 	private redoStack: Command[] = [];
@@ -823,6 +842,11 @@ export class History {
 		 * not kept: the command is reverted (or re-applied) and, for execute, not recorded. See model/page-lock.ts.
 		 */
 		private readonly pagesLocked: ((pageIds: readonly string[]) => void) | null = null,
+		/**
+		 * v19 (#217): the time of day in ms. When given, a command that adds ink or an element to a page stamps the page's start and end
+		 * times (model/page-times.ts) once it has succeeded: upkeep, so there is no undo step for it and Undo / Redo never touch it.
+		 */
+		private readonly clock: (() => number) | null = null,
 	) {}
 
 	/**
@@ -851,7 +875,24 @@ export class History {
 			return false;
 		}
 		this.record(cmd);
+		// v19: upkeep after the step is recorded: whatever goes wrong with the clock, the step stays an undo step.
+		if (this.clock) {
+			try {
+				this.stampAdded(doc, cmd, this.clock());
+			} catch (e) {
+				console.error("[notebook] page times", e);
+			}
+		}
 		return true;
+	}
+
+	/** v19: the pages `cmd` added ink or an element to, or changed the text of, are stamped `now` (not those a `SetPageTimes` of the same command sets itself). */
+	private stampAdded(doc: NotebookDocument, cmd: Command, now: number): void {
+		const added = new Set<string>();
+		const explicit = new Set<string>();
+		collectAdds(cmd, added, explicit);
+		for (const id of explicit) added.delete(id);
+		if (added.size > 0) stampPages(doc, added, Math.floor(now));
 	}
 
 	/**

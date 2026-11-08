@@ -31,6 +31,7 @@ import { cleanMarkerText, isBoxKind, isIsoDate, isMarkerKind } from "./markers";
 import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
+import { pageTimesProblem } from "./page-times";
 import { normalizePosition } from "./position";
 import { freezeElement, freezeStroke, liveGroups, parse, readPageComments, readPageStates, readSlides, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
@@ -78,7 +79,7 @@ export type RepairResult =
 
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 /** Page fields of the current format (a field dropped by the repair is not "unknown"). */
-const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1, tags: 1, states: 1, locked: 1, comments: 1 };
+const PAGE_FIELDS = { id: 1, width: 1, height: 1, paper: 1, strokes: 1, elements: 1, background: 1, infinite: 1, margins: 1, tags: 1, states: 1, locked: 1, comments: 1, startAt: 1, endAt: 1 };
 const HEX_RE = /^[0-9a-f]+$/;
 
 function isObj(v: unknown): v is RawObject {
@@ -134,7 +135,7 @@ function jsonOrUndefined(text: string): unknown {
 
 const HEADER_LINE = /^\t"(format|version|id|createdAt|modifiedAt|meta|position)": (.*)$/;
 const ASSET_LINE = /^\t\t("[0-9a-f]+"): (\{.*\}),?$/;
-const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|tags|background|infinite|margins|states|locked)": (.*)$/;
+const PAGE_FIELD_LINE = /^\t\t\t"(id|width|height|paper|tags|background|infinite|margins|states|locked|startAt|endAt)": (.*)$/;
 /** A v12 slide table entry (two tabs, content on the line: a page starts with a bare "\t\t{" line). */
 const SLIDE_LINE = /^\t\t(\{"id":.*\}),?$/;
 const ITEM_LINE = /^\t\t\t\t(\{.*\}),?$/;
@@ -579,6 +580,13 @@ function salvageSkeleton(p: RawObject, ctx: SalvageContext): { page: RawObject; 
 		// v14: a locked page stays locked; `false` is the same as absent; anything else is reset (the page is then unlocked).
 		if (p.locked === true) page.locked = true;
 		else if (p.locked !== false) ctx.summary.fieldsReset++;
+	}
+	if (p.startAt !== undefined || p.endAt !== undefined) {
+		// v19: the start and end time are kept as a valid pair; a lone, invalid or inverted one is reset (the page then has none).
+		if (pageTimesProblem(p.startAt, p.endAt) === null) {
+			page.startAt = p.startAt;
+			page.endAt = p.endAt;
+		} else ctx.summary.fieldsReset++;
 	}
 	if (p.tags !== undefined) {
 		// v7 page tags: the strings are kept (normalised); anything else in the list is dropped.

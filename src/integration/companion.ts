@@ -310,7 +310,7 @@ export class CompanionService {
 	/** Trashed notebooks and templates (roadmap #160, #74) get no companion note, and never claim one. */
 	private isInternal(path: string): boolean {
 		const s = this.plugin.settings;
-		return isInTrash(path) || isWithin(path, templatesFolderPath(s.templatesFolder, s.folder)) || isWithin(path, notebookTemplatesFolderPath(s.notebookTemplatesFolder, s.templatesFolder, s.folder));
+		return isInTrash(path) || isWithin(path, templatesFolderPath(s.templatesFolder, s.folder)) || isWithin(path, notebookTemplatesFolderPath(s.notebookTemplatesFolder, s.templatesFolder, s.folder)) || isWithin(path, s.zipBackupFolder);
 	}
 
 	/** Brings the companion of `file` up to date. Writes nothing when the note already matches. */
