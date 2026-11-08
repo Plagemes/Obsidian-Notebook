@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### integration (0.22)
+- The cloud sync is joined to the Google Drive and OneDrive sign-in at load; Google's client secret lives under one device-local key and never in the token blob, `data.json` or the vault. The new pens: ghost guide lines and scribble to erase work with the fountain pen and the brush (not the marker), the colour-meaning filter dims the marker too, and an L or a cross drawn with the marker is not turned into axes. Floating pills that share a corner (slide-back, symbols strip, "Referenced on", colour-filter pill, lecture-header chip, a parked minimap) are stacked instead of overlapping. The pen options popover leaves a strip of page below it on a phone held sideways, so a tap on the page still closes it.
+
 ### pens
 - **New pens (#35): fountain pen, brush and marker.** The pen options have a *Pen type* row. The *fountain pen* is a nib: lines drawn along the nib angle are thin, lines across it thick (pressure still modulates the width, ends are crisp, nothing tapers). The *brush* answers to pressure (fine tip to full belly) and speed (thinner when it is fast), grows from a point and closes to a point. The *marker* is a flat chisel: constant for any pressure, a little narrower along the nib, 85% opaque and painted in stroke order (above the ink written before it, with that ink showing through), not multiplied like the highlighter. The fountain pen and the marker have a *Nib angle* (a slider with a little bar that leans like the nib); the angle is stored on the stroke. The same look in the canvas, the wet ink, thumbnails, SVG, PDF, PNG and the interactive HTML export; eraser, lasso and moves work on their outlines, and a rotated selection turns the nib with it. A hold-still shape made with a new pen becomes an ordinary shape.
 - **Favourites, pen sets and the style eyedropper remember the kind** (and the nib angle). *Settings > Writing* has *Pen type* (the pen the pen tool starts with) and *Nib angle*.

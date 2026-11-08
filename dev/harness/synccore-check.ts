@@ -70,8 +70,8 @@ export async function checkSynccore(api: SynccoreCheckApi): Promise<{ ok: boolea
 	add("with a service chosen, the options are shown", shown(t("settings.cloudSyncAccount")) && shown(t("settings.cloudSyncNow")) && shown(t("settings.cloudSyncScope")) && shown(t("settings.cloudSyncWifiOnly")) && shown(t("settings.cloudSyncLog")));
 	add("rules fields show only for their scope", !shown(t("settings.cloudSyncFolders")) && !shown(t("settings.cloudSyncInclude")));
 	add(
-		"without the providers, the account row says sign-in is not available and offers no button",
-		(account()?.textContent ?? "").includes(t("cloudSync.account.unavailable", { provider: "Google Drive" })) && account()?.querySelector("button") === null,
+		"with the providers plugged in at load (nobody signed in yet), the account row says so and offers Sign in",
+		(account()?.textContent ?? "").includes(t("cloudSync.account.signedOut")) && [...(account()?.querySelectorAll("button") ?? [])].some((b) => b.textContent === t("cloudSync.account.signIn")),
 		account()?.textContent ?? "",
 	);
 
@@ -96,6 +96,7 @@ export async function checkSynccore(api: SynccoreCheckApi): Promise<{ ok: boolea
 	signIn?.click();
 	for (let i = 0; i < 50 && (service.running() || cloud.files.size < 4); i++) await sleep(50);
 	add("Sign in works and starts the first sync: a union of both sides", auth.signedIn && cloud.text("Notebooks/Maths.notebook") === doc("Maths") && vault.getFileByPath("Daily/yesterday.md") !== null, [...cloud.files.keys()].join(","));
+	add("for Google the account row says that every device must use the same client ID", (account()?.textContent ?? "").includes(t("cloudSync.account.gdriveNote")), account()?.textContent ?? "");
 	add("the account row shows the account and the cloud folder, and Disconnect", (account()?.textContent ?? "").includes("student@example.com") && [...(account()?.querySelectorAll("button") ?? [])].some((b) => b.textContent === t("cloudSync.account.disconnect")));
 	const nowRow = () => row(t("settings.cloudSyncNow"));
 	add("the status line shows the last sync", (nowRow()?.textContent ?? "").includes("Last sync"), nowRow()?.textContent ?? "");

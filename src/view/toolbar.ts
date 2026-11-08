@@ -477,10 +477,11 @@ export class Toolbar {
 	private syncPopover(): void {
 		const open = this.popover === "options";
 		this.optionsEl.toggleClass("notebook-hidden", !open);
-		// A popover never grows past the bottom of the view (a phone held sideways has little room): it scrolls instead.
+		// A popover never grows past the bottom of the view (a phone held sideways has little room): it scrolls instead. It also
+		// leaves a strip of page below it, so that a tap on the page still closes it (the new pens made the pen options taller).
 		const host = this.el.parentElement;
 		if (open && host) {
-			const room = host.getBoundingClientRect().bottom - this.optionsEl.getBoundingClientRect().top - 8;
+			const room = host.getBoundingClientRect().bottom - this.optionsEl.getBoundingClientRect().top - 8 - 56;
 			this.optionsEl.setCssProps({ "--notebook-popover-max": `${Math.max(120, Math.floor(room))}px` });
 		}
 		this.chipButton.toggleClass("is-active", open);
