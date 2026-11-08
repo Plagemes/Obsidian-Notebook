@@ -4549,6 +4549,11 @@ export const en = {
 	"tagSuggest.add": "Add tag {tag}",
 	"settings.tagSuggestions": "Suggest tags",
 	"settings.tagSuggestions.desc": "Offer tags from the course, nearby notebooks, text and markers.",
+	// 0.24 navadapt
+	"navAdapt.auto": "Auto",
+	"navAdapt.thumbs": "Thumbnails",
+	"navAdapt.list": "List",
+	"navAdapt.toggle": "Page panel layout: {mode}. Tap to change.",
 } as const;
 
 export type MessageKey = keyof typeof en;

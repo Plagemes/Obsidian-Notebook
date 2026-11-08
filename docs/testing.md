@@ -3733,3 +3733,22 @@ Manual steps (real Obsidian; nothing here is verified on Android). You need a ti
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Suggested tags in the notebook and page tag editors (course, sibling notebooks, frequent words, marker kinds); setting to turn off; no format change | yes | ranking, stop-words, normalisation, context: `tests/tag-suggest.test.ts`; editors: harness `doc=tagsuggest` | | | |
+
+### 0.24 — navadapt: adaptive page navigator (roadmap #414; steps 2540-2559)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+2540. **Written notebook.** Open a notebook of handwritten pages and open the page panel: it is a compact list (number, title, time, small thumbnail). A page with typed text shows its first line; a bookmarked page shows the bookmark title; a page with neither shows "Page N".
+2541. **PDF notebook.** Open an annotated PDF or slides: the panel is wider and the thumbnails are large and sharp.
+2542. **Mixed notebook.** A notebook with some PDF pages and some written ones keeps the usual thumbnails.
+2543. **Override.** Tap the layout button in the panel header: *Thumbnails*, then *List*, then *Auto* again. Close and reopen the notebook, and restart Obsidian: the choice is still there; another notebook is not affected.
+2544. **Long notebook.** In a notebook of 500 or more pages open the panel in list mode: it opens at once, scrolls smoothly, and the current page is in view.
+2545. **Everything still works in the list.** Tap a row to go to the page; drag a row to reorder (long press on touch); the star, the page menu, the lock mark, the select mode (check button, long press, Ctrl+click), the bookmark filter and the tag filter.
+2546. **Looks.** Light and dark theme, phone width (the panel is a drawer) and tablet width, Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Classification of a notebook (PDF/picture share: large, written: list, mixed: usual) and the Auto / Thumbnails / List modes | yes | `tests/nav-adapt.test.ts`; harness `doc=navadapt` | | | |
+| Per-notebook choice in bounded device-local storage (corrupt storage falls back to Auto) | yes | `tests/nav-adapt.test.ts`; harness `doc=navadapt` | | | |
+| Compact list rows (number, title, time, small thumbnail), chunked build and offscreen rows skipped | yes | `tests/nav-adapt.test.ts` (title and time); harness `doc=navadapt` (520 pages) | | | the title is typed text or a bookmark title only, there is no handwriting recognition |
+| Large thumbnails layout (wider panel, 240 px thumbnails, cached per page and width) | yes | harness `doc=navadapt` | | | |

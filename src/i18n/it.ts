@@ -4551,4 +4551,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"tagSuggest.add": "Aggiungi il tag {tag}",
 	"settings.tagSuggestions": "Suggerisci i tag",
 	"settings.tagSuggestions.desc": "Propone tag dal corso, dai quaderni vicini, dal testo e dai segni.",
+	// 0.24 navadapt
+	"navAdapt.auto": "Auto",
+	"navAdapt.thumbs": "Miniature",
+	"navAdapt.list": "Elenco",
+	"navAdapt.toggle": "Aspetto del pannello pagine: {mode}. Tocca per cambiare.",
 };

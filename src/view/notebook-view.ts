@@ -209,6 +209,7 @@ import { ColourTools, type PageInk } from "./colour-tools";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
 import { pageKindOf } from "../ui/page-kind";
+import { loadNavModes, modeOf, saveNavMode } from "../ui/nav-adapt";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { kindTool, strokeNib } from "../ink/pen-kinds";
@@ -248,8 +249,8 @@ const WORD_TAP_PX = 12;
 const NARROW_PX = 720;
 /** PDF pages are rendered at this scale (device px per pt) for thumbnails of pages not in view. */
 const THUMB_PDF_SCALE = 0.75;
-/** Page thumbnails are this many CSS px wide. */
-const THUMB_CSS_WIDTH = 120;
+/** Page thumbnails are at most this many CSS px wide (the panel asks for 60, 120 or, in the large layout, 240). */
+const THUMB_CSS_WIDTH = 240;
 
 export interface NotebookHost {
 	settings: NotebookSettings;
@@ -709,6 +710,12 @@ export class NotebookView extends FileView {
 			selectionMenu: (ids, evt) => openPageOpsMenu(this.pageOpsHost(), ids, evt),
 			openMap: () => this.openNotebookMap(),
 			setLocked: (pageId, value) => this.setLockedById(pageId, value),
+			// 0.24 (#414): the layout chosen for this notebook, kept on this device only.
+			layoutMode: () => modeOf(loadNavModes(this.app), this.session?.doc?.id ?? null),
+			setLayoutMode: (mode) => {
+				const id = this.session?.doc?.id;
+				if (id) saveNavMode(this.app, id, mode);
+			},
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);

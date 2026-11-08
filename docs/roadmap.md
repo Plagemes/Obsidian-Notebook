@@ -739,7 +739,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 411. **P2** 🧪 Tags suggested from context (course, content, markers).
 412. **P3** Page panel that shows only what that page has (hides empty sections and actions that do not apply).
 413. **P3** Generated cover for a notebook (title, course, colour, first page).
-414. **P2** Adaptive navigator: large thumbnails for PDFs, a compact list for text pages.
+414. **P2** 🧪 Adaptive navigator: large thumbnails for PDFs, a compact list for text pages.
 
 ### Library
 415. **P1** 🧪 Dynamic sections: Now, To complete, Changed on another device, Recent. (0.14: the first three are library dashboard panels, places, sidebar items with counts and Home chips; Recent is Home's Recent notes and the Recent filter; waiting for hardware verification)
