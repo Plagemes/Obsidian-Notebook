@@ -752,7 +752,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 420. **P2** 🧪 Welcome-back banner when reopening: last slide, open questions and gaps. (0.23: a card after a configurable absence with the way back, the open questions and gaps; look-up list and checkboxes not included.)
 
 ### Obsidian
-421. **P2** Dynamic gallery block in notes: pages selected by tag, bookmark or course.
+421. **P2** 🧪 Dynamic gallery block in notes: pages selected by tag, bookmark, course or marker (`notebook-gallery` block and "Insert gallery block").
 422. **P2** Related handwritten pages panel for the open Markdown note.
 423. ~~**P2** Rich hover preview of page links with actions.~~ — already covered by O5
 424. **P2** 🧪 Command palette ordered by context (commands relevant to the open view first).

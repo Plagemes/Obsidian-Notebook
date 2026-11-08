@@ -22,6 +22,8 @@ import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
 import { SharedInbox } from "./library/shared-inbox";
 import { registerIntegration } from "./integration";
+import { registerGalleryBlock } from "./integration/gallery";
+import type { GalleryService } from "./integration/gallery-service";
 import { annotatePdfFlow, registerAnnotatePdf, type AnnotatePdfHost } from "./library/annotate-pdf";
 import { registerHoverPreview } from "./view/hover-preview";
 import { registerReferenceMenu } from "./view/ref-window-open";
@@ -352,6 +354,15 @@ export default class NotebookPlugin extends Plugin {
 			this.timetable.start();
 		});
 
+		// 0.26 (#421): the `notebook-gallery` block and its builder.
+		this.step("gallery", () => {
+			this.gallery = registerGalleryBlock(this, {
+				root: () => this.settings.folder, loadIndex: () => this.host.loadIndex(), readNotebook: (file) => this.host.readNotebook(file),
+				background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width), timetable: () => this.timetable?.data(),
+				bookmarks: () => this.bookmarks?.list() ?? [], onBookmarksChange: (fn) => this.bookmarks.onChange(fn),
+			});
+		});
+
 		// 0.19 (#221): lecture log lines that waited for a daily note are written once it exists.
 		this.step("lecture log", () => {
 			const log = (this.lectureLog = new LectureLogService(this));
@@ -435,6 +446,7 @@ export default class NotebookPlugin extends Plugin {
 		stop("sync safety", () => this.syncSafety?.dispose());
 		stop("lecture log", () => this.lectureLog?.dispose());
 		stop("timetable", () => this.timetable?.stop());
+		stop("gallery", () => this.gallery?.dispose());
 		stop("library", () => this.host?.dispose());
 		stop("appearance", () => activeDocument.body.removeClass("notebook-style-obsidian"));
 	}
@@ -553,6 +565,8 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	private rememberTimer: number | null = null;
+	/** 0.26 (#421): the data behind the gallery blocks. */
+	private gallery: GalleryService | null = null;
 
 	private writeLocation(): void {
 		if (this.rememberTimer !== null) window.clearTimeout(this.rememberTimer);

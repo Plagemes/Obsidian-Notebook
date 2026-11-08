@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### gallery
+- **Dynamic gallery block (#421).** A `notebook-gallery` code block in a Markdown note shows pages of your notebooks as a responsive grid of thumbnails with notebook name and page number; tap one to open the notebook at that page. Lines: `tag: #x`, `bookmarked` (notebook and global bookmarks), `course: Analysis` (timetable), `notebook: path`, `marked: question|homework|…` (marker kinds and the marked-pages kinds), `limit: 12`, `sort: recent|title`. It works in reading view and Live Preview, refreshes (debounced, after the pen is quiet) when the notebooks change, shows a quiet empty state and a readable line for a bad query, and never writes to the vault. The command "Insert gallery block" has a small builder (tag, course, marker, bookmarked, count, order). English and Italian. No format change.
+- **Code.** Pure `src/integration/gallery-query.ts` (tested in `tests/gallery-query.test.ts`), `gallery-service.ts` (in-memory index, no writes), `gallery-render.ts`, `gallery-builder.ts`; thumbnails reuse `PageThumbs`, which gained `data-page-thumb-index`.
+
 ## 0.25.0 — 2026-11-08
 
 Seven features and a first part of the history: an area highlighter, a panel of the actions you took, align to baseline, lecture and study writing profiles, copy as image, a toolbar that fades while you write, a suggested paper for a new page and a page navigator view of marked pages only. The notebook format moves to version 23 (the area highlighter): the migration from version 22 is automatic, and 0.24 and older open a v23 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).
