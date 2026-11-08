@@ -71,6 +71,9 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	if (c.comments?.panel && a.id.startsWith("comment")) boost += 15;
 	// 0.25 (#93): lining the words up fits ink on ruled paper above all (the words go onto the ruled line).
 	if (a.id === "selection-baseline" && hasSelection && c.page?.kind === "ruled") boost += 10;
+	// 0.26 (#238): the tidy-up fits writing: a good many strokes selected, and a page of handwriting (ruled, grid or plain paper) when nothing is.
+	if (a.id === "selection-tidy" && (c.selection?.strokes ?? 0) >= 12) boost += 8;
+	if (a.id === "page-tidy" && !hasSelection && (c.page?.kind === "ruled" || c.page?.kind === "grid" || c.page?.kind === "plain")) boost += c.page.kind === "ruled" ? 16 : 14;
 	return boost;
 }
 

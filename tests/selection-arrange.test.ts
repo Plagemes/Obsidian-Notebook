@@ -451,9 +451,9 @@ describe("registry and bar placement (wave 0.10)", () => {
 	const idsOf = (c: UiContext, kind: "all" | "page" = "all") =>
 		buildSheet(c, { kind, usage: {}, now: 0, label: (a) => a.id }).flatMap((s) => s.actions.map((a) => a.id));
 
-	/** The second row of a selection bar with ink: select similar, align, clean up, join, transform, then (0.25) align to baseline, which the 5 slots of a phone bar leave to the sheet. */
+	/** The second row of a selection bar with ink: select similar, align, clean up, join, transform, then (0.25) align to baseline and (0.26) tidy up, which the 5 slots of a phone bar leave to the sheet. */
 	const secondRow = (width: number): string[] => {
-		const full = ["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu", "selection-baseline"];
+		const full = ["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu", "selection-baseline", "selection-tidy"];
 		return full.slice(0, Math.min(full.length, width < 480 ? 5 : full.length));
 	};
 

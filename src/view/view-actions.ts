@@ -179,6 +179,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-cleanup": (v) => v.selectionTools?.cleanUp(),
 	"selection-join": (v) => v.selectionTools?.joinBroken(),
 	"selection-baseline": (v) => v.selectionTools?.alignBaseline(),
+	// 0.26 (#238): tidy up the selection, or the page (the page in view, or the one the page sheet was opened from)
+	"selection-tidy": (v) => v.selectionTools?.tidy(),
+	"page-tidy": (v, arg) => v.selectionTools?.tidy(arg.page),
 	// 0.15 (241): drawings with states
 	"selection-part": (v) => v.stateTools?.makePartFromSelection(),
 	"states-toggle": (v) => v.stateTools?.toggle(),
