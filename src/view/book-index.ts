@@ -7,7 +7,7 @@ import { Modal, TFile, getLanguage, normalizePath, setIcon, type App } from "obs
 import { t } from "../i18n";
 import { stablePageSubpath } from "../integration/page-links";
 import {
-	buildIndex, buildIndexSection, collectIndexEntries, filterIndex, indexCounts, indexLabel, indexOwnerOf, newIndexNote, pickIndexNote, replaceIndexSection, type IndexSection, type IndexTerm,
+	buildIndex, buildIndexSection, collectIndexEntries, filterIndex, indexCounts, indexLabel, indexRegionOf, newIndexNote, pickIndexNote, replaceIndexSection, type IndexSection, type IndexTerm,
 } from "../model/book-index";
 import type { Page } from "../model/types";
 import { recordPluginWrite } from "../storage/plugin-written";
@@ -27,13 +27,15 @@ export function indexNotePath(notebook: TFile, n = 1): string {
 }
 
 /** The path of the index note to write for `notebook`: its plain name, or `(2)`... when that note belongs to another notebook. */
-export async function resolveIndexNotePath(app: App, notebook: TFile): Promise<string | null> {
+export async function resolveIndexNotePath(app: App, notebook: TFile, docId?: string): Promise<string | null> {
 	const n = await pickIndexNote(async (i) => {
 		const found = app.vault.getAbstractFileByPath(indexNotePath(notebook, i));
 		if (!found) return { exists: false };
 		if (!(found instanceof TFile)) return { exists: true, folder: true };
-		return { exists: true, owner: indexOwnerOf(await app.vault.cachedRead(found)) };
-	}, notebook.path);
+		const region = indexRegionOf(await app.vault.cachedRead(found));
+		if (!region) return { exists: true, owner: undefined };
+		return { exists: true, owner: region.path, ownerId: region.id, ownerGone: region.path !== null && app.vault.getAbstractFileByPath(region.path) === null };
+	}, notebook.path, docId);
 	return n === null ? null : indexNotePath(notebook, n);
 }
 
@@ -45,6 +47,8 @@ export function currentIndex(pages: readonly Page[], prefix: string): IndexSecti
 export interface BookIndexHost {
 	app: App;
 	file: TFile;
+	/** The notebook's document id: recorded in the index note, so a rename or move keeps the note (review W21 N1). */
+	docId?: string;
 	prefix: string;
 	pages: () => readonly Page[];
 	/** Scrolls to page `index` (0-based) with page y `y` near the top. */
@@ -55,7 +59,7 @@ export interface BookIndexHost {
 export async function writeIndexNote(host: BookIndexHost): Promise<string | null> {
 	const { app, file } = host;
 	const sections = currentIndex(host.pages(), host.prefix);
-	const notePath = await resolveIndexNotePath(app, file);
+	const notePath = await resolveIndexNotePath(app, file, host.docId);
 	if (notePath === null) {
 		showNotice(t("bookindex.failed", { error: indexNotePath(file) }), 10000);
 		return null;
@@ -76,12 +80,13 @@ export async function writeIndexNote(host: BookIndexHost): Promise<string | null
 		intro: t("bookindex.intro", { link: app.fileManager.generateMarkdownLink(file, notePath, undefined, file.basename), terms: String(counts.terms), pages: String(counts.pages) }),
 		none: t("bookindex.empty"),
 		owner: file.path,
+		ownerId: host.docId,
 	});
 	try {
 		if (existing instanceof TFile) {
 			const state: { outcome: "ok" | "unsafe" | "foreign" | "other" } = { outcome: "ok" };
 			await app.vault.process(existing, (current) => {
-				const r = replaceIndexSection(current, section, file.path);
+				const r = replaceIndexSection(current, section, file.path, { id: host.docId, pathExists: (p) => app.vault.getAbstractFileByPath(p) !== null });
 				if (r.outcome === "unsafe") state.outcome = "unsafe";
 				else if (r.outcome === "appended") state.outcome = "foreign";
 				else if (r.outcome === "other") state.outcome = "other";

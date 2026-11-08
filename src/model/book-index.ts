@@ -19,11 +19,48 @@ export const INDEX_MAX_DEPTH = 3;
 export const INDEX_START = "<!-- notebook-index:start -->";
 export const INDEX_END = "<!-- notebook-index:end -->";
 /** The start marker with or without the notebook it belongs to (`for=<encoded path>`, review W21 D8). */
-const INDEX_START_RE = /<!-- notebook-index:start(?: for=([^\s>]*))? -->/;
+const INDEX_START_RE = /<!-- notebook-index:start(?: for=([^\s>]*))?(?: id=([^\s>]*))? -->/;
 
-/** The start marker of the region written for the notebook at `owner`; the plain marker when there is no owner. */
-export function indexStartMarker(owner?: string): string {
-	return owner === undefined ? INDEX_START : `<!-- notebook-index:start for=${encodeURIComponent(owner)} -->`;
+/**
+ * The start marker of the region written for the notebook at `owner` (and with document id `id`, which survives a rename or move,
+ * review W21 N1); the plain marker when there is no owner.
+ */
+export function indexStartMarker(owner?: string, id?: string): string {
+	if (owner === undefined) return INDEX_START;
+	return `<!-- notebook-index:start for=${encodeURIComponent(owner)}${id ? ` id=${encodeURIComponent(id)}` : ""} -->`;
+}
+
+function decodeMarkerValue(raw: string): string {
+	try {
+		return decodeURIComponent(raw);
+	} catch {
+		return raw;
+	}
+}
+
+/** What the note's index region records: the notebook path (null: none) and document id (null: none); undefined without a complete region. */
+export function indexRegionOf(text: string): { path: string | null; id: string | null } | undefined {
+	const m = INDEX_START_RE.exec(text);
+	if (!m || text.indexOf(INDEX_END, m.index + m[0].length) < 0) return undefined;
+	return { path: m[1] === undefined ? null : decodeMarkerValue(m[1]), id: m[2] === undefined ? null : decodeMarkerValue(m[2]) };
+}
+
+/** What a note's region records, plus whether the recorded path still exists in the vault. */
+export interface IndexOwnerClaim {
+	owner: string;
+	ownerId?: string | null;
+	ownerGone?: boolean;
+}
+
+/**
+ * Whether a region that records `claim` belongs to the notebook at `path` with document id `docId`. The same document id wins even
+ * after a rename or move; a different recorded id never matches; a path-only marker matches its own path, or any path that no longer
+ * exists (the notebook was moved: the note sits at this notebook's own index name).
+ */
+export function indexNoteIsMine(claim: IndexOwnerClaim, path: string, docId?: string): boolean {
+	const idKnown = typeof claim.ownerId === "string" && claim.ownerId !== "" && docId !== undefined && docId !== "";
+	if (idKnown) return claim.ownerId === docId;
+	return claim.owner === path || claim.ownerGone === true;
 }
 
 /**
@@ -223,11 +260,13 @@ export interface IndexSectionOptions {
 	none: string;
 	/** Path of the notebook the section is written for; recorded in the start marker so another notebook never rewrites it. */
 	owner?: string;
+	/** The notebook's document id, recorded too: it survives a rename or move (review W21 N1). */
+	ownerId?: string;
 }
 
 /** The Markdown between the two markers (markers included): an intro line, then a heading per letter and a nested list per term. Same input, same text. */
 export function buildIndexSection(o: IndexSectionOptions): string {
-	const lines: string[] = [indexStartMarker(o.owner), "", o.intro, ""];
+	const lines: string[] = [indexStartMarker(o.owner, o.ownerId), "", o.intro, ""];
 	if (o.sections.length === 0) lines.push(o.none, "");
 	for (const s of o.sections) {
 		lines.push(`### ${s.letter === "#" ? "\\#" : escapeSearchText(s.letter)}`, "");
@@ -245,19 +284,25 @@ export function buildIndexSection(o: IndexSectionOptions): string {
 
 export type IndexReplaceOutcome = "replaced" | "created" | "appended" | "unsafe" | "other";
 
+/** What the caller knows about the notebook that writes: its document id and whether a recorded path still exists. */
+export interface IndexReplaceContext {
+	id?: string;
+	pathExists?: (path: string) => boolean;
+}
+
 /**
  * `existing` with the section between the markers replaced by `section`. Text outside the markers is never changed. A note with
  * one marker but not the other is "unsafe" (returned unchanged, must not be written). A non-empty note without markers is
  * "appended": the caller asks (or refuses) before writing. A region that records another notebook than `owner` is "other"
  * (returned unchanged): it belongs to that notebook.
  */
-export function replaceIndexSection(existing: string, section: string, owner?: string): { text: string; outcome: IndexReplaceOutcome } {
+export function replaceIndexSection(existing: string, section: string, owner?: string, me?: IndexReplaceContext): { text: string; outcome: IndexReplaceOutcome } {
 	const m = INDEX_START_RE.exec(existing);
 	const start = m ? m.index : -1;
 	const end = m ? existing.indexOf(INDEX_END, start + m[0].length) : existing.indexOf(INDEX_END);
 	if (m && end >= 0) {
-		const recorded = indexOwnerOf(existing);
-		if (owner !== undefined && typeof recorded === "string" && recorded !== owner) return { text: existing, outcome: "other" };
+		const region = indexRegionOf(existing);
+		if (owner !== undefined && region && region.path !== null && !indexNoteIsMine({ owner: region.path, ownerId: region.id, ownerGone: me?.pathExists ? !me.pathExists(region.path) : false }, owner, me?.id)) return { text: existing, outcome: "other" };
 		return { text: existing.slice(0, start) + section + existing.slice(end + INDEX_END.length), outcome: "replaced" };
 	}
 	if (start >= 0 || end >= 0) return { text: existing, outcome: "unsafe" };
@@ -277,6 +322,10 @@ export interface IndexNoteSlot {
 	folder?: boolean;
 	/** `indexOwnerOf` of the note's text (when it is a note). */
 	owner?: string | null | undefined;
+	/** The document id the region records (null: none). */
+	ownerId?: string | null;
+	/** The recorded path no longer exists in the vault. */
+	ownerGone?: boolean;
 }
 
 /** How many names (`Index`, `Index (2)`, ...) are tried before giving up. */
@@ -289,7 +338,7 @@ export const INDEX_NOTE_TRIES = 20;
  * is anything at a numbered name that is not this notebook's own index note: a numbered name is only reused for its own notebook.
  * Review W21 D8: two notebooks whose names collapse to the same text never rewrite each other's index.
  */
-export async function pickIndexNote(probe: (n: number) => Promise<IndexNoteSlot>, notebookPath: string): Promise<number | null> {
+export async function pickIndexNote(probe: (n: number) => Promise<IndexNoteSlot>, notebookPath: string, docId?: string): Promise<number | null> {
 	for (let n = 1; n <= INDEX_NOTE_TRIES; n++) {
 		const slot = await probe(n);
 		if (!slot.exists) return n;
@@ -297,7 +346,7 @@ export async function pickIndexNote(probe: (n: number) => Promise<IndexNoteSlot>
 			if (n === 1) return n;
 			continue;
 		}
-		if (slot.owner === notebookPath) return n;
+		if (typeof slot.owner === "string" && indexNoteIsMine({ owner: slot.owner, ownerId: slot.ownerId, ownerGone: slot.ownerGone }, notebookPath, docId)) return n;
 		if (n === 1 && (slot.owner === undefined || slot.owner === null)) return n;
 	}
 	return null;
