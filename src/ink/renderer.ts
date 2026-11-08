@@ -1452,7 +1452,7 @@ export class Renderer {
 			ctx.globalCompositeOperation = this.night ? "screen" : "multiply";
 		} else if (tool === "marker") {
 			// Format v20: 85% opaque in stroke order, in the day and the night (the ink colour is already the night one).
-			ctx.globalAlpha = MARKER_ALPHA;
+			ctx.globalAlpha = MARKER_ALPHA * (this.dimNow ? DIM_ALPHA : 1);
 			ctx.globalCompositeOperation = "source-over";
 		} else {
 			ctx.globalAlpha = this.dimNow ? DIM_ALPHA : 1;
