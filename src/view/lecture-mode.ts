@@ -87,6 +87,8 @@ export interface LectureModeHost {
 	 * writing. Called while the document is still open: the host logs it from memory first, then saves and snapshots the file.
 	 */
 	ended?(end: LectureEnd): void;
+	/** 0.22 (#210): lecture mode began for `cls`; `pageAdded`: it added its own lecture page (which has the header already). */
+	started?(cls: LectureClass, pageAdded: boolean): void;
 	/** The device's local storage (what was turned down or paged today); without it nothing is remembered across openings. */
 	memory?: { load(): unknown; save(value: unknown): void };
 	now?(): Date;
@@ -183,7 +185,7 @@ export class LectureModeController {
 		this.hideBanner();
 		this.asking = null;
 		this.enter(match, true);
-		if (match) this.ensurePage(match, now);
+		if (match) this.host.started?.(match, this.ensurePage(match, now));
 	}
 
 	/**
@@ -239,6 +241,7 @@ export class LectureModeController {
 			case "enter":
 				this.enter(step.cls, false);
 				showNotice(t("lectureMode.on", { course: step.cls.course }));
+				this.host.started?.(step.cls, false);
 				break;
 			case "ask":
 				this.asking = step.cls;
@@ -282,14 +285,14 @@ export class LectureModeController {
 	 * that it was dealt with. Only called for a user action. `scroll`: go to the new page (Start, command), or stay where the
 	 * user is writing.
 	 */
-	private ensurePage(cls: LectureClass, now: Date, scroll = true): void {
+	private ensurePage(cls: LectureClass, now: Date, scroll = true): boolean {
 		// Read-only (the user's, sync safety's or a newer format's): nothing is added, so nothing is saved either.
 		if (!this.host.editable()) {
 			showNotice(t("lectureMode.readOnly"));
-			return;
+			return false;
 		}
 		const ctx = this.host.editContext();
-		if (!ctx) return;
+		if (!ctx) return false;
 		let added = false;
 		if (findLecturePage(ctx.doc.pages, cls.course, now) < 0) {
 			addLecturePage(ctx, cls.course, now, cls.course, classContext(cls, ctx.slide?.() ?? null), scroll);
@@ -299,6 +302,7 @@ export class LectureModeController {
 		this.remember("paged", cls.key);
 		// Added behind the user's back (the view stayed where they write): say so, with a way to go there.
 		if (added && !scroll) this.offerGo(cls, now);
+		return true;
 	}
 
 	/** A notice "Lecture page added" with a Go button that scrolls to the page. */
@@ -400,7 +404,7 @@ export class LectureModeController {
 			const now = this.now();
 			this.asking = null;
 			this.enter(cls, false);
-			this.ensurePage(cls, now);
+			this.host.started?.(cls, this.ensurePage(cls, now));
 		});
 		actions.createEl("button", { text: t("lectureMode.notNow"), attr: { type: "button" } }).addEventListener("click", () => {
 			this.remember("declined", cls.key);

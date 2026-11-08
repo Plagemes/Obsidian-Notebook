@@ -382,6 +382,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.14 (401): switches lecture mode on or off by hand (the rule starts it from the timetable); the contextual bar follows it.
 	// 0.21 slideback (#225): palette command only (assign a hotkey in Obsidian); it applies once something was written during a lecture.
 	{ id: "slide-back", label: "command.slideBack", icon: "corner-up-left", group: "lecture", surfaces: ["palette"], priority: 40, scope: "view", command: true, readOnly: true, keywords: "lecture slide return current page lezione diapositiva torna" },
+	// 0.22 lecthead (#210): writes the course, lecturer, room, date and time of the class on the page in view (the class in progress, else the nearest of today).
+	{ id: "lecture-header", label: "command.lectureHeader", icon: "graduation-cap", group: "lecture", surfaces: ["palette", "sheet"], priority: 38, scope: "view", command: true, keywords: "lecture header course lecturer room date time class intestazione lezione corso docente aula orario" },
 	{ id: "lecture-mode", label: "command.lectureMode", icon: "graduation-cap", group: "lecture", surfaces: ["sheet"], priority: 72, scope: "view", command: true, readOnly: true, checked: (c) => c.lecture, keywords: "class timetable lesson classe orario" },
 	{ id: "exercise-paper", label: "page.exercisePaper", icon: "palette", group: "lecture", surfaces: ["sheet"], priority: 20, scope: "view", command: "command.exercisePaper", readOnly: true },
 	// wave 0.8: markers (#201-#203, #209) and structured boxes (#204): the next tap or drag on a page places one. Also on the radial dial (shapes ring → Markers).

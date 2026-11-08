@@ -17806,3 +17806,55 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-slide-back {
 	top: 66px;
 }
+
+/* ===== 0.22 lecthead ===== */
+/* The chip "Add lecture header": quiet, under the lecture chip at the top left, away from the page's top margin where the header goes. */
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-header-offer {
+	position: absolute;
+	top: 50px;
+	left: 8px;
+	z-index: 4;
+	display: flex;
+	align-items: center;
+	max-width: calc(100% - 16px);
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-header-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 40px;
+	padding: 0 6px 0 14px;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	font-size: inherit;
+	cursor: pointer;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-header-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-lecture-header-close {
+	width: 36px;
+	min-height: 40px;
+	color: var(--nb-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-lecture-header-offer {
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+}
