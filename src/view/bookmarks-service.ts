@@ -64,6 +64,13 @@ export class BookmarksService {
 		plugin.registerEvent(vault.on("create", changed));
 		plugin.registerEvent(vault.on("modify", changed));
 		plugin.registerEvent(vault.on("delete", changed));
+		// A file that changed may carry another notebook id now.
+		const forget = (file: unknown) => {
+			if (file instanceof TFile) this.idAt.delete(file.path);
+		};
+		plugin.registerEvent(vault.on("create", forget));
+		plugin.registerEvent(vault.on("modify", forget));
+		plugin.registerEvent(vault.on("delete", forget));
 		// A renamed folder fires one event per notebook in it: they are followed in one pass.
 		const renames = new RenameBatcher(
 			(list) => void this.deps.store.retargetMany(list).catch((e) => this.fail(e)),
@@ -74,6 +81,8 @@ export class BookmarksService {
 		);
 		plugin.register(() => renames.flush());
 		plugin.registerEvent(vault.on("rename", (file, oldPath) => {
+			this.idAt.delete(oldPath);
+			this.idAt.delete(file.path);
 			if (file instanceof TFile && isNotebookFile(file)) renames.add(oldPath, file.path);
 		}));
 	}
@@ -101,11 +110,33 @@ export class BookmarksService {
 		return this.deps.store.list().length;
 	}
 
-	/** Whether a notebook file is at `path` (a bookmark whose path is gone can still be found by the notebook's id). */
-	private readonly pathExists = (path: string): boolean => {
+	/** The notebook id found at a path (null: could not be read), as far as it has been looked at; dropped when the file changes. */
+	private readonly idAt = new Map<string, string | null>();
+
+	/**
+	 * Whether the file at `path` is still the notebook `docId`: false when there is no notebook file there, or when it is known to carry another id (a
+	 * different notebook now sits at the old path). An id not looked at yet counts as the same notebook.
+	 */
+	private readonly pathHolds = (path: string, docId: string): boolean => {
 		const f = this.deps.app.vault.getFileByPath(path);
-		return !!f && isNotebookFile(f);
+		if (!f || !isNotebookFile(f)) return false;
+		const id = this.idAt.get(path);
+		return id === undefined || id === null || id === docId;
 	};
+
+	/** Reads the id of the notebooks at the other paths this page is bookmarked under, so `pathHolds` knows them. True when something new was learnt. */
+	private async prime(ref: { docId: string; path: string; pageId: string }): Promise<boolean> {
+		if (!ref.docId) return false;
+		const paths = new Set(this.deps.store.list().filter((b) => b.docId === ref.docId && b.pageId === ref.pageId && b.path !== ref.path && !this.idAt.has(b.path)).map((b) => b.path));
+		let learnt = false;
+		for (const path of paths) {
+			const f = this.deps.app.vault.getFileByPath(path);
+			if (!f || !isNotebookFile(f)) continue;
+			this.idAt.set(path, await this.deps.readNotebookId(f).catch(() => null));
+			learnt = true;
+		}
+		return learnt;
+	}
 
 	/** One look-up session (a dialog open, one tap): each notebook's id is read at most once, whatever the number of bookmarks. */
 	newResolver(): BookmarkResolver<TFile> {
@@ -128,7 +159,9 @@ export class BookmarksService {
 	isBookmarkedAt(view: BookmarksViewApi, index: number): boolean {
 		const id = view.pageIds()[index];
 		const ref = id ? this.ref(view, id) : null;
-		return !!ref && this.deps.store.find(ref, this.pathExists) !== null;
+		if (!ref) return false;
+		void this.prime(ref).then((learnt) => learnt && this.changed()).catch(() => undefined);
+		return this.deps.store.find(ref, this.pathHolds) !== null;
 	}
 
 	/** Bookmarks the page in view, or removes its bookmark when it has one. */
@@ -136,13 +169,14 @@ export class BookmarksService {
 		const cur = view.current();
 		const ref = cur ? this.ref(view, cur.pageId) : null;
 		if (!cur || !ref) return;
-		const there = this.deps.store.find(ref, this.pathExists);
+		await this.prime(ref).catch(() => false);
+		const there = this.deps.store.find(ref, this.pathHolds);
 		try {
 			if (there) {
 				await this.deps.store.remove(there.id);
 				showNotice(t("gbm.removed"));
 			} else {
-				await this.deps.store.add({ ...ref, num: cur.index + 1, label: cur.title }, this.pathExists);
+				await this.deps.store.add({ ...ref, num: cur.index + 1, label: cur.title }, this.pathHolds);
 				showNotice(t("gbm.added"));
 			}
 		} catch (e) {
@@ -200,7 +234,7 @@ export class BookmarksService {
 			return;
 		}
 		const file = found.file;
-		if (found.byId && found.unique) void this.deps.store.retarget(b.path, file.path).catch((e) => this.fail(e));
+		if (found.byId && found.unique) void this.deps.store.retarget(b.path, file.path, b.docId).catch((e) => this.fail(e));
 		await (this.deps.openAt ? this.deps.openAt(file, b.num, b.pageId) : openNotebookAtPage(this.deps.app, file, b.num, null, b.pageId));
 	}
 

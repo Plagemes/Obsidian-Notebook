@@ -70,7 +70,7 @@ export function attachLongPressHelp(root: HTMLElement, resolve: (button: HTMLEle
 	let doc: Document | null = null;
 	// A tap anywhere else dismisses it (the press that opened it began before this listener existed).
 	const onOutside = (): void => {
-		guard.down();
+		guard.newPress(); // a second finger or the palm while the first still holds does not disarm it
 		hide();
 	};
 	function hide(): void {
@@ -105,7 +105,7 @@ export function attachLongPressHelp(root: HTMLElement, resolve: (button: HTMLEle
 	};
 
 	const onDown = (e: PointerEvent): void => {
-		guard.down(); // a new press is a new gesture: its tap is never swallowed
+		guard.newPress(); // a new press after the lift is a new gesture: its tap is never swallowed
 		if (!enabledFlag || !startsHelp(e.pointerType, e.isPrimary)) return;
 		const btn = targetButton(e, root);
 		if (!btn || !resolve(btn)) return;

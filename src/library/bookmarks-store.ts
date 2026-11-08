@@ -73,8 +73,8 @@ export class BookmarksStore {
 	}
 
 	/** The bookmark of this page, if any. */
-	find(ref: { docId: string; path: string; pageId: string }, pathExists?: (path: string) => boolean): GlobalBookmark | null {
-		return findBookmark(this.cache, ref, pathExists);
+	find(ref: { docId: string; path: string; pageId: string }, pathHolds?: (path: string, docId: string) => boolean): GlobalBookmark | null {
+		return findBookmark(this.cache, ref, pathHolds);
 	}
 
 	/** Runs `fn` after the bookmarks changed. Returns the unsubscribe function. */
@@ -91,11 +91,11 @@ export class BookmarksStore {
 	}
 
 	/** Adds a page at the end of the list; returns the id (of the existing bookmark when the page is bookmarked already). */
-	add(r: AddBookmarkRequest, pathExists?: (path: string) => boolean): Promise<string> {
+	add(r: AddBookmarkRequest, pathHolds?: (path: string, docId: string) => boolean): Promise<string> {
 		return this.enqueue(async () => {
 			const own = await this.readOwn();
 			const { merged, others } = await this.readAll();
-			const there = findBookmark(merged, r, pathExists);
+			const there = findBookmark(merged, r, pathHolds);
 			if (there) return there.id;
 			const id = newBookmarkId(new Set(merged.keys()), this.random);
 			await this.writeOps(own, merged, others, [{ kind: "add", id, ...r, order: bookmarkOrderAtEnd(liveBookmarks(merged)) }]);
@@ -111,22 +111,24 @@ export class BookmarksStore {
 
 	/** Gives the bookmark a name (empty: back to the default "<notebook> p. N"). */
 	rename(id: string, label: string): Promise<void> {
-		return this.change(() => [{ kind: "label", id, label }]);
+		// Twins (the same page bookmarked on two devices before they synced) are one row: every id gets the name, so the row never shows another one.
+		return this.change((merged) => bookmarkTwins(merged, id).map((twin) => ({ kind: "label" as const, id: twin, label })));
 	}
 
 	/** Moves the bookmark `id` so that it is at index `to` of the list. */
 	move(id: string, to: number): Promise<void> {
-		return this.change((merged) => planBookmarkMove(liveBookmarks(merged), id, to).map((m) => ({ kind: "order" as const, ...m })));
+		// The plan is made on the rows shown; each planned order is written to every twin of the row, so a hidden twin never becomes the first one.
+		return this.change((merged) => planBookmarkMove(liveBookmarks(merged), id, to).flatMap((m) => bookmarkTwins(merged, m.id).map((twin) => ({ kind: "order" as const, id: twin, order: m.order }))));
 	}
 
 	/** The notebook at `from` was renamed or moved to `to`: the bookmarks that point at it follow. */
-	retarget(from: string, to: string): Promise<void> {
-		return this.retargetMany([{ from, to }]);
+	retarget(from: string, to: string, docId?: string): Promise<void> {
+		return this.retargetMany([{ from, to, ...(docId !== undefined ? { docId } : {}) }]);
 	}
 
 	/** Several renames, in order, in one read and one write (a renamed folder moves many notebooks at once). */
-	retargetMany(renames: ReadonlyArray<{ from: string; to: string }>): Promise<void> {
-		return this.change(() => renames.map((r) => ({ kind: "retarget" as const, from: r.from, to: r.to })));
+	retargetMany(renames: ReadonlyArray<{ from: string; to: string; docId?: string }>): Promise<void> {
+		return this.change(() => renames.filter((r) => r.from !== r.to).map((r) => ({ kind: "retarget" as const, from: r.from, to: r.to, ...(r.docId !== undefined ? { docId: r.docId } : {}) })));
 	}
 
 	private change(ops: (merged: BookmarksMap) => BookmarkOp[]): Promise<void> {

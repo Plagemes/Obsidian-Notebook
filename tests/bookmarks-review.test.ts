@@ -192,3 +192,104 @@ describe("W10: the same page bookmarked on two devices is one row", () => {
 		expect(store.list().map((b) => b.pageId)).toEqual(["z"]);
 	});
 });
+
+describe("round 2: a notebook that took the old path of a moved one (R1, R2, R3)", () => {
+	const A = "doc-A";
+	const B = "doc-B";
+	const phone = (items: StoredBookmark[]) => file("0a000000", items);
+	const tablet = (items: StoredBookmark[]) => file("0b000000", items);
+	const bA = (id: string, order: number, o: Partial<StoredBookmark> = {}) => bm(id, order, { docId: A, path: "N/Untitled.notebook", pageId: "pgA", ...o });
+	const bB = (id: string, order: number, o: Partial<StoredBookmark> = {}) => bm(id, order, { docId: B, path: "N/Untitled.notebook", pageId: "pgB", ...o });
+
+	it("R1: retargeting A's bookmarks by id never moves B's, which share the old path", async () => {
+		const adapter = new MemoryAdapter();
+		adapter.files.set("Notebooks/_meta/bookmarks-0b000000.json", serializeBookmarks(tablet([bB("bb", 1)])));
+		adapter.files.set("Notebooks/_meta/bookmarks-0a000000.json", serializeBookmarks(phone([bA("ba", 0)])));
+		const store = new BookmarksStore(adapter, () => "Notebooks", "0a000000", (() => { let c = 100; return () => c++; })());
+		await store.load();
+		// A was renamed to Physics where no rename was seen; a new notebook B sits at the old path. The tap on A's bookmark retargets by id.
+		await store.retarget("N/Untitled.notebook", "N/Physics.notebook", A);
+		const byId = Object.fromEntries(store.list().map((b) => [b.id, b.path]));
+		expect(byId).toEqual({ ba: "N/Physics.notebook", bb: "N/Untitled.notebook" });
+		// Tapping B's bookmark (found at its own path) retargets nothing and drags nothing back: no ping-pong.
+		const writes = adapter.writes.length;
+		await store.retarget("N/Untitled.notebook", "N/Untitled.notebook", B);
+		expect(adapter.writes.length).toBe(writes);
+		expect(Object.fromEntries(store.list().map((b) => [b.id, b.path]))).toEqual(byId);
+	});
+
+	it("a retarget without an id (a rename event) still moves everything at the path", () => {
+		const map = mergeBookmarkFiles([phone([bA("ba", 0), bB("bb", 1)])]);
+		const after = applyBookmarkOps(phone([bA("ba", 0), bB("bb", 1)]), map, [{ kind: "retarget", from: "N/Untitled.notebook", to: "N/Moved.notebook" }], 500);
+		expect(after.items.map((i) => i.path)).toEqual(["N/Moved.notebook", "N/Moved.notebook"]);
+	});
+
+	it("R3: A's page shows as bookmarked (no duplicate on toggle) while B sits at A's old path", async () => {
+		const adapter = new MemoryAdapter();
+		adapter.files.set("Notebooks/_meta/bookmarks-0a000000.json", serializeBookmarks(phone([bA("ba", 0)])));
+		const store = new BookmarksStore(adapter, () => "Notebooks", "0a000000", () => 100);
+		await store.load();
+		const ref = { docId: A, path: "N/Physics.notebook", pageId: "pgA" };
+		// The file at the old path is B (a different id): it does not hold A's bookmark.
+		const holds = (path: string, docId: string) => !(path === "N/Untitled.notebook" && docId === A);
+		expect(store.find(ref, holds)?.id).toBe("ba");
+		expect(await store.add({ ...ref, num: 1 }, holds)).toBe("ba");
+		expect(store.list()).toHaveLength(1);
+		// Without knowing the id, an existing file at the path is taken to be the notebook (the copy rule of W8 stays).
+		expect(store.find(ref, () => true)).toBeNull();
+	});
+
+	it("R2: move and rename act on every twin, so the row never jumps back or shows another name", async () => {
+		const adapter = new MemoryAdapter();
+		adapter.files.set("Notebooks/_meta/bookmarks-0b000000.json", serializeBookmarks(tablet([bA("t1", 2, { label: "tablet" }), bB("x", 1)])));
+		adapter.files.set("Notebooks/_meta/bookmarks-0a000000.json", serializeBookmarks(phone([bA("p1", 0, { label: "phone" }), bB("y", 3, { pageId: "pgB2" })])));
+		const store = new BookmarksStore(adapter, () => "Notebooks", "0a000000", (() => { let c = 100; return () => c++; })());
+		await store.load();
+		// Rows: p1 (A twins p1,t1) order 0, x order 1, y order 3.
+		expect(store.list().map((b) => b.id)).toEqual(["p1", "x", "y"]);
+		await store.move("p1", 2);
+		expect(store.list().map((b) => b.id)).toEqual(["x", "y", "p1"]);
+		await store.rename("p1", "Exam");
+		expect(store.list().find((b) => b.pageId === "pgA")?.label).toBe("Exam");
+		const again = new BookmarksStore(adapter, () => "Notebooks", "0b000000", () => 900);
+		await again.load();
+		expect(again.list().map((b) => b.pageId)).toEqual(["pgB", "pgB2", "pgA"]);
+		expect(again.list()[2]?.label).toBe("Exam");
+	});
+});
+
+describe("round 2: the W6 scenario end to end (two notebooks, two devices)", () => {
+	it("tapping A's bookmark opens A and moves only A's bookmarks; tapping B's moves nothing; the toggle adds no duplicate", async () => {
+		const adapter = new MemoryAdapter();
+		const mk = (id: string, docId: string, pageId: string, order: number, device: string): StoredBookmark => ({ id, docId, path: "N/Untitled.notebook", pageId, num: 1, order, at: 10, ...(device ? {} : {}) });
+		adapter.files.set("Notebooks/_meta/bookmarks-0a000000.json", serializeBookmarks(file("0a000000", [mk("ba", "doc-A", "pgA", 0, "a")])));
+		adapter.files.set("Notebooks/_meta/bookmarks-0b000000.json", serializeBookmarks(file("0b000000", [mk("bb", "doc-B", "pgB", 1, "b")])));
+		const store = new BookmarksStore(adapter, () => "Notebooks", "0a000000", (() => { let c = 100; return () => c++; })());
+		await store.load();
+		// The vault: A now lives at Physics, a new notebook B sits at the old path.
+		const ids: Record<string, string> = { "N/Physics.notebook": "doc-A", "N/Untitled.notebook": "doc-B" };
+		const resolver = () => new BookmarkResolver<{ path: string }>({
+			fileAt: (p) => (ids[p] ? { path: p } : null),
+			notebooks: () => Object.keys(ids).map((path) => ({ path })),
+			idOf: async (f) => ids[f.path] ?? null,
+		});
+		const tap = async (id: string) => {
+			const b = store.list().find((x) => x.id === id)!;
+			const found = await resolver().resolve(b);
+			if (found?.byId && found.unique) await store.retarget(b.path, found.file.path, b.docId);
+			return found!.file.path;
+		};
+		expect(await tap("ba")).toBe("N/Physics.notebook");
+		expect(await tap("bb")).toBe("N/Untitled.notebook");
+		expect(await tap("ba")).toBe("N/Physics.notebook");
+		expect(Object.fromEntries(store.list().map((b) => [b.id, b.path]))).toEqual({ ba: "N/Physics.notebook", bb: "N/Untitled.notebook" });
+		// Toggling A's page and B's page finds the existing bookmarks (the other device's file agrees after a reload).
+		const holds = (path: string, docId: string) => ids[path] === docId;
+		expect(store.find({ docId: "doc-A", path: "N/Physics.notebook", pageId: "pgA" }, holds)?.id).toBe("ba");
+		expect(store.find({ docId: "doc-B", path: "N/Untitled.notebook", pageId: "pgB" }, holds)?.id).toBe("bb");
+		const other = new BookmarksStore(adapter, () => "Notebooks", "0b000000", () => 900);
+		await other.load();
+		expect(Object.fromEntries(other.list().map((b) => [b.id, b.path]))).toEqual({ ba: "N/Physics.notebook", bb: "N/Untitled.notebook" });
+		expect(store.list()).toHaveLength(2);
+	});
+});

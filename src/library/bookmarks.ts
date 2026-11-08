@@ -202,14 +202,13 @@ export function bookmarkTwins(map: BookmarksMap, id: string): string[] {
 
 /**
  * The live bookmark of this page of this notebook, if any. A notebook with an id is found by it AND its path, so a copy of a notebook (same id, same
- * page ids) is not mistaken for the original; a bookmark whose path no longer exists (`pathExists` says so: the notebook was renamed where no rename
- * was seen) still matches by id alone. Without an id the path decides.
+ * page ids) is not mistaken for the original; a bookmark whose path no longer holds that notebook (`pathHolds` says so: no file there, or a different notebook now sits there: it was renamed where no rename was seen) still matches by id alone. Without an id the path decides.
  */
-export function findBookmark(map: BookmarksMap, ref: { docId: string; path: string; pageId: string }, pathExists?: (path: string) => boolean): GlobalBookmark | null {
+export function findBookmark(map: BookmarksMap, ref: { docId: string; path: string; pageId: string }, pathHolds?: (path: string, docId: string) => boolean): GlobalBookmark | null {
 	const onPage = liveBookmarks(map).filter((b) => b.pageId === ref.pageId);
 	if (!ref.docId) return onPage.find((b) => b.path === ref.path) ?? null;
 	const sameId = onPage.filter((b) => b.docId === ref.docId);
-	return sameId.find((b) => b.path === ref.path) ?? sameId.find((b) => !pathExists || !pathExists(b.path)) ?? null;
+	return sameId.find((b) => b.path === ref.path) ?? sameId.find((b) => !pathHolds || !pathHolds(b.path, b.docId)) ?? null;
 }
 
 /** `file` without the tombstones older than `TOMBSTONE_DAYS` (same rule as the quick tabs: see `pruneQuickTabTombstones`). */
@@ -287,8 +286,8 @@ export type BookmarkOp =
 	| { kind: "remove"; id: string }
 	| { kind: "order"; id: string; order: number }
 	| { kind: "label"; id: string; label: string }
-	/** The notebook at `from` was renamed or moved to `to`: every live bookmark that points at it follows. */
-	| { kind: "retarget"; from: string; to: string };
+	/** The notebook at `from` was renamed or moved to `to`: every live bookmark that points at it follows; with `docId` (found by its id) only that notebook's bookmarks, never those of another notebook now at the old path. */
+	| { kind: "retarget"; from: string; to: string; docId?: string };
 
 /**
  * Applies changes to this device's file. `merged` is what every device's files say now: a written bookmark takes a time
@@ -320,7 +319,7 @@ export function applyBookmarkOps(ownFile: BookmarksFile, merged: BookmarksMap, o
 		if (op.kind === "retarget") {
 			for (const id of [...new Set([...merged.keys(), ...items.keys()])]) {
 				const base = current(id);
-				if (base && !base.deleted && base.path === op.from) put(base, { path: op.to });
+				if (base && !base.deleted && base.path === op.from && (op.docId === undefined || base.docId === op.docId)) put(base, { path: op.to });
 			}
 			continue;
 		}

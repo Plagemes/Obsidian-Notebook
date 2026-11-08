@@ -191,3 +191,27 @@ describe("the controls added late in the wave have their explanation", () => {
 		}
 	});
 });
+
+describe("ClickGuard: a second pointer during the hold (R4)", () => {
+	const btn = { id: "delete" };
+	it("a second finger or the palm landing while the first still holds does not disarm the guard", () => {
+		const g = new ClickGuard<object>();
+		g.arm(btn);
+		g.newPress(); // the palm
+		g.newPress(); // the S Pen on the canvas
+		g.lift(2000);
+		expect(g.consume(btn, 2010)).toBe(true);
+	});
+	it("after the lift any new pointerdown does disarm it", () => {
+		const g = new ClickGuard<object>();
+		g.arm(btn);
+		g.lift(2000);
+		g.newPress();
+		expect(g.consume(btn, 2010)).toBe(false);
+	});
+	it("nothing armed: newPress is a no-op", () => {
+		const g = new ClickGuard<object>();
+		g.newPress();
+		expect(g.armed).toBe(false);
+	});
+});

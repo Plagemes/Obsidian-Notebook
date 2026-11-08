@@ -39,6 +39,15 @@ export class ClickGuard<T> {
 		this.liftedAt = null;
 	}
 
+	/**
+	 * A pointerdown anywhere: a new gesture, so a tap is never swallowed. Not while the finger that armed the guard is still down: a second finger or
+	 * the palm landing during the hold must not let the first finger's lift press the button.
+	 */
+	newPress(): void {
+		if (this.armedFor !== null && this.liftedAt === null) return;
+		this.down();
+	}
+
 	get armed(): boolean {
 		return this.armedFor !== null;
 	}
