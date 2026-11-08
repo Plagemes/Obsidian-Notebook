@@ -3642,6 +3642,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"groups.kind.sticky": "Nota adesiva",
 	"groups.kind.checkbox": "Casella",
 	"merge.summary.flags": "{count} gruppi o blocchi presi dalla copia",
+	"merge.summary.times": "{count} orari di pagina estesi a quelli della copia",
 	// 0.20 vdiff (#121): confronto di versioni
 	"command.compareVersion": "Confronta questo quaderno con una versione precedente",
 	"command.compareVersions": "Confronta due versioni precedenti",

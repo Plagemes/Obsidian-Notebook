@@ -464,7 +464,7 @@ export class MathTools {
 				continue;
 			}
 			commands.push(new RemoveElement(page.id, eq));
-			for (const stroke of strokes) commands.push(new AddStroke(page.id, stroke, base + count++));
+			for (const stroke of strokes) commands.push(new AddStroke(page.id, stroke, base + count++, false));
 		}
 		if (commands.length > 0) this.host.execute(new Batch("Convert equation to ink", commands));
 		if (missing > 0) showNotice(t("math.convert.failed"), 6000);
