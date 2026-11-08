@@ -4,6 +4,7 @@
  * real numbers and a badge each, in the list and in the thumbnail layout; the kinds narrow it; tapping a row goes to its page; an empty result says
  * so quietly; the choice is remembered per notebook and corrupt storage falls back to all pages. `markedviewShot` leaves the list showing.
  */
+import { RENDER_INK } from "../../src/model/types";
 import { NAV_MODE_KEY } from "../../src/ui/nav-adapt";
 import { NAV_MARKED_KEY } from "../../src/ui/nav-marked";
 import type { HarnessView } from "./harness-types";
@@ -44,7 +45,7 @@ async function marked(api: MarkedviewCheckApi): Promise<MarkedView> {
 	pages[1]!.tags = ["exam"];
 	pages[2]!.elements!.push({ id: "m1", type: "marker", kind: "question", x: 300, y: 100 } as never);
 	pages[3]!.elements!.push({ id: "c1", type: "checkbox", x: 40, y: 200, size: 20, label: "" } as never);
-	pages[4]!.strokes.push({ id: "s1", tool: "pen", color: "#d62828", width: 2, points: [[10, 10, 0.5], [60, 40, 0.5]] } as never);
+	pages[4]!.strokes.push({ id: "s1", tool: "pen", color: "#d62828", width: 2, render: RENDER_INK, points: [[10, 10, 0.5], [60, 40, 0.5]] } as never);
 	(v.document.meta ??= {} as never).bookmarks = [pages[5]!.id];
 	await v.host.bookmarks?.toggle(v.quickApi()); // a global bookmark on the page in view
 	v.setNavigatorOpen(false);
