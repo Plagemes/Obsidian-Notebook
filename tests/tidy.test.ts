@@ -282,6 +282,47 @@ describe("tidy up: what it leaves alone", () => {
 		expect(plan.command.label).toBe("Tidy up page");
 	});
 
+	it("never lets a line move up into another moving line it overlaps only a little horizontally (whatever the overlap)", () => {
+		const stack = [100, 140, 180].map((b) => row(b, 60));
+		const wide = box(stack[0]!);
+		const below = row(420, 60);
+		// A short line at the right end of the stack: it overlaps the lines above it by under 15 %, so it is not "below" them, and it sits where the
+		// line below would end up. It is a line that moves (or stays) too: the two must not end on top of each other.
+		const short = word("the", wide.maxX - 0.5, 260).strokes;
+		const sb = box(short);
+		expect((Math.min(sb.maxX, wide.maxX) - Math.max(sb.minX, wide.minX)) / (sb.maxX - sb.minX)).toBeLessThan(TIDY_RULES.overlapShare);
+		const page = pageOf([...stack.flat(), ...short, ...below]);
+		const plan = planTidy(page, { strokes: page.strokes, elements: [] }, only("gaps"));
+		const lines = [...stack, short, below].map((r) => box(after(plan, r)));
+		const overlap = (a: (typeof lines)[number], b: (typeof lines)[number]): number =>
+			Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX)) * Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY));
+		const before = [...stack, short, below].map((r) => box(r));
+		for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) expect(overlap(lines[i]!, lines[j]!)).toBeLessThanOrEqual(overlap(before[i]!, before[j]!) + 0.01);
+	});
+
+	it("treats invisible ink and the ink of a collapsed note as in the way: a line never moves onto it", () => {
+		const { page, rows } = build();
+		// Where the line below would end up (a paragraph break under the last line).
+		const secret = word("red", 60, 255).strokes.map((s) => freezeStroke({ ...s, hidden: true }));
+		page.strokes.push(...secret);
+		const plan = planTidy(page, { strokes: page.strokes, elements: [] }, only("gaps"));
+		const moved = new Set(plan?.changes.keys() ?? []);
+		for (const s of rows[3]!) expect(moved.has(s)).toBe(false);
+		for (const s of secret) expect(moved.has(s)).toBe(false);
+		// The same for the ink a collapsed note keeps hidden (it is not marked hidden itself).
+		const { page: p2, rows: r2 } = build();
+		const kept = word("red", 60, 255).strokes;
+		p2.strokes.push(...kept);
+		p2.elements = [{ ...createSticky(500, 800, p2), collapsed: true as const, ink: kept.map((s) => s.id) }];
+		const plan2 = planTidy(p2, { strokes: p2.strokes, elements: [] }, only("gaps"));
+		const moved2 = new Set(plan2?.changes.keys() ?? []);
+		for (const s of r2[3]!) expect(moved2.has(s)).toBe(false);
+		// Without the hidden ink the line does close up (a positive control).
+		const free = build();
+		const control = planTidy(free.page, { strokes: free.page.strokes, elements: [] }, only("gaps"))!;
+		expect(box(after(control, free.rows[3]!)).minY).toBeLessThan(box(free.rows[3]!).minY - 100);
+	});
+
 	it("moves only what the selection asks for", () => {
 		const { page, rows } = build();
 		const chosen = [...rows[3]!, ...rows[4]!, ...rows[2]!];
