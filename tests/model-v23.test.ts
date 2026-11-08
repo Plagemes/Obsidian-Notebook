@@ -10,7 +10,7 @@ import { elementContentKey, planMerge } from "../src/model/merge";
 import { repairNotebookText } from "../src/model/repair";
 import { checkContent, parse, parseStaged, serialize, serializeChecked, StagedParse, STAGED_MIN_CHARS } from "../src/model/serialize";
 import { stressDocument } from "../src/model/stress";
-import { AddElement, History, RemoveElement } from "../src/model/history";
+import { AddElement, Batch, History, RemoveElement, ReplaceStroke, type Command } from "../src/model/history";
 import { expandToGroups, groupRenamer, selectableItems } from "../src/model/groups";
 import { elementBand } from "../src/model/layers";
 import { AREA_MAX_SIDE, AREA_MIN_SIDE, areaRect, areasOf, createArea, withAreaColour } from "../src/model/area";
@@ -18,7 +18,7 @@ import { CURRENT_VERSION, ELEMENT_TYPES_V23, FORMAT_ID, type AreaElement, type N
 import { elementBounds, elementsInLasso, hitElement, transformElement } from "../src/ink/elements";
 import { rotate90Matrix } from "../src/ink/selection-transform";
 import { apply, multiply, rotateAbout, scaleAbout, translate } from "../src/ink/transform";
-import { areaMatchesFilter, areasUnderEraser, eraserDistanceToArea } from "../src/ink/area-erase";
+import { AreaEraseGesture, areaMatchesFilter, areasUnderEraser, eraserDistanceToArea } from "../src/ink/area-erase";
 import { eraseAreaCommand } from "../src/ink/erase-area";
 import { commonStyle, planRestyle, restyleAbilities } from "../src/ink/restyle";
 import { pageToSvg } from "../src/ink/export-svg";
@@ -281,7 +281,7 @@ describe("area highlighter: geometry", () => {
 describe("area highlighter: erasing", () => {
 	const filter = (kind: "all" | "highlighter" | "pen" | "color", color = "#000000") => ({ kind, color });
 
-	it("the eraser removes the whole area as soon as its path touches it, near or crossing", () => {
+	it("the eraser finds the whole area as soon as its path touches it, near or crossing", () => {
 		const a = area("a");
 		expect(eraserDistanceToArea(a, 100, 112, 110, 112)).toBe(0);
 		expect(eraserDistanceToArea(a, 100, 60, 100, 160)).toBe(0);
@@ -306,6 +306,76 @@ describe("area highlighter: erasing", () => {
 		const locked = area("l", { locked: true, lockAt: 1 });
 		const spared = area("s", { y: 200 });
 		expect(areasUnderEraser([locked, spared], 100, 112, 100, 212, 3, filter("all"), new Set(["s"]))).toEqual([]);
+	});
+
+	describe("a whole-stroke or segment eraser gesture over an area (review fix)", () => {
+		const rubOut = (doc: NotebookDocument) => {
+			const page = doc.pages[0]!;
+			return new ReplaceStroke(page.id, page.strokes[0]!, [], 0);
+		};
+		const gesture = () => {
+			const commands: Command[] = [];
+			return { commands, g: new AreaEraseGesture(commands) };
+		};
+		const hit = (doc: NotebookDocument) => areasUnderEraser(doc.pages[0]!.elements ?? [], 100, 112, 110, 112, 3, filter("all"));
+		const ids = (doc: NotebookDocument) => (doc.pages[0]!.elements ?? []).map((e) => e.id);
+
+		it("erasing a letter written inside an area keeps the area", () => {
+			const doc = docWith([area("a")], [line(60, 110, 120, 114)]);
+			const { commands, g } = gesture();
+			const ink = rubOut(doc);
+			ink.apply(doc);
+			commands.push(ink);
+			g.inkErased(doc, filter("all"));
+			expect(g.allowed(filter("all"))).toBe(false);
+			expect(g.eraseAreas(doc, "p1", hit(doc), filter("all"))).toBe(false);
+			expect(ids(doc)).toEqual(["a"]);
+			expect(commands).toEqual([ink]);
+		});
+
+		it("scrubbing an empty area removes it, and the step undoes", () => {
+			const doc = docWith([area("a"), area("b", { y: 400 })]);
+			const { commands, g } = gesture();
+			expect(g.eraseAreas(doc, "p1", hit(doc), filter("all"))).toBe(true);
+			expect(ids(doc)).toEqual(["b"]);
+			const history = new History(() => doc, 100, checkContent);
+			history.record(new Batch("Erase", commands));
+			history.undo();
+			expect(ids(doc)).toEqual(["a", "b"]);
+		});
+
+		it("an area taken before the gesture reached ink comes back, in its place, and is not in the step", () => {
+			const doc = docWith([area("a"), area("b", { y: 400 })], [line(60, 110, 120, 114)]);
+			const { commands, g } = gesture();
+			expect(g.eraseAreas(doc, "p1", hit(doc), filter("all"))).toBe(true);
+			expect(ids(doc)).toEqual(["b"]);
+			const ink = rubOut(doc);
+			ink.apply(doc);
+			commands.push(ink);
+			expect(g.inkErased(doc, filter("all"))).toBe(true);
+			expect(ids(doc)).toEqual(["a", "b"]);
+			expect(commands).toEqual([ink]);
+			expect(g.eraseAreas(doc, "p1", hit(doc), filter("all"))).toBe(false);
+		});
+
+		it("with the highlighter filter the area goes even when ink goes in the same gesture", () => {
+			const doc = docWith([area("a")], [line(60, 110, 120, 114)]);
+			const { commands, g } = gesture();
+			const ink = rubOut(doc);
+			ink.apply(doc);
+			commands.push(ink);
+			g.inkErased(doc, filter("highlighter"));
+			expect(g.allowed(filter("highlighter"))).toBe(true);
+			expect(g.eraseAreas(doc, "p1", hit(doc), filter("highlighter"))).toBe(true);
+			expect(ids(doc)).toEqual([]);
+			expect(commands).toHaveLength(2);
+			// Ink that goes after the area does not bring it back under this filter.
+			const other = docWith([area("a")]);
+			const next = gesture();
+			next.g.eraseAreas(other, "p1", other.pages[0]!.elements as AreaElement[], filter("highlighter"));
+			expect(next.g.inkErased(other, filter("highlighter"))).toBe(false);
+			expect(ids(other)).toEqual([]);
+		});
 	});
 
 	it("the area eraser removes the areas whose centre is inside its outline, as one undo step", () => {

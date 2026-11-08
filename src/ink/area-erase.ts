@@ -1,10 +1,11 @@
-import type { AreaElement, PageElement } from "../model/types";
+import type { AreaElement, NotebookDocument, PageElement } from "../model/types";
+import { RemoveElement, type Command } from "../model/history";
 import { areaBounds, isArea } from "../model/area";
 import type { EraseFilter } from "./erase-filter";
 
 /**
- * Erasing area highlighters (v23, #99). An area is highlighter ink: the whole-stroke and the segment eraser remove the WHOLE area as soon as
- * the eraser touches it (an area has no stroke to cut), the area eraser removes the areas whose centre is inside its outline, and the
+ * Erasing area highlighters (v23, #99). An area is highlighter ink: the whole-stroke and the segment eraser remove the WHOLE area when
+ * the eraser touches it and the gesture removed no ink (`AreaEraseGesture`; an area has no stroke to cut), the area eraser removes the areas whose centre is inside its outline, and the
  * selective eraser treats it as a highlighter of its colour. A locked area is never erased (the eraser skips locked elements). Pure geometry,
  * no 'obsidian'.
  */
@@ -84,4 +85,49 @@ export function areasUnderEraser(
 		if (eraserDistanceToArea(el, ax, ay, bx, by) <= radius) out.push(el);
 	}
 	return out;
+}
+
+/**
+ * One whole-stroke or segment eraser gesture and the areas under it (review fix, #99). An area has no stroke to cut, so the eraser would take
+ * all of it as soon as it touched it, also when the user only meant to rub out a letter written on top. The rule: an area goes only when the
+ * gesture has removed no ink (the user is erasing the highlight itself), or when the selective eraser is set to "highlighter". An area taken
+ * before the gesture reached ink is put back the moment ink is hit, so the step that is recorded at the end never holds both. The commands are
+ * pushed on the gesture's own list, in the order they were applied.
+ */
+export class AreaEraseGesture {
+	private removed: RemoveElement[] = [];
+	private ink = false;
+
+	constructor(private readonly commands: Command[]) {}
+
+	/** May the areas under the eraser be taken now? */
+	allowed(filter: EraseFilter): boolean {
+		return filter.kind === "highlighter" || !this.ink;
+	}
+
+	/** Ink was removed or cut in this gesture: the areas taken so far are put back (not under the "highlighter" filter). True when any came back. */
+	inkErased(doc: NotebookDocument, filter: EraseFilter): boolean {
+		this.ink = true;
+		if (filter.kind === "highlighter" || this.removed.length === 0) return false;
+		for (let i = this.removed.length - 1; i >= 0; i--) {
+			const cmd = this.removed[i]!;
+			cmd.revert(doc);
+			const at = this.commands.indexOf(cmd);
+			if (at >= 0) this.commands.splice(at, 1);
+		}
+		this.removed = [];
+		return true;
+	}
+
+	/** Takes the areas under the eraser if the rule allows it. True when any went. */
+	eraseAreas(doc: NotebookDocument, pageId: string, areas: readonly AreaElement[], filter: EraseFilter): boolean {
+		if (areas.length === 0 || !this.allowed(filter)) return false;
+		for (const el of areas) {
+			const cmd = new RemoveElement(pageId, el);
+			cmd.apply(doc);
+			this.commands.push(cmd);
+			this.removed.push(cmd);
+		}
+		return true;
+	}
 }

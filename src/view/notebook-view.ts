@@ -19,7 +19,7 @@ import {
 import { elementsInLasso, hitElement, hitLockedElement } from "../ink/elements";
 import { eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
-import { areasUnderEraser } from "../ink/area-erase";
+import { AreaEraseGesture, areasUnderEraser } from "../ink/area-erase";
 import { createArea } from "../model/area";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { growForInfinite } from "../ink/infinite";
@@ -346,6 +346,8 @@ interface ActiveStroke {
 
 interface ActiveErase {
 	commands: Command[];
+	/** The areas under this gesture's eraser (they go only while the gesture has removed no ink); it pushes on `commands`. */
+	areas: AreaEraseGesture;
 	/** Last eraser position in document coordinates. */
 	last: [number, number];
 	/** Ids of strokes this eraser never touches: the ink its own contact committed just before it (side button mid-stroke). */
@@ -5171,7 +5173,8 @@ export class NotebookView extends FileView {
 		if (tool === "eraser" && this.tools.eraserMode !== "area" && !((this.markers?.armed || this.excerpts?.armed) && !eraserButton)) {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
 			this.clearSelection();
-			this.erasing = { commands: [], last: [dx, dy], spare };
+			const commands: Command[] = [];
+			this.erasing = { commands, areas: new AreaEraseGesture(commands), last: [dx, dy], spare };
 			this.eraseTo(dx, dy);
 			return true;
 		}
@@ -5939,13 +5942,12 @@ export class NotebookView extends FileView {
 			erasing.commands.push(cmd);
 			changed = true;
 		}
-		// v23 (#99): an area highlighter is erased whole as soon as the eraser touches it (the selective eraser applies; a locked one stays).
-		for (const el of areasUnderEraser(page.elements ?? [], ax, ay, bx, by, radius, this.eraseFilter())) {
-			const cmd = new RemoveElement(page.id, el);
-			cmd.apply(doc);
-			erasing.commands.push(cmd);
-			changed = true;
-		}
+		// v23 (#99): an area highlighter is erased whole when the eraser touches it, but only if this gesture has removed no ink (rubbing out a
+		// letter written on top of an area keeps the area) or the selective eraser is set to "highlighter". An area taken before the gesture
+		// reached ink comes back. The selective eraser applies; a locked area stays.
+		const filter = this.eraseFilter();
+		if (changed) erasing.areas.inkErased(doc, filter);
+		if (erasing.areas.allowed(filter) && erasing.areas.eraseAreas(doc, page.id, areasUnderEraser(page.elements ?? [], ax, ay, bx, by, radius, filter), filter)) changed = true;
 		if (changed) this.renderer.invalidate();
 	}
 
