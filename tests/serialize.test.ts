@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FULL_CHECK_LIMIT, freezeStroke, parse, serialize, serializeChecked } from "../src/model/serialize";
+import { FULL_CHECK_LIMIT, checkContent, freezeStroke, parse, serialize, serializeChecked } from "../src/model/serialize";
 import { CURRENT_VERSION, FORMAT_ID } from "../src/model/types";
 import { createStroke } from "../src/model/document";
 import { line, sampleDocument } from "./helpers";
@@ -109,6 +109,19 @@ describe("parse rejects corrupt files", () => {
 			expect(r.dropped).toBe(1);
 			expect(r.doc.pages[0]!.strokes[0]!.tool).toBe("pen");
 		}
+	});
+	// Review fix (D2): the lenient read keeps the ink as a pen, but a strict write never accepts a tool this version does not know.
+	it("unknown tool: the strict write still refuses it, and the lenient read counts it once per stroke", () => {
+		const doc = sampleDocument(1);
+		(doc.pages[0]!.strokes[0] as { tool: string }).tool = "laser";
+		expect(checkContent(doc)).toMatch(/tool/);
+		const written = serializeChecked(doc);
+		expect(written.ok).toBe(false);
+		const d = valid();
+		setAt(d, ["pages", 0, "strokes", 0, "tool"], "laser");
+		setAt(d, ["pages", 0, "strokes", 1, "tool"], "quill");
+		const r = parse(JSON.stringify(d));
+		expect(r.ok && r.dropped).toBe(2);
 	});
 });
 
