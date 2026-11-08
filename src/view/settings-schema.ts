@@ -206,6 +206,8 @@ const WRITING: SettingSpec[] = [
 	{ id: "axesTicks", section: "writing", order: 58.6, name: "settings.axesTicks", desc: "settings.axesTicks.desc", control: { type: "toggle" } },
 	{ id: "axesLabels", section: "writing", order: 58.7, name: "settings.axesLabels", desc: "settings.axesLabels.desc", control: { type: "toggle" }, parent: "axesTicks", visible: (s) => s.axesTicks },
 	{ id: "autoLineBreak", section: "writing", order: 60, name: "settings.autoLineBreak", desc: "settings.autoLineBreak.desc", control: { type: "toggle" } },
+	// 0.23 hookclean (#314)
+	{ id: "trimHooks", section: "writing", order: 61, name: "settings.trimHooks", desc: "settings.trimHooks.desc", keywords: "hook tick tail flick clean pen lift uncino coda penna", control: { type: "toggle" } },
 	// 0.21 symbols
 	{ id: "symbolStrip", section: "writing", order: 62, name: "settings.symbolStrip", desc: "settings.symbolStrip.desc", keywords: "symbols maths math formula greek simboli matematica", control: { type: "toggle" } },
 	{ id: "symbolCount", section: "writing", order: 63, name: "settings.symbolCount", desc: "settings.symbolCount.desc", control: { type: "slider", min: SYMBOL_COUNT_MIN, max: SYMBOL_COUNT_MAX, step: 1 }, parent: "symbolStrip", visible: (s) => s.symbolStrip },

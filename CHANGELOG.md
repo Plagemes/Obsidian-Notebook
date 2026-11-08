@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### hookclean
+- **Clean up hooks and stray dots (#314).** *Clean up strokes* in the contextual bar of an ink selection (and in the All actions sheet and the command palette) trims the small hook a pen leaves where it lands or lifts, and removes the stray dot a bouncing pen leaves touching the end of a stroke, as ONE undo step. A notice says how many hooks and dots went. Only the points at the very start or end of a stroke are cut; the stroke keeps its id, style, group and nib, and its place in the page order.
+- **Conservative on purpose.** A hook is a tick of at most a few pen widths (6 pt at most) and a tenth of the stroke that turns back at 120 degrees or more against a straight run of line. Real corners (the foot of an L, a check mark, an arrow barb, a Z or a W), curves and circles are never cut. A dot is removed only when it is a single tiny mark in the same pen, colour, width and nib as the stroke written just before or after it and touches one of its ends: the dot of an "i" or "j" and a full stop sit apart from the stroke and stay. Grouped dots and hidden ink are left alone.
+- **Respects the page.** Groups come whole, the ink a collapsed sticky note keeps hidden is cleaned with the note, a locked page refuses the step and says so, and the selection stays on the cleaned strokes (also across pages).
+- **Setting *Trim hooks as you write* (Settings > Writing, off by default).** When the pen lifts, the stroke that is committed loses a hook at its start or end. Only the committed points change, once; the live input and the rendering are not touched, and a snapped or recognised stroke is left as it is.
+- **Code.** Pure `src/ink/hook-clean.ts` (`findHooks`, `trimHooks`, `isStrayDot`, `planCleanup`), tested with synthetic strokes in `tests/hook-clean.test.ts`. No document format change.
+
 ## 0.22.0 — 2026-11-08
 
 Seven features: three new pens, optional cloud sync with Google Drive or OneDrive, two-way page references, colours with meaning, instant axes, custom covers and an automatic lecture header. The notebook format moves to version 20 (the new pen tools and the nib angle): the migration from version 19 is automatic, and 0.21 and older open a v20 notebook read-only and never overwrite it. Cloud sync is off by default and uses your own OAuth client; the plugin ships no client ID or secret.

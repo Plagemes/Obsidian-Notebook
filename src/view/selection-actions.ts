@@ -5,6 +5,8 @@ import { whiteToTransparent } from "../ink/image-alpha";
 import { measureText } from "../ink/renderer";
 import { withoutPinnedInk, withPinnedInk } from "../ink/attach";
 import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
+import { planCleanup, type CleanupPlan } from "../ink/hook-clean";
+import { selectableItems } from "../model/groups";
 import type { PageBox } from "../ink/layout";
 import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
 import { AddAsset, AddElement, AddPage, Batch, ReplaceElement, type Command } from "../model/history";
@@ -179,6 +181,48 @@ export class SelectionActions {
 		if (!plan) return;
 		if (!this.host.execute(plan.command)) return;
 		this.host.select(sel.pageIndex, plan.strokes, plan.elements);
+	}
+
+	// --- clean up (0.23, #314) ---
+
+	/**
+	 * Trims the hooks at the ends of the selected strokes and removes the stray dots touching them, as ONE undo step. Groups come
+	 * whole (`selectableItems`), the ink a collapsed note keeps hidden goes with the note (`withPinnedInk`); a locked page refuses
+	 * the step in the history, which says so. The selection stays on the cleaned strokes.
+	 */
+	cleanUp(): void {
+		const sel = this.host.selection();
+		const doc = this.host.doc();
+		if (!sel || !doc || !this.host.editable()) return;
+		const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])];
+		const plans: Array<{ part: PagePart; plan: CleanupPlan }> = [];
+		for (const part of parts) {
+			const page = doc.pages[part.pageIndex];
+			if (!page) continue;
+			const onPage = new Set(page.strokes);
+			const elements = part.elements.filter((e) => page.elements?.includes(e));
+			const picked = selectableItems(page, { strokes: part.strokes.filter((s) => onPage.has(s)), elements });
+			const plan = planCleanup(page, withPinnedInk(page.strokes, picked.strokes, picked.elements));
+			if (plan) plans.push({ part, plan });
+		}
+		if (plans.length === 0) {
+			showNotice(t("cleanup.nothing"));
+			return;
+		}
+		const cmd = plans.length === 1 ? plans[0]!.plan.command : new Batch("Clean up strokes", plans.map((p) => p.plan.command));
+		if (!this.host.execute(cmd)) return;
+		const next = (part: PagePart): PagePart => {
+			const found = plans.find((p) => p.part === part);
+			if (!found) return part;
+			const strokes = part.strokes.flatMap((s) => (found.plan.changes.has(s) ? (found.plan.changes.get(s) ?? []) : [s]));
+			return { pageIndex: part.pageIndex, strokes, elements: part.elements };
+		};
+		const [first, ...rest] = parts.map(next) as [PagePart, ...PagePart[]];
+		if (first.strokes.length + first.elements.length + rest.reduce((n, p) => n + p.strokes.length + p.elements.length, 0) === 0) this.host.clearSelection();
+		else this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
+		const hooks = plans.reduce((n, p) => n + p.plan.trimmed, 0);
+		const dots = plans.reduce((n, p) => n + p.plan.removed, 0);
+		showNotice(t("cleanup.done", { hooks: String(hooks), dots: String(dots) }));
 	}
 
 	// --- copy, cut, duplicate ---

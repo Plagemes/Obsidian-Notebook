@@ -3467,3 +3467,26 @@ Manual steps (real Obsidian; nothing here is verified on Android). You need a cl
 |---|---|---|---|---|---|
 | Automatic lecture header (#210): course, lecturer, room, date and start time as two grouped text boxes at the top, one undo step | yes | slot choice (in progress, lead time, overlap, linked to another notebook, no class, nearest), fields in English and Italian, free-area search, plan, History step and locked page: `tests/lecture-header.test.ts`; view and chip: harness `doc=lecthead` | | | not tried on Android; time zones are covered by the rule that class times are local wall-clock times, not by running under other zones |
 | Setting Off / Ask / Automatic and the four fields; command *Insert lecture header* | yes | settings read: `tests/lecture-header.test.ts`; command and chip: harness `doc=lecthead` | | | |
+
+### 0.23 — hookclean: clean-up of hooks and stray dots (#314; steps 2440-2459)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen). The synthetic strokes of the automated tests are perfect; the point of these steps is to see how real pen noise behaves.
+
+2440. **Hooks.** With the pen, write a few lines and words quickly, lifting the pen as you normally do, until some of them end (or start) with a tiny tick. Lasso them and tap *Clean up strokes* in the bar: the ticks disappear, the lines are otherwise as written, and a notice counts hooks and dots. One *Undo* brings every tick back.
+2441. **Real corners stay.** Write an L, a check mark, an arrow drawn in one stroke, a Z, a W, a circle and a cursive word, select them and run *Clean up strokes*: nothing changes and the notice says there was nothing to clean up. If a deliberate flick of yours is cut, note which pen and width it was (the rules are in `src/ink/hook-clean.ts`, `HOOK_RULES`).
+2442. **Stray dots.** Tap the pen on the paper right after lifting it from the end of a line, so that a dot touches the end of the line. Select both and clean up: the dot goes. Write an *i* with its dot and a sentence with a full stop: they stay.
+2443. **Other pens.** Repeat with the fountain pen (the nib angle is kept) and the brush; the highlighter and the marker are not touched.
+2444. **Groups and locks.** Group a hooked line with another item and select only the line: the whole group is cleaned. Lock the page, select the ink and run the action: the lock notice appears and nothing changes. Unlock and run it again.
+2445. **Hidden ink.** Collapse a sticky note that holds ink with a hook, select the note and clean up: the hidden ink is cleaned too and comes back trimmed when the note is opened.
+2446. **Several pages.** Lasso across a page break and clean up: both pages are cleaned and one *Undo* undoes both.
+2447. **Command and sheet.** *Clean up the selected strokes* in the command palette and *Clean up strokes* in the All actions sheet (Selection) do the same; without ink selected they are not offered.
+2448. **Trim as you write.** Turn on *Settings > Writing > Trim hooks as you write*. Write many words: the little ticks at the start and end of the lines are gone as soon as the pen lifts, the text still looks like your writing, and the pen feels no different (no extra lag). Turn it off again: the ticks come back on new strokes. Strokes already written are never changed by the setting.
+2449. **Languages and looks.** Switch the plugin to Italian: the action, the notice and the setting are translated. Light and dark theme, phone and tablet width: the action sits in the bar like the other selection actions.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Hook detection at the start and end of a stroke (sharp turn, short, straight run before it); real corners, arrows, circles, curves untouched | yes | `tests/hook-clean.test.ts` (synthetic strokes) | | | thresholds (`HOOK_RULES`) are tuned on synthetic strokes only |
+| Stray-dot detection (single tiny mark, same style as the neighbour stroke, touching its end); i/j dots and full stops kept | yes | `tests/hook-clean.test.ts` | | | |
+| Clean up strokes: one undo step, keeps ids, order, groups, nib; refuses a locked page; selection follows | yes | `tests/hook-clean.test.ts` (History: execute, undo, redo, locked page); harness `doc=hookclean` | | | |
+| Selection action, palette command and sheet entry (`selection-cleanup`) | yes | registry tests (`tests/ui-registry.test.ts`); harness `doc=hookclean` | | | |
+| Setting *Trim hooks as you write* (off by default), applied once at pen-up to the committed points; live input and rendering untouched | yes | settings read: `tests/hook-clean-settings.test.ts`; golden hashes unchanged: `tests/pens-golden.test.ts`; harness `doc=hookclean` | | yes | needs real pen data to judge |

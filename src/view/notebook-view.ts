@@ -33,6 +33,7 @@ import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layou
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
+import { trimHooks } from "../ink/hook-clean";
 import { scribbleEraseSteps } from "../ink/scribble";
 import { lineAt, TextLayoutCache, wordAt } from "../ink/words";
 import { InkBuilder } from "../ink/ink-geometry";
@@ -5242,7 +5243,7 @@ export class NotebookView extends FileView {
 			// The line ends where the pen lifted (the filtered position may trail it slightly).
 			this.ink.add(active.rawX, active.rawY, active.rawP);
 			this.ink.finish();
-			const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
+			const stroke = this.trimmedAtPenUp(active, freezeStroke({ ...active.stroke, points: this.ink.toPoints() }));
 			const snapped = this.reading?.snapStroke(page, stroke);
 			if (snapped) {
 				// Snap to text lines: straight highlights replace the hand-drawn stroke in the same undo step.
@@ -5267,7 +5268,7 @@ export class NotebookView extends FileView {
 			return;
 		}
 		this.renderer?.setLive(null);
-		const stroke = freezeStroke(active.stroke);
+		const stroke = this.trimmedAtPenUp(active, freezeStroke(active.stroke));
 		const snapped = this.reading?.snapStroke(page, stroke);
 		if (snapped) {
 			this.addStrokes(active.pageIndex, page, snapped);
@@ -5276,6 +5277,15 @@ export class NotebookView extends FileView {
 		const extras = active.extra.map((points) => freezeStroke({ ...active.stroke, id: createId(), points }));
 		this.addStrokes(active.pageIndex, page, [stroke, ...extras]);
 		this.updateGhostLines(active.pageIndex, page, stroke.tool);
+	}
+
+	/**
+	 * 0.23 (#314), setting "Trim hooks as you write": the stroke that is committed when the pen lifts loses a tiny hook at its start
+	 * or end (`ink/hook-clean.ts`). Only the committed points change, once, here: the live pipeline and the renderer are untouched
+	 * (the wet ink shows the line as written until the static layer takes over). A snapped or recognised stroke is left as it is.
+	 */
+	private trimmedAtPenUp(active: ActiveStroke, stroke: Stroke): Stroke {
+		return this.host.settings.trimHooks && !active.snap && !active.recognized ? trimHooks(stroke) : stroke;
 	}
 
 	/**

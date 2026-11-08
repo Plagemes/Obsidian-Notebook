@@ -179,6 +179,8 @@ export interface CleanupPlan {
 	command: Batch;
 	/** The strokes of the request after the clean-up: trimmed ones replaced by their new objects, removed dots left out. */
 	strokes: Stroke[];
+	/** What became of each stroke that changed: its trimmed copy, or null when it was a stray dot and is gone. */
+	changes: ReadonlyMap<Stroke, Stroke | null>;
 	/** Strokes whose hooks were cut, and dots removed. */
 	trimmed: number;
 	removed: number;
@@ -218,5 +220,5 @@ export function planCleanup(page: Page, strokes: readonly Stroke[]): CleanupPlan
 		const next = after.has(s) ? after.get(s) : s;
 		if (next) kept.push(next);
 	}
-	return { command: new Batch("Clean up strokes", steps.map((s) => s.cmd)), strokes: kept, trimmed, removed };
+	return { command: new Batch("Clean up strokes", steps.map((s) => s.cmd)), strokes: kept, changes: after, trimmed, removed };
 }
