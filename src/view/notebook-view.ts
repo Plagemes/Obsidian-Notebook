@@ -2504,6 +2504,7 @@ export class NotebookView extends FileView {
 			deselect: () => this.clearSelection(),
 			pen: () => ({ color: this.tools.penColor, textSize: this.tools.textSize }),
 			inkFollows: () => this.host.settings.inkFollowsObjects,
+			dimensionHint: () => this.host.settings.dimensionHint,
 			refresh: () => this.refreshUi(),
 		};
 	}

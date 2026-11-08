@@ -3515,3 +3515,25 @@ Manual steps (real Obsidian; nothing here is verified on Android). Use a noteboo
 |---|---|---|---|---|---|
 | Export of the written area of a page (bounding box of visible ink and elements plus margin) as transparent PNG 1x/2x/3x or SVG, saved next to the notebook, optional copy to the clipboard | yes | bounds, margin, hidden ink, collapsed notes: `tests/export-area.test.ts`; harness `doc=exportarea` (real dialog, transparent PNG corner, SVG without sheet, empty refusal) | | | clipboard image copy depends on the WebView (`ClipboardItem`) |
 | Export of the selection as transparent PNG or SVG (selected items and pinned note ink only; groups expanded by the selection; locked items fine) | yes | selection cut: `tests/export-area.test.ts` (SVG of each pen type, highlighter and marker alpha, wikilink label) | | | |
+### 0.23 — dimcheck (dimensional analysis of formulas, #293; steps 2320-2339)
+
+Manual steps (real Obsidian; nothing here is verified on Android). The hint lives in the equation editor (*Insert > Equation*, or *Edit* on an equation); it never changes the formula and never blocks *Done*. Units are written in the formula with `\mathrm`, `\text` or `\SI`.
+
+2320. **A sum that cannot be.** Insert an equation and type `5\,\mathrm{m} + 3\,\mathrm{s}`. After a moment a quiet dashed line under the preview, with a ruler icon and the word *Units*, says that 5 m (length) and 3 s (time) cannot be added. The preview and *Done* work as always.
+2321. **Equation sides.** Type `1\,\mathrm{N} = 1\,\mathrm{kg\,m/s}`: the hint says the two sides differ (force against momentum). Fix it to `1\,\mathrm{N} = 1\,\mathrm{kg\,m/s^2}`: the line turns into a green tick and *Units are consistent.*
+2322. **Declared symbols.** Type three lines: `m = 2\,\mathrm{kg}`, `a = 3\,\mathrm{m/s^2}`, `F = m a = 6\,\mathrm{J}` (use `\` between them for a multi-line equation, or just new lines). The hint says force and energy differ. Change `J` to `N`: the tick. Declaring with `[v] = m/s` on its own line works too.
+2323. **Quiet by default.** Type `\frac{a}{b} = \sqrt{x}` or `E = m c^2` (no units anywhere): no hint at all. A symbol the editor knows nothing about never causes a warning.
+2324. **Functions and exponents.** `\sin(5\,\mathrm{m})` and `2^{3\,\mathrm{s}}`: the hint says the argument or the exponent must be dimensionless. `\sin(30^\circ)` and `\ln\frac{2\,\mathrm{m}}{4\,\mathrm{m}}` give no warning.
+2325. **Prefixes and derived units.** `3\,\mathrm{m} + 2\,\mathrm{km} + 5\,\mathrm{cm}` is fine; `1\,\mathrm{J} = 1\,\mathrm{N\,m}`, `1\,\mathrm{V} = 1\,\mathrm{W/A}`, `1\,\mathrm{\Omega} = 1\,\mathrm{V/A}` are fine; `1\,\mathrm{J} = 1\,\mathrm{W}` is flagged.
+2326. **Derivatives and integrals.** With `[x] = m`, `[t] = s` on their own lines, `v = \frac{dx}{dt} + 1\,\mathrm{m}` is flagged (velocity against length); `W = \int F\,dx` with `[F] = N` followed by `W = 3\,\mathrm{J}` is fine.
+2327. **Many problems.** Five wrong lines: two sentences and *+3 more*; nothing else grows.
+2328. **Setting.** *Settings > Writing > Check units in equations*: switched off, the hint never appears in a newly opened editor; on again, it returns.
+2329. **Languages.** Italian: the label *Unità*, the sentences and the quantity names (*lunghezza*, *tempo*, *forza*, *energia*) are in Italian.
+2330. **Layout.** Phone and tablet width, light and dark, with the on-screen keyboard open: the hint wraps inside the card, stays under the preview and above Size/Colour, and is easy to ignore; it is not a button.
+2331. **Nothing stored.** Open an existing equation, type something with a unit mistake, press *Done*: the equation is saved exactly as typed; reopen it and the hint shows again. The file format is unchanged.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Dimensional analysis (#293): SI units and prefixes, derived units, propagation through + − × ÷ ^, roots, functions, fractions, derivatives, integrals and sums, `=` and comparisons, declared symbols | yes | `tests/dimensions.test.ts` (units, sums, products, powers, functions, equations, symbols, LaTeX forms, textbook formulas, plain text, hostile input) | | | |
+| Quiet units hint in the equation editor, English and Italian, with a tick when units agree | yes | words, quantity names, cut list: `tests/dimension-hint.test.ts`; editor: harness `doc=dimcheck` | | | |
+| Setting *Check units in equations* (Writing), default on | yes | `tests/dimension-hint.test.ts` | | | |

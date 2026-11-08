@@ -18766,3 +18766,72 @@ body.notebook-style-obsidian {
 	flex: 1 1 auto;
 	min-width: 0;
 }
+
+/* ===== 0.23 dimcheck ===== */
+/* The units hint of the equation editor (#293): a muted line under the preview, one sentence per problem, a tick when the units agree. */
+.nb-ui.nb-eq-card .notebook-eq-dimhint {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--nb-space-2);
+	padding: var(--nb-space-2) var(--nb-space-3);
+	border: 1px dashed var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-dimhint.notebook-hidden {
+	display: none;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-dimhint-icon {
+	display: inline-flex;
+	flex: none;
+	margin-top: 1px;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-dimhint.is-ok .notebook-eq-dimhint-icon {
+	color: var(--nb-success);
+}
+
+.nb-ui.nb-eq-card .notebook-eq-dimhint-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-dimhint-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-dimhint-label {
+	margin-right: var(--nb-space-2);
+	color: var(--nb-text);
+	font-weight: 600;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-dimhint.is-ok .notebook-eq-dimhint-body {
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: baseline;
+}
+
+.nb-ui.nb-eq-card .notebook-eq-dimhint-more {
+	opacity: 0.75;
+}
+
+/* A tall card (palette, hint, options) never outgrows a phone-sized page area: it scrolls inside itself. */
+.nb-ui.nb-eq-card.notebook-eq-editor {
+	max-height: calc(100% - 16px);
+	overflow-y: auto;
+}
+
+.nb-ui.nb-eq-card.notebook-eq-editor > * {
+	flex-shrink: 0;
+}
