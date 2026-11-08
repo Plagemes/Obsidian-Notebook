@@ -45,7 +45,7 @@ export function writtenSet(map: WrittenMap): Set<string> {
  * kept out of the inbox by the record of what the plugin wrote alone.
  */
 export function isPluginPictureName(name: string): boolean {
-	return /^.* (?:highlight|task|lookup) p\d+-\d+(?: \d+)?\.png$/iu.test(name);
+	return /^.* (?:highlight|task|lookup|meaning) p\d+-\d+(?: \d+)?\.png$/iu.test(name);
 }
 
 /** The part of Obsidian's App that holds per-device values. */

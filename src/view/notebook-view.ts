@@ -82,6 +82,8 @@ import { LookUpSheet, LookUpWordModal, runLookUp } from "./look-up";
 import { AddToIndexModal, BookIndexModal, currentIndex, termSpellings } from "./book-index";
 import { normalizeIndexPrefix } from "../model/book-index";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
+import { MeaningTools } from "./colour-meaning";
+import type { MeaningsStore } from "../library/meanings-store";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
@@ -248,6 +250,8 @@ export interface NotebookHost {
 	nav?: NavController;
 	/** 0.18 (#227): quick tabs, pages pinned in a notebook (view/quick-tabs-service.ts). Optional: absent in tests. */
 	quickTabs?: QuickTabsService;
+	/** 0.22 (#101): per-notebook colour meanings (library/meanings-store.ts). Optional: absent in tests. */
+	meanings?: MeaningsStore;
 	/** Roadmap O15: the page in view or the save state of `view` changed (the status bar item follows the active view). Optional. */
 	statusChanged?(view: NotebookView): void;
 	/** Instant save journal shared by all views. */
@@ -570,6 +574,8 @@ export class NotebookView extends FileView {
 	private readonly heavyDismissed = new Set<string>();
 	/** ui redesign: id of the page in view when it is heavy and can be split (page sheet), else null. */
 	private heavyPageId: string | null = null;
+	/** 0.22 (#101): colours with meaning: the legend, the view filter and the digest by colour (view/colour-meaning.ts). */
+	private meaningTools: MeaningTools | null = null;
 	private navCurrent = -1;
 	/** Pages whose thumbnail was drawn without all its media; redrawn when media arrives. */
 	private readonly thumbPending = new Set<string>();
@@ -687,6 +693,26 @@ export class NotebookView extends FileView {
 			dismiss: (index) => {
 				const id = this.pageAtIndex(index)?.id;
 				if (id) this.heavyDismissed.add(id);
+			},
+		});
+		this.meaningTools = new MeaningTools({
+			app: this.app, body: this.body, settings: () => this.host.settings,
+			setGlobal: async (legend) => {
+				this.host.settings = readSettings({ ...this.host.settings, colourMeanings: legend });
+				await this.host.saveSettings?.();
+			},
+			store: () => this.host.meanings ?? null, docId: () => this.session?.doc?.id ?? null, file: () => this.file, renderer: () => this.renderer,
+			pages: () => { const doc = this.shownDoc(); return doc ? this.renderPagesOf(doc) : []; },
+			media: () => this.media,
+			render: () => {
+				const options = this.exportOptions();
+				return {
+					render: {
+						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+						...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+					},
+					...(options.prepare ? { prepare: options.prepare } : {}),
+				};
 			},
 		});
 		// 0.16 (#124): a locked page shows a small badge over the page area; a tap on it unlocks the page.
@@ -1099,6 +1125,8 @@ export class NotebookView extends FileView {
 		this.penLinks = null;
 		this.pageOffer?.destroy();
 		this.pageOffer = null;
+		this.meaningTools?.destroy();
+		this.meaningTools = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
 		this.smartAdd?.destroy();
@@ -1441,6 +1469,7 @@ export class NotebookView extends FileView {
 		this.activePenSetId = null;
 		// wave 0.10 (51): read-only mode belongs to the notebook being read; the next one opens editable.
 		if (this.userReadOnly) this.setReadOnlyMode(false, false);
+		this.meaningTools?.reset();
 		this.syncSafety?.closed();
 		this.resilience?.end();
 		this.history.clear();
@@ -1530,6 +1559,7 @@ export class NotebookView extends FileView {
 	}
 
 	applySettings(settings: NotebookSettings): void {
+		this.meaningTools?.refresh();
 		this.applyInput(settings);
 		refreshSlideBadges(this); // 0.14 slides: the badges setting
 		this.pressure.mode = settings.pressureMode;
@@ -2217,6 +2247,18 @@ export class NotebookView extends FileView {
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */
 	openMentions(): void {
 		this.mentions?.open();
+	}
+	/** 0.22 (#101): the legend editor, the filter chooser and the digest by colour. */
+	openMeaningLegend(): void {
+		this.meaningTools?.openLegend();
+	}
+
+	openMeaningFilter(): void {
+		this.meaningTools?.openFilter();
+	}
+
+	openMeaningDigest(): void {
+		this.meaningTools?.openDigest();
 	}
 
 	/** 0.16 (#90): the Highlights digest dialog (grouping, picture quality); the note is written next to the notebook. */

@@ -27,6 +27,7 @@ import type { SnapGuide } from "../model/snap";
 import { ghostAlpha, ghostTouchRedraws, GHOST_IDLE_MS, type GhostMode, type GhostSegment } from "../model/ghost-lines";
 import { partMatrix, translate, type Matrix } from "./transform";
 import type { Viewport } from "./viewport";
+import { DIM_ALPHA } from "../model/colour-meaning";
 
 const PAPER = "#ffffff";
 const SHADOW = "rgba(0, 0, 0, 0.18)";
@@ -307,6 +308,9 @@ export class Renderer {
 	/** Reading options of the view (never saved): ink and elements of PDF pages are not drawn; backgrounds are drawn with this opacity. */
 	private hideAnnotations = false;
 	private backgroundAlpha = 1;
+	/** 0.22 (#101): view-only "filter by meaning": ink for which this says true is drawn faint (never saved; the static layer is redrawn once when it changes). */
+	private inkDim: ((stroke: Stroke) => boolean) | null = null;
+	private dimNow = false;
 	/** wave 0.9 (367): night mode, view-only. Colours are mapped when they are drawn; the document is never touched. */
 	private night = false;
 	private readonly nightInkColor = memoColors(nightInk);
@@ -508,6 +512,13 @@ export class Renderer {
 		if (hideAnnotations === this.hideAnnotations && backgroundAlpha === this.backgroundAlpha) return;
 		this.hideAnnotations = hideAnnotations;
 		this.backgroundAlpha = backgroundAlpha;
+		this.invalidate();
+	}
+
+	/** View-only: draws the strokes for which `dim` is true faint (null: no filter). */
+	setInkDim(dim: ((stroke: Stroke) => boolean) | null): void {
+		if (dim === this.inkDim) return;
+		this.inkDim = dim;
 		this.invalidate();
 	}
 
@@ -962,6 +973,7 @@ export class Renderer {
 						// the wet-ink curve may pass slightly outside its points.
 						const m = stroke.width * 0.3 + 1;
 						if (b.maxX + m < visible.minX || b.minX - m > visible.maxX || b.maxY + m < visible.minY || b.minY - m > visible.maxY) continue;
+						this.dimNow = this.inkDim?.(stroke) ?? false;
 						// v9: ink bound to a graph is clipped to its frame (a zoom may have carried it outside).
 						const clip = strokeClip(stroke, clips);
 						if (clip) {
@@ -973,7 +985,12 @@ export class Renderer {
 							ctx.restore();
 						} else this.fillStroke(ctx, stroke, this.lod);
 						strokesDrawn++;
+						if (this.dimNow) {
+							this.dimNow = false;
+							ctx.globalAlpha = 1;
+						}
 					} catch (e) {
+						this.dimNow = false;
 						this.fault(ctx, "stroke", e);
 						this.setInk(ctx, "pen", PAPER);
 					}
@@ -1431,14 +1448,14 @@ export class Renderer {
 		ctx.fillStyle = this.inkColor(tool, color);
 		if (tool === "highlighter") {
 			// Night mode: "multiply" would vanish on the dark paper, "screen" lights it.
-			ctx.globalAlpha = this.night ? NIGHT_HIGHLIGHTER_ALPHA : HIGHLIGHTER_ALPHA;
+			ctx.globalAlpha = (this.night ? NIGHT_HIGHLIGHTER_ALPHA : HIGHLIGHTER_ALPHA) * (this.dimNow ? DIM_ALPHA : 1);
 			ctx.globalCompositeOperation = this.night ? "screen" : "multiply";
 		} else if (tool === "marker") {
 			// Format v20: 85% opaque in stroke order, in the day and the night (the ink colour is already the night one).
 			ctx.globalAlpha = MARKER_ALPHA;
 			ctx.globalCompositeOperation = "source-over";
 		} else {
-			ctx.globalAlpha = 1;
+			ctx.globalAlpha = this.dimNow ? DIM_ALPHA : 1;
 			ctx.globalCompositeOperation = "source-over";
 		}
 	}

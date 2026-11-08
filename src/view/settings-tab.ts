@@ -14,6 +14,8 @@ import { CustomGesturesModal, GestureCheatSheet, setGestureEnabled, type PenGest
 import { deviceNameRow, type SyncSafetyService } from "./sync-safety";
 import { renderDeviceInfo } from "./device-info";
 import { BoardColumnsModal } from "./board-columns-modal";
+import { MeaningsEditorModal } from "./meaning-modals";
+import { TOLERANCES } from "../model/colour-meaning";
 import { renderBackupRow } from "./backup-settings";
 import { acceptBackupFolder } from "../storage/backup-logic";
 import { showErrorNotice } from "./notice";
@@ -233,6 +235,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "notebook-templates-manage": openNotebookTemplateManager(this.app, () => this.host.settings); break;
 			case "pen-sets": this.openPenSets(); break;
 			case "board-columns": new BoardColumnsModal({ app: this.app, get: () => this.host.settings.boardColumns, set: (cols) => this.setControlValue("boardColumns", cols) }).open(); break;
+			case "meanings-edit": new MeaningsEditorModal({ app: this.app, tolerance: () => TOLERANCES[this.host.settings.meaningTolerance], globalLegend: () => this.host.settings.colourMeanings, setGlobal: (legend) => this.setControlValue("colourMeanings", legend) }).open(); break;
 		}
 	}
 
