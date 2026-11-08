@@ -50,7 +50,7 @@ describe("device flow", () => {
 	it("Microsoft: verification_uri, no client secret, offline_access scope", async () => {
 		const http = new FakeHttp().once("POST", M.deviceUrl, res(200, MS_CODE)).once("POST", M.tokenUrl, res(200, TOKENS));
 		const auth = await runDeviceFlow(http, { provider: "onedrive", clientId: "11111111-2222" }, ui(), new FakeClock());
-		expect(form(http.calls[0]!).scope).toBe("Files.ReadWrite offline_access User.Read");
+		expect(form(http.calls[0]!).scope).toBe("Files.ReadWrite.AppFolder offline_access User.Read");
 		expect(form(http.calls[1]!).client_secret).toBeUndefined();
 		expect(auth.provider).toBe("onedrive");
 		expect(auth.clientSecret).toBeUndefined();
@@ -129,25 +129,28 @@ describe("connect an account", () => {
 			.once("POST", G.deviceUrl, res(200, GOOGLE_CODE))
 			.once("POST", G.tokenUrl, res(200, TOKENS))
 			.once("GET", "https://www.googleapis.com/drive/v3/files?q=", res(200, { files: [] }))
+			.once("GET", "https://www.googleapis.com/drive/v3/files/generateIds?", res(200, { ids: ["root-1"] }))
 			.once("POST", "https://www.googleapis.com/drive/v3/files?fields=id", res(200, { id: "root-1" }))
 			.once("GET", "https://www.googleapis.com/drive/v3/about", res(200, { user: { emailAddress: "me@example.com" } }));
 		const done = await connectAccount(http, new FakeClock(), "gdrive", "  cid  ", ui(), { clientSecret: "sec" });
 		expect(done.account).toBe("me@example.com");
 		expect(done.auth).toMatchObject({ provider: "gdrive", clientId: "cid", clientSecret: "sec", rootId: "root-1", rootLabel: "My Drive/Notebook sync" });
 		const created = bodyJson(http.find("POST", "https://www.googleapis.com/drive/v3/files?fields=id")[0]!);
-		expect(created).toMatchObject({ name: "Notebook sync", mimeType: "application/vnd.google-apps.folder", parents: ["root"] });
+		// Review W22 S4: the folder id is reserved first, so a retried create cannot make a second folder.
+		expect(created).toMatchObject({ id: "root-1", name: "Notebook sync", mimeType: "application/vnd.google-apps.folder", parents: ["root"] });
 		expect(http.find("GET", "https://www.googleapis.com/drive/v3/files?q=")[0]!.headers?.Authorization).toBe("Bearer at-1");
 	});
 
-	it("OneDrive: reuses an existing sync folder", async () => {
+	it("OneDrive: the sync folder is the app folder (special/approot), never a path in the whole drive", async () => {
 		const http = new FakeHttp()
 			.once("POST", M.deviceUrl, res(200, MS_CODE))
 			.once("POST", M.tokenUrl, res(200, TOKENS))
-			.once("GET", "https://graph.microsoft.com/v1.0/me/drive/root:/Notebook%20sync", res(200, { id: "F1", name: "Notebook sync", folder: {} }))
+			.once("GET", "https://graph.microsoft.com/v1.0/me/drive/special/approot?", res(200, { id: "F1", name: "Notebook", folder: {} }))
 			.once("GET", "https://graph.microsoft.com/v1.0/me?", res(200, { userPrincipalName: "me@outlook.com" }));
 		const done = await connectAccount(http, new FakeClock(), "onedrive", "11111111", ui());
-		expect(done.auth).toMatchObject({ rootId: "F1", rootLabel: "OneDrive/Notebook sync" });
+		expect(done.auth).toMatchObject({ rootId: "F1", rootLabel: "OneDrive/Apps/Notebook" });
 		expect(done.account).toBe("me@outlook.com");
+		expect(http.calls.some((c) => c.url.includes("/root:/"))).toBe(false);
 	});
 
 	it("refuses an empty client id, and a Google sign-in without its secret, before any request", async () => {
