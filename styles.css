@@ -19544,3 +19544,21 @@ body.notebook-style-obsidian {
 	display: flex;
 	justify-content: flex-start;
 }
+
+/* ===== 0.25 toolfade ===== */
+/* "Toolbar fades while writing" (src/view/tool-fade.ts): one class on the view root, opacity only (no layout shift, still hit-testable). */
+.workspace-leaf-content .view-content.notebook-view {
+	--nb-tool-fade-opacity: 0.15;
+}
+.workspace-leaf-content .view-content.notebook-view :is(.notebook-toolbar, .notebook-context-bar, .notebook-slide-back, .notebook-symbol-strip, .notebook-welcome-back, .notebook-page-refs, .notebook-lecture-header-offer) {
+	transition: opacity var(--nb-motion-fast, 120ms) ease-out;
+}
+.workspace-leaf-content .view-content.notebook-view.is-tools-faded :is(.notebook-toolbar, .notebook-context-bar, .notebook-slide-back, .notebook-symbol-strip, .notebook-welcome-back, .notebook-page-refs, .notebook-lecture-header-offer) {
+	opacity: var(--nb-tool-fade-opacity);
+	transition-duration: var(--nb-motion, 300ms);
+}
+@media (prefers-reduced-motion: reduce) {
+	.workspace-leaf-content .view-content.notebook-view :is(.notebook-toolbar, .notebook-context-bar, .notebook-slide-back, .notebook-symbol-strip, .notebook-welcome-back, .notebook-page-refs, .notebook-lecture-header-offer) {
+		transition: none;
+	}
+}

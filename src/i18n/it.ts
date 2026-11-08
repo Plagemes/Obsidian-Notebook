@@ -1811,6 +1811,15 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.toolbarSize.compact": "Compatta",
 	"settings.toolbarSize.normal": "Normale",
 	"settings.toolbarSize.large": "Grande",
+	// 0.25 toolfade
+	"settings.toolFade": "Barra durante la scrittura",
+	"settings.toolFade.desc": "Attenua la barra degli strumenti, la barra contestuale e le pillole mobili mentre la penna scrive, così la pagina ha tutto lo schermo. Un tocco fuori dalla pagina, o la penna sopra una barra, le riporta.",
+	"settings.toolFade.off": "Sempre visibile",
+	"settings.toolFade.writing": "Sfuma mentre scrivi",
+	"settings.toolFadeSeconds": "Ritardo della sfumatura",
+	"settings.toolFadeSeconds.desc": "Secondi di scrittura prima che le barre si attenuino e secondi dopo l'ultimo tratto prima che tornino.",
+	"settings.toolFadeFirstTouch": "Il primo tocco riporta soltanto le barre",
+	"settings.toolFadeFirstTouch.desc": "Un tocco con il dito su una barra attenuata la ripristina senza premere il pulsante sotto. Disattiva per premere subito.",
 	"settings.pageTurnerKeys": "Gira le pagine con i tasti",
 	"settings.pageTurnerKeys.desc": "Frecce, PagSu, PagGiù, spazio e telecomandi Bluetooth.",
 	// wave 0.9: text and objects

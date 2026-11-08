@@ -166,6 +166,7 @@ import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
 import { SlideBack } from "./slide-back";
+import { ToolFade } from "./tool-fade";
 import { WELCOME_KEY } from "../model/welcome-back";
 import { WelcomeBack } from "./welcome-back";
 import { PageRefs } from "./page-refs";
@@ -507,6 +508,8 @@ export class NotebookView extends FileView {
 	private gestures: GestureInput | null = null;
 	private readonly lastTool = new LastTool<ToolName>();
 	private strokeStart = 0;
+	/** 0.25 (#399): the toolbar and floating pills fade while the pen writes (view/tool-fade.ts). */
+	private toolFade: ToolFade | null = null;
 	private readonly location = new LocationKeeper(
 		{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
 		(path, page, pos) => {
@@ -1043,6 +1046,7 @@ export class NotebookView extends FileView {
 		this.practiceHooks = this.host.practice?.attach(this.practiceHost()) ?? null;
 		// 0.14 slides (#226): badges next to ink written beside a slide; a tap shows the slide again.
 		attachSlideBadges(this, () => this.host.settings);
+		this.toolFade = new ToolFade({ root: this.contentEl, stage: this.stage, settings: () => this.host.settings, blocked: () => !!this.selection || !!this.lasso || !!activeDocument.body.querySelector(".modal-container") });
 		this.applySettings(this.host.settings);
 
 		this.resizeObserver = new ResizeObserver(() => this.measure());
@@ -1217,6 +1221,8 @@ export class NotebookView extends FileView {
 		this.savedViews = null;
 		this.welcomeBack?.destroy();
 		this.welcomeBack = null;
+		this.toolFade?.destroy();
+		this.toolFade = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
 		this.pageRefs?.destroy();
@@ -1680,6 +1686,7 @@ export class NotebookView extends FileView {
 		this.reading?.settingsChanged();
 		this.lectureMode?.settingsChanged();
 		this.slideBack?.settingsChanged();
+		this.toolFade?.settingsChanged();
 		this.pageRefs?.reset();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
@@ -5023,6 +5030,7 @@ export class NotebookView extends FileView {
 		this.penLinks?.strokeStarted();
 		this.axes?.strokeStarted();
 		this.checklist?.strokeStarted();
+		if (sample.pointerType === "pen") this.toolFade?.strokeStart();
 		this.pageOffer?.penDown();
 		this.smartAdd?.hide();
 		this.strokeStart = sample.t;
@@ -5276,6 +5284,7 @@ export class NotebookView extends FileView {
 		// 0.19 (#103): the same for a checkbox: a short unmoved contact on it was a tap.
 		const boxTap = this.checklist?.takeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
 		this.endGesture(cancelled || badgeTap !== null || boxTap !== null);
+		this.toolFade?.strokeEnd();
 		if (boxTap) this.checklist?.toggle(boxTap);
 		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.

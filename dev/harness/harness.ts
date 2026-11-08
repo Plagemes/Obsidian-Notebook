@@ -113,6 +113,7 @@ import { checkDimcheck, dimcheckShot, type DimcheckState } from "./dimcheck-chec
 import { checkPalettectx, palettectxShot } from "./palettectx-check";
 import { checkWelcomeback, welcomebackShot } from "./welcomeback-check";
 import { checkIconhelp, iconhelpShot } from "./iconhelp-check";
+import { checkToolfade, toolfadeShot } from "./toolfade-check";
 import { checkNavadapt, navadaptShot } from "./navadapt-check";
 import { checkSymbols } from "./symbols-check";
 import { checkBackups } from "./backups-check";
@@ -335,7 +336,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, lectureHeaderClassFor: doc === "lecthead" || doc === "pillstack" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, bookmarks: doc === "bookmarks" ? harnessBookmarks(app) : undefined, meanings: doc === "colours" || doc === "coloursedit" ? harnessMeanings() : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "savedviews" || doc === "chembal" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pillstack" || doc === "welcomeback" || doc === "iconhelp" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" || doc === "hookclean" || doc === "shapefill" || doc === "strokejoin" || doc === "navadapt" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "bookmarks" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "savedviews" || doc === "chembal" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pillstack" || doc === "welcomeback" || doc === "iconhelp" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" || doc === "hookclean" || doc === "shapefill" || doc === "strokejoin" || doc === "navadapt" || doc === "toolfade" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "bookmarks" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2316,3 +2317,6 @@ harnessApi.checkTermOrder = async () => {
 	}
 };
 Object.assign(harnessApi, { checkIconhelp: () => checkIconhelp({ get view() { return view; }, open, frames, errors, notices }), iconhelpShot: () => iconhelpShot({ get view() { return view; }, open, frames, errors, notices }) }); // 0.24 iconhelp (#429)
+
+// 0.25 toolfade (#399): the toolbar fades while the pen writes (doc=toolfade, toolfade-check.ts).
+Object.assign(harnessApi, { checkToolfade: () => checkToolfade({ get view() { return view; }, open, frames, penStroke, errors, notices }), toolfadeShot: (state: string) => toolfadeShot({ get view() { return view; }, open, frames, penStroke, errors, notices }, state) });

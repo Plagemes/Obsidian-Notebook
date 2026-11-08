@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### toolfade
+- **Toolbar fades while writing and returns on the first touch (#399).** *Settings > Appearance > Toolbar while writing > Fade while writing* (default: always shown, so nothing moves for anyone who did not ask): once the pen has been writing for the *Fade delay* (1 to 6 s, default 2), the toolbar, the contextual bar and the floating pills (recent symbols, back-to-page, referenced-on, welcome-back, lecture header) dim to 15% and come back that many seconds after the last stroke. A finger touch outside the page, a pen hovering over a bar or a press on a bar brings them back at once; the first finger touch on a dimmed bar only restores it and does not press the button (switch *First touch only brings the bars back* off to press at once). A long press on a dimmed bar restores it and shows the icon help. A selection, the lasso or an open dialog never lets the bars fade. Opacity transition only (no layout shift, the bars stay hit-testable), none under reduced motion; one class is toggled by the existing stroke start and end events, with one timer and no per-frame work. Pure state machine in `src/ui/tool-fade.ts` (`tests/tool-fade.test.ts`), DOM part in `src/view/tool-fade.ts`; English and Italian.
+
 ## 0.24.0 — 2026-11-08
 
 Eight features: filled shapes and dashed or dotted lines, joining of broken strokes, a context-ordered actions sheet, explanations on long press of an icon, tag suggestions, an adaptive page navigator, global bookmarks across notebooks and a hand-in dialog. The notebook format moves to version 22 (filled shapes and dashed or dotted lines): the migration from version 21 is automatic, and 0.23 and older open a v22 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).

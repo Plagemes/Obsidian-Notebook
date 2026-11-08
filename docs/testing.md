@@ -3721,6 +3721,28 @@ Implemented, not verified on hardware. No format change. Manual steps (real Obsi
 |---|---|---|---|---|---|
 | Long-press explanation bubble on toolbar, selection/contextual bar and Home icons (finger only; mouse hover and pen untouched), setting to turn it off | yes | timing, slop, who may start it, placement, texts in en + it, setting: `tests/long-press-help.test.ts`; real view with synthetic touch/pen/mouse events: harness `doc=iconhelp` | | yes | the real long press on a WebView is not simulated; the system context menu on some devices is suppressed while the bubble shows |
 
+### 0.25 — toolfade: toolbar fades while writing (roadmap #399; steps 2720-2739)
+
+Implemented, not verified on hardware. No format change. Manual steps (real Obsidian on an Android tablet or phone, S Pen):
+
+2720. **Off by default.** Fresh install: write for a long time; the bars never dim. *Settings > Appearance > Toolbar while writing*: *Always shown* / *Fade while writing*; the delay and *First touch* rows only show when it is on.
+2721. **Fade.** Choose *Fade while writing*, delay 2 s. Write continuously with the S Pen: after about 2 s the toolbar, the contextual bar and any floating pill (recent symbols, back-to-page, referenced-on, welcome-back, lecture header) dim to a faint ghost. Nothing moves or resizes; the page does not jump.
+2722. **Return after writing.** Lift the pen and wait: about 2 s after the last stroke the bars come back smoothly. Pause shorter than that between words: they stay dim.
+2723. **Short notes.** One quick word (under 2 s): the bars never dim.
+2724. **Pen over a bar.** While dimmed, bring the pen near the toolbar without touching: the bars return.
+2725. **First touch.** While dimmed, tap a tool with a finger: the bars return and the tool is NOT selected; tap again: it is. With *First touch only brings the bars back* off, the first tap presses at once.
+2726. **Finger outside the page.** While dimmed, touch the page panel, the scrollbar area or any empty area outside the sheet: the bars return. A finger on the sheet (pan or zoom) or a resting palm does not bring them back.
+2727. **Long press.** While dimmed, hold a finger on a toolbar icon: the bars return and, after half a second, the icon help shows; the button is not pressed.
+2728. **Selection and dialogs.** Make a lasso selection or open any dialog: the bars stay fully shown even if you keep writing; closing the dialog lets them fade on the next long stroke.
+2729. **Floating pills.** With the symbols strip, back-to-page pill and referenced-on chip on screen, all dim together and keep their stacking; none overlaps another when they return.
+2730. **Pen button.** The S Pen side button rules (tap with the button held: radial menu; drag: eraser; mid-stroke press: ink) behave as before while the bars are dim.
+2731. **Reduced motion.** With the Android *Remove animations* option on: the bars change state without a fade.
+2732. **Looks.** Light and dark, tablet and phone: the dimmed bars are a quiet ghost, the restored bars are exactly as before. Italian texts in settings.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Toolbar, contextual bar and floating pills fade while the pen writes (delay setting) and return on a touch outside the page, a pen hover or a press on a bar; first touch only restores (setting); never fades during a selection or dialog; reduced motion | yes | state machine and restore rules: `tests/tool-fade.test.ts`; real view with synthetic pen/touch events: harness `doc=toolfade` | | yes | the real S Pen hover and palm behaviour on a WebView is not simulated |
+
 ### 0.24 — tagsuggest (tags suggested from context, #411; steps 2520-2539)
 
 Manual steps (real Obsidian; nothing here is verified on Android). You need a timetable with a class linked to a notebook or its folder, and a folder with a few notebooks that have tags.

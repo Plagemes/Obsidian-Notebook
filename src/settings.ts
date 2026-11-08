@@ -23,6 +23,7 @@ import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from ".
 import { DEFAULT_LECTURE_SETTINGS, readLectureSettings, type LectureSettings } from "./timetable/lecture-mode";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
+import { cleanFadeSeconds, DEFAULT_TOOL_FADE_MODE, DEFAULT_TOOL_FADE_SECONDS, isToolFadeMode, type ToolFadeMode } from "./ui/tool-fade";
 import { normalisePinned } from "./ui/adapt";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { cleanUserName } from "./library/greeting";
@@ -235,6 +236,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	adaptLearn: boolean;
 	/** The selection bar follows what is selected: ink, picture, text, mixed (402). */
 	adaptSelection: boolean;
+	// 0.25 (#399): the toolbar and floating pills fade while the pen writes and return on the first touch.
+	toolFade: ToolFadeMode;
+	/** Seconds of writing before the bars fade, and of rest before they return. */
+	toolFadeSeconds: number;
+	/** The first finger touch on a faded bar only brings it back (the button is not pressed). */
+	toolFadeFirstTouch: boolean;
 	/** Quick actions the person pinned to the toolbar, in order (at most 3): the ranking never moves them. */
 	pinnedQuick: string[];
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
@@ -403,6 +410,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	adaptPageType: true,
 	adaptLearn: true,
 	adaptSelection: true,
+	toolFade: DEFAULT_TOOL_FADE_MODE,
+	toolFadeSeconds: DEFAULT_TOOL_FADE_SECONDS,
+	toolFadeFirstTouch: true,
 	pinnedQuick: [],
 	pageTurnerKeys: true,
 	notebookTabs: false,
@@ -567,6 +577,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.adaptPageType === "boolean") s.adaptPageType = d.adaptPageType;
 	if (typeof d.adaptLearn === "boolean") s.adaptLearn = d.adaptLearn;
 	if (typeof d.adaptSelection === "boolean") s.adaptSelection = d.adaptSelection;
+	if (isToolFadeMode(d.toolFade)) s.toolFade = d.toolFade;
+	s.toolFadeSeconds = cleanFadeSeconds(d.toolFadeSeconds);
+	if (typeof d.toolFadeFirstTouch === "boolean") s.toolFadeFirstTouch = d.toolFadeFirstTouch;
 	s.pinnedQuick = normalisePinned(d.pinnedQuick);
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;

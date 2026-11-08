@@ -720,7 +720,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 396. **P3** Likely next tool one tap away, from the sequence of tools you usually use.
 397. **P3** Adaptive radial menu: sectors ordered by frequency of use, plus a wedge of recent actions.
 398. **P3** Toolbar placed away from the writing hand (learned handedness and palm position).
-399. **P2** Toolbar fades while writing and returns on the first touch.
+399. **P2** 🧪 Toolbar fades while writing and returns on the first touch.
 400. **P3** The 4–5 most likely commands appear near the nib when the pen lifts.
 401. **P1** 🧪 Automatic lecture mode from the timetable (#115), with the compact lecture toolbar (#214) shown when a class starts.
 
