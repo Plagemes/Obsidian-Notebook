@@ -19092,3 +19092,80 @@ body.notebook-style-obsidian {
 	color: var(--nb-text-muted);
 	font-size: var(--nb-fs-meta);
 }
+
+/* ===== 0.24 shapefill ===== */
+/* Fill and line style of shapes (#37): the shape tool's options and the selection bar share these rows. */
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-style {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--nb-space-2, 8px) var(--nb-space-3, 12px);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-options > .notebook-shape-style {
+	padding: 0 4px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-style.notebook-hidden {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-group {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-label {
+	flex: 0 0 auto;
+	font-size: var(--nb-text-s, 12px);
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-seg {
+	display: flex;
+	gap: 2px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-seg > .notebook-text-tool {
+	padding: 0 10px;
+	white-space: nowrap;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-colours {
+	gap: 2px;
+}
+
+/* "Same as the line": a ring in the colour of the text, so it reads as "follow the line" and not as a colour. */
+.workspace-leaf-content .view-content.notebook-view .notebook-swatch.is-line .notebook-swatch-dot {
+	background: transparent;
+	box-shadow: inset 0 0 0 2px var(--nb-text-muted);
+}
+
+/* Compact: the swatches and the buttons of these rows are smaller than the pen's, so a phone keeps most of the page in view. */
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-style .notebook-swatch {
+	width: 30px;
+	min-width: 0;
+	height: 30px;
+	padding: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-style .notebook-swatch-dot {
+	width: 18px;
+	height: 18px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-shape-style .notebook-shape-seg > .notebook-text-tool {
+	height: 30px;
+	min-height: 0;
+	font-size: var(--nb-text-s, 12px);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-selection-styles > .notebook-shape-style {
+	justify-content: center;
+	max-width: 100%;
+	padding: 6px 10px;
+	border-radius: var(--nb-radius-panel, 20px);
+	gap: 4px 12px;
+}

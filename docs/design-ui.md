@@ -507,3 +507,6 @@ One narrow dialog on the modal shell (`.nb-views-modal`, `src/view/saved-views-m
 
 ## Welcome back (0.23, roadmap #420)
 A quiet glass card at the top centre (`.notebook-welcome-back`), the second tier of the floating stack: its top is picked by `:has` rules from what sits above it (symbols strip, "Back to slide" pill, "Referenced on" chip), and it is hidden while the "Referenced on" list is open. Rows are real 38px buttons with a small accent icon; counts beyond the listed rows are muted text, not controls. Checked in the `pillstack` and `welcomeback` harness scenarios.
+
+## Shape fill and line style (0.24, roadmap #37)
+Two small segmented controls built by one function (`src/view/shape-style-row.ts`, block `0.24 shapefill` in `styles.css`) and shown in two places: the Shape tool's options (under the shape kinds; the fill only for the rectangle and the ellipse) and the selection bar (a rounded panel row after the colour and width rows, shown only when the selection has a shape). *Fill*: No fill / Solid / Tint, then a compact row of colours whose first swatch is a ring ("same as the line"); *Line*: Solid / Dashed / Dotted. Compact 30 px swatches and buttons, `--nb-*` tokens only, light and dark.

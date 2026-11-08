@@ -3074,7 +3074,7 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 
 ### 0.21 — schema: documented format with a JSON Schema (steps 1860-1879)
 
-Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v21.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
+Documented format (roadmap #167). There is no new screen: `docs/schema/notebook-v22.schema.json` and `docs/format.md` describe the `.notebook` file for other tools. Implemented, not verified on hardware.
 
 1860. **Schema agrees with a real notebook.** Copy a notebook written on the tablet (with ink, a picture, a text box and a comment) to a PC and validate it with any draft 2020-12 validator (see the end of `docs/format.md`): no errors.
 1861. **Old file.** Open a notebook that was last saved by an older plugin version and edit it once, then validate it: it validates after that save (the file is rewritten as version 19 on the first edit).
@@ -3629,3 +3629,29 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 | Clean up strokes: one undo step, keeps ids, order, groups, nib; refuses a locked page; selection follows | yes | `tests/hook-clean.test.ts` (History: execute, undo, redo, locked page); harness `doc=hookclean` | | | |
 | Selection action, palette command and sheet entry (`selection-cleanup`) | yes | registry tests (`tests/ui-registry.test.ts`); harness `doc=hookclean` | | | |
 | Setting *Trim hooks as you write* (off by default): the stroke is committed as written and the trim is its own undo step (Undo gives the written stroke back, a second Undo removes it); stricter limits than the manual clean-up (near reversal, very short hook), so letter tails stay; live input and rendering untouched | yes | `tests/hook-clean.test.ts` (review V2: raw stroke kept in the history, page times, locked page, limits), `tests/commit-trim.test.ts` (the pen-up wiring the view calls: trim step after the commit, locked page, late side-button take-back of both steps, partial take-back), the first-Undo notice and the real pen path: harness `doc=hookclean`; settings read: `tests/hook-clean-settings.test.ts`; golden hashes unchanged: `tests/pens-golden.test.ts`; harness `doc=hookclean` | | yes | needs real pen data to judge |
+
+### 0.24 — shapefill: filled shapes and dashed or dotted lines, document format 22 (roadmap #37; steps 2600-2619)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen).
+
+2600. **Options.** Pick the Shape tool and tap it again: the options show *Fill* (No fill, Solid, Tint) and *Line* (Solid, Dashed, Dotted) under the shape kinds. With *Line* or *Arrow* the fill is not offered, only the line style. Choose Tint: the fill colours appear (the first, a ring, is "same as the line").
+2601. **Draw.** Draw a rectangle and an ellipse with Tint and a colour: the inside is a light wash of the colour, the outline stays solid, and the paper pattern shows through. Solid covers the paper. Draw with Dashed and Dotted: the dashes follow the corners and the curve of the ellipse; a thicker line has longer dashes.
+2602. **Live preview.** While dragging, the fill and the dashes show in the preview as they will be saved.
+2603. **Restyle.** Lasso a few shapes and a handwritten word. The bar shows Fill and Line; change them: only the shapes change (the word never does), the selection stays, and one *Undo* puts the previous look back (*Redo* again). Lasso only lines and arrows: only *Line* is offered.
+2604. **Recognised shapes.** Draw a rough rectangle, triangle or circle with the pen and hold the pen still until it snaps: it is a plain shape; select it and give it a fill and a dashed line from the bar.
+2605. **Pick by the inside.** With the colour eyedropper in its style mode, tap the inside of a filled shape: the shape is taken (a plain shape is taken only by its outline).
+2606. **Cut a shape.** With the segment eraser, erase part of a filled dashed rectangle: the pieces that remain are dashed lines without the fill.
+2607. **Moving and scaling.** Move, rotate and scale a filled dashed shape with the selection handles: the fill follows, the dashes keep the length proportional to the (scaled) line width.
+2608. **Groups, locks, locked page.** A filled shape in a group is restyled with its group. On a locked page the bar's change is refused with the lock notice.
+2609. **Exports.** Export the page as PNG, SVG, PDF and as interactive HTML, and the written area or the selection as a transparent picture: fills (translucent tints too) and dashes are there, under the line, in the same places as on screen. Night mode only changes the colours on screen.
+2610. **Thumbnails.** The Library card and the page navigator show the filled and dashed shapes.
+2611. **Old files and other devices.** Open a notebook written by 0.23: it looks exactly the same and is saved as format 22. A copy of the plugin older than this version opens a notebook saved by this one read-only (it never rewrites it).
+2612. **Languages and looks.** Italian (*Riempimento*, *Linea*, *Tratteggiata*, *Punteggiata*), light and dark theme, phone and tablet width: the rows fit, nothing is clipped.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v22: optional `fill`, `fillTint`, `dash` of a shape stroke, migration v21 → v22 (identity plus version, stray keys dropped), lenient read (bad value dropped and counted), strict write, staged loading of large v21 files, repair, copies, merge, cut shapes | yes | `tests/model-v22.test.ts`, `tests/format-schema.test.ts` (schema `docs/schema/notebook-v22.schema.json`) | | | |
+| Dash geometry (pattern scaled by the width, runs along corners), closed-shape test, fill polygon, picking a filled shape by its inside | yes | `tests/shape-style.test.ts` | | | |
+| Fill and dashes drawn in the static layer, the live preview, PNG, SVG (also HTML and the area export), PDF and thumbnails; golden hashes of old strokes unchanged | yes | `tests/shape-style.test.ts`, `tests/pens-golden.test.ts`; harness `doc=shapefill` | | | the canvas and the PDF were not compared pixel by pixel on a device |
+| Shape tool options (fill none / solid / tint with colours, line solid / dashed / dotted) | yes | harness `doc=shapefill` | | | recognised shapes (hold the pen) are drawn plain and styled afterwards from the bar |
+| Selection restyle of fill and line: one undo step through `UpdateItems`, freehand ink untouched, refuses a locked page | yes | `tests/model-v22.test.ts` (History); harness `doc=shapefill` | | | |

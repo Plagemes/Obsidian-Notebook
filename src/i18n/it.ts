@@ -4465,4 +4465,16 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.trimHooks": "Taglia gli uncini mentre scrivi",
 	"settings.trimHooks.desc": "Toglie il minuscolo uncino a inizio o fine linea quando alzi la penna. Gli angoli restano.",
 	"trim.undone": "Uncino rimesso. Annulla ancora per togliere il tratto.",
+	// 0.24 shapefill (#37)
+	"shapeStyle.fill": "Riempimento",
+	"shapeStyle.fill.none": "Nessuno",
+	"shapeStyle.fill.solid": "Pieno",
+	"shapeStyle.fill.tint": "Velato",
+	"shapeStyle.fill.color": "Colore del riempimento",
+	"shapeStyle.fill.sameAsLine": "Come la linea",
+	"shapeStyle.line": "Linea",
+	"shapeStyle.line.solid": "Continua",
+	"shapeStyle.line.dashed": "Tratteggiata",
+	"shapeStyle.line.dotted": "Punteggiata",
+	"shapeStyle.title": "Stile della forma",
 };

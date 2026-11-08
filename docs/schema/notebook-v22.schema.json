@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v21.schema.json",
-  "title": "Notebook document, format version 21",
-  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 21). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
+  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v22.schema.json",
+  "title": "Notebook document, format version 22",
+  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 22). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
   "type": "object",
   "required": ["format", "version", "id", "createdAt", "modifiedAt", "meta", "assets", "pages"],
   "properties": {
     "format": { "const": "obsidian-notebook", "description": "Always this string. Distinguishes the file from any other JSON." },
-    "version": { "const": 21, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
+    "version": { "const": 22, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
     "id": { "type": "string", "minLength": 1, "description": "Document id (a UUID when available). Survives renames and copies made with 'Make a copy'." },
     "createdAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time the notebook was created." },
     "modifiedAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time of the last content save." },
@@ -252,6 +252,16 @@
           "description": "v20: only the fountain pen and the marker have a nib angle.",
           "if": { "properties": { "tool": { "enum": ["pen", "highlighter", "shape", "brush"] } }, "required": ["tool"] },
           "then": { "not": { "required": ["nib"] } }
+        },
+        {
+          "description": "v22: only the shape tool has a fill or a line style.",
+          "if": { "properties": { "tool": { "enum": ["pen", "highlighter", "fountain", "brush", "marker"] } }, "required": ["tool"] },
+          "then": { "not": { "anyOf": [{ "required": ["fill"] }, { "required": ["fillTint"] }, { "required": ["dash"] }] } }
+        },
+        {
+          "description": "v22: a tint needs a fill.",
+          "if": { "required": ["fillTint"] },
+          "then": { "required": ["fill"] }
         }
       ],
       "properties": {
@@ -264,6 +274,9 @@
         "slide": { "type": "string", "minLength": 1, "maxLength": 16, "description": "v12: id of an entry of the document `slides`." },
         "group": { "type": "string", "minLength": 1, "maxLength": 64, "description": "v18: group id, scoped to the page; written only when the group has at least two members on the page." },
         "nib": { "type": "integer", "minimum": 0, "maximum": 179, "description": "v20: angle of the nib of a fountain pen or a marker, whole degrees counter-clockwise on the page; absent means 45. Only those two tools have one." },
+        "fill": { "$ref": "#/$defs/color", "description": "v22: the colour a closed shape is filled with (only the shape tool). An open shape that has one is simply not filled." },
+        "fillTint": { "$ref": "#/$defs/true", "description": "v22: the fill is a translucent tint of `fill` instead of the solid colour. Needs `fill`." },
+        "dash": { "enum": ["dashed", "dotted"], "description": "v22: the line of a shape is dashed or dotted (absent = solid). Only the shape tool." },
         "points": {
           "type": "array",
           "minItems": 1,

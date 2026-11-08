@@ -20,6 +20,7 @@ import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
 import { LINK_COLOR, lineRuns, linksInCodePoints, shownText } from "./link-text";
 import { tileLabel, type SplitPlan } from "./export-tiles";
+import { dashRuns, FILL_TINT_ALPHA, isFilled } from "./shape-style";
 
 /**
  * An image placed on a page, in page coordinates (pt, origin top-left, y down). `jpeg` is a
@@ -179,6 +180,8 @@ function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void,
 		if (res.highlighter) states.push(`/GS1 << /Type /ExtGState /ca ${HIGHLIGHTER_ALPHA} /BM /Multiply >>`);
 		// Format v20: the marker is 85% opaque, source-over (the highlighter multiplies).
 		if (res.marker) states.push(`/GS3 << /Type /ExtGState /ca ${MARKER_ALPHA} >>`);
+		// v22 (#37): the tint fill of a closed shape.
+		if (res.tint) states.push(`/GS4 << /Type /ExtGState /ca ${FILL_TINT_ALPHA} >>`);
 		// v9: shaded areas of graphs.
 		if (res.area) states.push(`/GS2 << /Type /ExtGState /ca ${GRAPH_STYLE.areaAlpha} >>`);
 		if (states.length > 0) parts.push(`/ExtGState << ${states.join(" ")} >>`);
@@ -354,6 +357,8 @@ interface PageResources {
 	highlighter: boolean;
 	/** Format v20: a marker stroke (ExtGState GS3). */
 	marker?: boolean;
+	/** v22: a closed shape has a tint fill (ExtGState GS4). */
+	tint?: boolean;
 	/** v9: a graph shades an area (ExtGState GS2). */
 	area?: boolean;
 }
@@ -430,6 +435,7 @@ function pageContent(
 		if (op) {
 			if (stroke.tool === "highlighter") res.highlighter = true;
 			if (stroke.tool === "marker") res.marker = true;
+			if (stroke.fillTint && isFilled(stroke)) res.tint = true;
 			// v9: ink bound to a graph is clipped to its frame, as on screen.
 			const clip = strokeClip(stroke, clips);
 			ops.push(clip ? `q ${num(clip.x)} ${num(clip.y)} ${num(clip.width)} ${num(clip.height)} re W n\n${op}\nQ` : op);
@@ -822,7 +828,18 @@ class PdfPathSink implements PathSink {
 	}
 }
 
+/** The PDF operators of a stroke: the fill of a closed shape (v22, #37), then its line (a dashed or dotted line is its runs, each an outline). */
 function strokeOps(stroke: Stroke): string {
+	const line = stroke.dash !== undefined && stroke.tool === "shape"
+		? dashRuns(stroke.points, stroke.dash, stroke.width).map((run) => lineOps({ ...stroke, points: run, dash: undefined })).filter((op) => op !== "").join("\n")
+		: lineOps(stroke);
+	if (!line || !isFilled(stroke)) return line;
+	const poly = polyOps(stroke.points.map((p): [number, number] => [p[0], p[1]]));
+	const fill = stroke.fillTint ? `q\n/GS4 gs\n${rgb(stroke.fill!)} rg\n${poly} f\nQ` : `${rgb(stroke.fill!)} rg\n${poly} f`;
+	return `${fill}\n${line}`;
+}
+
+function lineOps(stroke: Stroke): string {
 	if (stroke.render === RENDER_INK) {
 		const sink = new PdfPathSink();
 		inkPath(sink, stroke.points, stroke.width, stroke.tool, stroke.nib);

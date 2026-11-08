@@ -1,6 +1,7 @@
 /** Page thumbnails for the library cards. Runs in the browser (canvas). */
 import { lodLevel, lodSvgPath } from "../ink/lod";
 import { inkAlpha, inkBlend } from "../ink/stroke-shape";
+import { fillAlpha, fillPathD, isFilled } from "../ink/shape-style";
 import { minorVisible, PAPER_COLORS, paperPattern } from "../ink/paper";
 import { hiddenStickyInk } from "../model/sticky";
 import type { Page } from "../model/types";
@@ -91,6 +92,13 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 		if (region && !strokeNear(stroke.points, visible, stroke.width)) continue;
 		if (++drawn % 64 === 0 && performance.now() - started > TIME_BUDGET_MS) break;
 		const highlighter = stroke.tool === "highlighter";
+		// v22 (#37): the fill of a closed shape lies under its line.
+		if (isFilled(stroke)) {
+			ctx.fillStyle = stroke.fill!;
+			ctx.globalAlpha = fillAlpha(stroke);
+			ctx.globalCompositeOperation = "source-over";
+			ctx.fill(new Path2D(fillPathD(stroke.points)));
+		}
 		ctx.fillStyle = stroke.color;
 		ctx.globalAlpha = inkAlpha(stroke.tool);
 		ctx.globalCompositeOperation = inkBlend(stroke.tool);

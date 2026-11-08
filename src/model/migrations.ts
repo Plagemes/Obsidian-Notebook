@@ -477,6 +477,29 @@ export function withoutV21Views(raw: RawObject): RawObject {
 	return copy;
 }
 
+/**
+ * v22 adds the optional stroke fields `fill`, `fillTint` and `dash` (filled shapes and dashed or dotted lines, #37). Every valid v21
+ * document is a valid v22 document: the migration is the identity apart from the version. A v21 reader ignored unknown stroke fields,
+ * so such a key in a v21 file was never ours and never meant anything: it is dropped, not interpreted (like `nib` in v19 -> v20).
+ * Nothing else changes, so a large v21 file can still be read page by page (StagedParse), which ignores these keys of each stroke.
+ */
+function v21ToV22(raw: RawObject): RawObject {
+	const out: RawObject = { ...raw, version: 22 };
+	if (!Array.isArray(raw.pages)) return out;
+	const pages = (raw.pages as unknown[]).map((page) => {
+		if (!isRaw(page) || !Array.isArray(page.strokes)) return page;
+		return (page.strokes as unknown[]).some((s) => isRaw(s) && V22_STROKE_KEYS.some((k) => k in s))
+			? { ...page, strokes: (page.strokes as unknown[]).map((s) => withoutKeys(s, V22_STROKE_KEYS)) }
+			: page;
+	});
+	// A document with nothing to drop keeps its pages as they were (the migration is the identity but the version).
+	if (pages.some((p, i) => p !== (raw.pages as unknown[])[i])) out.pages = pages;
+	return out;
+}
+
+/** The stroke keys v22 added. */
+const V22_STROKE_KEYS: readonly string[] = ["fill", "fillTint", "dash"];
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -512,6 +535,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	18: v18ToV19,
 	19: v19ToV20,
 	20: v20ToV21,
+	21: v21ToV22,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

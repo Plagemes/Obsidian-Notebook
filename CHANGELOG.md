@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### shapefill
+- **Filled shapes and dashed or dotted lines (#37) and document format 22.** The shape tool's options have a *Fill* (none, solid, or a translucent tint, in the colour of the line or a palette colour) for the rectangle and the ellipse and a *Line* style (solid, dashed, dotted) for every shape; the selection bar restyles both for the selected shapes as one undo step (freehand ink is never touched, groups and locks are respected). Fill and dashes are drawn on the page, in the live preview, in the PNG, SVG, PDF and HTML exports, the written-area export and the thumbnails; tapping inside a filled shape picks it with the eyedropper.
+- **Document format v22.** Three optional stroke fields, only on shape strokes: `fill`, `fillTint`, `dash`. The v21 to v22 migration is the identity plus the version; a bad value is dropped and counted when reading and refused when writing; older readers open a v22 notebook read-only. `docs/schema/notebook-v21.schema.json` is now `notebook-v22.schema.json`; `docs/format.md` and `docs/architecture.md` describe the fields. Old documents render exactly as before.
+- **Code.** Pure geometry in `src/ink/shape-style.ts` (dash runs by arc length, scaled by the line width; closed-shape test; fill polygon), the selection restyle in `src/ink/shape-restyle.ts`, one row builder for the options and the bar in `src/view/shape-style-row.ts`; English and Italian.
+
 ## 0.23.0 — 2026-11-08
 
 Eight features: saved views, export of the written area or the selection, dimensional analysis of formulas, balancing of chemical reactions, an automatic formula sheet, a welcome-back card, notebooks ordered by the active term and clean-up of pen hooks and stray dots. The notebook format moves to version 21 (saved views): the migration from version 20 is automatic, and 0.22 and older open a v21 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).
