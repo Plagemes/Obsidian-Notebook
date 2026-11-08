@@ -63,6 +63,15 @@ export async function checkZoomwidth(api: ZoomwidthCheckApi): Promise<{ ok: bool
 			add(`on at ${zoom}x stores chosen / zoom`, Math.abs(on - chosen / zoom) < 1e-9, `${on}`);
 			add(`on at ${zoom}x looks the chosen width on screen`, Math.abs(on * zoom - chosen) < 1e-6);
 		}
+		// 0.26 integration: a stroke written with the zoom rule and an opacity (#358) keeps both.
+		const zv = api.view as ZoomView;
+		setup(api, 4, true);
+		zv.toolbar.update({ penOpacity: 0.5 });
+		const w = await write(api, zv, 45);
+		const strokes = zv.document.pages[zv.currentPage()]!.strokes as Array<{ width: number; opacity?: number }>;
+		const last = strokes[strokes.length - 1]!;
+		add("a stroke written with zoom width and opacity keeps both", Math.abs(w - chosen / 4) < 1e-9 && last.opacity === 0.5, `${w} ${last.opacity}`);
+		zv.toolbar.update({ penOpacity: 1 });
 		await api.openOptions("pen");
 		setup(api, 4, true);
 		await api.frames(3);
@@ -71,13 +80,6 @@ export async function checkZoomwidth(api: ZoomwidthCheckApi): Promise<{ ok: bool
 		// 0.26 integration: the opacity row (#358) shows beside the zoom hint and both apply to the next stroke.
 		const opRow = q<HTMLElement>(".notebook-options .notebook-pen-opacity");
 		add("the opacity row shows beside the zoom hint", !!opRow && opRow.offsetWidth > 0 && !!hint && hint.offsetWidth > 0);
-		const zv = api.view as ZoomView;
-		zv.toolbar.update({ penOpacity: 0.5 });
-		const strokes = zv.document.pages[zv.currentPage()]!.strokes as Array<{ width: number; opacity?: number }>;
-		const w = await write(api, zv, 90);
-		const last = strokes[strokes.length - 1]!;
-		add("a stroke written with both keeps the on-screen width and the opacity", Math.abs(w - chosen / 4) < 1e-9 && last.opacity === 0.5, `${w} ${last.opacity}`);
-		zv.toolbar.update({ penOpacity: 1 });
 		setup(api, 4, false);
 		await api.frames(3);
 		add("the hint is hidden when off", !q<HTMLElement>(".notebook-options .notebook-zoom-hint:not(.notebook-hidden)"));
