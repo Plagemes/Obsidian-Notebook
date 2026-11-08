@@ -405,6 +405,10 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"export-markdown": (v) => v.openMarkdownExport(),
 	// 0.16 (#90): the highlights digest note
 	"highlights-digest": (v) => v.openHighlightsDigest(),
+	// 0.22 (#101): colours with meaning
+	"meaning-filter": (v) => v.openMeaningFilter(),
+	"meaning-legend": (v) => v.openMeaningLegend(),
+	"meaning-digest": (v) => v.openMeaningDigest(),
 	// 0.18 mentions (O7): the notes that link to this page
 	"mentions": (v) => v.openMentions(),
 	// 0.19 (#228): the Figures gallery

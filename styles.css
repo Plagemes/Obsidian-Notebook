@@ -17806,3 +17806,96 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-slide-back {
 	top: 66px;
 }
+
+/* ===== 0.22 colormeaning ===== */
+/* The pill that says "filter by meaning" is on, and clears it. Bottom left, clear of the minimap and scrollbar on the right. */
+.nb-ui.nb-meaning-pill {
+	position: absolute;
+	bottom: 12px;
+	left: 12px;
+	z-index: 6;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 36px;
+	max-width: calc(100% - 96px);
+	padding: 0 4px 0 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	box-shadow: var(--nb-shadow-2);
+}
+
+.nb-ui.nb-meaning-pill::before {
+	content: "";
+	flex: none;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--nb-sw, var(--nb-accent));
+}
+
+.nb-ui.nb-meaning-pill .nb-meaning-pill-icon {
+	display: inline-flex;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-meaning-pill .nb-meaning-pill-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.nb-ui.nb-meaning-pill .nb-meaning-pill-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-meaning-pill .nb-meaning-pill-clear {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui.nb-meaning-pill .nb-meaning-pill-clear:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+/* The legend editor reuses the Board columns editor rows; the extras are the free colour input and the notebook switch. */
+.nb-ui.nb-meaning-editor .nb-meaning-other {
+	width: 28px;
+	height: 28px;
+	min-width: 28px;
+	padding: 0;
+	border: 2px dashed var(--nb-border-strong);
+	border-radius: 50%;
+	background: transparent;
+	cursor: pointer;
+}
+
+.nb-ui.nb-meaning-editor .nb-colrow-name:disabled,
+.nb-ui.nb-meaning-editor .nb-colrow-swatch:disabled,
+.nb-ui.nb-meaning-editor .nb-meaning-other:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.nb-ui.nb-meaning-filter .nb-modal-row.is-current {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}

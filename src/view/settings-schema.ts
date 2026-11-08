@@ -102,7 +102,7 @@ export const GROUPS: readonly GroupSpec[] = [
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open";
+export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open" | "meanings-edit";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info" | "backup-now";
 
@@ -339,6 +339,15 @@ const READING: SettingSpec[] = [
 	},
 	// 0.21 (#187): back-of-book index.
 	{ id: "indexPrefix", section: "reading", order: 61, name: "settings.indexPrefix", desc: "settings.indexPrefix.desc", control: { type: "text", placeholder: "#idx" }, keywords: "index back of book term prefix marker indice analitico prefisso" },
+	// 0.22 colormeaning (#101): what each ink colour means; edited in a dialog, used by the view filter and the digest by colour.
+	{
+		id: "colourMeanings", section: "reading", order: 62, name: "settings.meanings", desc: "settings.meanings.desc",
+		control: { type: "action", run: "meanings-edit", button: "settings.open" }, edits: ["colourMeanings"], keywords: "colour color meaning legend definition example filter digest significato colori legenda definizione esempio",
+	},
+	{
+		id: "meaningTolerance", section: "reading", order: 63, name: "settings.meaningTolerance", desc: "settings.meaningTolerance.desc",
+		control: { type: "dropdown", options: options([["strict", "settings.meaningTolerance.strict"], ["normal", "settings.meaningTolerance.normal"], ["loose", "settings.meaningTolerance.loose"]]) }, parent: "colourMeanings", keywords: "colour color match tolerance legend tolleranza colori",
+	},
 
 	// 0.18 (#86): margin comments.
 	{ id: "commentMarkers", section: "reading", order: 70, name: "settings.commentMarkers", desc: "settings.commentMarkers.desc", control: { type: "toggle" }, keywords: "comments markers margin review commenti margine revisione" },

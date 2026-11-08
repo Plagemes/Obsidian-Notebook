@@ -55,6 +55,7 @@ import { SyncSafetyService } from "./view/sync-safety";
 import type { NavController } from "./view/nav-controller";
 import { registerNavigation } from "./view/nav-service";
 import { QuickTabsStore } from "./library/quicktabs-store";
+import { MeaningsStore } from "./library/meanings-store";
 import { QuickTabsService } from "./view/quick-tabs-service";
 import { NotebookStatusBar } from "./view/status-bar";
 import { registerResilience, type ResilienceServices } from "./view/resilience";
@@ -78,6 +79,8 @@ export default class NotebookPlugin extends Plugin {
 	nav!: NavController;
 	/** 0.18 (#227): quick tabs, pages pinned in a notebook (one file per device in `_meta`, library/quicktabs-store.ts). */
 	quickTabs!: QuickTabsService;
+	/** 0.22 (#101): per-notebook colour meanings (one file per device in `_meta`, library/meanings-store.ts). */
+	meanings!: MeaningsStore;
 	private statusBar: NotebookStatusBar | null = null;
 	/** Public API for other plugins and scripts (docs/api.md). */
 	api?: NotebookApi;
@@ -211,6 +214,19 @@ export default class NotebookPlugin extends Plugin {
 			const store = new QuickTabsStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
 			this.quickTabs = new QuickTabsService({ app: this.app, store, readNotebook: (file) => this.host.readNotebook(file), notebooksFolder: () => this.settings.folder });
 			this.quickTabs.register(this);
+		});
+		// 0.22 (#101): per-notebook colour meanings follow other devices' files.
+		this.step("colour meanings", () => {
+			const store = new MeaningsStore(vaultDeviceFileAdapter(this.app), () => this.settings.folder, sidecarDeviceId(this.app));
+			this.meanings = store;
+			const load = () => void store.load().catch((e) => console.error("[notebook] colour meanings could not be read", e));
+			this.app.workspace.onLayoutReady(load);
+			const changed = (file: unknown) => {
+				if (file instanceof TFile && store.watches(file.path)) load();
+			};
+			this.registerEvent(this.app.vault.on("create", changed));
+			this.registerEvent(this.app.vault.on("modify", changed));
+			this.registerEvent(this.app.vault.on("delete", changed));
 		});
 		this.step("status bar", () => this.registerStatusBar());
 		let quickNav: QuickNavService | null = null;

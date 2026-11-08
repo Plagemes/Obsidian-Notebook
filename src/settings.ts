@@ -1,5 +1,6 @@
 import type { PressureMode } from "./ink/pressure";
 import { defaultPenSets, MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, type PenSet } from "./view/pen-sets";
+import { isToleranceName, parseLegend, type Meaning, type ToleranceName } from "./model/colour-meaning";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
 import { cleanSignDateCustom, DEFAULT_SIGN_DATE_CUSTOM, DEFAULT_SIGN_DATE_MODE, isSignDateMode, type SignDateMode } from "./ink/signature";
@@ -226,6 +227,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	// 0.16 (#90): highlights digest
 	/** How the digest note of the highlights is grouped: by page or by colour. */
 	digestGroup: "page" | "colour";
+	/** 0.22 (#101): what each ink colour means (the global legend; a notebook may have its own in `_meta`). */
+	colourMeanings: Meaning[];
+	/** 0.22 (#101): how close a stroke colour must be to a legend colour. */
+	meaningTolerance: ToleranceName;
 	/** 0.21 (#187): the label prefix that makes a marker an index term (one word). */
 	indexPrefix: string;
 	// 0.18 (#86): margin comments
@@ -361,6 +366,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	notebookTabs: false,
 	autoLineBreak: false,
 	digestGroup: "page",
+	colourMeanings: [],
+	meaningTolerance: "normal",
 	indexPrefix: "#idx",
 	commentMarkers: true,
 	commentsInPdf: false,
@@ -504,6 +511,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
 	if (d.digestGroup === "page" || d.digestGroup === "colour") s.digestGroup = d.digestGroup;
+	s.colourMeanings = parseLegend(d.colourMeanings);
+	if (isToleranceName(d.meaningTolerance)) s.meaningTolerance = d.meaningTolerance;
 	if (typeof d.indexPrefix === "string") s.indexPrefix = normalizeIndexPrefix(d.indexPrefix);
 	if (typeof d.commentMarkers === "boolean") s.commentMarkers = d.commentMarkers;
 	if (typeof d.commentsInPdf === "boolean") s.commentsInPdf = d.commentsInPdf;
