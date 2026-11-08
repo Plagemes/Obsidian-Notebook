@@ -3467,3 +3467,24 @@ Manual steps (real Obsidian; nothing here is verified on Android). You need a cl
 |---|---|---|---|---|---|
 | Automatic lecture header (#210): course, lecturer, room, date and start time as two grouped text boxes at the top, one undo step | yes | slot choice (in progress, lead time, overlap, linked to another notebook, no class, nearest), fields in English and Italian, free-area search, plan, History step and locked page: `tests/lecture-header.test.ts`; view and chip: harness `doc=lecthead` | | | not tried on Android; time zones are covered by the rule that class times are local wall-clock times, not by running under other zones |
 | Setting Off / Ask / Automatic and the four fields; command *Insert lecture header* | yes | settings read: `tests/lecture-header.test.ts`; command and chip: harness `doc=lecthead` | | | |
+
+### 0.23 — chembal: balancing of typed chemical reactions (#294; steps 2340-2359)
+
+Implemented, not verified on hardware. No format change. Reference screenshots after `HARNESS_DOC=chembal npm run harness:check`: `dev/harness/dist/shots/chembal-*.png` (tablet and phone, light and dark).
+
+2340. **Text box.** Write the text box `CH4 + O2 -> CO2 + H2O` (type it) and select it with the lasso: the selection bar shows *Balance reaction*. Tap it: a preview shows the line before and after (`CH4 + 2 O2 -> CO2 + 2 H2O`). *Balance* replaces the text; *Cancel* changes nothing.
+2341. **Undo.** One undo gives the original text back; one redo balances it again (a single step, also for several boxes at once).
+2342. **Charges.** `MnO4^- + Fe^2+ + H^+ -> Mn^2+ + Fe^3+ + H2O` gives `MnO4^- + 5 Fe^2+ + 8 H^+ -> Mn^2+ + 5 Fe^3+ + 4 H2O`. Subscript and superscript letters (H₂O, Fe³⁺) work too and keep their look.
+2343. **Hydrate.** `CuSO4·5H2O -> CuSO4 + H2O` gives `CuSO4·5H2O -> CuSO4 + 5 H2O`.
+2344. **Several lines.** A box with a title line, two reactions and a note: only the reaction lines change; a line that cannot be balanced is listed in the preview with the reason and stays as it is.
+2345. **Impossible.** `NaCl -> Na` says Cl appears on one side only; `H2 + O2 + H2O2 -> H2O` says more than one balance is possible; a typo such as `H2 + Xx -> H2O` names the unknown element. *Balance* is off when nothing would change.
+2346. **Equation.** Insert an equation with the source `\ce{H2 + O2 -> H2O}` (or `H_2 + O_2 \rightarrow H_2O`), select it, *Balance reaction*: it becomes `\ce{2 H2 + O2 -> 2 H2O}` and is typeset again.
+2347. **Locked.** Lock the text box: the action says the element is locked and nothing changes. Lock the page: a notice says the page is locked.
+2348. **Not offered.** Select an ordinary text box, a picture or ink: no *Balance reaction* in the bar. The same command is in the command palette while a reaction is selected.
+2349. **Languages.** In Italian the action, preview, reasons and notices are translated.
+2350. **Style.** Light and dark theme, phone and tablet width: the preview is a narrow dialog with quiet rows; errors in the danger colour; nothing overflows.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Balancing of typed chemical reactions (#294): formulas with groups and hydrates, charges, electrons, arrows `->` `→` `⇌` `=`; exact rational nullspace, smallest whole coefficients; unbalanceable, one-sided, unused-species and ambiguous reactions are explained | yes | `tests/chem-balance.test.ts` (parsing, combustion, redox with charges, hydrates, impossible and ambiguous cases, text boxes, LaTeX) | | | |
+| "Balance reaction" in the selection bar and the palette: preview, one undo step, refuses locked elements and locked pages; text boxes and equations (`\ce{}`) | yes | pure part tested; harness `doc=chembal` | | | not tried on the tablet |

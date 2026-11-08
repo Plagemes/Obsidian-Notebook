@@ -209,6 +209,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"insert-graph": (v) => v.mathTools?.insertGraph(),
 	"math-edit": (v) => v.mathTools?.editSelected(),
 	"math-convert-ink": (v) => void v.mathTools?.convertSelectedToInk(),
+	"chem-balance": (v) => v.chemTools?.balanceSelected(),
 	// 0.17 (#20): sticky notes
 	"insert-sticky": (v) => v.stickyTools?.insert(),
 	"sticky-edit": (v) => v.stickyTools?.editSelected(),

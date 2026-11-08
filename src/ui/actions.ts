@@ -48,6 +48,7 @@ export interface UiContext {
 		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
 		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
 		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
+		/** 0.23 (#294): selected text boxes and equations that hold a typed chemical reaction (optional, 0 when absent). */ reactions?: number;
 		/** 0.17 (#20): selected sticky notes, and how many of them are collapsed (optional, 0 when absent). */ stickies?: number; stickiesCollapsed?: number;
 		/** 0.19 (#103): selected checkboxes, and how many of them are linked to a task (optional, 0 when absent). */ checkboxes?: number; checkboxesLinked?: number;
 		/** 0.20 (#39): the selected items can be made one group (two or more, not already exactly one group), and how many of them are in a group now (optional, false and 0 when absent). */ canGroup?: boolean; grouped?: number;
@@ -208,6 +209,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// wave 0.9: math — edit the selected equation or graph, turn equations into ink.
 	{ id: "math-edit", label: "math.edit", icon: "square-function", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", command: "math.command.edit", when: oneMath },
 	{ id: "math-convert-ink", label: "math.convertInk", icon: "pen-line", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 58, scope: "view", command: "math.command.convertInk", when: (c) => (c.selection?.equations ?? 0) > 0 },
+	// 0.23 (#294): balance the chemical reaction typed in the selected text boxes and equations.
+	{ id: "chem-balance", label: "chem.balance", icon: "flask-conical", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 57, scope: "view", command: "chem.command.balance", when: (c) => (c.selection?.reactions ?? 0) > 0, keywords: "chemistry reaction balance equation stoichiometry chimica reazione bilancia" },
 	// v10: anchored excerpts (#105). With a selection they excerpt its region; with nothing selected the next drag on a page
 	// outlines the region (lasso bar, All actions sheet). "Go to source" when an excerpt is selected.
 	{ id: "excerpt-open-source", label: "excerpt.openSource", icon: "corner-up-left", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 93, scope: "view", command: "excerpt.command.openSource", readOnly: true, when: (c) => (c.selection?.excerpts ?? 0) > 0, keywords: "excerpt source back jump origin estratto fonte" },

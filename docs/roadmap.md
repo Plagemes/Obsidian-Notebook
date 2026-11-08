@@ -562,7 +562,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### STEM tools (no AI)
 292. ~~**P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.~~ — dropped (user decision, 2026-10-29)
 293. **P2** Dimensional analysis of formulas: flags inconsistent units.
-294. **P2** Balancing of typed chemical reactions.
+294. **P2** Balancing of typed chemical reactions. — 🧪 implemented in 0.23 (`src/math/chem-balance.ts`, "Balance reaction" in the selection bar), waiting for hardware verification.
 295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart.
 296. **P3** Step-by-step linear systems and matrices shown on the page.
 297. ~~**P3** Basic vector maps as backgrounds for geography and history (public-domain data).~~ — dropped (user decision, 2026-10-29)

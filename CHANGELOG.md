@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### chembal, roadmap 🧪
+- **Balancing of typed chemical reactions (#294).** Select a text box or an equation that holds a reaction and tap *Balance reaction* in the selection bar (or the command): a preview shows each line before and after, and *Balance* replaces the text with the smallest whole coefficients in one undo step. Formulas with parentheses and brackets, hydrates (`CuSO4·5H2O`), charges (`Fe^3+`, `SO4^2-`, `Fe³⁺`, `e^-`) and arrows (`->`, `→`, `⇌`, `=`) are read; the species keep the spelling they were typed in. The coefficients come from an exact rational nullspace of the element and charge matrix (no rounding). A reaction that cannot be balanced says why (an element on one side only, unknown element, unclear charge, no positive solution, a species that cannot take part) and one with several answers says so instead of picking one. Locked elements and locked pages are never changed. An equation becomes `\ce{...}`. No format change.
+
 ## 0.22.0 — 2026-11-08
 
 Seven features: three new pens, optional cloud sync with Google Drive or OneDrive, two-way page references, colours with meaning, instant axes, custom covers and an automatic lecture header. The notebook format moves to version 20 (the new pen tools and the nib angle): the migration from version 19 is automatic, and 0.21 and older open a v20 notebook read-only and never overwrite it. Cloud sync is off by default and uses your own OAuth client; the plugin ships no client ID or secret.
