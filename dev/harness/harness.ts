@@ -61,6 +61,7 @@ import { checkPagetime } from "./pagetime-check";
 import { checkPens } from "./pens-check";
 import { checkSavedviews } from "./savedviews-check";
 import { checkHistpanel } from "./histpanel-check";
+import { checkRelated, relatedShot } from "./related-check"; // 0.26 related
 import { checkMinimap } from "./minimap-check";
 import { checkHeader } from "./header-check";
 import { checkChrome, chromeState, type ChromeState } from "./ds-notebook-check";
@@ -2200,6 +2201,9 @@ harnessApi.checkAreahl = () => checkAreahl({ view, penStroke, setTool, openOptio
 harnessApi.checkSavedviews = () => checkSavedviews({ view, frames, errors, notices });
 // 0.25 histpanel (#84): its own check (dev/harness/histpanel-check.ts).
 harnessApi.checkHistpanel = () => checkHistpanel({ view, frames, errors, notices });
+// 0.26 related (#422): its own check (dev/harness/related-check.ts).
+harnessApi.checkRelated = () => checkRelated({ app, errors, notices });
+harnessApi.relatedShot = (state: "results" | "empty" | "none") => relatedShot({ app, errors, notices }, state);
 harnessApi.inboxShot = (state: "list" | "close") => inboxShot(state);
 // 0.22 syncprov (#126): the cloud sign-in dialog (dev/harness/syncprov-check.ts).
 harnessApi.checkSyncprov = () => checkSyncprov({ errors, notices });

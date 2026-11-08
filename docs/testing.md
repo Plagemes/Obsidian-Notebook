@@ -3980,3 +3980,25 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Pure marked-page logic (kinds, reasons, counts) | yes | `tests/nav-marked.test.ts` | | | markers resolved (done) still count as marked |
 | Per-notebook choice in bounded device-local storage (corrupt falls back to all pages) | yes | `tests/nav-marked.test.ts`; harness `doc=markedview` | | | |
 | Marked-only list with badges, sub-filters by kind, empty message, long-press help | yes | harness `doc=markedview` | | | |
+
+### 0.26 — related: related handwritten pages panel (roadmap #422; steps 2880-2899)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+2880. **Open.** Run the command *Related handwritten pages* (command palette or All actions): a panel opens in the right sidebar. With no Markdown note open it says "No note open".
+2881. **Links.** In a notebook text box write `[[Some note]]` (a note that exists), save, then open that note: the page appears first with the chip *Links here*.
+2882. **Title, alias, tag, heading.** Write the note's title, one of its aliases (frontmatter `aliases`) or one of its headings in a text box; give a page a tag that the note has (or a parent or child of it). Each page appears with the chip *Title*, *Alias*, *Tag* or *Heading* and the matched text beside it; a page with several reasons shows `+n` and ranks higher.
+2883. **Course.** In the timetable link a course to a folder of notebooks and put the note in that folder (or give it the course name as a tag, title or alias): the first page of those notebooks appears last with *Same course* (turn it off in Settings, Integration, *Related pages: same course*).
+2884. **Open.** Tap a row: the notebook opens on that page. Open a second note: the panel updates by itself a moment later.
+2885. **Link and embed.** Tap the link button of a row: the link of that page is copied (paste it in the note). Drag a row into the note: the page's embed is inserted at the drop point.
+2886. **Thumbnails.** Every row shows the page; scrolling a long list stays smooth on the tablet (thumbnails are drawn one at a time).
+2887. **Empty and refresh.** A note nothing relates to shows "Nothing related yet". The refresh button reads the notebooks again; long-press it and the link button: the explanations appear (English and Italian).
+2888. **Read-only.** Nothing in the vault changes while the panel is open (no file is written; the library index may be refreshed as the page switcher does).
+2889. **Looks.** Light and dark theme, phone and tablet width, Italian; the panel in the left sidebar and as a tab.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure ranking (links, title, alias, tag, heading, course; caps; ties) | yes | `tests/related-pages.test.ts` | | | |
+| Side panel (thumbnail, notebook, page, reason, open, copy link, empty states, debounced update) | yes | harness `doc=related` | | | |
+| Drag a row into the note (embed text) | yes | harness `doc=related` (drag data only) | | | drop into the editor not tested in a real Obsidian |
+| Setting *Related pages: same course* | yes | `tests/settings-schema.test.ts` | | | |

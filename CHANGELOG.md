@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### related
+- **Related handwritten pages (#422).** The command *Related handwritten pages* (also in All actions) opens a panel in the right sidebar. For the Markdown note in front it lists the handwritten pages that relate to it, best first: pages whose text links to the note (`[[Note]]`), pages that name its title or an alias, pages tagged like the note, pages that name one of its headings (or a bookmark titled like one), and, last, the first page of the notebooks of the note's course. Each row has the page thumbnail, the notebook and page, a reason pill (*Links here*, *Title*, *Alias*, *Tag*, *Heading*, *Same course*) with the matched text, and `+n` when the page has more reasons.
+- **Use.** Tap a row to open the page; drag a row into the note to place its embed; the link button copies the link. The panel follows the note you work in (a short delay after you switch notes or edit its headings, tags or aliases) and a refresh button reads the notebooks again. Empty states say what to do. Long-press explains the buttons (English and Italian).
+- **Read-only.** It reads the library index and the note's metadata only; it never writes to the vault. No format change. A new setting *Related pages: same course* (Integration) turns the course rows off.
+- **Code.** Pure, Node-tested ranking in `src/library/related-pages.ts` (no `obsidian` import); the panel in `src/view/related-view.ts`; what it reads from Obsidian in `src/view/related-source.ts` (reuses the page switcher's index and thumbnails). Tests: `tests/related-pages.test.ts`; harness `doc=related`.
+
 ## 0.25.0 — 2026-11-08
 
 Seven features and a first part of the history: an area highlighter, a panel of the actions you took, align to baseline, lecture and study writing profiles, copy as image, a toolbar that fades while you write, a suggested paper for a new page and a page navigator view of marked pages only. The notebook format moves to version 23 (the area highlighter): the migration from version 22 is automatic, and 0.24 and older open a v23 notebook read-only and never overwrite it. Two independent review rounds are folded in (see Review fixes).
