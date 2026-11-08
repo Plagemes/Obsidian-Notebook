@@ -3647,6 +3647,7 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 2610. **Thumbnails.** The Library card and the page navigator show the filled and dashed shapes.
 2611. **Old files and other devices.** Open a notebook written by 0.23: it looks exactly the same and is saved as format 22. A copy of the plugin older than this version opens a notebook saved by this one read-only (it never rewrites it).
 2612. **Languages and looks.** Italian (*Riempimento*, *Linea*, *Tratteggiata*, *Punteggiata*), light and dark theme, phone and tablet width: the rows fit, nothing is clipped.
+2613. **Redo and background changes (review).** Restyle a shape (fill or dash), Undo, then Redo while a slide or margin refresh runs: the shape ends with the new fill and is not reverted. A filled shape whose ends are very close (a recognised rectangle) keeps its fill after being scaled up with the lasso. In *Compare with an earlier version*, a shape that only got a fill or a dash is listed as changed.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
@@ -3671,6 +3672,7 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 2468. **Command, sheet and one stroke.** *Join broken strokes in the selection* in the command palette and *Join broken strokes* in the All actions sheet (Selection) do the same; with fewer than two strokes selected they are not offered.
 2469. **Together with Clean up.** Run *Clean up strokes* and then *Join broken strokes* on the same selection: two separate undo steps. A hook cut by the first never makes the second join something it would not have joined.
 2470. **Languages and looks.** Switch the plugin to Italian: the action, the command and the notices are translated. Light and dark theme, phone and tablet width: the action sits in the second row of the bar with the others and nothing is cut off.
+2471. **Graph ink (review).** Pan a graph so that a line is cut at its frame edge in two strokes, one of them moved with the graph; select both and run *Join broken strokes*: they are not joined (a stroke bound to a graph is never joined with one that is not).
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
@@ -3712,6 +3714,8 @@ Implemented, not verified on hardware. No format change. Manual steps (real Obsi
 2508. **Pen and mouse.** With the S Pen held on a toolbar button: no bubble, and the pen button rules (tap with the button held: radial menu; drag with the button held: eraser) behave as before. With a mouse: only the hover tooltip.
 2509. **Setting.** *Settings > Appearance > Explain icons on long press* off: no bubble anywhere. On again: it works. Switch to Italian: bubbles are in Italian.
 2510. **Looks.** Light and dark, tablet and phone: a quiet card with a small arrow, readable, never off screen.
+2511. **Long hold on a button (review).** Hold a finger on Delete (selection bar) or on Undo for two seconds, then lift: the bubble shows and the button is NOT pressed, however long you held. Right after, a quick tap on the same button works at once.
+2512. **New controls.** Hold a finger on: the Bookmarks chip on Home, *Bookmark in the global list* and *Global bookmarks* (page sheet), *Hand in…*, *Join broken strokes*, the layout button in the page panel header, and each Fill / Line button and fill colour swatch in the shape options and in the selection bar: each shows a bubble with its own sentence (Italian too).
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
@@ -3729,6 +3733,7 @@ Manual steps (real Obsidian; nothing here is verified on Android). You need a ti
 2525. **Page tags.** Page panel, page menu, *Tags*: chips from the course, the notebook tags, that page's text and markers; a tap writes the tag into the field, *Save* is one undo step.
 2526. **Spelling.** A course such as *Fisica 2* is offered as `Fisica-2` for notebook tags and as `Fisica 2` for page tags.
 2527. **Off.** Settings, *Integration*, *Suggest tags* off: no chips in either editor. Italian reads *Suggerisci i tag* / *Suggeriti*.
+2528. **One tap, one tag (review).** Link a class whose course has a comma or semicolon in its name (for example *Analysis I, Part 2*). In the page tag editor tap its chip: exactly one tag *Analysis I Part 2* is added.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
@@ -3745,6 +3750,7 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 2544. **Long notebook.** In a notebook of 500 or more pages open the panel in list mode: it opens at once, scrolls smoothly, and the current page is in view.
 2545. **Everything still works in the list.** Tap a row to go to the page; drag a row to reorder (long press on touch); the star, the page menu, the lock mark, the select mode (check button, long press, Ctrl+click), the bookmark filter and the tag filter.
 2546. **Looks.** Light and dark theme, phone width (the panel is a drawer) and tablet width, Italian.
+2547. **Memory (review).** Scroll a 500-page notebook in the page panel from top to bottom and back, switch between List and Thumbnails a few times, and close the notebook: the app stays smooth and the memory does not keep growing; the thumbnails are drawn again on demand.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
@@ -3769,6 +3775,9 @@ Implemented, not verified on hardware. No format change: the list is the sidecar
 2569. **A file that cannot be read.** Damage `_meta/bookmarks-<device>.json` of this device (not valid JSON): adding a bookmark says the file could not be read and nothing was changed; the file is not overwritten (a copy named `bookmarks.unreadable-…` is kept next to it).
 2570. **Read-only and locked pages.** On a locked page and in a read-only view the toggle still works (it does not edit the notebook).
 2571. **Languages and looks.** In Italian the action, the dialog, the Missing badge and the notices are translated. Light and dark theme, phone and tablet width: the rows wrap, the four small buttons of a row stay 44 px targets that do not overlap the title.
+2572. **Copy of a notebook (review).** Copy a bookmarked notebook in the file manager (same notebook id). Open the copy: its pages are not shown as bookmarked and bookmarking one adds a new row; the original keeps its own. Remove one of them: the other stays.
+2573. **Notebook not synced yet (review).** On a second device, open the bookmarks list before the notebook has synced: the row says Missing and is not moved to another file; once the notebook arrives the row works again. Tapping a row whose notebook was moved without a rename event opens it and the bookmark follows it (only when exactly one notebook has that id).
+2574. **Same page on two devices (review).** Bookmark the same page on two devices before they sync: after the sync it is one row, and removing it (from either device) removes it for good.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
