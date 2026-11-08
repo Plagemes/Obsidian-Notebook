@@ -4748,6 +4748,7 @@ export const en = {
 	"histpanel.t.replaceAll": "Text replaced",
 	"histpanel.t.axes": "Axes made",
 	"histpanel.t.join": "Broken strokes joined",
+	"histpanel.t.baseline": "Words aligned to a baseline",
 	"histpanel.t.cleanUp": "Strokes cleaned up",
 	"histpanel.t.scan": "Scan inserted",
 	"histpanel.t.picture": "Picture inserted",

@@ -287,9 +287,9 @@ describe("what is not handwriting", () => {
 		const plan = planBaseline(page, strokes)!;
 		expect(hist.execute(plan.command)).toBe(true);
 		expect(page.elements).toEqual([area]);
-		expect(page.elements![0]).toBe(area);
+		expect(page.elements[0]).toBe(area);
 		hist.undo();
-		expect(page.elements![0]).toBe(area);
+		expect(page.elements[0]).toBe(area);
 	});
 
 	it("leaves a lone dot and a lone dash alone", () => {

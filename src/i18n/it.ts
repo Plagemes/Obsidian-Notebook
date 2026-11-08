@@ -4750,6 +4750,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"histpanel.t.replaceAll": "Testo sostituito",
 	"histpanel.t.axes": "Assi creati",
 	"histpanel.t.join": "Tratti spezzati uniti",
+	"histpanel.t.baseline": "Parole allineate a una linea di base",
 	"histpanel.t.cleanUp": "Tratti ripuliti",
 	"histpanel.t.scan": "Scansione inserita",
 	"histpanel.t.picture": "Immagine inserita",

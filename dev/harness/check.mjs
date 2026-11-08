@@ -633,6 +633,8 @@ async function main() {
 					} catch (e) {
 						problems.push(`baseline ${state} screenshot: ${e.message}`);
 					}
+				}
+			}
 			// 0.25 markedview: a screenshot of the marked-only list.
 			if (s.doc === "markedview") {
 				const designDir = join(shots, "design");
