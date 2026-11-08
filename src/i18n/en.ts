@@ -4436,6 +4436,20 @@ export const en = {
 	"formulasheet.unsafe": "{path} has an unpaired formula marker; it was left untouched.",
 	"formulasheet.foreign": "{path} already exists and is not a formula sheet; it was left untouched. Rename or move it, then try again.",
 	"formulasheet.other": "{path} is the formula sheet of another notebook; it was left untouched. Try again to use a separate note.",
+	// 0.23 welcomeback
+	"settings.welcomeBack": "Welcome back card",
+	"settings.welcomeBack.desc": "When you reopen a notebook after a while, a card offers the way back and open questions.",
+	"settings.welcomeBackHours": "Offer it after",
+	"settings.welcomeBackHours.desc": "How long the notebook stays closed on this device before the card appears.",
+	"welcomeBack.title": "Welcome back",
+	"welcomeBack.awayH": "Last open {n} h ago",
+	"welcomeBack.awayD": "Last open {n} days ago",
+	"welcomeBack.resumePage": "Continue on page {n}",
+	"welcomeBack.resumeSlide": "Continue at slide {n}",
+	"welcomeBack.question": "Question, p. {n}",
+	"welcomeBack.gap": "Gap, p. {n}",
+	"welcomeBack.more": "and {n} more",
+	"welcomeBack.dismiss": "Dismiss",
 } as const;
 
 export type MessageKey = keyof typeof en;

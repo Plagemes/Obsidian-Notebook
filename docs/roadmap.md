@@ -749,7 +749,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 417. **P1** 🧪 Slide strip: for each slide, the exercise page after it, the margin note and the question on this slide.
 418. **P2** PDF search with suggested terms (from the outline, headings and your own text).
 419. **P2** Filtered view of marked pages only (bookmarks, markers, questions).
-420. **P2** Welcome-back banner when reopening: last slide, open questions and gaps.
+420. **P2** 🧪 Welcome-back banner when reopening: last slide, open questions and gaps. (0.23: a card after a configurable absence with the way back, the open questions and gaps; look-up list and checkboxes not included.)
 
 ### Obsidian
 421. **P2** Dynamic gallery block in notes: pages selected by tag, bookmark or course.

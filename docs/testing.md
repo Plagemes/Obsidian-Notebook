@@ -3571,3 +3571,24 @@ Formula sheet (roadmap #249). *Formula sheet…* (page sheet, notebook menu, com
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Formula sheet (#249): equations collected in reading order into `<Notebook> — Formulas.md` (`$$` blocks, link to each page, `\tag{n}` for numbered ones); owner marker with path and document id, only the region is rewritten inside `vault.process`, a note without markers, with an unpaired marker or recording another notebook is never rewritten, recorded in plugin-written | yes | collection order, escaping of `$`, `-->` and blank lines, section, marker safety and note-name choice: `tests/formula-sheet.test.ts`; dialog and vault side: harness `doc=formulasheet` | | | one notebook at a time (no course/folder-wide sheet yet); formulas are written as LaTeX, typeset by Obsidian |
+### 0.23 — welcomeback: welcome-back card (roadmap #420; steps 2380-2399)
+
+Settings, Study, Timetable: *Welcome back card* (on by default) and *Offer it after* (hours, default 8). Implemented, not verified on hardware. Use a notebook with several pages, some question and gap markers (not resolved) and, for the slide case, an annotated PDF.
+
+2380. **First time.** Open a notebook you never opened on this device: no card.
+2381. **Quick return.** Close it and reopen it within the threshold: no card.
+2382. **After a while.** With *Offer it after* at 1 hour, wait an hour (or set the clock) and reopen: a quiet card at the top centre says *Welcome back* and how long ago the notebook was last open.
+2383. **Way back.** The first row reads *Continue on page N* (or *Continue at slide N* on a page that shows a PDF page). Tap it: the view goes to the page where you stopped; the card goes.
+2384. **Questions and gaps.** Rows *Question, p. N* and *Gap, p. N* list the first two open ones of each, with their label when they have one; resolved ones are not listed; *and N more* is text, not a button. Tap one: the view goes to that marker.
+2385. **Nothing to offer.** A notebook stopped on its first page with no open marker shows no card.
+2386. **Pen.** Write the first stroke while the card is showing: the card goes and the stroke is drawn normally; the card never takes pen input.
+2387. **Close.** The cross closes it; it does not return until the next opening after the threshold.
+2388. **Stacking.** With the symbols strip on, a *Back to slide* pill showing and a *Referenced on* chip, the card sits below all of them, without covering any. Open the *Referenced on* list: the card steps aside.
+2389. **Settings.** Turn the card off: nothing appears. Raise *Offer it after* above the time away: nothing appears.
+2390. **Nothing written.** The notebook file is not modified by the card (no new revision, no sync traffic from it).
+2391. **Italian, light, dark, phone.** The texts are in Italian with the plugin in Italian; the card reads in light and dark and fits a phone's width.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Welcome-back card (#420): after a configurable absence (per device, local storage, bounded), the way back to the stored position (slide N for a PDF page) and the first open questions and gaps as links; once per opening; hides on the first stroke | yes | threshold, first time, nothing to offer, resume and slide, open markers in reading order, shortening, bounded and corrupt store, away text: `tests/welcome-back.test.ts`; view, rows, stroke, close, settings, stacking: harness `doc=welcomeback` and `doc=pillstack` | | | not tried on Android; the look-up list and unchecked checkboxes are not part of the card yet |
+| Settings *Welcome back card* and *Offer it after* | yes | settings read and range: `tests/welcome-back.test.ts` (hours) | | | |

@@ -160,6 +160,8 @@ import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
 import { SlideBack } from "./slide-back";
+import { WELCOME_KEY } from "../model/welcome-back";
+import { WelcomeBack } from "./welcome-back";
 import { PageRefs } from "./page-refs";
 import { SmartAddStrip } from "./smart-add";
 import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
@@ -528,6 +530,8 @@ export class NotebookView extends FileView {
 	private pageOffer: PageOffer | null = null;
 	/** 0.21 (#225): the pill back to the place last written during a lecture (view/slide-back.ts). */
 	slideBack: SlideBack | null = null;
+	/** 0.23 (#420): the card offered when a notebook is reopened after a while (view/welcome-back.ts). */
+	welcomeBack: WelcomeBack | null = null;
 	pageRefs: PageRefs | null = null;
 	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
 	lectureMode: LectureModeController | null = null;
@@ -891,6 +895,19 @@ export class NotebookView extends FileView {
 				this.scrollToPage(index, y);
 			},
 		});
+		this.welcomeBack = new WelcomeBack({
+			parent: () => this.body,
+			enabled: () => this.host.settings.welcomeBack,
+			hours: () => this.host.settings.welcomeBackHours,
+			load: () => this.app.loadLocalStorage(WELCOME_KEY) as unknown,
+			save: (value) => this.app.saveLocalStorage(WELCOME_KEY, value),
+			now: () => Date.now(),
+			indexOf: (pageId) => this.session?.doc?.pages.findIndex((p) => p.id === pageId) ?? -1,
+			goTo: (index, y) => {
+				this.recordJump(index);
+				this.scrollToPage(index, y);
+			},
+		});
 		this.pageRefs = new PageRefs({
 			parent: () => this.body,
 			enabled: () => this.host.settings.pageRefs && this.layout !== null,
@@ -1183,6 +1200,8 @@ export class NotebookView extends FileView {
 		this.meaningTools?.destroy();
 		this.meaningTools = null;
 		this.savedViews = null;
+		this.welcomeBack?.destroy();
+		this.welcomeBack = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
 		this.pageRefs?.destroy();
@@ -1222,6 +1241,8 @@ export class NotebookView extends FileView {
 	private pendingAt: string | null = null;
 	/** wave 0.6 (v7): the next load is the first one of this file, so it may start at the stored reading position. */
 	private startPending = false;
+	/** 0.23 (#420): the welcome-back card is considered once per opening, when the complete document arrives. */
+	private welcomePending = false;
 	/** wave 0.6 (v7): when the page in view last changed, for the `pageAt` of the layout. */
 	private readonly pageClock = new PageClock();
 
@@ -1398,6 +1419,8 @@ export class NotebookView extends FileView {
 	async onLoadFile(file: TFile): Promise<void> {
 		await super.onLoadFile(file);
 		this.startPending = true;
+		this.welcomePending = true;
+		this.welcomeBack?.reset();
 		this.navFresh = true;
 		this.lastBackupPath = null;
 		this.fitMode = true;
@@ -1528,6 +1551,7 @@ export class NotebookView extends FileView {
 		// wave 0.10 (51): read-only mode belongs to the notebook being read; the next one opens editable.
 		if (this.userReadOnly) this.setReadOnlyMode(false, false);
 		this.meaningTools?.reset();
+		this.welcomeBack?.reset();
 		this.syncSafety?.closed();
 		this.resilience?.end();
 		this.history.clear();
@@ -4148,6 +4172,10 @@ export class NotebookView extends FileView {
 			this.pageNav?.invalidate();
 			if (this.tools.ruler) this.placeRuler();
 			this.applyStartPosition();
+			if (this.welcomePending) {
+				this.welcomePending = false;
+				this.welcomeBack?.offer(doc);
+			}
 			if (this.file) this.location.note(this.file.path, this.currentPageIndex() + 1);
 			void checkConflicts(this.reliabilityDeps(), this);
 			this.syncHooks?.loaded();
@@ -5216,6 +5244,7 @@ export class NotebookView extends FileView {
 		if (!cancelled && badgeTap === null && boxTap === null && committed) {
 			window.setTimeout(() => {
 				this.lectureMode?.wrote();
+				this.welcomeBack?.wrote();
 				this.noteWrittenForSlideBack(committed);
 			}, 0);
 		}

@@ -4438,4 +4438,18 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"formulasheet.unsafe": "{path} contiene un marcatore di formule spaiato; non è stato toccato.",
 	"formulasheet.foreign": "{path} esiste già e non è un formulario; non è stato toccato. Rinominalo o spostalo, poi riprova.",
 	"formulasheet.other": "{path} è il formulario di un altro quaderno; non è stato toccato. Riprova per usare una nota separata.",
+	// 0.23 welcomeback
+	"settings.welcomeBack": "Scheda di bentornato",
+	"settings.welcomeBack.desc": "Dopo un po', una scheda propone di tornare dove eri e mostra le domande aperte.",
+	"settings.welcomeBackHours": "Proponila dopo",
+	"settings.welcomeBackHours.desc": "Quanto resta chiuso il quaderno su questo dispositivo prima che compaia la scheda.",
+	"welcomeBack.title": "Bentornato",
+	"welcomeBack.awayH": "Aperto l'ultima volta {n} h fa",
+	"welcomeBack.awayD": "Aperto l'ultima volta {n} giorni fa",
+	"welcomeBack.resumePage": "Riprendi da pagina {n}",
+	"welcomeBack.resumeSlide": "Riprendi dalla diapositiva {n}",
+	"welcomeBack.question": "Domanda, p. {n}",
+	"welcomeBack.gap": "Lacuna, p. {n}",
+	"welcomeBack.more": "e altre {n}",
+	"welcomeBack.dismiss": "Chiudi",
 };

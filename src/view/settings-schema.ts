@@ -23,6 +23,7 @@ import { defaultDailyPath } from "../library/daily-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP } from "./reading-settings";
 import { INSERT_WIDTH_MAX, INSERT_WIDTH_MIN, INSERT_WIDTH_STEP } from "../model/note-insert";
 import { LOOKUP_WIDTH_MAX, LOOKUP_WIDTH_MIN, LOOKUP_WIDTH_STEP } from "../model/look-up";
+import { WELCOME_HOURS_MAX, WELCOME_HOURS_MIN } from "../model/welcome-back";
 import { SNAP_STRENGTH_MAX, SNAP_STRENGTH_MIN, SNAP_STRENGTH_STEP } from "../model/snap";
 import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 import { SYMBOL_COUNT_MAX, SYMBOL_COUNT_MIN } from "../ui/symbol-rank";
@@ -552,6 +553,9 @@ const STUDY: SettingSpec[] = [
 	},
 	// 0.21 slideback (#225): the pill back to where you last wrote during a lecture.
 	{ id: "slideBack", section: "study", group: "timetable", order: 31, name: "settings.slideBack", desc: "settings.slideBack.desc", control: { type: "toggle" }, keywords: "lecture slide back return current page lezione diapositiva torna" },
+	// 0.23 welcomeback (#420): the card with the way back, open questions and gaps when a notebook is reopened after a while.
+	{ id: "welcomeBack", section: "study", group: "timetable", order: 33, name: "settings.welcomeBack", desc: "settings.welcomeBack.desc", control: { type: "toggle" }, keywords: "welcome back reopen resume where i left questions gaps bentornato riprendi domande lacune" },
+	{ id: "welcomeBackHours", section: "study", group: "timetable", order: 34, name: "settings.welcomeBackHours", desc: "settings.welcomeBackHours.desc", control: { type: "slider", min: WELCOME_HOURS_MIN, max: WELCOME_HOURS_MAX, step: 1, format: suffix("h") }, parent: "welcomeBack", visible: (s) => s.welcomeBack },
 	// 0.22 lecthead (#210): the header of the class (course, lecturer, room, date, time) on the page you write on.
 	{
 		id: "lectureHeader", section: "study", group: "timetable", order: 32, name: "settings.lectureHeader", desc: "settings.lectureHeader.desc", keywords: "lecture header course lecturer room date time intestazione lezione corso docente aula",

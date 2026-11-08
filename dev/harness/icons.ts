@@ -60,6 +60,9 @@ const P: Record<string, string> = {
 	"list": "M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01",
 	"layers": "M12 2l10 5-10 5L2 7z M2 12l10 5 10-5 M2 17l10 5 10-5",
 	"play": "M6 4l14 8-14 8z",
+	// 0.23 welcomeback: the question and gap rows of the card
+	"help-circle": "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3 M12 17h.01",
+	"alert-circle": "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 8v4 M12 16h.01",
 	"clock": "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2",
 	"archive": "M3 4h18v4H3z M5 8v12h14V8 M10 12h4",
 	"hard-drive": "M22 12H2 M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z M6 16h.01 M10 16h.01",
