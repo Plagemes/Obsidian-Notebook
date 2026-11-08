@@ -8,6 +8,8 @@
  */
 import { createStroke } from "../../src/model/document";
 import { AddStroke } from "../../src/model/history";
+import { createMarker } from "../../src/model/markers";
+import { WELCOME_KEY } from "../../src/model/welcome-back";
 import { freezeStroke } from "../../src/model/serialize";
 import type { PageElement } from "../../src/model/types";
 import type { HarnessView } from "./harness-types";
@@ -28,11 +30,13 @@ interface PillstackView extends HarnessView {
 	pageRefs: { shown: readonly { index: number }[]; listOpen: boolean; openList(): void; closeList(): void; sync(): void };
 	minimap: { el: HTMLElement; preferences: { corner: string; collapsed: boolean } };
 	meaningTools: { choose(index: number | null): void };
+	welcomeBack: { offer(doc: HarnessView["document"]): void };
+	app: { saveLocalStorage(key: string, data: unknown): void };
 	addPage(): void;
 	scrollToPage(index: number, y?: number, animate?: boolean): void;
 	host: HarnessView["host"] & {
 		settings: HarnessView["host"]["settings"] & {
-			lectureHeader: string; slideBack: boolean; symbolStrip: boolean; symbolCount: number; pageRefs: boolean; minimapMode: string;
+			lectureHeader: string; welcomeBack: boolean; slideBack: boolean; symbolStrip: boolean; symbolCount: number; pageRefs: boolean; minimapMode: string;
 			colourMeanings: Array<{ colour: string; label: string }>;
 		};
 	};
@@ -51,6 +55,7 @@ const PIECES: Array<[string, string]> = [
 	["lecture-header chip", ".notebook-lecture-header-offer"],
 	["lecture-mode chip", ".notebook-lecture-chip"],
 	["contextual bar", ".notebook-context-bar:not(.notebook-hidden)"],
+	["welcome-back card", ".notebook-welcome-back"],
 
 ];
 
@@ -116,6 +121,13 @@ async function prepare(api: PillstackCheckApi): Promise<PillstackView> {
 	// Away from the written place, on the new page: the back pill shows once the scroll settles.
 	v.scrollToPage(pages.length - 1, 0, false);
 	await sleep(600);
+	// 0.23 welcomeback: the card, offered last (a long absence, a stored place, an open question and a gap), takes the tier below the pills.
+	s.welcomeBack = true;
+	pages[1]!.elements = [...(pages[1]!.elements ?? []), createMarker("question", 80, 200, { text: "Why does the series converge?" }), createMarker("gap", 80, 400)];
+	v.document.position = { page: pages[2]!.id, y: 0, at: new Date().toISOString() };
+	v.app.saveLocalStorage(WELCOME_KEY, { [v.document.id]: Date.now() - 20 * 3_600_000 });
+	v.welcomeBack.offer(v.document);
+	await api.frames(4);
 	await api.frames(4);
 	return v;
 }
@@ -153,8 +165,9 @@ export async function checkPillstack(api: PillstackCheckApi): Promise<{ ok: bool
 		if (visible(list)) {
 			const lr = list.getBoundingClientRect();
 			add("the opened list stays inside the page area", lr.left >= bodyRect.left - 1 && lr.right <= bodyRect.right + 1 && lr.bottom <= bodyRect.bottom + 1);
-			const under = rects.filter((p) => p.name !== "referenced-on chip" && overlap(lr, p.r)).map((p) => p.name);
+			const under = rects.filter((p) => p.name !== "referenced-on chip" && p.name !== "welcome-back card" && overlap(lr, p.r)).map((p) => p.name);
 			add("the opened list covers none of the other pieces", under.length === 0, under.join(", "));
+			add("the welcome-back card steps aside while the list is open", !visible(body.querySelector<HTMLElement>(":scope > .notebook-welcome-back")));
 		} else add("the referenced-on list opens", false, "no list");
 		v.pageRefs.closeList();
 		await api.frames(3);

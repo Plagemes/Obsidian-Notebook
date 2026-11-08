@@ -9,6 +9,7 @@ import { DEFAULT_GESTURE_SETTINGS, readGestureSettings, type GestureSettings } f
 import { DEFAULT_PEN_GESTURE_SETTINGS, readPenGestureSettings, type PenGestureSettings } from "./ink/gestures/settings";
 import { clampInsertWidth, INSERT_WIDTH_DEFAULT, isInsertBackground } from "./model/note-insert";
 import { clampLookUpWidth, LOOKUP_WIDTH_DEFAULT } from "./model/look-up";
+import { clampWelcomeHours, WELCOME_HOURS_DEFAULT } from "./model/welcome-back";
 import { PEN_BUTTON_ACTIONS, type PenButtonAction } from "./ink/input-policy";
 import { BUTTON_AFTER_MAX_MS, BUTTON_BEFORE_MAX_MS, DEFAULT_BUTTON_WINDOWS, LEGACY_BEFORE_MS, cleanPenKey, cleanWindowMs, isPenKeyAction, type PenKeyAction } from "./ink/pen-hover";
 import { isHeaderAlign, isHeaderMode, type HeaderAlign, type HeaderMode } from "./ink/page-header";
@@ -126,6 +127,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	slideBack: boolean;
 	/** 0.22 pagerefs (#179): a chip on a page that other pages link to. */
 	pageRefs: boolean;
+	/** 0.23 welcomeback (#420): a quiet card with the way back, the open questions and gaps when a notebook is reopened after a while. */
+	welcomeBack: boolean;
+	/** Hours away before the card is offered. */
+	welcomeBackHours: number;
 	/** 0.22 lecthead (#210): header on the page you write on (course, lecturer, room, date, time of the class): off / ask (a chip) / automatic. */
 	lectureHeader: "off" | "ask" | "auto";
 	lectureHeaderLecturer: boolean;
@@ -340,6 +345,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	refWindowSnap: true, // 0.20 refwindow
 	slideBack: true, // 0.21 slideback
 	pageRefs: true, // 0.22 pagerefs
+	welcomeBack: true, // 0.23 welcomeback
+	welcomeBackHours: WELCOME_HOURS_DEFAULT, // 0.23 welcomeback
 	lectureHeader: "ask", // 0.22 lecthead
 	lectureHeaderLecturer: true,
 	lectureHeaderRoom: true,
@@ -494,6 +501,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.refWindowSnap === "boolean") s.refWindowSnap = d.refWindowSnap; // 0.20 refwindow
 	if (typeof d.slideBack === "boolean") s.slideBack = d.slideBack; // 0.21 slideback
 	if (typeof d.pageRefs === "boolean") s.pageRefs = d.pageRefs; // 0.22 pagerefs
+	if (typeof d.welcomeBack === "boolean") s.welcomeBack = d.welcomeBack; // 0.23 welcomeback
+	if (typeof d.welcomeBackHours === "number") s.welcomeBackHours = clampWelcomeHours(d.welcomeBackHours); // 0.23 welcomeback
 	if (d.lectureHeader === "off" || d.lectureHeader === "ask" || d.lectureHeader === "auto") s.lectureHeader = d.lectureHeader; // 0.22 lecthead
 	if (typeof d.lectureHeaderLecturer === "boolean") s.lectureHeaderLecturer = d.lectureHeaderLecturer;
 	if (typeof d.lectureHeaderRoom === "boolean") s.lectureHeaderRoom = d.lectureHeaderRoom;

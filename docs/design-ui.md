@@ -499,3 +499,6 @@ A floating pill (`.notebook-symbol-strip`, `src/view/symbol-strip.ts`, styles in
 
 ## Change cover (0.22, roadmap #53)
 One dialog on the modal shell (`src/library/cover-dialog.ts`): the 3:4 frame (a canvas, with the card's spine) on the left, source chips (Pattern, Image, Page, Template) and their controls on the right; on a phone the frame sits on top. Swatches, style tiles and zoom/pager controls are 40 px targets in the `.nb-ui` scope (`styles.css`, block `0.22 covers`).
+
+## Welcome back (0.23, roadmap #420)
+A quiet glass card at the top centre (`.notebook-welcome-back`), the second tier of the floating stack: its top is picked by `:has` rules from what sits above it (symbols strip, "Back to slide" pill, "Referenced on" chip), and it is hidden while the "Referenced on" list is open. Rows are real 38px buttons with a small accent icon; counts beyond the listed rows are muted text, not controls. Checked in the `pillstack` and `welcomeback` harness scenarios.

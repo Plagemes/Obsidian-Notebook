@@ -4288,6 +4288,20 @@ export const en = {
 	"cover.notice.failed": "The cover could not be changed: {error}",
 	"cover.notice.encode": "The cover picture could not be made.",
 	"cover.notice.missing": "The notebook is no longer there.",
+	// 0.23 welcomeback
+	"settings.welcomeBack": "Welcome back card",
+	"settings.welcomeBack.desc": "When you reopen a notebook after a while, a card offers the way back and open questions.",
+	"settings.welcomeBackHours": "Offer it after",
+	"settings.welcomeBackHours.desc": "How long the notebook stays closed on this device before the card appears.",
+	"welcomeBack.title": "Welcome back",
+	"welcomeBack.awayH": "Last open {n} h ago",
+	"welcomeBack.awayD": "Last open {n} days ago",
+	"welcomeBack.resumePage": "Continue on page {n}",
+	"welcomeBack.resumeSlide": "Continue at slide {n}",
+	"welcomeBack.question": "Question, p. {n}",
+	"welcomeBack.gap": "Gap, p. {n}",
+	"welcomeBack.more": "and {n} more",
+	"welcomeBack.dismiss": "Dismiss",
 } as const;
 
 export type MessageKey = keyof typeof en;

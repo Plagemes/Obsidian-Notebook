@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### welcomeback
+- **Welcome-back card when you reopen a notebook (#420).** After a notebook has stayed closed on this device for a while (default 8 hours; *Settings > Study > Timetable > Welcome back card* and *Offer it after*, 1 to 168 hours), a quiet card at the top centre offers the way back to where you were (the notebook's stored reading position, named *slide N* when that page shows a PDF page) and the first open questions and gaps already marked in the notebook (question and gap markers that are not resolved; the rest is counted as plain text). Every row is a button that goes there. The card appears once per opening, goes away on the first stroke, on the close button or when a row is taken, steps aside while the *Referenced on* list is open, and stacks below the symbols strip, the *Back to slide* pill and the *Referenced on* chip. The only thing stored is the time the notebook was last open, in this device's local storage (bounded to 80 notebooks, corrupt data read as empty); the notebook file, the format and the settings file of other devices are untouched. Pure selection logic: `src/model/welcome-back.ts`, `tests/welcome-back.test.ts`; view: `src/view/welcome-back.ts`.
+
 ## 0.22.0 — 2026-11-08
 
 Seven features: three new pens, optional cloud sync with Google Drive or OneDrive, two-way page references, colours with meaning, instant axes, custom covers and an automatic lecture header. The notebook format moves to version 20 (the new pen tools and the nib angle): the migration from version 19 is automatic, and 0.21 and older open a v20 notebook read-only and never overwrite it. Cloud sync is off by default and uses your own OAuth client; the plugin ships no client ID or secret.
