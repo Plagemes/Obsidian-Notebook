@@ -753,7 +753,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 
 ### Obsidian
 421. **P2** 🧪 Dynamic gallery block in notes: pages selected by tag, bookmark, course or marker (`notebook-gallery` block and "Insert gallery block").
-422. **P2** Related handwritten pages panel for the open Markdown note.
+422. **P2** 🧪 Related handwritten pages panel for the open Markdown note. (0.26: a right-sidebar panel, command "Related handwritten pages"; ranks pages that link to the note, name its title, aliases, tags or headings, and the first page of the notebooks of its course; thumbnail, notebook, page and reason per row; tap opens, drag places the embed, a button copies the link; read-only.)
 423. ~~**P2** Rich hover preview of page links with actions.~~ — already covered by O5
 424. **P2** 🧪 Command palette ordered by context (commands relevant to the open view first).
 

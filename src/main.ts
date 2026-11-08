@@ -53,6 +53,8 @@ import type { InboxService } from "./zettel/inbox-service";
 import { registerTextbookRefs } from "./view/textbook-ref-ui";
 import { PracticeService } from "./view/practice";
 import { openPageSwitcher, QuickNavService } from "./view/quick-switcher";
+import { RELATED_VIEW_TYPE, RelatedView } from "./view/related-view";
+import { createRelatedSource, openRelatedPanel } from "./view/related-source";
 import { openRecentPages, RecentPagesService } from "./view/recent-pages";
 import { SyncSafetyService } from "./view/sync-safety";
 import type { NavController } from "./view/nav-controller";
@@ -281,6 +283,9 @@ export default class NotebookPlugin extends Plugin {
 				readNotebook: (file) => this.host.readNotebook(file),
 				thumbnailBackground: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
 			}, this.recentPages);
+			// 0.26 related (#422): the side panel of handwritten pages related to the open Markdown note (read-only).
+			const related = createRelatedSource(this.app, { quickNav: () => quickNav, timetable: () => this.timetable?.data() ?? null, includeCourse: () => this.settings.relatedCourse });
+			this.registerView(RELATED_VIEW_TYPE, (leaf) => new RelatedView(leaf, related));
 		});
 
 		// ui redesign: every command of the plugin comes from the action registry (ui/actions.ts); ids are unchanged.
@@ -301,6 +306,7 @@ export default class NotebookPlugin extends Plugin {
 			"timetable": () => void this.timetable.edit(),
 			"open-class": () => this.timetable.openNow(),
 			"pen-button-test": () => new PenTestModal(this.app, penSignalInfo(this)).open(),
+			"related-pages": () => void openRelatedPanel(this.app),
 			"go-to-page": () => {
 				if (quickNav) openPageSwitcher(quickNav);
 			},

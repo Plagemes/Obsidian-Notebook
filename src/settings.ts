@@ -254,6 +254,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	toolFadeSeconds: number;
 	/** The first finger touch on a faded bar only brings it back (the button is not pressed). */
 	toolFadeFirstTouch: boolean;
+	/** 0.26 (#422): the Related pages panel also lists the first page of the notebooks of the note's course. */
+	relatedCourse: boolean;
 	/** Quick actions the person pinned to the toolbar, in order (at most 3): the ranking never moves them. */
 	pinnedQuick: string[];
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
@@ -432,6 +434,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	toolFade: DEFAULT_TOOL_FADE_MODE,
 	toolFadeSeconds: DEFAULT_TOOL_FADE_SECONDS,
 	toolFadeFirstTouch: true,
+	relatedCourse: true, // 0.26 related
 	pinnedQuick: [],
 	pageTurnerKeys: true,
 	notebookTabs: false,
@@ -605,6 +608,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (isToolFadeMode(d.toolFade)) s.toolFade = d.toolFade;
 	s.toolFadeSeconds = cleanFadeSeconds(d.toolFadeSeconds);
 	if (typeof d.toolFadeFirstTouch === "boolean") s.toolFadeFirstTouch = d.toolFadeFirstTouch;
+	if (typeof d.relatedCourse === "boolean") s.relatedCourse = d.relatedCourse; // 0.26 related
 	s.pinnedQuick = normalisePinned(d.pinnedQuick);
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;

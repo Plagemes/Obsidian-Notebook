@@ -167,6 +167,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "savedviews", theme, device, lowLatency: false });
 // 0.25 histpanel (#84): the action history panel (dev/harness/histpanel-check.ts), tablet and phone, light and dark (dist/shots/histpanel-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "histpanel", theme, device, lowLatency: false });
+// 0.26 related (#422): the Related pages panel (dev/harness/related-check.ts), tablet and phone, light and dark (dist/shots/related-*.png, related-empty-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "related", theme, device, lowLatency: false });
 // 0.22 pagerefs (#179): the chip and list of pages that link here (dev/harness/pagerefs-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "pagerefs", theme, device, lowLatency: false });
 // 0.22 review fix: every floating pill at once, no overlap (dev/harness/pillstack-check.ts), tablet and phone, light and dark (dist/shots/pillstack-*.png).
@@ -465,6 +467,7 @@ async function main() {
 				else if (s.doc === "pens") report = await cdp.evaluate("window.harness.checkPens()", 90000);
 				else if (s.doc === "savedviews") report = await cdp.evaluate("window.harness.checkSavedviews()", 90000); // 0.23 savedviews
 				else if (s.doc === "histpanel") report = await cdp.evaluate("window.harness.checkHistpanel()", 90000); // 0.25 histpanel
+				else if (s.doc === "related") report = await cdp.evaluate("window.harness.checkRelated()", 60000); // 0.26 related
 				else if (s.doc === "share") report = await cdp.evaluate("window.harness.checkShare()", 180000); // 0.20 share
 				// 0.18 mentions: its own check.
 				else if (s.doc === "mentions") report = await cdp.evaluate("window.harness.checkMentions()", 60000);
@@ -836,6 +839,17 @@ async function main() {
 						writeFileSync(join(designDir, `zettel-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`zettel ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.26 related: the nothing-related and no-note states of the panel.
+			if (s.doc === "related") {
+				for (const state of ["empty", "none"]) {
+					try {
+						await cdp.evaluate(`window.harness.relatedShot('${state}').then(() => true)`);
+						writeFileSync(join(shots, `related-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`related ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

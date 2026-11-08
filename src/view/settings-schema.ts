@@ -497,6 +497,8 @@ const CLIP: SettingSpec[] = [
 		id: "clipImageBackground", section: "integration", order: 44, name: "settings.clipImageBackground", desc: "settings.clipImageBackground.desc", keywords: "copy image clipboard background white transparent copia immagine appunti sfondo bianco trasparente",
 		control: { type: "dropdown", options: options([["white", "settings.clipImageBackground.white"], ["transparent", "settings.clipImageBackground.transparent"]]) },
 	},
+	// 0.26 related (#422)
+	{ id: "relatedCourse", section: "integration", order: 45, name: "settings.relatedCourse", desc: "settings.relatedCourse.desc", control: { type: "toggle" }, keywords: "related pages panel course timetable sidebar collegate pannello corso orario" },
 ];
 
 const INTEGRATION: SettingSpec[] = [

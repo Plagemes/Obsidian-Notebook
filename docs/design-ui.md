@@ -498,6 +498,10 @@ A floating `modal-shell`-like card over the page area (`src/view/ref-window.ts`,
 ## Recent symbols (0.21, roadmap #212)
 A floating pill (`.notebook-symbol-strip`, `src/view/symbol-strip.ts`, styles in the 0.21 symbols block) at the top centre of the page area: up to 12 round 40 px buttons, a character in the text font or a small SVG of a saved symbol in the text colour; the armed button uses the active-tool colours and a muted "Tap the page" hint follows. While armed a transparent catcher covers the page (outside the stage) and takes one tap. Same raised surface, border and shadow as the contextual bar; scrolls sideways on a phone.
 
+## Related pages (0.26, roadmap #422)
+
+A right-sidebar `ItemView` (`src/view/related-view.ts`) in the `nb-ui` scope: a small header (title, the note, a refresh icon button), then one tile per page (thumbnail 44x58, notebook, page number, a reason pill that is not a control, the matched text, `+n` for further reasons) with a link icon button. Empty states use the shared empty-state component. Every button has a long-press explanation.
+
 ## Colours with meaning (0.22, roadmap #101)
 
 **Legend editor** (`src/view/meaning-modals.ts`, `MeaningsEditorModal`): a shell dialog that reuses the Board columns editor rows (`nb-colrow*`, class `nb-meaning-editor`): a label field, 20 palette swatches plus a round "other colour" input, up / down / remove. Every change is saved at once. Opened from *Settings > Reading & PDF* (global legend) or the notebook menu (adds a switch for a legend of this notebook only; while it is off the list shows the global legend, read-only). A red inline note names two meanings that are too close in colour. **Filter by meaning** (`MeaningFilterModal`): a narrow shell list, one row per meaning with its colour dot and stroke count, *Show everything* first. While a meaning is chosen a pill (`.nb-meaning-pill`, bottom left, 36 px, colour dot, label, a 32 px × button) sits over the page; the renderer draws other ink at 16 % opacity (`Renderer.setInkDim`). **Digest by colour** (`src/view/meaning-digest.ts`): a medium shell dialog (picture quality) and a note, built like the highlights digest.
