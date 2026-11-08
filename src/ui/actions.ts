@@ -96,6 +96,8 @@ export interface UiContext {
 	openNotebooks?: number;
 	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */
 	nav?: { back: boolean; forward: boolean };
+	/** 0.25 (#84): how many steps the undo history holds (to take back) and how many were undone (to bring back). Optional (absent: none). */
+	history?: { undo: number; redo: number };
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -201,6 +203,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// --- history: fixed in the toolbar, also in the radial menu and as gestures.
 	{ id: "undo", label: "tool.undo", icon: "undo", group: "history", surfaces: ["toolbar", "radial"], priority: 100, scope: "view", command: "command.undo" },
 	{ id: "redo", label: "tool.redo", icon: "redo", group: "history", surfaces: ["toolbar", "radial"], priority: 99, scope: "view", command: "command.redo" },
+	// 0.25 (#84): every step listed, a tap goes back or forward to that point. The list can be read on a read-only notebook (it cannot jump there).
+	{ id: "history-panel", label: "histpanel.menu", icon: "history", group: "history", surfaces: ["sheet", "notebook"], priority: 45, scope: "view", command: "command.historyPanel", readOnly: true, keywords: "undo redo history steps jump back go to point storico passi azioni annulla ripeti torna" },
 
 	// --- selection: the contextual bar of the lasso.
 	{ id: "selection-copy", label: "selection.copy", icon: "copy", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 90, scope: "view", when: hasSelection },

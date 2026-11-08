@@ -129,6 +129,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"style-eyedropper": (v) => v.colourTools?.armEyedropper("style"),
 	"undo": (v) => v.undo(),
 	"redo": (v) => v.redo(),
+	"history-panel": (v) => v.openHistoryPanel(),
 
 	// selection
 	"selection-copy": (v) => void v.selectionTools?.copy(),

@@ -92,6 +92,8 @@ import { normalizeIndexPrefix } from "../model/book-index";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { MeaningTools } from "./colour-meaning";
 import { SavedViewTools } from "./saved-views";
+import { HistoryTools } from "./history-tools";
+import { jumpHistory, type JumpResult, type JumpTarget } from "../model/history-jump";
 import type { MeaningsStore } from "../library/meanings-store";
 import { canPrint } from "./print";
 import type { ExportFormat } from "../ink/export-layers";
@@ -610,6 +612,8 @@ export class NotebookView extends FileView {
 	private meaningTools: MeaningTools | null = null;
 	/** 0.23 (#264): saved views: a named page region with a zoom, recalled in one step (view/saved-views.ts; stored in the notebook, format 21). */
 	private savedViews: SavedViewTools | null = null;
+	/** 0.25 (#84): the action history panel: every step listed, a tap goes back or forward to that point (view/history-tools.ts). */
+	private historyTools: HistoryTools | null = null;
 	private navCurrent = -1;
 	/** Pages whose thumbnail was drawn without all its media; redrawn when media arrives. */
 	private readonly thumbPending = new Set<string>();
@@ -762,6 +766,14 @@ export class NotebookView extends FileView {
 			execute: (cmd) => this.applyCommand(cmd),
 			capture: () => this.captureViewRegion(),
 			show: (index, region) => this.showViewRegion(index, region),
+		});
+		this.historyTools = new HistoryTools({
+			app: this.app,
+			doc: () => this.shownDoc(),
+			entries: () => this.history.entries(),
+			editable: () => !!this.session?.doc && this.editable(),
+			limit: this.history.limit,
+			jump: (target) => this.jumpHistoryTo(target),
 		});
 		// 0.16 (#124): a locked page shows a small badge over the page area; a tap on it unlocks the page.
 		const badge = this.body.createEl("button", { cls: "nb-ui nb-lock-badge", attr: { type: "button", "aria-label": t("lock.badge.aria") } });
@@ -1215,6 +1227,7 @@ export class NotebookView extends FileView {
 		this.meaningTools?.destroy();
 		this.meaningTools = null;
 		this.savedViews = null;
+		this.historyTools = null;
 		this.welcomeBack?.destroy();
 		this.welcomeBack = null;
 		this.slideBack?.destroy();
@@ -1816,6 +1829,34 @@ export class NotebookView extends FileView {
 		this.penLinks?.hideChip();
 		this.pageOffer?.cancel();
 		if (this.history.redo()) this.afterHistoryChange();
+	}
+
+	/** 0.25 (#84): how many steps can be taken back and brought back (for the ranking of the All actions sheet). */
+	private historyCounts(): { undo: number; redo: number } {
+		return this.history.depth();
+	}
+
+	/** 0.25 (#84): the action history panel (list of steps; a tap goes back or forward to that point). */
+	openHistoryPanel(): void {
+		this.historyTools?.open();
+	}
+
+	/**
+	 * 0.25 (#84): goes to a point of the history, one ordinary Undo or Redo at a time (the guards of the history apply to each step; a
+	 * refused step stops the jump, and the result says how far it got). Null while a stroke is being drawn or the notebook cannot be
+	 * edited. Saves and redraws once, if any step was taken.
+	 */
+	private jumpHistoryTo(target: JumpTarget): JumpResult | null {
+		if (!this.editable() || this.controller?.drawing) return null;
+		this.commitText();
+		this.clearSelection();
+		this.penLinks?.hideChip();
+		this.pageOffer?.cancel();
+		const result = jumpHistory(this.history, target);
+		// A step the history refused leaves the document as it was, but may have left the stacks changed: the buttons follow either way.
+		if (result.done > 0) this.afterHistoryChange();
+		else this.updateHistoryButtons();
+		return result;
 	}
 
 	// --- pens: favourites, tools, pen-only (hotkey commands) ---
@@ -3755,6 +3796,7 @@ export class NotebookView extends FileView {
 				pageSolutions: !!page && (this.markers?.pageSolutionsShown(page) ?? false),
 			},
 			nav: this.navState(),
+			history: this.historyCounts(),
 			narrow: this.body?.hasClass("is-narrow") ?? false,
 			openNotebooks: this.tabs?.count ?? 0,
 		};

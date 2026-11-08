@@ -48,6 +48,12 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 		case "navigate":
 			boost += c.presenting ? 22 : c.page && c.page.count > 1 ? 4 : 0;
 			break;
+		case "history":
+			// 0.25 (#84): the history panel fits once there is something to go back to (a little), and most when steps were just undone
+			// (the way forward is in the panel: enough for "For this page"). It steps back for a presentation. The toolbar's own Undo and
+			// Redo are fixed slots and do not take part.
+			if (a.id === "history-panel" && !c.presenting && c.history) boost += c.history.redo > 0 ? HERE_MIN_BOOST + 2 : c.history.undo > 0 ? 12 : 0;
+			break;
 		case "app":
 		case "dev":
 			// Library-level and diagnostic actions step back while a notebook is in front.

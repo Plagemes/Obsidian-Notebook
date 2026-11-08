@@ -827,9 +827,17 @@ export function collectAdds(cmd: Command, added: Set<string>, explicit: Set<stri
 	else if ("inner" in cmd && typeof cmd.inner === "object" && cmd.inner !== null) collectAdds(cmd.inner as Command, added, explicit);
 }
 
+/** 0.25 (#84): one step of the history as the panel lists it: the command and the time (ms) it was made, or null when it is not known. */
+export interface HistoryEntry {
+	readonly cmd: Command;
+	readonly at: number | null;
+}
+
 export class History {
 	private undoStack: Command[] = [];
 	private redoStack: Command[] = [];
+	/** 0.25 (#84): when each step was recorded (for the history panel only: nothing else reads it, and a step without a time is fine). */
+	private readonly madeAt = new WeakMap<Command, number>();
 
 	constructor(
 		private readonly doc: () => NotebookDocument, readonly limit = 500,
@@ -960,6 +968,11 @@ export class History {
 
 	/** Records an already applied command (e.g. the eraser, which erases while it moves). */
 	record(cmd: Command): void {
+		try {
+			this.madeAt.set(cmd, Math.floor(this.clock ? this.clock() : Date.now()));
+		} catch {
+			// The time is only a label of the step: a clock that fails never stops the step from being recorded.
+		}
 		this.undoStack.push(cmd);
 		if (this.undoStack.length > this.limit) this.undoStack.shift();
 		this.redoStack = [];
@@ -1025,6 +1038,32 @@ export class History {
 	clear(): void {
 		this.undoStack = [];
 		this.redoStack = [];
+	}
+
+	/**
+	 * 0.25 (#84): the steps for the history panel. `undo` oldest first (the last one is where the document is now), `redo` with the step
+	 * a Redo would run first. A copy: the caller cannot change the stacks.
+	 */
+	entries(): { undo: HistoryEntry[]; redo: HistoryEntry[] } {
+		const entry = (cmd: Command): HistoryEntry => ({ cmd, at: this.madeAt.get(cmd) ?? null });
+		return { undo: this.undoStack.map(entry), redo: [...this.redoStack].reverse().map(entry) };
+	}
+
+	/** 0.25 (#84): how many steps the two stacks hold (cheap: no copy). */
+	depth(): { undo: number; redo: number } {
+		return { undo: this.undoStack.length, redo: this.redoStack.length };
+	}
+
+	/**
+	 * 0.25 (#84): how many Undo (`undo`) or Redo (`redo`) steps lead to the point just after `cmd`; null when `cmd` is in neither stack.
+	 * Redo steps count from the next one: the step a Redo would run first is 1.
+	 */
+	stepsTo(cmd: Command): { direction: "undo" | "redo"; steps: number } | null {
+		const u = this.undoStack.lastIndexOf(cmd);
+		if (u >= 0) return { direction: "undo", steps: this.undoStack.length - 1 - u };
+		const r = this.redoStack.lastIndexOf(cmd);
+		if (r >= 0) return { direction: "redo", steps: this.redoStack.length - r };
+		return null;
 	}
 
 	/** Every command still in the undo and redo stacks (read-only: the library check asks what they still name). */
