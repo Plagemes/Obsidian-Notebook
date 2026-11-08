@@ -523,7 +523,8 @@ export function boxesTouching(items: { strokes: readonly Stroke[]; elements: rea
 		}
 		areas.push({ minX: minX - r, minY: minY - r, maxX: maxX + r, maxY: maxY + r });
 	}
-	return boxes.filter((b) => areas.some((a) => overlaps(a, [b])));
+	// A few pt more than the export's own test: a box taken that touches nothing only covers empty paper.
+	return boxes.filter((b) => areas.some((a) => overlaps(a, [b], ELEMENT_PAD)));
 }
 
 /**

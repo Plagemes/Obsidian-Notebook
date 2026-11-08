@@ -3569,7 +3569,7 @@ export const en = {
 	"redact.nopages": "This notebook has no pages.",
 	// 0.26 review fixes (#285): the redaction fails closed, and says what it does not cover.
 	"redact.unreadable": "The redaction boxes of this notebook could not be read on this device, so nothing was written. They cannot be restored: open Export… › Redact…, draw the boxes again and press Done (Done saves exactly the boxes you see, none if you draw none), or reset the redaction storage there.",
-	"redact.unreadable.dialog": "The boxes kept for this notebook could not be read on this device and cannot be restored. Exports are refused until you open Redact…, draw the boxes again and press Done: Done saves exactly the boxes you see there, none if you draw none.",
+	"redact.unreadable.dialog": "The boxes kept for this notebook could not be read on this device and cannot be restored. Exports are refused until you open Redact…, draw the boxes again and press Done: Done saves exactly the boxes you see there, none if you draw none. Closing without Done saves nothing.",
 	"redact.storeDamaged": "Redaction boxes saved on this device could not be read. A copy of what was there has been kept aside, and exports of the notebooks concerned are refused until you draw their boxes again in Export… › Redact… and press Done, or reset the redaction storage there.",
 	"redact.storeLost": "Redaction boxes saved on this device are gone and nothing of them could be kept. Exports of every notebook are refused until you draw its boxes again in Export… › Redact… and press Done, or reset the redaction storage there.",
 	"redact.reset": "Reset redaction storage",
