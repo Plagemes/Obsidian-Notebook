@@ -330,7 +330,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### B. PDF
 153. **P2** Fill PDF forms (fields) by hand or keyboard; export them filled.
-154. **P2** 🧪 Reusable signature and date stamp for documents.
+154. **P2** 🧪 Reusable signature and date stamp for documents. (0.21: *Sign and date* in the page sheet: a saved signature stamp and today's date placed as one group; no format change.)
 155. **P1** 🧪 Export PDF annotations to a Markdown note: highlights, excerpts and comments, each with a page link.
 156. **P2** Import existing annotations from PDFs annotated in other apps, as editable items.
 157. **P3** Export ink as native PDF annotations, editable in other PDF readers.
@@ -344,7 +344,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 163. **P2** Per-notebook settings: stabilization, palm rejection, default paper, sync.
 
 ### D. Sharing and open formats
-164. **P2** 🧪 Interactive HTML export: zoomable vector pages that open anywhere, without Obsidian.
+164. **P2** 🧪 Interactive HTML export: zoomable vector pages that open anywhere, without Obsidian. (0.21: *Export…* > *Interactive HTML*: one self-contained file with a small viewer, no network access; no format change.)
 165. **P2** Collaboration, also with people who do not use Obsidian:
     - Guests join from any browser through a lightweight web viewer/editor; nothing to install.
     - Direct peer-to-peer connection (WebRTC) set up by scanning a QR code; works on the same network even without internet; no mandatory cloud.
@@ -352,7 +352,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - Conflict-free by design: every stroke has a unique id, so concurrent edits never clash; at the end everything lands in the host's notebook with the author of each stroke.
     - Asynchronous too: people without Obsidian annotate in the web viewer (#164) and send back an annotation package that is imported with one tap; or the notebook is shared on Drive with conflict merging (#122).
 166. **P3** InkML export (open standard for digital ink).
-167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks.
+167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; no format change.)
 
 ### E. Automation
 168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.
@@ -388,7 +388,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 184. **P2** Paint bucket: fill closed areas with colour (diagrams, maps).
 185. **P1** 🧪 Erase area: draw an outline and everything inside disappears, in one gesture.
 186. **P2** 🧪 Copy a page into another notebook, with a link back to the source page.
-187. **P2** 🧪 Back-of-book index: mark terms or regions and an index page with references is generated.
+187. **P2** 🧪 Back-of-book index: mark terms or regions and an index page with references is generated. (0.21: *Add to index…* turns a lasso selection into an `#idx <term>` marker; *Back-of-book index…* lists the terms A-Z with page chips and writes `<Notebook> — Index.md`; no format change.)
 188. **P1** 🧪 Show/hide all annotations, to reread a clean PDF.
 189. **P2** Attachments on the page: Word files, zips and others as icons that open on tap.
 190. **P2** 🧪 Page QR code: scan it with the phone and the page opens on the other device.
@@ -421,7 +421,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 209. **P1** 🧪 Assigned homework: a "homework" stamp with a due date that becomes an Obsidian task.
 210. **P2** Automatic lecture header: course, lecturer, room, date and time from the timetable.
 211. **P1** 🧪 "Pen only" toggle at hand: instantly ignores fingers when you rest your hand.
-212. **P2** 🧪 Recent symbols: the symbols you draw most often (∀, ∫, →) become buttons to insert them quickly.
+212. **P2** 🧪 Recent symbols: the symbols you draw most often (∀, ∫, →) become buttons to insert them quickly. (0.21: a strip of the most used typographic symbols and saved signs, ordered by use with decay; no format change.)
 213. **P2** 🧪 "Look up later" list: circle a word and it goes to a list, with its image.
 214. **P2** Compact lecture toolbar: only 4–5 large tools.
 215. **P2** Board photo: keep or trace. Keep the photo as it is, or switch to tracing mode: the photo becomes semi-transparent (removable) and the drawing in it is automatically vectorised into ink — dark lines detected, thinned to centre lines, simplified into smooth curves, each stroke taking the photo's colour; a slider sets the sensitivity. The result is normal ink you can edit, erase or move. Own implementation (potrace is GPL and cannot be used).
@@ -438,7 +438,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 
 ### Slides and board
 224. **P2** "Slide explained" ticks: see how far the lecturer has got.
-225. **P2** 🧪 "Back to the current slide" after looking elsewhere.
+225. **P2** 🧪 "Back to the current slide" after looking elsewhere. (0.21: a pill *Back to slide N* / *Back to current page* after scrolling away while lecture mode is on; no format change.)
 226. **P1** 🧪 Automatic notes ↔ slide link: ink remembers which slide was visible in the side-by-side view while you wrote it; tapping it shows that slide again.
 227. **P2** 🧪 Quick tabs: pages pinned during the lecture (e.g. the formula sheet), one tap away.
 228. **P2** 🧪 Lecture figure gallery: all photos and crops of the section in one place.
