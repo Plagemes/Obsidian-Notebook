@@ -1011,52 +1011,29 @@ export function repairNotebookText(text: string, now: Date = new Date()): Repair
 	return { ok: true, doc: again.doc, text: checked.text, summary };
 }
 
-/** Colour given to an element whose own is missing (what a new one of its kind starts with); strokes and text are defaulted by the repair itself. */
-const MISSING_COLOUR: Readonly<Record<string, string>> = { checkbox: CHECKBOX_DEFAULT_COLOR, sticky: STICKY_DEFAULT_COLOR, area: "#facc15", equation: "#000000" };
+/** Colour given to an item whose own is missing or invalid: what a new one of its kind starts with (strokes and text boxes: black, like the repair of a file). */
+const MISSING_COLOUR: Readonly<Record<string, string>> = {
+	text: "#000000", checkbox: CHECKBOX_DEFAULT_COLOR, sticky: STICKY_DEFAULT_COLOR, area: "#facc15", equation: "#000000",
+};
 
 /**
- * Repairs, in place, the strokes and elements of a document held in memory that can no longer be written (a missing colour, say), so
- * a save that was refused is not refused forever. Each item that does not pass the strict write on its own goes through
- * `repairNotebookText` (the same lenient reader a damaged file gets) on a one-item copy of the document, and is replaced by what that
- * returns; an item that cannot be repaired is left as it is (the save is then refused as before). Nothing is touched when the
- * document fails for another reason than one of its items. Returns how many items were replaced.
+ * Fills the colour of the strokes and elements of a document held in memory that have none (or an invalid one), so a save that the
+ * writer refuses for that reason is not refused forever. It only sets the colour, ON THE SAME object: nothing is replaced, so the
+ * history (commands find items by identity) and the views keep pointing at the right objects. A frozen item (committed through a
+ * command) cannot be changed in place and is left as it is, like every other kind of damage: the save is then refused as before.
+ * Returns how many items were given a colour.
  */
 export function repairLiveDocument(doc: NotebookDocument): number {
-	const base: NotebookDocument = { ...doc };
-	delete base.views;
-	delete base.position;
-	const withItem = (page: Page, strokes: Stroke[], elements: PageElement[]): NotebookDocument => ({
-		...base, pages: [{ id: page.id, width: page.width, height: page.height, paper: page.paper, strokes, elements }],
-	});
-	if (doc.pages.length === 0 || !serializeChecked(withItem(doc.pages[0]!, [], [])).ok) return 0;
 	let fixed = 0;
+	const fill = (target: Stroke | PageElement, fallback: string | undefined): void => {
+		const item = target as { color?: unknown };
+		if (fallback === undefined || (typeof item.color === "string" && COLOR_RE.test(item.color)) || Object.isFrozen(item)) return;
+		item.color = fallback;
+		fixed++;
+	};
 	for (const page of doc.pages) {
-		const repair = (item: Stroke | PageElement, isStroke: boolean): Stroke | PageElement | null => {
-			const candidate: Record<string, unknown> = { ...item };
-			const fallback = isStroke ? undefined : MISSING_COLOUR[(item as PageElement).type];
-			if (fallback !== undefined && (typeof candidate.color !== "string" || !COLOR_RE.test(candidate.color))) candidate.color = fallback;
-			const mini = withItem(page, [], []);
-			const text = JSON.stringify({ ...mini, pages: [{ ...mini.pages[0], strokes: isStroke ? [candidate] : [], elements: isStroke ? [] : [candidate] }] });
-			const result = repairNotebookText(text);
-			if (!result.ok) return null;
-			return (isStroke ? result.doc.pages[0]?.strokes[0] : result.doc.pages[0]?.elements?.[0]) ?? null;
-		};
-		page.strokes.forEach((s, i) => {
-			if (serializeChecked(withItem(page, [s], [])).ok) return;
-			const replacement = repair(s, true);
-			if (replacement) {
-				page.strokes[i] = replacement as Stroke;
-				fixed++;
-			}
-		});
-		(page.elements ?? []).forEach((e, i) => {
-			if (serializeChecked(withItem(page, [], [e])).ok) return;
-			const replacement = repair(e, false);
-			if (replacement) {
-				page.elements![i] = replacement as PageElement;
-				fixed++;
-			}
-		});
+		for (const s of page.strokes) fill(s, MISSING_COLOUR.text);
+		for (const e of page.elements ?? []) fill(e, MISSING_COLOUR[e.type]);
 	}
 	return fixed;
 }
