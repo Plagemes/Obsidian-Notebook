@@ -37,6 +37,7 @@ function scene(els: PageElement[]) {
 	const history = new History(() => doc, 500, checkContent);
 	let selected: PageElement[] = [...els];
 	const steps: string[] = [];
+	let refuseAll = false;
 	const host: ChemHost = {
 		app: {} as ChemHost["app"],
 		doc: () => doc,
@@ -44,14 +45,18 @@ function scene(els: PageElement[]) {
 		selection: () => ({ pageIndex: 0, elements: selected }),
 		execute: (cmd: Command) => {
 			steps.push(cmd.label);
-			return history.execute(cmd);
+			return refuseAll ? false : history.execute(cmd);
 		},
 		select: (_p, e) => (selected = e),
 		refresh: () => undefined,
 	};
 	const tools = new ChemTools(host);
 	const apply = () => modals[modals.length - 1]!.onApply();
-	return { doc, history, tools, steps, apply, page: () => doc.pages[0]! };
+	const refuse = (lock: boolean) => {
+		if (lock) doc.pages[0]!.locked = true;
+		else refuseAll = true;
+	};
+	return { doc, history, tools, steps, apply, refuse, page: () => doc.pages[0]! };
 }
 
 beforeEach(() => {
@@ -164,5 +169,45 @@ describe("Balance reaction", () => {
 		s.page().elements = [text("a", "CH4 + O2 -> CO2 + H2O")];
 		s.apply();
 		expect(s.steps.length).toBe(0);
+	});
+});
+
+describe("review V1: an equation with other maths keeps it, and the preview shows the whole result", () => {
+	it("plans the whole new source and keeps the unrelated part", () => {
+		const eq = equation("e", "\\ce{H2 + O2 -> H2O} \\\\ T_{max} = 300\\,\\text{K}", "<svg/>");
+		const item = planElement(eq);
+		expect(item.result).toBe("\\ce{2 H2 + O2 -> 2 H2O} \\\\ T_{max} = 300\\,\\text{K}");
+		expect((item.next as EquationElement).latex).toBe(item.result);
+		expect(item.lines).toHaveLength(1);
+		expect(planElement(text("t", "H2 + O2 -> H2O")).result).toBeNull();
+	});
+	it("applies the mixed equation unchanged outside the reaction, in one undo step", () => {
+		const s = scene([equation("e", "\\ce{H2 + O2 -> H2O} \\\\ T_{max} = 300\\,\\text{K}")]);
+		s.tools.balanceSelected();
+		s.apply();
+		expect((s.page().elements![0] as EquationElement).latex).toBe("\\ce{2 H2 + O2 -> 2 H2O} \\\\ T_{max} = 300\\,\\text{K}");
+		s.history.undo();
+		expect((s.page().elements![0] as EquationElement).latex).toBe("\\ce{H2 + O2 -> H2O} \\\\ T_{max} = 300\\,\\text{K}");
+	});
+});
+
+describe("review V8: the notice names the real refusal", () => {
+	function refusing(locked: boolean) {
+		const s = scene([text("a", "CH4 + O2 -> CO2 + H2O")]);
+		s.tools.balanceSelected();
+		// The history refuses the step (for any reason) after the preview was confirmed.
+		s.refuse(locked);
+		notices.length = 0;
+		s.apply();
+		return s;
+	}
+	it("says nothing about a lock when the step was refused for another reason (the history's own message stands)", () => {
+		const s = refusing(false);
+		expect(notices).toEqual([]);
+		expect((s.page().elements![0] as TextElement).text).toBe("CH4 + O2 -> CO2 + H2O");
+	});
+	it("names the lock when the page is locked", () => {
+		refusing(true);
+		expect(notices).toEqual(["Page 1 is locked. Unlock it first."]);
 	});
 });

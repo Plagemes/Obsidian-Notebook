@@ -18873,6 +18873,29 @@ body.notebook-style-obsidian {
 	line-height: 1.4;
 }
 
+.nb-ui.nb-chem-modal .nb-chem-result {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: var(--nb-space-3);
+	border: 1px dashed var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui.nb-chem-modal .nb-chem-result-label {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-chem-modal .nb-chem-result-source {
+	color: var(--nb-text);
+	font-family: var(--font-monospace);
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+	white-space: pre-wrap;
+}
+
 .nb-ui.nb-chem-modal .nb-chem-problem {
 	color: var(--nb-danger);
 	font-size: var(--nb-fs-meta);

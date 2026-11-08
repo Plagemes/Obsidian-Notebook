@@ -541,9 +541,44 @@ export function hasLatexReaction(latex: string): boolean {
 	return latex.length <= CHEM_TEXT_MAX && hasReaction(latexToPlain(latex));
 }
 
-/** Balances the reactions of an equation's LaTeX; the result is mhchem (`\ce{...}`), one line per reaction. */
+/**
+ * Balances the reactions of an equation's LaTeX. Only the lines (cut at `\\` and at line ends) that are a reaction and get balanced are
+ * rewritten, as mhchem (`\ce{...}`); every other part of the source (other maths, text, spacing, a reaction that cannot be balanced,
+ * one that is balanced already) is kept character for character. `balance.text` is the whole resulting LaTeX; `balance.lines` the
+ * reactions found, numbered by the part of the source they sit in.
+ */
 export function balanceLatex(latex: string): { balance: TextBalance; latex: string } {
-	const balance = balanceText(latexToPlain(latex));
-	const lines = balance.text.split("\n").map((l) => l.trim()).filter((l) => l !== "");
-	return { balance, latex: lines.map((l) => `\\ce{${l}}`).join(" \\\\ ") };
+	const pieces = latex.split(/(\\\\|\r?\n)/);
+	const lines: LineResult[] = [];
+	let changed = 0;
+	let failed = 0;
+	let same = 0;
+	for (let i = 0; i < pieces.length; i += 2) {
+		const part = pieces[i]!;
+		const lead = /^\s*/.exec(part)![0];
+		const core = part.slice(lead.length).replace(/\s+$/, "");
+		if (core === "") continue;
+		const trail = part.slice(lead.length + core.length);
+		const plainCore = latexToPlain(core);
+		if (plainCore.includes("\n")) continue;
+		const b = balanceText(plainCore);
+		const line = b.lines[0];
+		if (!line) continue;
+		// A part with words before the reaction is not wholly one: it is left as it is (and not offered).
+		const f = frame(plainCore);
+		if (line.changed && f.head !== "") continue;
+		lines.push({ ...line, line: i / 2 });
+		if (line.error || line.after === null) {
+			failed++;
+			continue;
+		}
+		if (!line.changed) {
+			same++;
+			continue;
+		}
+		pieces[i] = `${lead}\\ce{${line.after.slice(0, line.after.length - f.tail.length)}}${f.tail}${trail}`;
+		changed++;
+	}
+	const result = pieces.join("");
+	return { balance: { lines, text: result, changed, failed, same }, latex: result };
 }

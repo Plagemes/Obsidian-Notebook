@@ -253,3 +253,42 @@ describe("LaTeX and mhchem", () => {
 		expect(hasLatexReaction("\\frac{a}{b}")).toBe(false);
 	});
 });
+
+describe("review V1: only the reaction lines of an equation are rewritten", () => {
+	it("keeps other maths byte for byte next to a balanced reaction", () => {
+		const src = "\\ce{H2 + O2 -> H2O} \\\\ T_{max} = 300\\,\\text{K}";
+		const r = balanceLatex(src);
+		expect(r.latex).toBe("\\ce{2 H2 + O2 -> 2 H2O} \\\\ T_{max} = 300\\,\\text{K}");
+		expect(r.balance.changed).toBe(1);
+		expect(r.balance.text).toBe(r.latex);
+		expect(r.balance.lines).toHaveLength(1);
+	});
+	it("keeps the maths in front, in between and after, and line ends", () => {
+		const src = "E = mc^2 \\\\\n  N_2 + H_2 \\to NH_3 \\\\ \\frac{a}{b}\\quad x\r\n\\ce{Al + O2 -> Al2O3}";
+		const r = balanceLatex(src);
+		expect(r.latex).toBe("E = mc^2 \\\\\n  \\ce{N2 + 3 H2 → 2 NH3} \\\\ \\frac{a}{b}\\quad x\r\n\\ce{4 Al + 3 O2 -> 2 Al2O3}");
+		expect(r.balance.changed).toBe(2);
+	});
+	it("leaves a reaction that is balanced already, or cannot be balanced, exactly as written", () => {
+		const src = "\\ce{2H2 + O2 -> 2H2O} \\\\ \\ce{H2 + Xx3 -> H2O} \\\\ \\ce{CH4 + O2 -> CO2 + H2O}";
+		const r = balanceLatex(src);
+		expect(r.latex).toBe("\\ce{2H2 + O2 -> 2H2O} \\\\ \\ce{H2 + Xx3 -> H2O} \\\\ \\ce{CH4 + 2 O2 -> CO2 + 2 H2O}");
+		expect(r.balance.same).toBe(1);
+		expect(r.balance.failed).toBe(1);
+		expect(r.balance.changed).toBe(1);
+	});
+	it("returns the very same source when nothing changes", () => {
+		for (const src of ["\\ce{2H2 + O2 -> 2H2O}", "x^2 + y^2 = r^2", "T_{max} = 300\\,\\text{K} \\\\ \\frac{a}{b}", ""]) {
+			const r = balanceLatex(src);
+			expect(r.latex).toBe(src);
+			expect(r.balance.changed).toBe(0);
+		}
+	});
+	it("does not rewrite a part that has words before the reaction", () => {
+		const src = "\\text{Step 1: } H_2 + O_2 \\to H_2O \\\\ H_2 + O_2 \\to H_2O";
+		const r = balanceLatex(src);
+		expect(r.latex.endsWith("\\\\ \\ce{2 H2 + O2 → 2 H2O}")).toBe(true);
+		expect(r.latex.startsWith("\\text{Step 1: } H_2 + O_2 \\to H_2O \\\\")).toBe(true);
+		expect(r.balance.changed).toBe(1);
+	});
+});

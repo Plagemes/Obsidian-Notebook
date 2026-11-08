@@ -60,18 +60,20 @@ export interface ChemItem {
 	lines: Array<{ before: string; after: string | null; changed: boolean; error?: ChemError }>;
 	/** The element with the balanced text; null when nothing in it changes. */
 	next: TextElement | EquationElement | null;
+	/** The whole LaTeX an equation will have after balancing (shown in the preview, so nothing changes unseen); null for a text box or no change. */
+	result: string | null;
 }
 
 /** Works out the balance of an element (pure; nothing is changed). */
 export function planElement(el: TextElement | EquationElement): ChemItem {
 	if (el.type === "text") {
 		const r = balanceText(el.text);
-		return { element: el, lines: r.lines, next: r.changed > 0 ? { ...el, text: r.text } : null };
+		return { element: el, lines: r.lines, next: r.changed > 0 ? { ...el, text: r.text } : null, result: null };
 	}
 	const r = balanceLatex(el.latex);
 	const next: EquationElement | null = r.balance.changed > 0 ? { ...el, latex: r.latex } : null;
 	if (next) delete next.outline;
-	return { element: el, lines: r.balance.lines, next };
+	return { element: el, lines: r.balance.lines, next, result: next ? next.latex : null };
 }
 
 export class ChemTools {
@@ -119,7 +121,8 @@ export class ChemTools {
 		}
 		if (steps.length === 0) return;
 		if (!this.host.execute(steps.length === 1 ? steps[0]! : new Batch("Balance reaction", steps))) {
-			showNotice(t("lock.needsUnlock", { n: String(pageIndex + 1) }));
+			// The history has already said why (a refused content check, a read-only notebook); name the lock only when it is the cause.
+			if (isLocked(page)) showNotice(t("lock.needsUnlock", { n: String(pageIndex + 1) }));
 			return;
 		}
 		const placed = (this.host.doc()?.pages[pageIndex]?.elements ?? []).filter((e) => after.some((a) => a.id === e.id));
@@ -151,6 +154,12 @@ export class ChemPreviewModal extends Modal {
 					row.createDiv({ cls: "nb-chem-after", text: line.changed ? line.after.trim() : t("chem.same") });
 					if (line.changed) changes++;
 				}
+			}
+			// An equation keeps everything that is not a balanced reaction: show the whole source it will have.
+			if (item.result) {
+				const box = list.createDiv({ cls: "nb-chem-result", attr: { role: "listitem" } });
+				box.createDiv({ cls: "nb-chem-result-label", text: t("chem.result") });
+				box.createDiv({ cls: "nb-chem-result-source", text: item.result });
 			}
 		}
 		if (this.lockedCount > 0) shellNote(shell.body, t("chem.lockedSkipped", { n: String(this.lockedCount) }));

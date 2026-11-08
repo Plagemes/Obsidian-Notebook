@@ -4406,6 +4406,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"chem.apply": "Bilancia",
 	"chem.cancel": "Annulla",
 	"chem.same": "Già bilanciata",
+	"chem.result": "Equazione dopo il bilanciamento",
 	"chem.nothing": "Nessuna reazione chimica nella selezione.",
 	"chem.locked": "Questi elementi sono bloccati. Sbloccali prima.",
 	"chem.lockedSkipped": "{n} elementi bloccati restano come sono.",

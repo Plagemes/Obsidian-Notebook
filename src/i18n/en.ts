@@ -4404,6 +4404,7 @@ export const en = {
 	"chem.apply": "Balance",
 	"chem.cancel": "Cancel",
 	"chem.same": "Already balanced",
+	"chem.result": "Equation after balancing",
 	"chem.nothing": "No chemical reaction found in the selection.",
 	"chem.locked": "These elements are locked. Unlock them first.",
 	"chem.lockedSkipped": "{n} locked elements are left as they are.",
