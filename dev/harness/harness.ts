@@ -101,6 +101,7 @@ import { linkbackApi } from "./linkback-check";
 import { checkSlideback, slidebackShot } from "./slideback-check";
 import { checkPagerefs, pagerefsShot } from "./pagerefs-check";
 import { checkLecthead, lectheadShot } from "./lecthead-check";
+import { checkTermOrder, installTermTimetable } from "./termorder-check";
 import { checkPillstack, pillstackShot } from "./pillstack-check";
 import { checkDimcheck, dimcheckShot, type DimcheckState } from "./dimcheck-check";
 import { checkWelcomeback, welcomebackShot } from "./welcomeback-check";
@@ -2210,7 +2211,8 @@ async function interactLibrary(): Promise<Record<string, unknown>> {
 async function main(): Promise<void> {
 	applyTheme();
 	applySize();
-	if (params.get("doc") === "library" || params.get("doc") === "empty") {
+	if (params.get("doc") === "library" || params.get("doc") === "empty" || params.get("doc") === "termorder") {
+		if (params.get("doc") === "termorder") installTermTimetable(); // 0.23 termorder
 		libraryHarness = await openLibraryHarness(app, librarySurface, params.get("doc") === "empty", homeVariant);
 		return;
 	}
@@ -2289,3 +2291,11 @@ Object.assign(harnessApi, { checkPillstack: () => checkPillstack({ get view() { 
 
 // 0.23 dimcheck (#293): the units hint of the equation editor (doc=dimcheck, dimcheck-check.ts).
 Object.assign(harnessApi, { checkDimcheck: () => checkDimcheck({ get view() { return view; }, open, frames, errors, notices }), dimcheckShot: (state: DimcheckState) => dimcheckShot({ get view() { return view; }, open, frames, errors, notices }, state) });
+// 0.23 termorder: the Library's "Active term" order (doc=termorder, termorder-check.ts).
+harnessApi.checkTermOrder = async () => {
+	try {
+		return libraryHarness ? JSON.parse(JSON.stringify(await checkTermOrder(libraryHarness))) as unknown : { ok: false, results: [], errors: ["no library"], notices: [], env: {} };
+	} catch (e) {
+		return { ok: false, results: [], errors: [`termorder check: ${(e as Error).stack ?? String(e)}`], notices: [], env: {} };
+	}
+};

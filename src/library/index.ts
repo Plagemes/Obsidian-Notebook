@@ -52,7 +52,8 @@ export interface LibraryEntry {
 }
 
 /** `manual`: the order set by hand (library/library-state.ts); the index returns the notebooks by last change and the view orders them. */
-export type LibrarySort = "modified" | "name" | "created" | "manual";
+/** `term` (0.23, #416): the active term's courses first; the index returns the notebooks by last change and the view orders them (library/term-order.ts). */
+export type LibrarySort = "modified" | "name" | "created" | "manual" | "term";
 /** `archived`: the notebooks the user hid (the index returns all of them; the view's `filter` picks the archived ones). */
 export type LibraryScope = "all" | "favorites" | "recent" | "archived" | { folder: string; recursive?: boolean } | { tag: string };
 
@@ -64,7 +65,7 @@ export interface LibraryQuery {
 	filter?: (entry: LibraryEntry) => boolean;
 }
 
-export const SORTS: readonly LibrarySort[] = ["modified", "name", "created", "manual"];
+export const SORTS: readonly LibrarySort[] = ["modified", "name", "created", "manual", "term"];
 
 /** Lower-case, accent-free form used for searching and comparing. */
 export function normalizeText(text: string): string {

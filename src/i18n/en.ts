@@ -2097,6 +2097,8 @@ export const en = {
 	"libcheck.moveFailed": "{n} files could not be moved: {error}",
 	"libcheck.incompleteNow": "Nothing was moved: some files that could use them are not downloaded yet.",
 	"library.sort.manual": "Manual order",
+	// 0.23 termorder
+	"library.sort.term": "Active term",
 	"library.nav.archived": "Archived",
 	// 0.12 design system: Home, library, navigation rail, inbox bell
 	"nav.label": "Notebook navigation",
