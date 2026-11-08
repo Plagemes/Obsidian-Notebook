@@ -4700,6 +4700,7 @@ export const en = {
 	"histpanel.thing.graph": "graph",
 	"histpanel.thing.excerpt": "excerpt",
 	"histpanel.thing.sticky": "sticky note",
+	"histpanel.thing.area": "highlighter area",
 	"histpanel.thing.checkbox": "checkbox",
 	"histpanel.t.pageAdded": "Page added",
 	"histpanel.t.pageDeleted": "Page deleted",

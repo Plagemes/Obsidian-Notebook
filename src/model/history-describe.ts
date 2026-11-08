@@ -59,6 +59,7 @@ const THINGS: Readonly<Record<PageElement["type"], MessageKey>> = {
 	excerpt: "histpanel.thing.excerpt",
 	sticky: "histpanel.thing.sticky",
 	checkbox: "histpanel.thing.checkbox",
+	area: "histpanel.thing.area",
 };
 
 /**

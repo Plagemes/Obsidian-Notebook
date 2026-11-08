@@ -4702,6 +4702,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"histpanel.thing.graph": "grafico",
 	"histpanel.thing.excerpt": "estratto",
 	"histpanel.thing.sticky": "nota adesiva",
+	"histpanel.thing.area": "area evidenziata",
 	"histpanel.thing.checkbox": "casella da spuntare",
 	"histpanel.t.pageAdded": "Pagina aggiunta",
 	"histpanel.t.pageDeleted": "Pagina eliminata",

@@ -48,7 +48,7 @@ export async function checkProfiles(api: ProfilesCheckApi): Promise<{ ok: boolea
 
 	v.applyWritingProfile("lecture", true);
 	await frames(3);
-	add("Lecture: light smoothing and ruled paper for new notebooks", s.stabilization === 1 && s.defaultPaper === "ruled" && s.writingProfileActive === "lecture", `${s.stabilization} ${s.defaultPaper}`);
+	add("Lecture: light smoothing and ruled paper for new notebooks", s.stabilization === 1 && (s.defaultPaper as string) === "ruled" && s.writingProfileActive === "lecture", `${s.stabilization} ${s.defaultPaper}`);
 	add("the chip shows Lecture", chipText() === "Lecture", chipText());
 	add("the strip is the Lecture set", v.activePenSet()?.id === "wp-lecture");
 
