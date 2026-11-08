@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### axes
+- **Instant axes (#206).** An L (up, then right) or a + of two crossing lines drawn with the pen is offered as Cartesian axes: a *Make axes* chip for nine seconds, or made by itself with the setting *L or + drawn as axes* (offer, make, leave as ink). The result is plain shape ink (one arrowed stroke per arm with evenly spaced ticks following the page grid or line spacing) and small number labels, all in one new group and one undo step that also takes away your lines. *Ticks on axes* and *Numbers on axes* settings. *Axes* in the insert sheet drops four-quadrant axes where the pen last wrote. No format change; the input pipeline is untouched (the gesture is read when a stroke ends, with the shape recogniser of hold-to-snap).
+
 ## 0.21.0 — 2026-11-08
 
 Eight features: a start and end time on every page, scheduled backups, a documented file format with a JSON Schema, an interactive HTML export, a back-of-book index, a reusable signature and date stamp, a way back to the current slide and a strip of recent symbols; plus the review fixes carried over from 0.20. The notebook format moves to version 19 (page start and end times): the migration from version 18 is automatic, and 0.20 and older open a v19 notebook read-only and never overwrite it.

@@ -3221,3 +3221,21 @@ Scheduled backups (roadmap #127). Settings, Sync & safety: *Scheduled backups* (
 | Scheduled zip backups (#127): off / daily / weekly into a vault folder, *Back up now*, keep the last N, last time and result in settings | yes | due-time (daily, weekly, other device's backup, clock in the future, failure retry), names, retention never trashing foreign files or the last complete backup, run order (flush, temp name, size check, rename, then trim), partial and failed runs leave old backups alone: `tests/backup-logic.test.ts`, `tests/backup-run.test.ts`, `tests/backup-wiring.test.ts` | | | memory limit of 64 MB on phones and tablets (the zip is built in memory); no Drive and no folder outside the vault (no Node/Electron); not tried on Android |
 | Scheduled backups, review W21 (D1-D5): the zip just written is always kept (names dated more than a day ahead rank oldest); a backup folder that is, holds, or is inside the notebooks folder, overlaps a templates folder or holds notebooks is refused (settings keep the previous folder; a run with one fails; `readSettings` falls back to the default); an old backup is trashed only after its zip comment is read; a notebook that changes during the read is read again once, then skipped and the backup is partial; mobile cap 64 MB | yes | `tests/backup-logic.test.ts` (retention with future-dated names and keep = 1, overlap rules, settings fallback), `tests/backup-run.test.ts` (new backup survives, overlap fails with nothing written or trashed, foreign file with a backup's name left alone, unreadable file never trashed, stale temp needs the record or the mark, racing read re-read once or skipped) | | | the notice in the settings and the check against real vault files are not run inside Obsidian; a backup over 512 MB is never trashed (it is not read to check the mark); an interrupted temporary file from another device stays |
 | Zip writer and reader (STORE, CRC-32, UTF-8 names, strict reader): `src/model/zip.ts` | yes | round trip, CRC, truncated and corrupt archives, name rules, entry limit; checked once against Windows `tar`: `tests/zip.test.ts` | | | no ZIP64 (at most 65 534 files and 4 GB) |
+
+### 0.22 — axes: instant axes (steps 2140-2159)
+
+Implemented, not verified on hardware. No format change. Reference screenshots after `HARNESS_DOC=axes npm run harness:check`: `dev/harness/dist/shots/axes-*.png` (tablet and phone, light and dark).
+
+2140. **L.** With the pen, draw an L about 4 cm tall and 5 cm wide (up, then right). A *Make axes* chip appears under the corner for nine seconds; tap it: the L is replaced by two arrows with ticks following the page grid and small numbers beside every second tick.
+2141. **Undo.** One undo gives your L back, with no axes left; one redo makes the axes again.
+2142. **Group.** Lasso the axes: they select together (one group); move them and the numbers follow.
+2143. **+.** Draw a horizontal line, then a vertical one crossing it near the middle of both: the chip appears after the second line; taking it gives four-quadrant axes with negative numbers left and below.
+2144. **Not axes.** A handwritten letter L or t, a T-shaped pair of lines, a curve and a short + give no chip.
+2145. **Settings.** *Settings > Writing > L or + drawn as axes*: *Make axes* turns the gesture into axes by itself after a moment; *Leave it as ink* does nothing. *Ticks on axes* off gives plain arrows; *Numbers on axes* off keeps the ticks only.
+2146. **Insert.** In the insert sheet choose *Axes*: four-quadrant axes appear where the pen last wrote on the page (the centre of the view if nothing was written), selected; one undo removes them.
+2147. **Pen button.** Neither the side-button tap (radial menu) nor the drag (eraser) is affected; hold-to-snap lines still snap.
+2148. **Languages.** In Italian the chip, setting and insert entry are translated.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Instant axes (#206): an L or a + (two lines) offered as axes, ticks from the page spacing, number labels, one group, one undo step; insert from the sheet; settings | yes | `tests/axes.test.ts` (L / + classification, tick placement, labels, group ids); harness scenario `axes` | | | offer after a real S Pen stroke on hardware |

@@ -176,6 +176,7 @@ import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
+import { AxesTools, type AxesHost } from "./axes-tools";
 import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
@@ -460,6 +461,8 @@ export class NotebookView extends FileView {
 	private sticky: StickyTools | null = null;
 	/** 0.19 (#103): handwritten checklists (taps, the square drawn by hand, send to tasks, the task lines). */
 	private checklist: ChecklistTools | null = null;
+	/** 0.22 (#206): instant axes (an L or a + drawn by hand, the insert). */
+	private axes: AxesTools | null = null;
 	/** 0.20 (#39): groups and locked elements (Group, Ungroup, Lock, the Unlock chip, the list of locked elements). */
 	private groups: GroupTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
@@ -726,6 +729,7 @@ export class NotebookView extends FileView {
 		this.math = new MathTools(this.mathHost());
 		this.sticky = new StickyTools(this.stickyHost());
 		this.checklist = new ChecklistTools(this.checklistHost());
+		this.axes = new AxesTools(this.axesHost());
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
 		this.penGestures = new PenGestureLayer({
@@ -1091,6 +1095,8 @@ export class NotebookView extends FileView {
 		this.selectionActions = null;
 		this.arrange = null;
 		this.checklist?.destroy();
+		this.axes?.destroy();
+		this.axes = null;
 		this.checklist = null;
 		this.groups?.destroy();
 		this.groups = null;
@@ -2466,6 +2472,21 @@ export class NotebookView extends FileView {
 			sendTask: (pageIndex, bounds, request) => this.sendChecklistTask(pageIndex, bounds, request),
 			refresh: () => this.refreshUi(),
 		};
+	}
+
+	/** What the instant axes need from the view (0.22, #206). */
+	private axesHost(): AxesHost {
+		const c = this.checklistHost();
+		return {
+			stage: () => c.stage(), doc: () => c.doc(), editable: () => c.editable(), execute: (cmd) => c.execute(cmd), settings: () => c.settings(),
+			toStage: (p, x, y) => c.toStage(p, x, y), insertTarget: () => c.insertTarget(), penColor: () => c.penColor(), penWidth: () => this.tools.penWidth,
+			select: (p, s, e) => c.select(p, s, e), refresh: () => c.refresh(),
+		};
+	}
+
+	/** 0.22 (#206): instant axes of this view (null before the view is open). */
+	get axesTools(): AxesTools | null {
+		return this.axes;
 	}
 
 	/** 0.19 (#103): handwritten checklists of this view (null before the view is open). */
@@ -3901,6 +3922,7 @@ export class NotebookView extends FileView {
 		this.lassoTap = null;
 		this.penLinks?.reset();
 		this.checklist?.reset();
+		this.axes?.reset();
 		this.pageOffer?.reset();
 		this.slideBack?.documentChanged();
 		this.multiTap.reset();
@@ -4116,6 +4138,7 @@ export class NotebookView extends FileView {
 			this.pageNav?.markCurrent(current);
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
 			this.checklist?.cancelOffer();
+			this.axes?.cancelOffer();
 			this.smartAdd?.hide();
 			this.refreshUi(); // the contextual bar follows the kind of page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
@@ -4399,6 +4422,7 @@ export class NotebookView extends FileView {
 		this.renderer?.setViewport(this.viewport, interactive);
 		this.penLinks?.viewChanged();
 		this.checklist?.viewChanged();
+		this.axes?.viewChanged();
 		this.reading?.viewportChanged();
 		this.pdfText?.viewportChanged();
 		if (this.selection) this.pushSelection();
@@ -5215,7 +5239,10 @@ export class NotebookView extends FileView {
 		const cmd = commands.length === 1 ? commands[0]! : new Batch("Draw", commands);
 		this.justCommitted = this.history.execute(cmd) ? { ids: new Set(strokes.map((s) => s.id)), cmd } : null;
 		this.penLinks?.strokesAdded(pageIndex);
-		if (offerChecklist) this.checklist?.strokesAdded(pageIndex, strokes);
+		if (offerChecklist) {
+			this.checklist?.strokesAdded(pageIndex, strokes);
+			this.axes?.strokesAdded(pageIndex, strokes);
+		}
 		// Reaching the bottom of a page in the middle: offer (never add) a page right after it.
 		if (doc && this.renderer && !grew) {
 			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
