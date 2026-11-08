@@ -18644,3 +18644,125 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-meaning-pill) > .notebook-lecture-header-offer {
 	bottom: calc(60px + var(--nb-ctx-lift, 0px));
 }
+
+/* ===== 0.23 savedviews ===== */
+.nb-ui.nb-views-modal .nb-views-save .nb-modal-btn {
+	flex: none;
+}
+
+.nb-ui.nb-views-modal .nb-views-now {
+	margin-top: 2px;
+}
+
+.nb-ui.nb-views-modal .nb-views-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui.nb-views-modal .nb-views-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 56px;
+	padding: 4px 6px 4px 14px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-views-modal .nb-views-row.is-fresh {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.nb-views-modal .nb-views-row.is-missing {
+	border-style: dashed;
+}
+
+.nb-ui.nb-views-modal .nb-views-row-icon {
+	display: inline-flex;
+	flex: none;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-views-modal .nb-views-row.is-missing .nb-views-row-icon {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-views-modal .nb-views-row-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.nb-views-modal .nb-views-row-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	min-width: 0;
+	min-height: 44px;
+	margin: 0;
+	padding: 4px 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.nb-ui.nb-views-modal .nb-views-row.is-missing .nb-views-row-text {
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-views-modal .nb-views-row-label {
+	max-width: 100%;
+	overflow: hidden;
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-views-modal .nb-views-row-detail {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-views-modal .nb-views-row.is-missing .nb-views-row-detail {
+	color: var(--nb-danger);
+}
+
+.nb-ui.nb-views-modal .nb-views-row-more {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-pill, 999px);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui.nb-views-modal .nb-views-row-more:hover {
+	background: var(--nb-accent-bg);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-views-modal .nb-views-row-more svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.nb-views-modal .nb-views-rename {
+	flex: 1 1 auto;
+	min-width: 0;
+}

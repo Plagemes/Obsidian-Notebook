@@ -6,7 +6,8 @@ import {
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
-import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, v17OnlyElement, withoutV11Meta, withoutV12Slides, type RawObject } from "./migrations";
+import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, v17OnlyElement, withoutV11Meta, withoutV12Slides, withoutV21Views, type RawObject } from "./migrations";
+import { isStoredViewName, normalizeViewName, validRegion } from "./views";
 import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE, CHECKBOX_PATH_MAX, cleanCheckboxLabel, isOurBlockId } from "./checklist";
 import { commentLine, normalizeComments, readComments } from "./comments-format";
 import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
@@ -23,6 +24,7 @@ import {
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageComment, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type StickyElement, type Stroke,
 	type TextElement, type Tool,
+	VIEWS_MAX, VIEW_ID_MAX, VIEW_PAGE_ID_MAX, type SavedView,
 } from "./types";
 
 export type ParseFailure =
@@ -334,6 +336,11 @@ function metaLine(meta: NotebookMeta): string {
 	return `{${base}${entries ? `,"bookmarkInfo":{${entries.join(",")}}` : ""}${v11}}`;
 }
 
+/** v21 saved view: id, name, page, then the region and the zoom, in a fixed order. */
+function viewLine(v: SavedView): string {
+	return `\t\t{"id":${j(v.id)},"name":${j(v.name)},"page":${j(v.page)},"x":${j(v.x)},"y":${j(v.y)},"width":${j(v.width)},"height":${j(v.height)},"zoom":${j(v.zoom)}}`;
+}
+
 function positionLine(p: ReadingPosition): string {
 	return p.y !== undefined
 		? `{"page":${j(p.page)},"y":${j(p.y)},"at":${j(p.at)}}`
@@ -405,6 +412,8 @@ function assemble(
 		`\t"meta": ${metaLine(meta)},`,
 		...(position ? [`\t"position": ${positionLine(position)},`] : []),
 		...(slides.refs.length ? [`\t"slides": [\n${slides.refs.map(slideRefLine).join(",\n")}\n\t],`] : []),
+		// v21: the saved views, as they are (a malformed one is written as it is, so the strict check refuses it: the history's guard keeps such a notebook from being saved).
+		...(doc.views && doc.views.length > 0 ? [`\t"views": [\n${doc.views.map(viewLine).join(",\n")}\n\t],`] : []),
 		assets.length ? `\t"assets": {\n${assets.map(assetLine).join(",\n")}\n\t},` : `\t"assets": {},`,
 		`\t"pages": [\n${pages.join(",\n")}\n\t]`,
 		"}",
@@ -585,6 +594,54 @@ function readSlideRef(v: unknown, path: string): SlideRef {
 	const ref: SlideRef = { id, source, page: v.page };
 	if (v.path !== undefined) ref.path = boundedId(v.path, `${path}.path`, SLIDE_PATH_MAX);
 	return ref;
+}
+
+/**
+ * v21 saved views: an array of { id, name, page, x, y, width, height, zoom }. Read leniently, an invalid entry (a repeated id, an
+ * unusable region or zoom, an entry past the limit) is dropped and counted, and a name that is not in its stored form (untrimmed, with a
+ * line break) is kept in that form and counted; the other views stay. A view that names a page the notebook does not have is valid (it
+ * is shown as missing). Strict (`drop` null): any of those fails.
+ */
+export function readViews(v: unknown, drop: Dropped | null): SavedView[] {
+	if (v === undefined) return [];
+	const all = orDrop(drop, () => (Array.isArray(v) ? (v as unknown[]) : fail("views", "expected an array")));
+	if (!all) return [];
+	const out: SavedView[] = [];
+	const ids = new Set<string>();
+	all.forEach((r, i) => {
+		const at = `views[${i}]`;
+		if (out.length >= VIEWS_MAX) {
+			if (!drop) fail("views", `more than ${VIEWS_MAX} views`);
+			drop.count++;
+			return;
+		}
+		const view = orDrop(drop, () => {
+			const read = readView(r, at, drop);
+			if (ids.has(read.id)) fail(`${at}.id`, "duplicate id");
+			return read;
+		});
+		if (!view) return;
+		ids.add(view.id);
+		out.push(view);
+	});
+	return out;
+}
+
+function readView(v: unknown, path: string, drop: Dropped | null): SavedView {
+	if (!isObject(v)) fail(path, "expected an object");
+	const id = boundedId(v.id, `${path}.id`, VIEW_ID_MAX);
+	if (typeof v.name !== "string") fail(`${path}.name`, "expected a string");
+	let name = v.name;
+	if (!isStoredViewName(name)) {
+		const kept = drop ? normalizeViewName(name) : "";
+		if (kept === "") fail(`${path}.name`, "expected a name of 1 to 80 characters, trimmed, on one line");
+		name = kept;
+		if (drop) drop.count++;
+	}
+	const page = boundedId(v.page, `${path}.page`, VIEW_PAGE_ID_MAX);
+	const region = { x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`), width: finite(v.width, `${path}.width`), height: finite(v.height, `${path}.height`), zoom: finite(v.zoom, `${path}.zoom`) };
+	if (!validRegion(region)) fail(path, "region or zoom out of range");
+	return Object.freeze({ id, name, page, ...region });
 }
 
 /** v13: a number of a pose, finite and within `[lo, hi]`. */
@@ -1531,6 +1588,9 @@ function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, dr
 	const position = readPosition(raw.position, pageIds, drop);
 	if (position) doc.position = position;
 	if (slides.length > 0) doc.slides = slides;
+	// v21: the saved views (not tied to the pages read above: a view of a page that is gone stays, shown as missing).
+	const views = readViews(raw.views, drop);
+	if (views.length > 0) doc.views = views;
 	return doc;
 }
 
@@ -1657,7 +1717,8 @@ export class StagedParse {
 			// Lenient like `parse`: invalid optional v7 details are dropped and counted; everything else still fails.
 			const drop: Dropped = { count: 0 };
 			// v12 -> v13 only drops the `states` keys of pages, which `read` ignores page by page; the document-level drops are older.
-			const current = from === CURRENT_VERSION ? raw : { ...(from < 12 ? withoutV12Slides(from < 11 ? withoutV11Meta(raw) : raw) : raw), version: CURRENT_VERSION };
+			// v20 -> v21 only drops a stray `views` key (a v20 file has none of ours).
+			const current = from === CURRENT_VERSION ? raw : { ...withoutV21Views(from < 12 ? withoutV12Slides(from < 11 ? withoutV11Meta(raw) : raw) : raw), version: CURRENT_VERSION };
 			const doc = validateWith(current, readPageShell, ids, drop);
 			const rawPages = raw.pages as unknown[];
 			const at = Math.min(rawPages.length - 1, Math.max(0, first));
@@ -1753,7 +1814,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v17 → v18 only drops the `group`, `locked` and `lockAt` keys of strokes and elements (ignored page by page), so large v17 files are staged too.
 	// v18 → v19 only drops the pages' `startAt` and `endAt` keys (ignored page by page), so large v18 files are staged too.
 	// v19 → v20 only refuses the new pens (checked stroke by stroke as each page is read) and drops the strokes' `nib` keys (ignored), so large v19 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19) return StagedParse.create(pre.raw, first, pre.version);
+	// v20 → v21 only drops a stray `views` key (applied by `StagedParse.create`), so large v20 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }
@@ -1798,6 +1860,8 @@ function checkComments(page: Page, path: string): void {
 
 /** Slide table entries that already passed `checkContent` (frozen). */
 const checkedSlideRefs = new WeakSet<SlideRef>();
+/** v21: frozen saved views that already passed the writer's round-trip check. */
+const checkedViews = new WeakSet<SavedView>();
 
 /** Elements that already passed `checkContent` (they are frozen, so they cannot change afterwards). */
 const checkedElements = new WeakSet<PageElement>();
@@ -1832,6 +1896,18 @@ export function checkContent(doc: NotebookDocument): string | null {
 			const line = slideRefLine(r);
 			if (slideRefLine(readSlideRef(JSON.parse(line), `slide ${r.id}`)) !== line) return `slide ${r.id}: round-trip mismatch`;
 			if (Object.isFrozen(r)) checkedSlideRefs.add(r);
+		}
+		// v21: the saved views are checked as the writer would (a bad name or region, a repeated id or too many would fail every save).
+		const views = doc.views ?? [];
+		if (views.length > VIEWS_MAX) return `views: more than ${VIEWS_MAX} views`;
+		const viewIds = new Set<string>();
+		for (const v of views) {
+			if (viewIds.has(v.id)) return `view ${v.id}: duplicate id`;
+			viewIds.add(v.id);
+			if (checkedViews.has(v)) continue;
+			const line = viewLine(v);
+			if (viewLine(readView(JSON.parse(line), `view ${v.id}`, null)) !== line) return `view ${v.id}: round-trip mismatch`;
+			if (Object.isFrozen(v)) checkedViews.add(v);
 		}
 		// 0.19: ids are unique across strokes and elements, as `serializeChecked` requires (two copies of one element would fail every save).
 		const ids = new Set<string>();

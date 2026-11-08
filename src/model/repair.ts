@@ -33,10 +33,10 @@ import { detectVersion, migrate, type RawObject } from "./migrations";
 import { normalizePageTags } from "./page-tags";
 import { pageTimesProblem } from "./page-times";
 import { normalizePosition } from "./position";
-import { freezeElement, freezeStroke, liveGroups, parse, readPageComments, readPageStates, readSlides, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
+import { freezeElement, freezeStroke, liveGroups, parse, readPageComments, readPageStates, readSlides, readViews, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
 	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, PAPER_SPACING, RENDER_FREEHAND, RENDER_INK, RENDER_VERSIONS, TOOLS, type Tool,
-	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageComment, type PageElement, type PageStates, type ReadingPosition, type SlideRef, type Stroke,
+	type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page, type PageComment, type PageElement, type PageStates, type ReadingPosition, type SavedView, type SlideRef, type Stroke,
 } from "./types";
 
 export interface Counts {
@@ -537,6 +537,20 @@ function salvageSlides(raw: unknown, summary: RepairSummary): readonly SlideRef[
 	return table;
 }
 
+/** v21 saved views: the valid ones (an invalid entry or a repeated id is left out and counted as a reset field). */
+function salvageViews(raw: unknown, summary: RepairSummary): SavedView[] {
+	if (raw === undefined) return [];
+	const drop = { count: 0 };
+	let list: SavedView[] = [];
+	try {
+		list = readViews(raw, drop);
+	} catch {
+		summary.fieldsReset++;
+	}
+	summary.fieldsReset += drop.count;
+	return list;
+}
+
 function salvageAssets(raw: unknown, summary: RepairSummary): Record<string, Asset> {
 	const out: Record<string, Asset> = {};
 	if (!isObj(raw)) return out;
@@ -890,7 +904,8 @@ function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet
 	const createdAt = str(raw.createdAt, () => iso);
 	const meta = salvageMeta(raw.meta, ctx.pageIds, summary, assets);
 	const position = salvagePosition(raw.position, ctx.pageIds, summary);
-	summary.unknownFields += unknownKeys(raw, { format: 1, version: 1, id: 1, createdAt: 1, modifiedAt: 1, pages: 1, meta: 1, assets: 1, position: 1, slides: 1 });
+	const views = salvageViews(raw.views, summary);
+	summary.unknownFields += unknownKeys(raw, { format: 1, version: 1, id: 1, createdAt: 1, modifiedAt: 1, pages: 1, meta: 1, assets: 1, position: 1, slides: 1, views: 1 });
 	if (pages.length === 0) {
 		// A notebook has at least one page.
 		pages.push({ id: createId(), width: A4_WIDTH, height: A4_HEIGHT, paper: { kind: "grid", spacing: PAPER_SPACING.grid }, strokes: [] });
@@ -900,6 +915,7 @@ function salvage(raw: RawObject, summary: RepairSummary, now: Date, cut: WeakSet
 	// Entries no stroke refers to are not written: the repaired document handed back is the strict re-parse of the checked
 	// text, which has no unused slide entries (a later link to the same PDF page creates a new one).
 	if (slides.length > 0) doc.slides = [...slides];
+	if (views.length > 0) doc.views = views;
 	return doc;
 }
 

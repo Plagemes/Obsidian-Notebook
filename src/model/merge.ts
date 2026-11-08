@@ -66,6 +66,7 @@ import { commentCovered, copyComments, mergeComments, SetPageComments, shiftComm
 import { exemptFromLocks, SetPageLocked } from "./page-lock";
 import { mergedTimes, pageTimes, putPageTimes, sameTimes, SetPageTimes } from "./page-times";
 import { slideMerger } from "./slide-links";
+import { mergedViews, SetViews, viewsOf } from "./views";
 import { remapStates, SetPageStates } from "./states";
 import { boxBounds, markerBounds } from "./markers";
 import { stableStringify } from "./math-elements";
@@ -120,6 +121,8 @@ export interface MergeSummary {
 	flagsUpdated: number;
 	/** v19: common pages whose start or end time is widened to the copy's (counted only when the page brings no ink: a times-only difference is still a change to merge). */
 	timesUpdated: number;
+	/** v21: saved views of the copy that the main notebook does not have (by id), added to its list. */
+	viewsAdded: number;
 }
 
 export interface MergePlan {
@@ -329,7 +332,7 @@ function carriedInk(e: PageElement, strokeMap: ReadonlyMap<string, string>, adde
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0, timesUpdated: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0, timesUpdated: 0, viewsAdded: 0,
 	};
 	const commands: Command[] = [];
 	// v12: the copy's slide ids in the main notebook's table.
@@ -682,6 +685,14 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		commands.push(new SetMeta(before, meta));
 	}
 
+	// v21: the saved views of the copy the main notebook lacks (by id), on pages the result has.
+	const mainViews = viewsOf(main);
+	const unitedViews = mergedViews(mainViews, viewsOf(other), new Set(order));
+	if (unitedViews !== mainViews) {
+		summary.viewsAdded = unitedViews.length - mainViews.length;
+		commands.push(new SetViews(mainViews, unitedViews, "Merge saved views"));
+	}
+
 	// v12: the slide entries the copied ink names, first (in the same undo step).
 	commands.unshift(...slides.commands());
 	// v14: exempt from the page-lock guard: the merge exists to bring in what the other copy has, and a locked page of the main
@@ -750,7 +761,7 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
 	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded
-		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated + s.flagsUpdated + s.timesUpdated;
+		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated + s.flagsUpdated + s.timesUpdated + s.viewsAdded;
 }
 
 /**
@@ -832,6 +843,9 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 		}
 	}
 	for (const id of Object.keys(other.assets ?? {})) if (!result.assets?.[id]) return false;
+	// v21: every saved view of the copy whose page the result has is in the result (by id; the main notebook's view wins on a shared id).
+	const haveViews = new Set(viewsOf(result).map((v) => v.id));
+	for (const v of viewsOf(other)) if (resultPages.has(v.page) && !haveViews.has(v.id)) return false;
 	const tags = new Set(result.meta?.tags ?? []);
 	if (!(other.meta?.tags ?? []).every((t) => tags.has(t))) return false;
 	// v7: every page tag, every bookmark and every bookmark detail field of the copy is in the result, with the same value.

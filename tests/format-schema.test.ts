@@ -1,7 +1,7 @@
-// docs/schema/notebook-v20.schema.json against what the serializer really writes (roadmap #167).
+// docs/schema/notebook-v21.schema.json against what the serializer really writes (roadmap #167).
 // The schema is a published contract for other tools: a document the plugin writes must always satisfy it, and a document that
 // breaks one of the writer's rules must not. The validator is a small dependency-free one (tests/json-schema-lite.ts).
-import schemaText from "../docs/schema/notebook-v20.schema.json?raw";
+import schemaText from "../docs/schema/notebook-v21.schema.json?raw";
 import guide from "../docs/format.md?raw";
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
@@ -58,6 +58,11 @@ function fullDocument(): NotebookDocument {
 		coverArt: { kind: "image", asset: hex3 },
 	};
 	doc.slides = [{ id: "s1", source: hex, page: 3, path: "Courses/lecture-1.pdf" }, { id: "s2", source: hex, page: 4 }];
+	// v21: saved views (the second one names a page the notebook does not have: a missing view is still written).
+	doc.views = [
+		{ id: "v1", name: "Proof of lemma 2", page: "p-ink", x: 40.5, y: 220, width: 420, height: 310.2, zoom: 1.35 },
+		{ id: "v2", name: "Old page", page: "p-gone", x: 0, y: -12, width: 595.3, height: 400, zoom: 0.5 },
+	];
 
 	// Page 1: ink of every tool and render version, flags, groups, every element type.
 	const strokes: Stroke[] = [
@@ -137,7 +142,7 @@ function fullDocument(): NotebookDocument {
 	return doc;
 }
 
-describe("notebook-v20.schema.json: what the serializer writes validates", () => {
+describe("notebook-v21.schema.json: what the serializer writes validates", () => {
 	it("is a well-formed draft 2020-12 schema for the current format version", () => {
 		expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
 		expect((getAt(schema as Raw, ["properties", "version", "const"]))).toBe(CURRENT_VERSION);
@@ -165,7 +170,7 @@ describe("notebook-v20.schema.json: what the serializer writes validates", () =>
 		const types = new Set(raw.pages.flatMap((p) => (p.elements ?? []).map((e) => e.type)));
 		expect([...types].sort()).toEqual(["box", "checkbox", "equation", "excerpt", "graph", "image", "marker", "sticky", "text"]);
 		for (const key of [
-			'"bookmarkInfo"', '"description"', '"coverArt"', '"position"', '"slides"', '"tags"', '"background"', '"margins"', '"infinite"', '"locked"',
+			'"bookmarkInfo"', '"description"', '"coverArt"', '"position"', '"slides"', '"views"', '"tags"', '"background"', '"margins"', '"infinite"', '"locked"',
 			'"states"', '"comments"', '"hidden"', '"slide"', '"group"', '"lockAt"', '"outline"', '"taskAt"', '"sketch"', '"resolved"', '"inline"', '"numbered"',
 			'"startAt"', '"endAt"', '"collapsed"', '"ink"', '"table"', '"params"', '"axes"', '"degrees"',
 		]) expect(text, key).toContain(key);
@@ -182,7 +187,7 @@ describe("notebook-v20.schema.json: what the serializer writes validates", () =>
 	});
 });
 
-describe("notebook-v20.schema.json: invalid documents are refused", () => {
+describe("notebook-v21.schema.json: invalid documents are refused", () => {
 	const base = (): Raw => parseRaw(written(fullDocument()));
 	const bad = (name: string, edit: (raw: Raw) => void): void => {
 		it(name, () => {
@@ -199,14 +204,14 @@ describe("notebook-v20.schema.json: invalid documents are refused", () => {
 	});
 
 	it("refuses things that are not notebooks", () => {
-		for (const v of [null, 1, "x", [], {}, { format: "other", version: 20 }]) expect(validator.validate(v).length).toBeGreaterThan(0);
+		for (const v of [null, 1, "x", [], {}, { format: "other", version: 21 }]) expect(validator.validate(v).length).toBeGreaterThan(0);
 	});
 
 	// Header.
 	bad("wrong format id", set(["format"], "excalidraw"));
 	bad("another version", set(["version"], 18));
-	bad("the previous version", set(["version"], 19));
-	bad("version as a string", set(["version"], "20"));
+	bad("the previous version", set(["version"], 20));
+	bad("version as a string", set(["version"], "21"));
 	bad("no pages", set(["pages"], []));
 	bad("missing id", del(["id"]));
 	bad("missing meta", del(["meta"]));
@@ -222,6 +227,22 @@ describe("notebook-v20.schema.json: invalid documents are refused", () => {
 	bad("asset kind unknown", set(["assets", "0123456789abcdef".repeat(4), "kind"], "video"));
 	bad("asset bytes negative", set(["assets", "0123456789abcdef".repeat(4), "bytes"], -1));
 	bad("slide page 0", set(["slides", 0, "page"], 0));
+	// v21: saved views.
+	bad("views empty (an empty list is not written)", set(["views"], []));
+	bad("views not an array", set(["views"], { v1: {} }));
+	bad("view without a name", del(["views", 0, "name"]));
+	bad("view with an empty name", set(["views", 0, "name"], ""));
+	bad("view name with a trailing space", set(["views", 0, "name"], "Proof "));
+	bad("view name too long", set(["views", 0, "name"], "n".repeat(81)));
+	bad("view without a page", del(["views", 0, "page"]));
+	bad("view without a zoom", del(["views", 0, "zoom"]));
+	bad("view zoom zero", set(["views", 0, "zoom"], 0));
+	bad("view zoom too large", set(["views", 0, "zoom"], 101));
+	bad("view width zero", set(["views", 0, "width"], 0));
+	bad("view height negative", set(["views", 0, "height"], -5));
+	bad("view x as a string", set(["views", 0, "x"], "4"));
+	bad("view id too long", set(["views", 0, "id"], "i".repeat(65)));
+	bad("more than 100 views", set(["views"], Array.from({ length: 101 }, (_, i) => ({ id: `v${i}`, name: `View ${i}`, page: "p-ink", x: 0, y: 0, width: 100, height: 100, zoom: 1 }))));
 	// Pages.
 	bad("page without strokes", del(["pages", 0, "strokes"]));
 	bad("page width zero", set(["pages", 0, "width"], 0));
@@ -346,7 +367,7 @@ describe("docs/format.md", () => {
 	});
 
 	it("names the schema file and the version it describes", () => {
-		expect(guide).toContain("schema/notebook-v20.schema.json");
+		expect(guide).toContain("schema/notebook-v21.schema.json");
 		expect(guide).toContain(`version ${CURRENT_VERSION}`);
 	});
 });

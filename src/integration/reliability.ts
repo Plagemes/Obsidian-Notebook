@@ -303,6 +303,7 @@ export function describeMerge(s: MergeSummary): string[] {
 	add(s.checkboxesUpdated, "merge.summary.checkboxes");
 	add(s.flagsUpdated, "merge.summary.flags");
 	add(s.timesUpdated, "merge.summary.times");
+	add(s.viewsAdded, "merge.summary.views");
 	add(s.onlyInMain, "merge.summary.onlyMain");
 	return lines;
 }
