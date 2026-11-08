@@ -257,6 +257,29 @@ describe("per-notebook meanings sidecar", () => {
 		expect(parseMeanings(out, "0a000000").ok).toBe(true);
 	});
 
+	// Review fix (D9): fields of a legend entry this version does not know, and entries it rejects, survive a rewrite.
+	it("keeps unknown fields inside legend entries and entries it cannot read, until the legend is edited", () => {
+		const rawLegend = [{ colour: RED, label: "Definition", icon: "star" }, { colour: "not a colour", label: "Future kind", extra: [1, 2] }, { colour: BLUE, label: "Example" }];
+		const text = JSON.stringify({
+			format: "obsidian-notebook-meanings", version: 1, device: "0a000000",
+			items: [{ scope: "nb1", legend: rawLegend, at: 5 }, { scope: "nb2", legend: [{ colour: RED, label: "Old" }], at: 6 }],
+		});
+		const parsed = parseMeanings(text, "0a000000");
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) return;
+		// The usable legend is what this version understands; the file keeps all of it.
+		expect(parsed.data.items.find((i) => i.scope === "nb1")!.legend).toEqual([{ colour: RED, label: "Definition" }, { colour: BLUE, label: "Example" }]);
+		const out = serializeMeanings(parsed.data);
+		expect(out).toContain(JSON.stringify(rawLegend));
+		// Rewriting after adopting a winner from another device leaves the entries alone too.
+		const merged = mergeMeaningFiles([parsed.data]);
+		const rewritten = applyMeaningOps(parsed.data, merged, [{ kind: "set", scope: "nb2", legend: [{ colour: BLUE, label: "New" }] }], 100);
+		const out2 = serializeMeanings(rewritten);
+		expect(out2).toContain(JSON.stringify(rawLegend));
+		expect(out2).toContain('"label":"New"');
+		expect(out2).not.toContain('"label":"Old"');
+	});
+
 	it("rejects a file that is empty, not ours, damaged or from the future without 'fixing' it", () => {
 		expect(parseMeanings("  ", "0a000000")).toMatchObject({ ok: false, reason: "empty" });
 		expect(parseMeanings("{", "0a000000")).toMatchObject({ ok: false, reason: "json" });

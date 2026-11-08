@@ -26,6 +26,12 @@ export interface StoredMeanings {
 	at: number;
 	deleted?: boolean;
 	extra?: Record<string, unknown>;
+	/**
+	 * Review fix (D9): the legend list exactly as it was read. Entries this version rejects and fields of an entry it does not know
+	 * are written back unchanged, until this device edits the legend (a new entry has no `rawLegend`). Used only while `legend`
+	 * is still what reading it gives, so it can never write something stale.
+	 */
+	rawLegend?: unknown[];
 }
 
 export interface MeaningsFile {
@@ -58,7 +64,14 @@ function readItem(v: unknown): StoredMeanings | null {
 	const item: StoredMeanings = { scope: v.scope, legend: parseLegend(v.legend), at: v.at };
 	if (v.deleted === true) item.deleted = true;
 	if (Object.keys(extra).length > 0) item.extra = extra;
+	item.rawLegend = v.legend;
 	return item;
+}
+
+/** What is written for the legend: the list as read while it still means what this version understood of it, else the legend. */
+function legendJson(i: StoredMeanings): unknown {
+	if (i.rawLegend && JSON.stringify(parseLegend(i.rawLegend)) === JSON.stringify(i.legend)) return i.rawLegend;
+	return i.legend;
 }
 
 /** Reads a device file. A file that is not ours, is empty (a sync may not have finished) or is newer is reported, never "fixed". */
@@ -89,7 +102,7 @@ export function parseMeanings(text: string, device: string): MeaningsParse {
 }
 
 function itemJson(i: StoredMeanings): string {
-	const o: Record<string, unknown> = { ...(i.extra ?? {}), scope: i.scope, legend: i.legend, at: i.at };
+	const o: Record<string, unknown> = { ...(i.extra ?? {}), scope: i.scope, legend: legendJson(i), at: i.at };
 	if (i.deleted) o.deleted = true;
 	return JSON.stringify(o);
 }
