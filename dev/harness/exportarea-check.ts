@@ -73,7 +73,9 @@ function standIn(app: unknown, written: Written[]): App {
 }
 
 function host(app: App, page: Page, withSelection: boolean): AreaHost {
-	const file: TFile = Object.assign(Object.create(TFile.prototype) as TFile, { basename: "Demo", parent: { path: "Notebooks" }, path: "Notebooks/Demo.notebook" });
+	const made: unknown = Object.assign(Object.create(TFile.prototype) as object, { basename: "Demo", parent: { path: "Notebooks" }, path: "Notebooks/Demo.notebook" });
+	if (!(made instanceof TFile)) throw new Error("harness: could not build the demo file");
+	const file = made;
 	return {
 		app, file, page, pageNumber: 1, media: null, exportOptions: {}, render: {},
 		selection: withSelection ? { strokes: [page.strokes[2]!], elements: [] } : null,
