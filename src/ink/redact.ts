@@ -69,19 +69,58 @@ function overlaps(a: BBox, boxes: readonly RedactBox[], grow = 0): boolean {
 /** A conservative width for wrapping: wider letters make more lines, so the area is never smaller than any writer's. */
 const wideMeasure = (s: string, fontSize: number): number => Array.from(s).length * fontSize * 0.66;
 
-/** The widest a character can be in the export font (em): a CJK or full-width character, an emoji or a symbol. */
+/** The width (em) a single character of a text box is allowed for when the box is narrower than it (CJK, emoji, a wide symbol). */
 const WIDEST_EM = 1.5;
 
 /**
- * A width (em) no glyph of the sans-serif fonts the writers use is wider than, by character: the widest Latin capitals and `m`, `w`,
- * `@`, `%`, `&` are under 1 em; other ASCII under 0.8 em; other alphabets under 1 em; CJK, full-width forms, emoji and symbols (anything
- * from U+1100 on, and every character outside the basic plane) under 1.5 em.
+ * Review fix (R6): the bound for every character that is NOT in one of the ranges below, whose widths were checked: unknown scripts and
+ * symbols count as the widest glyph known in any font a writer may fall back to (U+FDFD, the bismillah ligature, is about 4.5 em in
+ * Noto Naskh Arabic). An unknown character can make the measure too wide, never too narrow.
  */
-function charEm(ch: string): number {
+const UNKNOWN_EM = 6;
+
+/**
+ * Character ranges with a checked upper bound (em) in the sans-serif fonts the writers use (Helvetica in PDF and SVG, the system
+ * sans-serif on the canvas, with Noto and DejaVu as fallbacks). [first, last, em]; anything outside every range is `UNKNOWN_EM`.
+ */
+const EM_RANGES: ReadonlyArray<readonly [number, number, number]> = [
+	[0x01c4, 0x01cc, 1.5], // Latin digraphs Ǆ…ǌ (about 1.3 em)
+	[0x01f1, 0x01f3, 1.5], // Ǳ ǲ ǳ
+	[0x00a0, 0x02ff, 1], // Latin-1, Latin Extended-A/B, IPA, spacing modifiers (Æ and Œ are the widest, 1 em)
+	[0x0300, 0x036f, 1], // combining marks (they do not advance; counted anyway)
+	[0x0370, 0x03ff, 1], // Greek
+	[0x0400, 0x052f, 1.25], // Cyrillic (Ж Щ Ю about 1 em)
+	[0x0530, 0x05ff, 1.25], // Armenian, Hebrew
+	[0x0600, 0x06ff, 1.5], // Arabic letters (the wide ligatures of U+FDxx are not here)
+	[0x0900, 0x0dff, 2], // Devanagari to Sinhala (Tamil ஔ and Malayalam ൌ about 1.6 em)
+	[0x0e00, 0x0e7f, 1.25], // Thai
+	[0x1100, 0x11ff, 1.5], // Hangul Jamo
+	[0x1e00, 0x1fff, 1], // Latin Extended Additional, Greek Extended
+	[0x2000, 0x206f, 1.5], // general punctuation (the em dash is 1 em; ‱ about 1.3)
+	[0x20a0, 0x20cf, 1.5], // currency signs
+	[0x2190, 0x21ff, 1.5], // arrows
+	[0x2200, 0x22ff, 1.5], // mathematical operators
+	[0x2460, 0x24ff, 1.5], // enclosed alphanumerics
+	[0x2500, 0x27bf, 1.5], // box drawing, blocks, shapes, dingbats
+	[0x2e3a, 0x2e3a, 2], // ⸺ two-em dash
+	[0x2e3b, 0x2e3b, 3], // ⸻ three-em dash
+	[0x2e80, 0x9fff, 1.5], // CJK radicals, kana, CJK ideographs (1 em)
+	[0xac00, 0xd7af, 1.5], // Hangul syllables
+	[0xf900, 0xfaff, 1.5], // CJK compatibility ideographs
+	[0xfe00, 0xfe0f, 1], // variation selectors (do not advance)
+	[0xff00, 0xffef, 1.5], // full-width and half-width forms
+	[0x1f000, 0x1faff, 1.5], // emoji and pictographs (about 1.25 em)
+];
+
+/**
+ * A width (em) no glyph of the fonts the writers use is wider than, by character: the widest Latin capitals and `m`, `w`, `@`, `%`, `&`
+ * are under 1 em, other ASCII under 0.8 em, the checked ranges their own bound (`EM_RANGES`), anything else the widest bound of all.
+ */
+export function charEm(ch: string): number {
 	const c = ch.codePointAt(0) ?? 0;
 	if (c < 0x80) return /[A-Z@%&mw]/.test(ch) ? 1 : 0.8;
-	if (c < 0x1100) return 1;
-	return WIDEST_EM;
+	for (const [first, last, em] of EM_RANGES) if (c >= first && c <= last) return em;
+	return UNKNOWN_EM;
 }
 
 /** A width for wrapping that is never smaller than the canvas, SVG or PDF one (so the lines are never fewer than on the page). */
@@ -104,7 +143,9 @@ export function redactBounds(el: PageElement): BBox {
 		const a = layoutText(text, el.fontSize, el.width, (s) => estimateMeasure(s, el.fontSize)).height;
 		const c = layoutText(text, el.fontSize, el.width, (s) => wideMeasure(s, el.fontSize)).height;
 		const p = layoutText(text, el.fontSize, el.width, (s) => pessimisticMeasure(s, el.fontSize)).height;
-		b = { minX: el.x, minY: el.y, maxX: el.x + Math.max(el.width, WIDEST_EM * el.fontSize), maxY: el.y + Math.max(a, c, p, LINE_HEIGHT * el.fontSize) };
+		let widest = WIDEST_EM;
+		for (const ch of text) widest = Math.max(widest, charEm(ch));
+		b = { minX: el.x, minY: el.y, maxX: el.x + Math.max(el.width, widest * el.fontSize), maxY: el.y + Math.max(a, c, p, LINE_HEIGHT * el.fontSize) };
 	} else if (el.type === "equation") {
 		const base = elementBounds(el);
 		b = el.numbered === true ? { ...base, maxX: base.maxX + el.fontSize * (EQUATION_NUMBER_GAP + 6) } : base;
@@ -390,23 +431,70 @@ export function redactPage(page: Page, boxes: readonly RedactBox[], notebook?: R
  * needs nothing is the same object).
  */
 export function redactPages(pages: readonly Page[], redactions: Redactions | undefined): Page[] {
-	return pages.map((p) => redactPage(p, boxesOf(redactions, p.id), redactions));
+	const set = withExcerptChains(pages, redactions);
+	return pages.map((p) => redactPage(p, boxesOf(set, p.id), set));
 }
 
 /** Whether any of the pages has boxes in the set, or shows an excerpt of a region a box covers. */
 export function hasRedactions(pages: readonly Page[], redactions: Redactions | undefined): boolean {
-	return !!redactions && pages.some((p) => boxesOf(redactions, p.id).length > 0 || (p.elements ?? []).some((el) => coveredExcerpt(el, redactions)));
+	if (!redactions) return false;
+	const set = withExcerptChains(pages, redactions);
+	return pages.some((p) => boxesOf(set, p.id).length > 0 || (p.elements ?? []).some((el) => coveredExcerpt(el, set)));
+}
+
+/** The rectangles of the excerpts that show covered pixels, by the id of the page that shows them (see `withExcerptChains`). */
+const CHAIN = Symbol("notebook.excerptChain");
+type Chained = Redactions & { [CHAIN]?: Readonly<Record<string, readonly RedactBox[]>> };
+
+/**
+ * Review fix (R5): the set, with the rectangles of every excerpt that shows covered pixels, at any depth. An excerpt of a region that holds
+ * a covered excerpt carries those pixels in its own snapshot, so it is covered too (and an excerpt of that one, and so on). Found by
+ * repeating over the excerpts of `pages` until nothing new is covered (each excerpt is added once, so a cycle ends). The rectangles ride
+ * on the set in a symbol-keyed field: they decide only `coveredExcerpt`, never cut ink or draw a box, and never reach storage (a symbol is
+ * not serialised; `Object.keys` and `boxesOf` do not see it). Chains already found on `redactions` (for a wider set of pages) are kept.
+ */
+export function withExcerptChains(pages: readonly Page[], redactions: Redactions | undefined): Redactions | undefined {
+	if (!redactions) return redactions;
+	const chain: Record<string, RedactBox[]> = {};
+	const prior = (redactions as Chained)[CHAIN];
+	if (prior) for (const id of Object.keys(prior)) chain[id] = [...prior[id]!];
+	const out: Chained = { ...redactions };
+	out[CHAIN] = chain;
+	const excerpts: Array<{ page: string; el: ExcerptElement; done: boolean }> = [];
+	for (const p of pages) for (const el of p.elements ?? []) if (el.type === "excerpt") excerpts.push({ page: p.id, el, done: false });
+	let grew = true;
+	while (grew) {
+		grew = false;
+		for (const x of excerpts) {
+			if (x.done || !coveredExcerpt(x.el, out)) continue;
+			x.done = true;
+			grew = true;
+			(chain[x.page] ??= []).push({ x: x.el.x, y: x.el.y, width: x.el.width, height: x.el.height });
+		}
+	}
+	return out;
 }
 
 /**
  * Review fix (P2): whether `el` is an excerpt whose source region a box of the set touches. Its snapshot is the pixels of that region, so
  * an export leaves the whole excerpt out (the page it shows it on may have no box at all). Matched by the source page id, which is unique.
+ * Review fix (R5): a source region that holds an excerpt which is itself covered counts too (`withExcerptChains`).
  */
 export function coveredExcerpt(el: PageElement, redactions: Redactions | undefined): boolean {
 	if (el.type !== "excerpt" || !redactions) return false;
 	const s: ExcerptElement["source"] = el.source;
 	const area: BBox = { minX: s.x, minY: s.y, maxX: s.x + s.width, maxY: s.y + s.height };
-	return overlaps(area, boxesOf(redactions, s.page), ELEMENT_PAD);
+	return overlaps(area, boxesOf(redactions, s.page), ELEMENT_PAD) || overlaps(area, (redactions as Chained)[CHAIN]?.[s.page] ?? [], ELEMENT_PAD);
+}
+
+/**
+ * Review fix (R1): whether the element `elementId` of `page` is still there once the page is redacted with the set (false when it is
+ * dropped, or when its source region is covered). A copy of one element (the figures' *Copy*) is refused when it is not.
+ */
+export function elementKept(page: Page, elementId: string, redactions: Redactions | undefined): boolean {
+	if (!(page.elements ?? []).some((el) => el.id === elementId)) return false;
+	const drawn = redactPages([page], redactions)[0]!;
+	return (drawn.elements ?? []).some((el) => el.id === elementId);
 }
 
 /** The header or footer of a page, or null when a box covers it (its text could be what the reader wants out). */
@@ -414,7 +502,9 @@ export function headerAfterRedaction(header: HeaderLayout | null, page: Page): H
 	if (!header) return null;
 	const boxes = redactionOf(page);
 	if (boxes.length === 0) return header;
-	const width = Math.min(header.maxWidth, Math.max(8, estimateMeasure(header.text, header.size) + 2));
+	// Review fix (R2): measured like a text box (`pessimisticMeasure`), so capitals, CJK or a wide symbol never run past the area. Not
+	// capped at `maxWidth`: the canvas and the PDF squeeze a long header into it, the SVG text does not.
+	const width = Math.max(8, pessimisticMeasure(header.text, header.size) + 2);
 	const left = header.align === "left" ? header.x : header.align === "right" ? header.x - width : header.x - width / 2;
 	const area: BBox = { minX: left - 2, minY: header.y - header.size, maxX: left + width + 2, maxY: header.y + header.size };
 	return overlaps(area, boxes) ? null : header;
