@@ -10,7 +10,11 @@
 //   (`REDACT_QUARANTINE_KEY`), and while that copy exists EVERY notebook reads as `unreadable` (its exports are refused) until the reader,
 //   in the Redact dialog, saves that notebook's boxes again (an explicit save may then start a fresh store; a notebook saved with no boxes
 //   is kept as an explicit "none") or resets the redaction storage (`resetRedactStorage`, after a confirmation).
-// - One entry that cannot be read makes that notebook unreadable and is kept as it is by later saves of other notebooks.
+// - One entry that cannot be read (also one whose set loses a page or a box when it is read: this store writes its sets already
+//   normalised) makes that notebook unreadable, is kept as it is by later saves of other notebooks, and is copied aside before a save of
+//   its own notebook replaces it (T5). Each distinct unreadable value gets its own bounded copy (at most `QUARANTINE_MAX_COPIES`); when
+//   no copy can be made nothing is overwritten (T6).
+// - A very first save whose value cannot be written (a full quota) takes back the sentinel, so other notebooks are not refused (T9).
 // - A notebook whose switch is on is never forgotten to make room: only switched-off notebooks are, oldest first, and the caller is told
 //   how many. When every remembered notebook is switched on, a new one is held in memory only (and the caller is told).
 // - An id the store cannot use as a key (unusual characters, too long) is stored under a hash of it instead of not at all.
@@ -28,7 +32,7 @@ export const REDACT_MAX_NOTEBOOKS = 20;
 /** Most entries read back from storage (bounds a corrupt or foreign value; the store never writes more than the limit plus one). */
 const READ_CAP = 200;
 /** Most characters of an unreadable value kept in the quarantine copy. */
-export const QUARANTINE_MAX_CHARS = 256_000;
+export const QUARANTINE_MAX_CHARS = 128_000;
 
 const NOTEBOOK_PATTERN = /^[A-Za-z0-9_.-]{1,80}$/;
 /** A notebook id the store can use as a key as it is (the same rule as a page id, which also refuses the names an object treats specially). */
@@ -86,15 +90,36 @@ function parse(data: unknown, present = false): Parsed {
 		const boxes = normaliseRedactions(o.boxes);
 		const at = typeof o.at === "number" && Number.isFinite(o.at) ? o.at : 0;
 		if (Object.keys(boxes).length === 0) {
-			if (o.cleared === true) rows.push([id, { on: false, at, boxes: {}, cleared: true }]);
+			if (o.cleared === true && isEmptyBoxes(o.boxes)) rows.push([id, { on: false, at, boxes: {}, cleared: true }]);
 			else out.bad.set(id, v);
+			continue;
+		}
+		// Review fix (T5): this store writes its sets already normalised, so a set that loses a page or a box when it is read again was
+		// written by something else (a newer version, another tool): that notebook is unreadable, never read with fewer boxes.
+		if (!sameShape(o.boxes, boxes)) {
+			out.bad.set(id, v);
 			continue;
 		}
 		rows.push([id, { on: o.on === true, at, boxes }]);
 	}
+	// Review fix (T5): more notebooks than this store ever writes: another format, not a list to cut.
+	if (rows.length + out.bad.size > READ_CAP) return { store: {}, bad: new Map(), corrupt: true };
 	rows.sort((a, b) => b[1].at - a[1].at);
-	out.store = Object.fromEntries(rows.slice(0, READ_CAP));
+	out.store = Object.fromEntries(rows);
 	return out;
+}
+
+const isEmptyBoxes = (raw: unknown): boolean => raw === undefined || (typeof raw === "object" && raw !== null && !Array.isArray(raw) && Object.keys(raw).length === 0);
+
+/** Whether the raw set has exactly the pages and the number of boxes of its normalised form. */
+function sameShape(raw: unknown, boxes: ReturnType<typeof normaliseRedactions>): boolean {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return false;
+	const pages = Object.keys(raw);
+	if (pages.length !== Object.keys(boxes).length) return false;
+	return pages.every((p) => {
+		const list = (raw as Record<string, unknown>)[p];
+		return Array.isArray(list) && list.length === (boxes[p]?.length ?? -1);
+	});
 }
 
 /** Whatever was stored, as a valid store (entries that cannot be read are left out; nothing that is switched on is dropped). */
@@ -104,10 +129,17 @@ export function normaliseRedactStore(data: unknown): RedactStore {
 
 /** What this session set, per app and notebook: it wins over storage (see the file comment). */
 const sessions = new WeakMap<object, Map<string, RedactState>>();
-/** Apps where an unreadable value was found in this session (one notice is due). */
-const found = new WeakSet<object>();
+/** What notice is due per app: an unreadable value was found and copied aside ("damaged"), or there was nothing left to copy ("lost"). */
+const found = new WeakMap<object, RedactStoreProblem>();
 /** Apps whose reader has been told that the stored boxes could not be read (once per session). */
 const told = new WeakSet<object>();
+
+/** Review fix (T6): what the one notice of a session says. */
+export type RedactStoreProblem = "damaged" | "lost";
+
+function note(app: object, problem: RedactStoreProblem): void {
+	if (found.get(app) !== "lost") found.set(app, problem);
+}
 
 function remembered(app: object): Map<string, RedactState> {
 	let m = sessions.get(app);
@@ -121,29 +153,60 @@ function remembered(app: object): Map<string, RedactState> {
 const copyState = (s: RedactState): RedactState => ({ on: s.on, boxes: s.boxes });
 const UNREADABLE: RedactState = { ...EMPTY_REDACT_STATE, unreadable: true };
 
-/** The raw value as it was read, bounded, for the quarantine copy. */
-function quarantineCopy(raw: unknown, now: number): { at: number; raw: string; truncated?: true } {
-	let text: string;
+/**
+ * Review fix (T6): one copy kept aside. `store`: the whole value could not be read (every notebook without a fresh entry is then
+ * unreadable); `entry`: the entry of one notebook (`id`), before it is replaced. `raw` is null when nothing was left to copy (a value the
+ * platform dropped).
+ */
+interface QuarantineCopy {
+	at: number;
+	scope: "store" | "entry";
+	id?: string;
+	raw: string | null;
+	truncated?: true;
+}
+
+/** Most copies kept aside: one per distinct unreadable value; past it a value that would need its own copy is never overwritten. */
+export const QUARANTINE_MAX_COPIES = 6;
+
+function textOf(raw: unknown): string | null {
+	if (raw === null || raw === undefined) return null;
+	if (typeof raw === "string") return raw;
 	try {
-		text = typeof raw === "string" ? raw : (JSON.stringify(raw) ?? String(raw));
+		const text = JSON.stringify(raw);
+		if (typeof text === "string") return text;
 	} catch {
-		text = String(raw);
+		// A cycle or a value JSON cannot write: kept as a marker of its kind (nothing more can be read from it).
 	}
-	return text.length > QUARANTINE_MAX_CHARS ? { at: now, raw: text.slice(0, QUARANTINE_MAX_CHARS), truncated: true } : { at: now, raw: text };
+	return `[unserialisable ${typeof raw}]`;
 }
 
-/** Whether a quarantine copy exists (every notebook without a fresh entry is then unreadable). Throws when storage throws. */
-function quarantined(app: Pick<LocalStore, "loadLocalStorage">): boolean {
+/** The copies kept aside (a copy written by the first version of this fix, a single object, reads as one `store` copy). Throws when storage throws. */
+function copiesOf(app: Pick<LocalStore, "loadLocalStorage">): QuarantineCopy[] {
 	const q = app.loadLocalStorage(REDACT_QUARANTINE_KEY);
-	return q !== null && q !== undefined;
+	if (q === null || q === undefined) return [];
+	if (typeof q === "object" && !Array.isArray(q) && Array.isArray((q as { copies?: unknown }).copies)) {
+		return ((q as { copies: unknown[] }).copies).filter((c): c is QuarantineCopy => typeof c === "object" && c !== null);
+	}
+	// Anything else under the key still means "something could not be read": every notebook stays refused.
+	return [{ at: 0, scope: "store", raw: textOf(q) }];
 }
 
-/** Keeps the unreadable value under the quarantine key (once: an existing copy is never replaced). True when the copy is there. */
-function quarantine(app: LocalStore, raw: unknown, now: number): boolean {
+/**
+ * Keeps one unreadable value aside, bounded, unless the same value (same scope, notebook and text) is already kept. True when its copy is
+ * there afterwards; false when it could not be written or the list is full (the caller then overwrites nothing).
+ */
+function quarantine(app: LocalStore, scope: "store" | "entry", raw: unknown, now: number, id?: string): boolean {
 	try {
-		if (quarantined(app)) return true;
-		app.saveLocalStorage(REDACT_QUARANTINE_KEY, quarantineCopy(raw, now));
-		return quarantined(app);
+		const text = textOf(raw);
+		const kept = text !== null && text.length > QUARANTINE_MAX_CHARS ? text.slice(0, QUARANTINE_MAX_CHARS) : text;
+		const copies = copiesOf(app);
+		const same = (c: QuarantineCopy): boolean => c.scope === scope && (c.id ?? null) === (id ?? null) && c.raw === kept;
+		if (copies.some(same)) return true;
+		if (copies.length >= QUARANTINE_MAX_COPIES) return false;
+		const copy: QuarantineCopy = { at: now, scope, raw: kept, ...(id !== undefined ? { id } : {}), ...(kept !== text ? { truncated: true as const } : {}) };
+		app.saveLocalStorage(REDACT_QUARANTINE_KEY, { copies: [...copies, copy] });
+		return copiesOf(app).some(same);
 	} catch (e) {
 		console.error("[notebook] could not keep the unreadable redaction boxes", e);
 		return false;
@@ -153,13 +216,14 @@ function quarantine(app: LocalStore, raw: unknown, now: number): boolean {
 interface Read {
 	parsed: Parsed;
 	raw: unknown;
+	/** A `store` copy exists: every notebook without a fresh entry is unreadable. */
 	quarantined: boolean;
 }
 
 function readStore(app: Pick<LocalStore, "loadLocalStorage">): Read {
 	const raw = app.loadLocalStorage(REDACT_KEY);
 	const present = app.loadLocalStorage(REDACT_PRESENT_KEY);
-	return { parsed: parse(raw, present !== null && present !== undefined), raw, quarantined: quarantined(app) };
+	return { parsed: parse(raw, present !== null && present !== undefined), raw, quarantined: copiesOf(app).some((c) => c.scope === "store") };
 }
 
 /**
@@ -176,29 +240,39 @@ export function loadRedactState(app: Pick<LocalStore, "loadLocalStorage"> & Part
 	try {
 		read = readStore(app);
 	} catch {
-		found.add(app);
+		note(app, "damaged");
 		return UNREADABLE;
 	}
+	const canWrite = typeof app.saveLocalStorage === "function";
 	if (read.parsed.corrupt) {
-		found.add(app);
-		if (typeof app.saveLocalStorage === "function") quarantine(app as LocalStore, read.raw, Date.now());
+		note(app, read.raw === null || read.raw === undefined ? "lost" : "damaged");
+		if (canWrite) quarantine(app as LocalStore, "store", read.raw, Date.now());
 		return UNREADABLE;
 	}
-	if (read.parsed.bad.has(key)) return UNREADABLE;
+	if (read.parsed.bad.has(key)) {
+		// Review fix (T5): an entry this version cannot read whole is kept aside and told, like a value that cannot be read at all.
+		note(app, "damaged");
+		if (canWrite) quarantine(app as LocalStore, "entry", read.parsed.bad.get(key), Date.now(), key);
+		return UNREADABLE;
+	}
 	const e = read.parsed.store[key];
 	if (e) return e.cleared ? EMPTY_REDACT_STATE : { on: e.on, boxes: e.boxes };
 	if (read.quarantined) {
-		found.add(app);
+		note(app, "damaged");
 		return UNREADABLE;
 	}
 	return EMPTY_REDACT_STATE;
 }
 
-/** Review fix (R3): true once per session after the stored boxes were found unreadable (the caller shows one notice that says what to do). */
-export function takeRedactStoreNotice(app: object): boolean {
-	if (!found.has(app) || told.has(app)) return false;
+/**
+ * Review fixes (R3, T6): once per session after the stored boxes were found unreadable, what the one notice says: `damaged` (what could be
+ * read was copied aside) or `lost` (nothing was left to copy). Null otherwise.
+ */
+export function takeRedactStoreNotice(app: object): RedactStoreProblem | null {
+	const problem = found.get(app);
+	if (!problem || told.has(app)) return null;
 	told.add(app);
-	return true;
+	return problem;
 }
 
 /** What a save did. `stored`: it is on this device and was read back the same (otherwise it is held for this session only). */
@@ -225,15 +299,19 @@ export function saveRedactState(app: LocalStore, notebookId: string | null | und
 	const boxes = normaliseRedactions(state.boxes);
 	remembered(app).set(notebookId, { on: state.on && Object.keys(boxes).length > 0, boxes });
 	const key = redactKey(notebookId);
+	// Review fix (T9): whether this save wrote the sentinel for a store that had no value yet (undone when the value itself cannot be written).
+	let sentinelOnly = false;
 	try {
 		const read = readStore(app);
 		const parsed = read.parsed;
 		let isQuarantined = read.quarantined;
 		if (parsed.corrupt) {
-			found.add(app);
-			if (!quarantine(app, read.raw, now)) return failed;
+			note(app, read.raw === null || read.raw === undefined ? "lost" : "damaged");
+			if (!quarantine(app, "store", read.raw, now)) return failed;
 			isQuarantined = true;
 		}
+		// Review fixes (T5, T6): the entry of this notebook that could not be read is kept aside before it is replaced.
+		if (parsed.bad.has(key) && !quarantine(app, "entry", parsed.bad.get(key), now, key)) return failed;
 		const store: Record<string, Entry> = { ...parsed.store };
 		const had = Object.prototype.hasOwnProperty.call(store, key);
 		let mine: Entry | undefined;
@@ -263,14 +341,27 @@ export function saveRedactState(app: LocalStore, notebookId: string | null | und
 		const holds = Object.keys(out).length > 0;
 		// The sentinel is set before a value that holds notebooks is written and cleared only after an empty one is, so a torn write never
 		// leaves a missing value that reads as "no boxes".
-		if (holds) app.saveLocalStorage(REDACT_PRESENT_KEY, 1);
+		if (holds) {
+			sentinelOnly = (read.raw === null || read.raw === undefined) && !parsed.corrupt;
+			app.saveLocalStorage(REDACT_PRESENT_KEY, 1);
+		}
 		app.saveLocalStorage(REDACT_KEY, out);
+		sentinelOnly = false;
 		if (!holds) app.saveLocalStorage(REDACT_PRESENT_KEY, null);
 		if (full) return { stored: false, full: true, evicted };
 		const back = parse(app.loadLocalStorage(REDACT_KEY));
 		return { stored: !back.corrupt && sameEntry(back.store[key], mine), full: false, evicted };
 	} catch (e) {
 		console.error("[notebook] could not remember the redaction boxes", e);
+		// Review fix (T9): the very first value could not be written (a full quota): the sentinel would make every notebook read as a
+		// damaged store. It goes again; this notebook's boxes are held for the session, and the caller says once that they were not saved.
+		if (sentinelOnly) {
+			try {
+				app.saveLocalStorage(REDACT_PRESENT_KEY, null);
+			} catch {
+				// Then every notebook is refused (fail closed).
+			}
+		}
 		return failed;
 	}
 }

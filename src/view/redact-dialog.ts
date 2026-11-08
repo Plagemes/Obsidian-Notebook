@@ -2,7 +2,8 @@
 // picture; a drag (pen or mouse, and a finger when the switch is on) draws a box. The picture is what the export will contain: it is
 // drawn from the REDACTED copy of the page (ink/redact.ts) by the same renderer as the PNG export, so anything a box removes disappears
 // from it, and a PDF or picture behind the page shows the box burned in. Nothing here touches the notebook: the boxes are handed to
-// `host.commit` after every change, and the caller keeps them on this device.
+// `host.commit` after every change (only on Done while the kept boxes could not be read, see redact-commits.ts), and the caller keeps
+// them on this device.
 import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
 import { headerAfterRedaction, redactPage, withExcerptChains } from "../ink/redact";
@@ -17,6 +18,7 @@ import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { confirmDestructive } from "../ui/destructive";
 import { PageImageRenderer } from "./page-images";
+import { RedactCommits } from "./redact-commits";
 
 export interface RedactHost {
 	app: App;
@@ -29,7 +31,7 @@ export interface RedactHost {
 	initial: Redactions;
 	/** 0-based page to open on. */
 	pageIndex: number;
-	/** Called after every change with the whole set (the caller keeps it on this device). */
+	/** Called after every change with the whole set (the caller keeps it on this device); with `unreadable`, only on Done or after a reset. */
 	commit(boxes: Redactions): void;
 	/** Called when the dialog has closed. */
 	closed?(): void;
@@ -67,11 +69,14 @@ export class RedactModal extends Modal {
 	private dirty = false;
 	private done = false;
 	private stopHelp: (() => void) | null = null;
+	/** Review fix (T7): when the changes reach the device. */
+	private readonly commits: RedactCommits;
 
 	constructor(private readonly host: RedactHost) {
 		super(host.app);
 		this.all = host.pages();
 		this.boxes = host.initial;
+		this.commits = new RedactCommits((boxes) => host.commit(boxes), host.initial, host.unreadable === true);
 		this.index = Math.min(Math.max(0, host.pageIndex), Math.max(0, this.all.length - 1));
 		this.fingerDraws = this.all[this.index]?.infinite !== true;
 	}
@@ -131,10 +136,10 @@ export class RedactModal extends Modal {
 		if (this.url) URL.revokeObjectURL(this.url);
 		this.url = "";
 		this.contentEl.empty();
-		// Review fixes (P4, R3, R4): Done hands over the set as it is, even unchanged: boxes that could not be read are then set to exactly
-		// what is shown here (possibly none), and exports can go on. Closing any other way (Escape, ×) saves only what was changed (every
-		// change is handed over at once), so an unreadable state stays refused until the reader chooses.
-		if (this.confirmed) this.host.commit(this.boxes);
+		// Review fixes (P4, R3, R4, T7): Done hands over the set as it is, even unchanged: boxes that could not be read are then set to exactly
+		// what is shown here (possibly none), and exports can go on. Closing any other way (Escape, ×) saves only a net change of readable
+		// boxes, and nothing while they could not be read, so an unreadable state stays refused until the reader chooses (redact-commits.ts).
+		this.commits.close(this.boxes, this.confirmed);
 		this.host.closed?.();
 	}
 
@@ -150,6 +155,7 @@ export class RedactModal extends Modal {
 		const button = shellButton(row, "danger", t("redact.reset"), () => {
 			confirmDestructive(this.app, { title: t("redact.reset.title"), body: t("redact.reset.body"), confirm: t("redact.reset.confirm") }, () => {
 				reset();
+				this.commits.reset(this.boxes);
 				note.remove();
 				row.remove();
 			});
@@ -170,7 +176,7 @@ export class RedactModal extends Modal {
 	private change(next: Redactions): void {
 		if (next === this.boxes) return;
 		this.boxes = next;
-		this.host.commit(next);
+		this.commits.change(next);
 		this.sync();
 		this.schedule();
 	}

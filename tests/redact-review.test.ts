@@ -144,7 +144,7 @@ describe("P2: an excerpt of a covered region, on a page with no box", () => {
 
 	it("is not in the PDF (its snapshot is the covered pixels); the control has it", async () => {
 		const control = fakeApp();
-		await exportPdf(control.app, notebookFile(), [source, shows], "", fakeMedia(), { redact: { src: [far] } });
+		await exportPdf(control.app, notebookFile(), [source, shows], "", fakeMedia(), {});
 		expect(readable([...control.files.values()][0]!)).toContain("PIXELS of snapSECRET");
 		const { app, files } = fakeApp();
 		await exportPdf(app, notebookFile(), [source, shows], "", fakeMedia(), { redact: { src: [box] } });
@@ -154,7 +154,7 @@ describe("P2: an excerpt of a covered region, on a page with no box", () => {
 
 	it("is not in the SVG of that page alone, nor in the HTML (base64 decoded); the controls have it", async () => {
 		const c1 = fakeApp();
-		await exportSvg(c1.app, notebookFile(), shows, " p2", fakeMedia(), { redact: { src: [far] } });
+		await exportSvg(c1.app, notebookFile(), shows, " p2", fakeMedia(), {});
 		expect(readable([...c1.files.values()][0]!)).toContain("PIXELS of snapSECRET");
 		const s = fakeApp();
 		await exportSvg(s.app, notebookFile(), shows, " p2", fakeMedia(), { redact: { src: [box] } });
@@ -171,7 +171,7 @@ describe("P2: an excerpt of a covered region, on a page with no box", () => {
 		// Some ink beside the excerpt: the picture has something written to measure.
 		const inked = { ...shows, strokes: [line("s", [[60, 450], [240, 460]])] };
 		const host = (redact?: ExportOptions["redact"]): AreaHost => ({ app: {} as App, file: notebookFile(), page: inked, pageNumber: 2, selection: null, media: null, exportOptions: redact ? { redact } : {}, render: {} });
-		expect(JSON.stringify(planWithRedaction(host({ src: [far] }), "page")!.page)).toContain("snapSECRET");
+		expect(JSON.stringify(planWithRedaction(host(), "page")!.page)).toContain("snapSECRET");
 		expect(JSON.stringify(planWithRedaction(host({ src: [box] }), "page")!.page)).not.toContain("snapSECRET");
 	});
 });
@@ -336,7 +336,7 @@ describe("R5: a one-page export from the dialog knows the excerpt chain of the w
 	it("the SVG of the last page alone has no picture of the covered region; the control has it", async () => {
 		const request = (redact: ExportOptions["redact"]) => ({ format: "svg" as const, scope: "page" as const, pageIndex: 2, layers: "both" as const, redact });
 		const c = fakeApp();
-		await runExport(c.app, notebookFile(), [p2, p3, p5], request({ p2: [far] }), fakeMedia(), {});
+		await runExport(c.app, notebookFile(), [p2, p3, p5], request(undefined), fakeMedia(), {});
 		expect(readable([...c.files.values()][0]!)).toContain("PIXELS of snapSECRET-A");
 		const r = fakeApp();
 		await runExport(r.app, notebookFile(), [p2, p3, p5], request({ p2: [box] }), fakeMedia(), {});

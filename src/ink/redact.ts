@@ -13,7 +13,8 @@
  * - elements (text, pictures, equations, graphs, boxes, sticky notes, markers, checkboxes, excerpts) whose area touches a box are dropped
  *   WHOLE, including their text, source and picture: a text box that is half under a box does not leave its other half behind. The area of
  *   a text box is measured pessimistically (`redactBounds`). The area highlighter holds no content, so it is cut like a rectangle minus the box.
- * - an excerpt whose SOURCE region a box touches is dropped on whatever page shows it (its snapshot is the covered pixels); a checkbox whose
+ * - an excerpt of a page of this notebook is dropped on whatever page shows it while the notebook has any box (its snapshot is never
+ *   refreshed, so it may hold content that has since been boxed anywhere); a checkbox whose
  *   handwritten label a box touches loses its typed label.
  * - ink that the dropped graph clipped to its frame goes with it; ink a collapsed sticky note hides is never drawn by an export and is left out.
  * - margin comments anchored on a box are dropped with their replies; the automatic header or footer is dropped on a page whose box covers it.
@@ -24,7 +25,7 @@ import { EQUATION_NUMBER_GAP } from "../model/math-elements";
 import { backgroundRect } from "../model/margins";
 import { isCheckbox } from "../model/checklist";
 import { pageCopy } from "../model/states";
-import { rectsOverlap, type RedactBox, type Redactions, boxesOf } from "../model/redact";
+import { countBoxes, rectsOverlap, type RedactBox, type Redactions, boxesOf } from "../model/redact";
 import { RENDER_INK, type AreaElement, type ExcerptElement, type NotebookMeta, type Page, type PageComment, type PageElement, type Point, type Stroke } from "../model/types";
 import { boundGraphId } from "./attach";
 import { checkboxLabelBounds } from "./checklist";
@@ -84,9 +85,10 @@ const UNKNOWN_EM = 6;
  * sans-serif on the canvas, with Noto and DejaVu as fallbacks). [first, last, em]; anything outside every range is `UNKNOWN_EM`.
  */
 const EM_RANGES: ReadonlyArray<readonly [number, number, number]> = [
+	[0x00bc, 0x00be, 1.5], // ¼ ½ ¾ (about 1.3 em in DejaVu Sans)
 	[0x01c4, 0x01cc, 1.5], // Latin digraphs Ǆ…ǌ (about 1.3 em)
 	[0x01f1, 0x01f3, 1.5], // Ǳ ǲ ǳ
-	[0x00a0, 0x02ff, 1], // Latin-1, Latin Extended-A/B, IPA, spacing modifiers (Æ and Œ are the widest, 1 em)
+	[0x00a0, 0x02ff, 1.25], // Latin-1, Latin Extended-A/B, IPA, spacing modifiers (Æ and Œ are the widest, about 1.07 em in DejaVu Sans)
 	[0x0300, 0x036f, 1], // combining marks (they do not advance; counted anyway)
 	[0x0370, 0x03ff, 1], // Greek
 	[0x0400, 0x052f, 1.25], // Cyrillic (Ж Щ Ю about 1 em)
@@ -95,30 +97,37 @@ const EM_RANGES: ReadonlyArray<readonly [number, number, number]> = [
 	[0x0900, 0x0dff, 2], // Devanagari to Sinhala (Tamil ஔ and Malayalam ൌ about 1.6 em)
 	[0x0e00, 0x0e7f, 1.25], // Thai
 	[0x1100, 0x11ff, 1.5], // Hangul Jamo
-	[0x1e00, 0x1fff, 1], // Latin Extended Additional, Greek Extended
+	[0x1e00, 0x1fff, 1.25], // Latin Extended Additional, Greek Extended
 	[0x2000, 0x206f, 1.5], // general punctuation (the em dash is 1 em; ‱ about 1.3)
+	[0x2070, 0x209f, 1.5], // superscripts and subscripts (H₂O)
 	[0x20a0, 0x20cf, 1.5], // currency signs
+	[0x2100, 0x218f, 2], // letterlike symbols and number forms (™ № ℃; ℡ and ℻ about 1.6 em; Roman numerals)
 	[0x2190, 0x21ff, 1.5], // arrows
 	[0x2200, 0x22ff, 1.5], // mathematical operators
+	[0x2300, 0x23ff, 1.5], // miscellaneous technical (⌘ ⏰)
 	[0x2460, 0x24ff, 1.5], // enclosed alphanumerics
 	[0x2500, 0x27bf, 1.5], // box drawing, blocks, shapes, dingbats
+	[0x2b00, 0x2bff, 1.5], // miscellaneous symbols and arrows (⭐)
 	[0x2e3a, 0x2e3a, 2], // ⸺ two-em dash
 	[0x2e3b, 0x2e3b, 3], // ⸻ three-em dash
 	[0x2e80, 0x9fff, 1.5], // CJK radicals, kana, CJK ideographs (1 em)
 	[0xac00, 0xd7af, 1.5], // Hangul syllables
 	[0xf900, 0xfaff, 1.5], // CJK compatibility ideographs
+	[0xfb00, 0xfb4f, 1.5], // ligatures ﬁ ﬂ ﬃ, Hebrew presentation forms
 	[0xfe00, 0xfe0f, 1], // variation selectors (do not advance)
 	[0xff00, 0xffef, 1.5], // full-width and half-width forms
 	[0x1f000, 0x1faff, 1.5], // emoji and pictographs (about 1.25 em)
 ];
 
 /**
- * A width (em) no glyph of the fonts the writers use is wider than, by character: the widest Latin capitals and `m`, `w`, `@`, `%`, `&`
- * are under 1 em, other ASCII under 0.8 em, the checked ranges their own bound (`EM_RANGES`), anything else the widest bound of all.
+ * A width (em) no glyph of the fonts the writers and the UI use is wider than, by character. Review fix (T8): with a margin over DejaVu
+ * Sans (the usual sans-serif on Linux, and a fallback elsewhere), whose `@` is 1 em and whose `# + < = > ^ ~` are 0.838 em: the Latin
+ * capitals and `m`, `w`, `@`, `%`, `&` count 1.1 em, other ASCII 0.9 em; the checked ranges their own bound (`EM_RANGES`); anything else
+ * the widest bound of all.
  */
 export function charEm(ch: string): number {
 	const c = ch.codePointAt(0) ?? 0;
-	if (c < 0x80) return /[A-Z@%&mw]/.test(ch) ? 1 : 0.8;
+	if (c < 0x80) return /[A-Z@%&mw]/.test(ch) ? 1.1 : 0.9;
 	for (const [first, last, em] of EM_RANGES) if (c >= first && c <= last) return em;
 	return UNKNOWN_EM;
 }
@@ -444,7 +453,9 @@ export function hasRedactions(pages: readonly Page[], redactions: Redactions | u
 
 /** The rectangles of the excerpts that show covered pixels, by the id of the page that shows them (see `withExcerptChains`). */
 const CHAIN = Symbol("notebook.excerptChain");
-type Chained = Redactions & { [CHAIN]?: Readonly<Record<string, readonly RedactBox[]>> };
+/** Review fix (T1): the ids of the pages of the notebook the set belongs to (see `withExcerptChains`). */
+const PAGES = Symbol("notebook.pages");
+type Chained = Redactions & { [CHAIN]?: Readonly<Record<string, readonly RedactBox[]>>; [PAGES]?: ReadonlySet<string> };
 
 /**
  * Review fix (R5): the set, with the rectangles of every excerpt that shows covered pixels, at any depth. An excerpt of a region that holds
@@ -460,6 +471,7 @@ export function withExcerptChains(pages: readonly Page[], redactions: Redactions
 	if (prior) for (const id of Object.keys(prior)) chain[id] = [...prior[id]!];
 	const out: Chained = { ...redactions };
 	out[CHAIN] = chain;
+	out[PAGES] = new Set([...((redactions as Chained)[PAGES] ?? []), ...pages.map((p) => p.id)]);
 	const excerpts: Array<{ page: string; el: ExcerptElement; done: boolean }> = [];
 	for (const p of pages) for (const el of p.elements ?? []) if (el.type === "excerpt") excerpts.push({ page: p.id, el, done: false });
 	let grew = true;
@@ -481,10 +493,38 @@ export function withExcerptChains(pages: readonly Page[], redactions: Redactions
  * Review fix (R5): a source region that holds an excerpt which is itself covered counts too (`withExcerptChains`).
  */
 export function coveredExcerpt(el: PageElement, redactions: Redactions | undefined): boolean {
-	if (el.type !== "excerpt" || !redactions) return false;
+	if (el.type !== "excerpt" || !redactions || countBoxes(redactions) === 0) return false;
 	const s: ExcerptElement["source"] = el.source;
+	// Review fix (T1, which also settles T4): the snapshot is never refreshed after the excerpt is made, so the content it holds may since
+	// have moved anywhere in the notebook and been boxed there; the current geometry cannot tell. While the notebook has any box, an excerpt
+	// of one of its own pages is therefore left out whole, wherever its source region is. (Its source page having a box also proves it is
+	// one of this notebook's pages when the set does not know them.)
+	if ((redactions as Chained)[PAGES]?.has(s.page) || boxesOf(redactions, s.page).length > 0) return true;
 	const area: BBox = { minX: s.x, minY: s.y, maxX: s.x + s.width, maxY: s.y + s.height };
-	return overlaps(area, boxesOf(redactions, s.page), ELEMENT_PAD) || overlaps(area, (redactions as Chained)[CHAIN]?.[s.page] ?? [], ELEMENT_PAD);
+	return overlaps(area, (redactions as Chained)[CHAIN]?.[s.page] ?? [], ELEMENT_PAD);
+}
+
+/**
+ * Review fix (T2): the boxes that touch the given items with the same conservative areas the export uses: an element's `redactBounds`
+ * (text measured at its widest), a stroke's bounds grown by its reach. A picture of a selection applies these (and not only the boxes
+ * near its estimated area), so a box over the real last line of a long text is never missed.
+ */
+export function boxesTouching(items: { strokes: readonly Stroke[]; elements: readonly PageElement[] }, boxes: readonly RedactBox[]): RedactBox[] {
+	const areas: BBox[] = items.elements.map((el) => redactBounds(el));
+	for (const s of items.strokes) {
+		if (s.points.length === 0) continue;
+		const r = redactReach(s) + INK_PAD;
+		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+		for (const [x, y] of s.points) {
+			minX = Math.min(minX, x);
+			minY = Math.min(minY, y);
+			maxX = Math.max(maxX, x);
+			maxY = Math.max(maxY, y);
+		}
+		areas.push({ minX: minX - r, minY: minY - r, maxX: maxX + r, maxY: maxY + r });
+	}
+	// A few pt more than the export's own test: a box taken that touches nothing only covers empty paper.
+	return boxes.filter((b) => areas.some((a) => overlaps(a, [b], ELEMENT_PAD)));
 }
 
 /**

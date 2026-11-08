@@ -345,18 +345,19 @@ describe("review fixes (0.26 privacy review)", () => {
 		const el: PageElement = { id: "t", type: "text", x: 100, y: 100, width: 4, text: "漢SECRET", fontSize: 20, color: "#000000" };
 		expect(redactBounds(el).maxX).toBeGreaterThanOrEqual(100 + 1.5 * 20);
 		expect(pessimisticMeasure("漢", 10)).toBe(15);
-		expect(pessimisticMeasure("ab", 10)).toBe(16);
-		expect(pessimisticMeasure("Wm", 10)).toBe(20);
+		expect(pessimisticMeasure("ab", 10)).toBe(18);
+		expect(pessimisticMeasure("Wm", 10)).toBe(22);
 	});
 
 	it("P2: an excerpt whose SOURCE region is under a box is left out of every page that shows it", () => {
 		const source = page({ id: "src" });
 		const ex: PageElement = { id: "ex", type: "excerpt", x: 50, y: 50, width: 100, height: 60, asset: "SECRETSNAP", source: { notebook: "n", doc: "d", page: "src", x: 110, y: 110, width: 40, height: 20 } };
 		const shows = page({ id: "dst", elements: [ex] });
-		// Positive control: no box over the source, or a box elsewhere: the excerpt and its snapshot stay.
+		// Positive control: no box in the notebook: the excerpt and its snapshot stay.
 		expect(JSON.stringify(redactPages([source, shows], {}))).toContain("SECRETSNAP");
+		// Review fix (T1): a box anywhere else in the notebook drops it too (the snapshot may hold content boxed since).
 		const elsewhere = redactPages([source, shows], { src: [{ x: 400, y: 400, width: 40, height: 40 }] });
-		expect(elsewhere[1]).toBe(shows);
+		expect(JSON.stringify(elsewhere[1])).not.toContain("SECRETSNAP");
 		const out = redactPages([source, shows], { src: [box] });
 		expect(out[1]).not.toBe(shows);
 		expect(out[1]!.id).toBe("dst");

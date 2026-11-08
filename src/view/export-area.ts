@@ -6,7 +6,7 @@ import { Modal, Setting, normalizePath, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
 import { AREA_SCALES, DEFAULT_AREA_SCALE, areaSuffix, areaSvg, planArea, type AreaFormat, type AreaPlan, type AreaScale, type AreaScope } from "../ink/export-area";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
-import { coveredExcerpt, redactPage, redactionOf } from "../ink/redact";
+import { boxesTouching, coveredExcerpt, redactPage, redactionOf } from "../ink/redact";
 import type { Page, PageElement, Stroke } from "../model/types";
 import { scaleDpi } from "../model/export-pages";
 import { boxesOf, rectsOverlap } from "../model/redact";
@@ -96,7 +96,12 @@ export function planWithRedaction(host: AreaHost, scope: AreaScope): AreaPlan | 
 	const excerpts = (host.page.elements ?? []).some((el) => coveredExcerpt(el, notebook));
 	if (!plain || (boxes.length === 0 && !excerpts)) return plain;
 	const r = plain.rect;
-	const near = selection ? boxes.filter((b) => rectsOverlap(b, { x: r.x - INK_REACH, y: r.y - INK_REACH, width: r.width + 2 * INK_REACH, height: r.height + 2 * INK_REACH })) : boxes;
+	// Review fix (T2): also every box that touches a selected item measured as the export measures it (text at its widest, ink with its
+	// reach): the estimated area can end lines before the real text does.
+	const touching = selection ? boxesTouching(selection, boxes) : [];
+	const near = selection
+		? boxes.filter((b) => touching.includes(b) || rectsOverlap(b, { x: r.x - INK_REACH, y: r.y - INK_REACH, width: r.width + 2 * INK_REACH, height: r.height + 2 * INK_REACH }))
+		: boxes;
 	if (near.length === 0 && !excerpts) return plain;
 	return planArea(host.page, selection, hidden, undefined, (drawn) => redactPage(drawn, near, notebook));
 }

@@ -27,8 +27,10 @@ describe("R1: a single element is copied only when the export would keep it", ()
 	const p5 = page("p5", [excerpt("A", { x: 50, y: 50 }, "snapSECRET-A", { page: "p2", x: 120, y: 120, width: 50, height: 20 })]);
 
 	it("an excerpt on a page with no box, whose source region is covered on another page, is refused; the control is copied", () => {
-		expect(elementKept(p5, "A", { p2: [far] })).toBe(true);
+		expect(elementKept(p5, "A", {})).toBe(true);
 		expect(elementKept(p5, "A", { p2: [covered] })).toBe(false);
+		// T1: a box anywhere on the source page refuses it too (the snapshot is never refreshed).
+		expect(elementKept(p5, "A", { p2: [far] })).toBe(false);
 		// What the copy guard looked at before (boxes of the figure's own page only) saw nothing.
 		expect(boxesOf({ p2: [covered] }, "p5")).toHaveLength(0);
 		void p2;
@@ -90,8 +92,8 @@ describe("R5: excerpts of excerpts of a covered region, at any depth, and cycles
 	const p6 = page("p6", [excerpt("Z", { x: 300, y: 500 }, "snapSECRET-Z", { page: "p5", x: 60, y: 60, width: 40, height: 40 })]);
 	const all = [p2, p3, p5, p6];
 
-	it("every excerpt in the chain is left out; with the box elsewhere every one is kept", () => {
-		const control = redactPages(all, { p2: [far] });
+	it("every excerpt in the chain is left out; with no box in the notebook every one is kept", () => {
+		const control = redactPages(all, {});
 		expect(holds(control[2], "snapSECRET-A")).toBe(true);
 		expect(holds(control[3], "snapSECRET-Z")).toBe(true);
 		const out = redactPages(all, { p2: [covered] });
@@ -103,7 +105,9 @@ describe("R5: excerpts of excerpts of a covered region, at any depth, and cycles
 	it("a writer given one page knows the chain found over the whole notebook", () => {
 		const set = withExcerptChains(all, { p2: [covered] });
 		expect(holds(redactPages([p6], set)[0], "snapSECRET-Z")).toBe(false);
-		expect(holds(redactPages([p6], withExcerptChains(all, { p2: [far] }))[0], "snapSECRET-Z")).toBe(true);
+		expect(holds(redactPages([p6], withExcerptChains(all, {}))[0], "snapSECRET-Z")).toBe(true);
+		// T1: the set knows the notebook's pages, so a box anywhere in it drops an excerpt of any of them, also given one page.
+		expect(holds(redactPages([p6], withExcerptChains(all, { p2: [far] }))[0], "snapSECRET-Z")).toBe(false);
 		// The chain never becomes a box: page p3 keeps its own ink and gets no black rectangle.
 		expect(boxesOf(set, "p3")).toHaveLength(0);
 		expect(JSON.parse(JSON.stringify(set))).toEqual({ p2: [covered] });
@@ -112,7 +116,7 @@ describe("R5: excerpts of excerpts of a covered region, at any depth, and cycles
 	it("excerpts that show each other end (a cycle), covered or not", () => {
 		const c = page("c", [excerpt("C", { x: 50, y: 50 }, "snapSECRET-C", { page: "d", x: 50, y: 50, width: 40, height: 40 })]);
 		const d = page("d", [excerpt("D", { x: 50, y: 50 }, "snapSECRET-D", { page: "c", x: 50, y: 50, width: 40, height: 40 })]);
-		const kept = redactPages([c, d], { c: [far] });
+		const kept = redactPages([c, d], {});
 		expect(holds(kept[0], "snapSECRET-C") && holds(kept[1], "snapSECRET-D")).toBe(true);
 		const gone = redactPages([c, d], { d: [{ x: 60, y: 60, width: 10, height: 10 }] });
 		expect(holds(gone[0], "snapSECRET-C")).toBe(false);
@@ -134,8 +138,8 @@ describe("R6: the width of a character is a true upper bound, unknown ones count
 		expect(charEm("ꙮ")).toBe(charEm("﷽"));
 		expect(charEm("\u{1D11E}")).toBe(charEm("﷽"));
 		// Control: ordinary text keeps its tighter bounds.
-		expect(charEm("a")).toBe(0.8);
-		expect(charEm("é")).toBe(1);
+		expect(charEm("a")).toBe(0.9);
+		expect(charEm("é")).toBe(1.25);
 	});
 
 	it("a text box of three-em dashes: a box over its real last line drops it; the control keeps it", () => {
