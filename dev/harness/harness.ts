@@ -94,6 +94,7 @@ import { bulkApi } from "./bulk-check";
 import { xferApi } from "./pagesplit-check";
 import { linkbackApi } from "./linkback-check";
 import { checkSlideback, slidebackShot } from "./slideback-check";
+import { checkPagerefs, pagerefsShot } from "./pagerefs-check";
 import { checkSymbols } from "./symbols-check";
 import { checkBackups } from "./backups-check";
 import { checkSynccore } from "./synccore-check";
@@ -315,7 +316,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, meanings: doc === "colours" || doc === "coloursedit" ? harnessMeanings() : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "symbols" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pagerefs" || doc === "symbols" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2257,6 +2258,8 @@ Object.assign(harnessApi, xferApi({ app, errors, notices }));
 Object.assign(harnessApi, linkbackApi({ app, errors, notices }));
 // 0.21 slideback: the pill back to the current slide (doc=slideback, slideback-check.ts).
 Object.assign(harnessApi, { checkSlideback: () => checkSlideback({ get view() { return view; }, open, frames, penStroke, errors, notices }), slidebackShot: (state: "away") => slidebackShot({ get view() { return view; }, open, frames, penStroke, errors, notices }, state) });
+// 0.22 pagerefs: the chip and list of pages that link here (doc=pagerefs, pagerefs-check.ts).
+Object.assign(harnessApi, { checkPagerefs: () => checkPagerefs({ get view() { return view; }, open, frames, errors, notices }), pagerefsShot: (state: "chip" | "list") => pagerefsShot({ get view() { return view; }, open, frames, errors, notices }, state) });
 // 0.17 pdfcopy: the optional PDF copy (doc=pdfcopy, pdfcopy-check.ts).
 Object.assign(harnessApi, pdfcopyApi({ get view() { return view; }, app, frames, penStroke, errors, notices }));
 // 0.20 dropfiles: files dropped on a page (doc=dropfiles, dropfiles-check.ts).

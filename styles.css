@@ -18400,3 +18400,116 @@ body.notebook-style-obsidian {
 	}
 }
 /* ===== end 0.22 covers ===== */
+
+/* ===== 0.22 pagerefs ===== */
+/* "Referenced on p. 3, p. 12" (roadmap #179): a quiet chip at the top right while the page in view is linked from other pages of the
+   notebook. A real button; the list it opens sits under it. Neither takes pen input. */
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs {
+	position: absolute;
+	top: 10px;
+	right: 56px;
+	z-index: 5;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: min(60%, 320px);
+	min-height: 32px;
+	padding: 0 12px 0 10px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-glass);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs[aria-expanded="true"] {
+	border-color: var(--nb-border-strong);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs-icon .svg-icon {
+	width: 14px;
+	height: 14px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs-list {
+	position: absolute;
+	top: 48px;
+	right: 56px;
+	z-index: 7;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	box-sizing: border-box;
+	min-width: 180px;
+	max-width: min(80%, 300px);
+	max-height: min(60%, 360px);
+	padding: 6px;
+	overflow-y: auto;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-lg, 14px);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs-title {
+	padding: 6px 10px 4px;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 44px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--nb-radius-md, 10px);
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	font-size: var(--nb-fs-body, 14px);
+	text-align: left;
+	cursor: pointer;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs-row:hover,
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs-row:focus-visible {
+	background: var(--nb-accent-soft, var(--nb-glass));
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-page-refs-row-count {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+}
+
+/* The recent-symbols strip is centred at the top and, on a narrow screen, reaches the chip: while it is shown, the chip and its list sit below it. */
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-page-refs {
+	top: 66px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-symbol-strip:not(.notebook-hidden) ~ .notebook-page-refs-list {
+	top: 104px;
+}

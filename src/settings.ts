@@ -124,6 +124,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	refWindowSnap: boolean;
 	/** 0.21 slideback (#225): a pill "Back to slide N" while scrolled away from where you last wrote during a lecture. */
 	slideBack: boolean;
+	/** 0.22 pagerefs (#179): a chip on a page that other pages link to. */
+	pageRefs: boolean;
 	/** 0.17 (#57): a task made from a selection gets its due date as the Tasks plugin's date emoji (else a Dataview field). */
 	taskDueEmoji: boolean;
 	/** 0.17 (#57): the note "Make task" can add to besides the daily note (vault path; empty = none configured). */
@@ -327,6 +329,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	lectureLogHeading: "## Lectures",
 	refWindowSnap: true, // 0.20 refwindow
 	slideBack: true, // 0.21 slideback
+	pageRefs: true, // 0.22 pagerefs
 	taskDueEmoji: true,
 	tasksNote: "",
 	checklistDraw: "offer",
@@ -472,6 +475,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.lectureLogHeading === "string") s.lectureLogHeading = d.lectureLogHeading.trim().slice(0, 80); // normalised where it is used (an empty one means the default)
 	if (typeof d.refWindowSnap === "boolean") s.refWindowSnap = d.refWindowSnap; // 0.20 refwindow
 	if (typeof d.slideBack === "boolean") s.slideBack = d.slideBack; // 0.21 slideback
+	if (typeof d.pageRefs === "boolean") s.pageRefs = d.pageRefs; // 0.22 pagerefs
 	if (typeof d.taskDueEmoji === "boolean") s.taskDueEmoji = d.taskDueEmoji;
 	if (typeof d.tasksNote === "string") s.tasksNote = d.tasksNote.trim();
 	if (d.checklistDraw === "off" || d.checklistDraw === "offer" || d.checklistDraw === "auto") s.checklistDraw = d.checklistDraw;

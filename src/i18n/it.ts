@@ -3905,6 +3905,15 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"slideBack.slide": "Torna alla diapositiva {n}",
 	"slideBack.page": "Torna alla pagina corrente",
 	"slideBack.dismiss": "Chiudi",
+	// 0.22 pagerefs
+	"settings.pageRefs": "Mostra le pagine che collegano qui",
+	"settings.pageRefs.desc": "Un chip elenca le pagine del quaderno che collegano a questa.",
+	"pageRefs.chip": "Citata a {pages}",
+	"pageRefs.chipMore": "Citata a {pages} +{n}",
+	"pageRefs.page": "p. {n}",
+	"pageRefs.pageLong": "Pagina {n}",
+	"pageRefs.links": "{n} collegamenti",
+	"pageRefs.title": "Citata in queste pagine",
 	// 0.21 symbols
 	"symbols.title": "Simboli recenti",
 	"symbols.hint": "Tocca la pagina",

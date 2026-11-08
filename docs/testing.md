@@ -3348,3 +3348,24 @@ Roadmap #101. Say what each ink colour means (red = definition, blue = example) 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Change cover: pattern, image (crop), page, template; stored as an image asset + `meta.coverArt` (no format change) | yes | crop maths, template wrapping and colours, `patchNotebookCover`: `tests/cover-crop.test.ts`, `tests/cover-template.test.ts`; dialog flow in the harness (`doc=covers`) | | | not tried on Android; the creation dialog keeps its own image option; a cover is not redrawn when the notebook is renamed |
+
+### 0.22 — pagerefs: two-way page references (steps 2100-2119)
+
+Roadmap #179. Settings, Pages, Outline: *Show pages that link here* (on by default). Use a notebook with several pages and text boxes that hold page links (*Copy link to page*, pasted into a text box). Implemented, not verified on hardware. Links to pages of other notebooks are not listed (only the open notebook is read).
+
+2100. **Chip.** Page 3 has a text box with a link to page 7. Scroll to page 7 and stop: a small chip *Referenced on p. 3* appears at the top right after a moment; it never shows on a page nobody links to.
+2101. **List.** Tap the chip: a short list of the referencing pages opens; a page that links twice says *2 links*.
+2102. **Jump.** Tap a row: the view goes to that page and the list closes. Back (the notebook's back button) returns.
+2103. **Close.** Tap outside the list or press Escape: it closes without jumping.
+2104. **Reorder.** Move page 3 after page 7 in the page panel: page 7 still shows the chip, now with the new page number.
+2105. **Deleted page.** Delete the page a link points to: no other page shows a chip because of it.
+2106. **Self link.** A link on a page to itself adds nothing.
+2107. **Edit.** Delete the link text on page 3: page 7's chip goes away; type a new link: it appears.
+2108. **Sticky note.** A link inside a sticky note counts too.
+2109. **Setting.** Turn the setting off: no chip.
+2110. **Pen.** The chip and list never take pen input: writing under them still works around them.
+2111. **Light, dark, phone.** Readable in light and dark and inside a phone's width; below the recent-symbols strip when it is shown.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Two-way page references (#179): a chip "Referenced on p. 3, p. 12" on a page that other pages of the notebook link to (text boxes and sticky notes; by page id, so reordering keeps them), a list with a jump to each, setting to hide it; derived, nothing stored | yes | index by id, reorder, deleted pages, self links, many links, slices: `tests/page-refs.test.ts`; harness `doc=pagerefs` | | | links from other notebooks are not listed; no "Referenced" filter in the notebook map; not tried on a tablet |
