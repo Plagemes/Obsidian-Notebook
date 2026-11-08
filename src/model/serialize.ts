@@ -46,9 +46,24 @@ export type ParseResult =
 	| { ok: true; doc: NotebookDocument; migratedFrom: number | null; dropped?: number }
 	| { ok: false; reason: ParseFailure; message: string; version?: number };
 
-const j = JSON.stringify;
-
 class ValidationError extends Error {}
+
+/**
+ * `JSON.stringify` for the hand-built lines of the writer. `JSON.stringify(undefined)` is `undefined`, which a template literal
+ * would write as the bare word `undefined` (not JSON): a missing value is refused here, before any text is built, so the save is
+ * stopped with a clear message instead of producing text that cannot be read back.
+ */
+function j(v: unknown): string {
+	const text = JSON.stringify(v);
+	if (text === undefined) fail("value", "a required field is missing (undefined)");
+	return text;
+}
+
+/** The colour of a stroke or element as JSON text; a colour that is not even a string is refused with the owner named. */
+function jc(owner: { id: string; type?: string; color: unknown }): string {
+	if (typeof owner.color !== "string") fail(`${owner.type ?? "stroke"} ${String(owner.id)}.color`, "expected a #rrggbb colour (it is missing)");
+	return JSON.stringify(owner.color);
+}
 
 /**
  * Lenient read of optional v7 details: invalid ones are counted here and left out instead of failing the
@@ -73,7 +88,7 @@ function strokeLine(s: Stroke): string {
 	const fill = (s.fill !== undefined ? `,"fill":${j(s.fill)}` : "") + (s.fillTint !== undefined ? `,"fillTint":${j(s.fillTint)}` : "") + (s.dash !== undefined ? `,"dash":${j(s.dash)}` : "");
 	// v24: `opacity` only when set, after the shape style.
 	const opacity = s.opacity !== undefined ? `,"opacity":${j(s.opacity)}` : "";
-	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide}${group}${nib}${fill}${opacity},"points":${j(s.points)}}`;
+	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${jc(s)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide}${group}${nib}${fill}${opacity},"points":${j(s.points)}}`;
 }
 
 /**
@@ -184,7 +199,7 @@ function boxLine(e: BoxElement): string {
 
 /** v9 equation: frame, source, size and colour, then the optional style flags and the cached outline. */
 function equationLine(e: EquationElement): string {
-	let out = `{"id":${j(e.id)},"type":"equation","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"latex":${j(e.latex)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}`;
+	let out = `{"id":${j(e.id)},"type":"equation","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"latex":${j(e.latex)},"fontSize":${j(e.fontSize)},"color":${jc(e)}`;
 	if (e.inline !== undefined) out += `,"inline":${j(e.inline)}`;
 	if (e.numbered !== undefined) out += `,"numbered":${j(e.numbered)}`;
 	if (e.outline !== undefined) out += `,"outline":${j(e.outline)}`;
@@ -253,7 +268,7 @@ function excerptLine(e: ExcerptElement): string {
  * strokes it keeps hidden, in that order (one line).
  */
 function stickyLine(e: StickyElement): string {
-	let line = `				{"id":${j(e.id)},"type":"sticky","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${j(e.color)},"fontSize":${j(e.fontSize)}`;
+	let line = `				{"id":${j(e.id)},"type":"sticky","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${jc(e)},"fontSize":${j(e.fontSize)}`;
 	if (e.text !== undefined && e.text !== "") line += `,"text":${j(e.text)}`;
 	if (e.collapsed === true) {
 		line += `,"collapsed":true`;
@@ -267,7 +282,7 @@ function stickyLine(e: StickyElement): string {
  * change of the link (`taskAt`), the typed label and the task link, in that order (one line).
  */
 function checkboxLine(e: CheckboxElement): string {
-	let line = `				{"id":${j(e.id)},"type":"checkbox","x":${j(e.x)},"y":${j(e.y)},"size":${j(e.size)},"color":${j(e.color)}`;
+	let line = `				{"id":${j(e.id)},"type":"checkbox","x":${j(e.x)},"y":${j(e.y)},"size":${j(e.size)},"color":${jc(e)}`;
 	if (e.checked === true) line += `,"checked":true`;
 	if (e.at !== undefined) line += `,"at":${j(e.at)}`;
 	if (e.taskAt !== undefined) line += `,"taskAt":${j(e.taskAt)}`;
@@ -280,7 +295,7 @@ function checkboxLine(e: CheckboxElement): string {
 function areaLine(e: AreaElement): string {
 	// v24: `opacity` only when set, after the colour.
 	const opacity = e.opacity !== undefined ? `,"opacity":${j(e.opacity)}` : "";
-	return `				{"id":${j(e.id)},"type":"area","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${j(e.color)}${opacity}}`;
+	return `				{"id":${j(e.id)},"type":"area","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${jc(e)}${opacity}}`;
 }
 
 function elementLine(e: PageElement): string {
@@ -289,7 +304,7 @@ function elementLine(e: PageElement): string {
 
 function typedElementLine(e: PageElement): string {
 	if (e.type === "text") {
-		return `\t\t\t\t{"id":${j(e.id)},"type":"text","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"text":${j(e.text)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}}`;
+		return `\t\t\t\t{"id":${j(e.id)},"type":"text","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"text":${j(e.text)},"fontSize":${j(e.fontSize)},"color":${jc(e)}}`;
 	}
 	if (e.type === "image") {
 		// v24: `opacity` only when set, after the rotation.

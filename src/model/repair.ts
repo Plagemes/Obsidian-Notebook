@@ -26,7 +26,9 @@
  * in the original file, which is never modified.
  */
 import { normalizeBookmarkInfo, normalizeBookmarkInfoMap } from "./bookmarks";
+import { CHECKBOX_DEFAULT_COLOR } from "./checklist";
 import { createId } from "./document";
+import { STICKY_DEFAULT_COLOR } from "./sticky";
 import { cleanMarkerText, isBoxKind, isIsoDate, isMarkerKind } from "./markers";
 import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
@@ -1007,4 +1009,31 @@ export function repairNotebookText(text: string, now: Date = new Date()): Repair
 	const again = parse(checked.text);
 	if (!again.ok) return { ok: false, reason: "nothing", message: again.message, summary };
 	return { ok: true, doc: again.doc, text: checked.text, summary };
+}
+
+/** Colour given to an item whose own is missing or invalid: what a new one of its kind starts with (strokes and text boxes: black, like the repair of a file). */
+const MISSING_COLOUR: Readonly<Record<string, string>> = {
+	text: "#000000", checkbox: CHECKBOX_DEFAULT_COLOR, sticky: STICKY_DEFAULT_COLOR, area: "#facc15", equation: "#000000",
+};
+
+/**
+ * Fills the colour of the strokes and elements of a document held in memory that have none (or an invalid one), so a save that the
+ * writer refuses for that reason is not refused forever. It only sets the colour, ON THE SAME object: nothing is replaced, so the
+ * history (commands find items by identity) and the views keep pointing at the right objects. A frozen item (committed through a
+ * command) cannot be changed in place and is left as it is, like every other kind of damage: the save is then refused as before.
+ * Returns how many items were given a colour.
+ */
+export function repairLiveDocument(doc: NotebookDocument): number {
+	let fixed = 0;
+	const fill = (target: Stroke | PageElement, fallback: string | undefined): void => {
+		const item = target as { color?: unknown };
+		if (fallback === undefined || (typeof item.color === "string" && COLOR_RE.test(item.color)) || Object.isFrozen(item)) return;
+		item.color = fallback;
+		fixed++;
+	};
+	for (const page of doc.pages) {
+		for (const s of page.strokes) fill(s, MISSING_COLOUR.text);
+		for (const e of page.elements ?? []) fill(e, MISSING_COLOUR[e.type]);
+	}
+	return fixed;
 }

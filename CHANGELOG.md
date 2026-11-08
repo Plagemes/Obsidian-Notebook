@@ -74,6 +74,7 @@
 - Redaction: every character has a true upper bound for its width; scripts and symbols without a checked width (and the very wide ones such as ⸺, ⸻ and ﷽) count as the widest, so a text box of them is never measured too small.
 - Related pages: entries kept by the read-only panel are never written over a newer entry of the library index (the newer read wins; entries of notebooks deleted since are not written).
 - Document format: an `opacity` of exactly 1 stays as it is in a file and counts as full strength (documented).
+- **A stroke or element with no colour no longer makes a notebook unsavable.** The writer refuses a missing colour (or any `undefined`) with a message naming the item, before any text is built; if such an item is already in memory, the save gives it a colour on the same object (a checkbox, sticky note, area or equation takes the default colour of its kind, a stroke or text box black) and saves, instead of failing on every later attempt; nothing is replaced, so undo and redo keep working. A committed (frozen) item, or any other damage, is still refused and the file is left alone. Found by a harness fixture that built a checkbox with no colour.
 
 ## 0.25.0 — 2026-11-08
 
