@@ -77,6 +77,7 @@ export interface UiContext {
 	toggles: {
 		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
 		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
+		/** 0.25 (#99): the highlighter marks rectangles (area highlighter) instead of strokes. */ highlighterArea?: boolean;
 		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
 		/** 0.17 (#71): snap is available (the setting is not "off") and whether it is on now (not paused in this view). Optional (absent: available, on). */ snapAvailable?: boolean; snap?: boolean;
 	};
@@ -365,6 +366,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "pdf-search", label: "reading.search", icon: "search", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 80, scope: "view", command: "command.pdfSearch", readOnly: true, when: (c) => c.notebook.pdfPages },
 	// 0.14 (392): the highlighter follows the text lines of PDF pages (the same switch as the highlighter options and the settings).
 	{ id: "toggle-snap-highlighter", label: "reading.snap", icon: "text-cursor", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 41, scope: "view", command: "command.snapHighlighter", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.reading.snap, keywords: "highlighter snap text lines evidenziatore testo righe" },
+	// 0.25 (#99): the highlighter marks a rectangle (an area highlighter, drawn under the ink): ideal on scanned PDFs. The "highlighter-" prefix ranks it first while the highlighter is in hand; on a PDF page the reading group ranks it too.
+	{ id: "highlighter-area", label: "highlighter.areaAction", icon: "highlighter", group: "reading", surfaces: ["sheet"], priority: 41, scope: "view", command: "command.highlighterArea", checked: (c) => !!c.toggles.highlighterArea, keywords: "highlighter area rectangle scan pdf block evidenziatore area rettangolo blocco scansione" },
 	{ id: "pdf-select-text", label: "pdfText.selectText", icon: "text-cursor-input", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 72, scope: "view", command: "command.pdfSelectText", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.reading.selectText, keywords: "select copy text quote pdf seleziona copia testo citazione" },
 	{ id: "pdf-search-next", label: "command.pdfSearchNext", icon: "chevron-down", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "pdf-search-previous", label: "command.pdfSearchPrev", icon: "chevron-up", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },

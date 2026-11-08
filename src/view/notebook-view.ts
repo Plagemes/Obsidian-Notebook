@@ -19,6 +19,8 @@ import {
 import { elementsInLasso, hitElement, hitLockedElement } from "../ink/elements";
 import { eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
+import { areasUnderEraser } from "../ink/area-erase";
+import { createArea } from "../model/area";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
 import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
@@ -372,6 +374,8 @@ interface ShapeDrag {
 	pageIndex: number;
 	a: [number, number];
 	b: [number, number];
+	/** v23 (#99): the drag draws an area highlighter (the highlighter in its "Area" mode), not a shape. */
+	area?: true;
 }
 
 interface TextTap {
@@ -3747,7 +3751,7 @@ export class NotebookView extends FileView {
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			states: { open: !!this.statesTools?.open },
 			comments: { panel: this.comments?.panelOpen ?? false, total: this.comments?.counts.total ?? 0, open: this.comments?.counts.open ?? 0, drawing: this.comments?.drawing ?? false },
-			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", readOnly: this.userReadOnly,
+			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", highlighterArea: this.tools.highlighterArea, readOnly: this.userReadOnly,
 				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused },
 			canPrint: canPrint(),
 			markers: {
@@ -3796,6 +3800,11 @@ export class NotebookView extends FileView {
 	/** wave 0.10 (63): switches the lasso tool between the freehand outline and the rectangle (turning the lasso on). */
 	toggleSelectRectangle(): void {
 		if (this.editable()) this.toolbar.update({ tool: "lasso", selectMode: this.tools.selectMode === "rectangle" ? "lasso" : "rectangle" });
+	}
+
+	/** 0.25 (#99): switches the highlighter between marking strokes and marking rectangles (area highlighter), and takes the highlighter in hand. */
+	toggleHighlighterArea(): void {
+		if (this.editable()) this.toolbar.update({ tool: "highlighter", highlighterArea: !this.tools.highlighterArea });
 	}
 
 	/** The selection's copy, cut, paste, duplicate and white-to-transparent (contextual bar). */
@@ -4192,6 +4201,7 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		this.history.clear();
 		this.renderer?.setLive(null);
+		this.renderer?.setAreaPreview(null);
 		this.renderer?.cancelWet();
 		this.renderer?.setLasso(null);
 		this.renderer?.setSpacePreview(null);
@@ -5012,9 +5022,10 @@ export class NotebookView extends FileView {
 			return true;
 		}
 
-		if (tool === "shape") {
+		// v23 (#99): the highlighter in its "Area" mode drags a rectangle, like the shape tool drags a shape.
+		if (tool === "shape" || (tool === "highlighter" && this.tools.highlighterArea)) {
 			this.clearSelection();
-			this.shapeDrag = { pageIndex, a: local, b: local };
+			this.shapeDrag = tool === "highlighter" ? { pageIndex, a: local, b: local, area: true } : { pageIndex, a: local, b: local };
 			return true;
 		}
 
@@ -5383,6 +5394,7 @@ export class NotebookView extends FileView {
 		if (shape) {
 			this.shapeDrag = null;
 			this.renderer?.setLive(null);
+			if (shape.area) this.renderer?.setAreaPreview(null);
 			if (!cancelled) this.commitShape(shape);
 			return;
 		}
@@ -5557,9 +5569,25 @@ export class NotebookView extends FileView {
 		return false;
 	}
 
+	/**
+	 * v23 (#99): the rectangle dragged with the highlighter in its "Area" mode becomes an area highlighter, as one undo step (a drag too small to
+	 * be a rectangle is a stray touch and adds nothing). It goes on top of the page's elements, so it is drawn above the older areas.
+	 */
+	private commitArea(shape: ShapeDrag, page: Page): void {
+		const area = createArea(shape.a, shape.b, page, this.tools.highlighterColor);
+		if (!area) return;
+		if (!this.history.execute(new AddElement(page.id, area, page.elements?.length ?? 0))) return;
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+	}
+
 	private commitShape(shape: ShapeDrag): void {
 		const page = this.pageAtIndex(shape.pageIndex);
 		if (!page) return;
+		if (shape.area) {
+			this.commitArea(shape, page);
+			return;
+		}
 		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.tools.penWidth, this.shiftDown);
 		if (points.length < 2) return;
 		const stroke = freezeStroke({ ...createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"), ...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine) });
@@ -5578,6 +5606,13 @@ export class NotebookView extends FileView {
 	private pushShapeLive(): void {
 		const s = this.shapeDrag;
 		if (!s) return;
+		if (s.area) {
+			// v23 (#99): the rectangle being dragged, with the look it will have (nothing is drawn until the drag is big enough to be one).
+			const page = this.pageAtIndex(s.pageIndex);
+			const area = page ? createArea(s.a, s.b, page, this.tools.highlighterColor) : null;
+			this.renderer?.setAreaPreview(area ? { pageIndex: s.pageIndex, area } : null);
+			return;
+		}
 		const points = shapePoints(this.tools.shapeKind, s.a, s.b, this.tools.penWidth, this.shiftDown);
 		this.renderer?.setLive({
 			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.tools.penWidth, points, predicted: [],
@@ -5670,6 +5705,13 @@ export class NotebookView extends FileView {
 				after = strokePieces(page, stroke, runs);
 			}
 			const cmd = new ReplaceStroke(page.id, stroke, after, index);
+			cmd.apply(doc);
+			erasing.commands.push(cmd);
+			changed = true;
+		}
+		// v23 (#99): an area highlighter is erased whole as soon as the eraser touches it (the selective eraser applies; a locked one stays).
+		for (const el of areasUnderEraser(page.elements ?? [], ax, ay, bx, by, radius, this.eraseFilter())) {
+			const cmd = new RemoveElement(page.id, el);
 			cmd.apply(doc);
 			erasing.commands.push(cmd);
 			changed = true;

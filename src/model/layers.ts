@@ -29,6 +29,8 @@ export function elementBand(el: PageElement): number {
 		case "box": return 2;
 		// v15 sticky notes are drawn after the boxes and before the equations and text boxes (ink/renderer.ts drawElements); only the order of the bands matters.
 		case "sticky": return 2.5;
+		// v23 areas (the area highlighter) are drawn after the sticky notes and before the equations and text boxes, so what is typed over them stays readable.
+		case "area": return 2.7;
 		case "equation": return 3;
 		case "text": return 4;
 		case "marker": return 5;

@@ -113,10 +113,10 @@ describe("format v22: migration from v21", () => {
 		expect(r.doc.pages[0]!.strokes[0]!.dash).toBeUndefined();
 	});
 
-	it("reads a v21 file and writes it as v22", () => {
+	it("reads a v21 file and writes it in the current format", () => {
 		const r = parsed(JSON.stringify(v21Raw()));
 		expect(r.migratedFrom).toBe(21);
-		expect(getAt(parseRaw(serialize(r.doc)), ["version"])).toBe(22);
+		expect(getAt(parseRaw(serialize(r.doc)), ["version"])).toBe(CURRENT_VERSION);
 	});
 
 	it("opens a file of a newer format read-only", () => {

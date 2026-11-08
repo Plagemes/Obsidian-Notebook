@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v22.schema.json",
-  "title": "Notebook document, format version 22",
-  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 22). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
+  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v23.schema.json",
+  "title": "Notebook document, format version 23",
+  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 23). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
   "type": "object",
   "required": ["format", "version", "id", "createdAt", "modifiedAt", "meta", "assets", "pages"],
   "properties": {
     "format": { "const": "obsidian-notebook", "description": "Always this string. Distinguishes the file from any other JSON." },
-    "version": { "const": 22, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
+    "version": { "const": 23, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
     "id": { "type": "string", "minLength": 1, "description": "Document id (a UUID when available). Survives renames and copies made with 'Make a copy'." },
     "createdAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time the notebook was created." },
     "modifiedAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time of the last content save." },
@@ -317,7 +317,8 @@
         { "$ref": "#/$defs/graphElement" },
         { "$ref": "#/$defs/excerptElement" },
         { "$ref": "#/$defs/stickyElement" },
-        { "$ref": "#/$defs/checkboxElement" }
+        { "$ref": "#/$defs/checkboxElement" },
+        { "$ref": "#/$defs/areaElement" }
       ]
     },
 
@@ -611,6 +612,22 @@
             "block": { "type": "string", "pattern": "^nb-[A-Za-z0-9]+$", "maxLength": 40, "description": "Block id (without ^) the plugin wrote at the end of the task line." }
           }
         }
+      }
+    },
+
+    "areaElement": {
+      "description": "v23 area highlighter: a translucent axis-aligned rectangle (x, y is the top-left corner) in a highlighter colour, drawn above the page background and below all the ink, with the look of a highlighter stroke (the opacity is not stored).",
+      "allOf": [{ "$ref": "#/$defs/elementFlags" }],
+      "type": "object",
+      "required": ["id", "type", "x", "y", "width", "height", "color"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "const": "area" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 2, "maximum": 20000 },
+        "height": { "type": "number", "minimum": 2, "maximum": 20000 },
+        "color": { "$ref": "#/$defs/color" }
       }
     },
 

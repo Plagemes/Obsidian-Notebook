@@ -4637,4 +4637,14 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"handIn.export": "Esporta PDF",
 	"handIn.exportAnyway": "Esporta comunque",
 	"handIn.fixHint": "La finestra si chiude quando vai a una pagina; riaprila dal menu del quaderno quando hai finito.",
+	// 0.25 areahl (#99)
+	"highlighter.mode": "Cosa segna l'evidenziatore",
+	"highlighter.mode.stroke": "Tratto",
+	"highlighter.mode.area": "Area",
+	"highlighter.areaAction": "Evidenziatore ad area",
+	"command.highlighterArea": "Attiva o disattiva l'evidenziatore ad area (segna rettangoli)",
+	"groups.kind.area": "Area evidenziata",
+	"help.highlighterArea": "Segna un blocco con un rettangolo traslucido che sta sotto la tua scrittura: trascina da un angolo all'altro. Ideale sui PDF scansionati.",
+	"help.highlighter.modeStroke": "Evidenzia lungo la linea che tracci, come un pennarello.",
+	"help.highlighter.modeArea": "Trascina un rettangolo per evidenziare un blocco intero. Resta sotto il tuo inchiostro e si può spostare, ridimensionare, ricolorare e cancellare.",
 };

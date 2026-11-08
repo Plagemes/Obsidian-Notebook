@@ -249,7 +249,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 96. **P2** Strike-through as logical deletion: a line over a word marks it as deleted; it stays readable struck through and can be hidden.
 97. **P1** 🧪 Selective eraser: erase only one kind of ink (only highlighter, only one colour) and leave the rest.
 98. **P2** Per-page undo: each page has its own history; undo on one page never touches another.
-99. **P2** Area highlighter: translucent rectangles, ideal on scanned PDFs.
+99. **P2** 🧪 Area highlighter: translucent rectangles, ideal on scanned PDFs.
 100. **P1** 🧪 Invisible ink for self-testing: write answers with a hidden pen and reveal them with "show solutions".
 101. **P2** 🧪 Colours with meaning: define what each colour means (red = definition, blue = example), filter the view by it and generate a digest per colour.
 102. **P2** 🧪 Headings from handwriting size (no OCR): lines written large become outline entries, shown as images of the ink.
@@ -352,7 +352,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - Conflict-free by design: every stroke has a unique id, so concurrent edits never clash; at the end everything lands in the host's notebook with the author of each stroke.
     - Asynchronous too: people without Obsidian annotate in the web viewer (#164) and send back an annotation package that is imported with one tap; or the notebook is shared on Drive with conflict merging (#122).
 166. **P3** InkML export (open standard for digital ink).
-167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20; 0.23: `notebook-v21.schema.json` for format 21; 0.24: `notebook-v22.schema.json` for format 22.)
+167. **P2** 🧪 Documented format with a JSON Schema, so other tools can read notebooks. (0.21: `docs/schema/notebook-v19.schema.json` and `docs/format.md`; 0.22: renamed to `notebook-v20.schema.json` for format 20; 0.23: `notebook-v21.schema.json` for format 21; 0.24: `notebook-v22.schema.json` for format 22; 0.25: `notebook-v23.schema.json` for format 23.)
 
 ### E. Automation
 168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.

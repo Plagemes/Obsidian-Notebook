@@ -500,6 +500,16 @@ function v21ToV22(raw: RawObject): RawObject {
 /** The stroke keys v22 added. */
 const V22_STROKE_KEYS: readonly string[] = ["fill", "fillTint", "dash"];
 
+/**
+ * v23 adds the element type "area" (area highlighter, #99). Every valid v22 document is a valid v23 document: the migration is the identity apart
+ * from the version. A v22 reader rejected unknown element types, so a v22 file that holds an area was never written by this plugin (only a v23 file
+ * edited by hand can look like that); it is read as the v23 file it evidently is, not refused, because nothing else about it is doubtful.
+ * Nothing changes, so a large v22 file can still be read page by page (StagedParse).
+ */
+function v22ToV23(raw: RawObject): RawObject {
+	return { ...raw, version: 23 };
+}
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -536,6 +546,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	19: v19ToV20,
 	20: v20ToV21,
 	21: v21ToV22,
+	22: v22ToV23,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

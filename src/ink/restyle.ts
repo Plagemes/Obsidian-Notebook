@@ -1,6 +1,6 @@
 import { Batch, ReplaceElement, ReplaceStroke, type Command } from "../model/history";
 import { freezeStroke } from "../model/serialize";
-import type { Page, PageElement, Stroke, TextElement } from "../model/types";
+import type { AreaElement, Page, PageElement, Stroke, TextElement } from "../model/types";
 
 /**
  * Restyle selection (pure): change colour and width of lasso-selected strokes as ONE undo step.
@@ -36,7 +36,9 @@ export function restyleAbilities(strokes: readonly Stroke[], elements: readonly 
 	const ink = strokes.some((s) => styleGroup(s) === "ink");
 	const hl = strokes.some((s) => styleGroup(s) === "highlighter");
 	const text = elements.some((e) => e.type === "text");
-	return { inkColor: ink || text, inkWidth: ink, highlighterColor: hl, highlighterWidth: hl };
+	// v23: an area highlighter is recoloured with the highlighter colours (it has no width).
+	const area = elements.some((e) => e.type === "area");
+	return { inkColor: ink || text, inkWidth: ink, highlighterColor: hl || area, highlighterWidth: hl };
 }
 
 /** The value shared by every item, or null when they differ (to mark the active swatch). */
@@ -50,7 +52,11 @@ export function commonStyle(
 		colors.add(s.color.toLowerCase());
 		widths.add(s.width);
 	}
-	if (group === "ink") for (const e of elements) if (e.type === "text") colors.add(e.color.toLowerCase());
+	// v23: the area highlighters of the selection count with the highlighter, the text boxes with the ink.
+	for (const e of elements) {
+		if (group === "ink" && e.type === "text") colors.add(e.color.toLowerCase());
+		else if (group === "highlighter" && e.type === "area") colors.add(e.color.toLowerCase());
+	}
 	return {
 		color: colors.size === 1 ? [...colors][0]! : null,
 		width: widths.size === 1 ? [...widths][0]! : null,
@@ -96,6 +102,11 @@ export function planRestyle(
 	for (const el of elements) {
 		if (el.type === "text" && req.group === "ink" && color && color !== el.color.toLowerCase() && page.elements?.includes(el)) {
 			const next: TextElement = { ...el, color };
+			commands.push(new ReplaceElement(page.id, el, next));
+			newElements.push(next);
+		} else if (el.type === "area" && req.group === "highlighter" && color && color !== el.color.toLowerCase() && page.elements?.includes(el)) {
+			// v23: an area highlighter takes the colours of the highlighter.
+			const next: AreaElement = { ...el, color };
 			commands.push(new ReplaceElement(page.id, el, next));
 			newElements.push(next);
 		} else {

@@ -52,6 +52,8 @@ export interface ToolbarState {
 	shapeFill: FillMode;
 	shapeFillColor: string | null;
 	shapeLine: LineStyle;
+	/** 0.25 (#99): the highlighter marks a rectangle (an area highlighter) instead of a stroke. */
+	highlighterArea: boolean;
 }
 
 export const DEFAULT_TOOLS: ToolbarState = {
@@ -73,6 +75,7 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	shapeFill: "none",
 	shapeFillColor: null,
 	shapeLine: "solid",
+	highlighterArea: false,
 };
 
 export interface ToolbarActions {
@@ -168,6 +171,9 @@ export class Toolbar {
 	/** 0.24 (#37): fill and line style of the shape tool. */
 	private readonly shapeStyleEl: HTMLElement;
 	private readonly selectGroup: HTMLElement;
+	/** 0.25 (#99): the highlighter marks strokes or rectangles. */
+	private readonly highlighterModeGroup: HTMLElement;
+	private readonly highlighterModeButtons = new Map<boolean, HTMLButtonElement>();
 	private readonly selectButtons = new Map<SelectMode, HTMLButtonElement>();
 	private readonly shapeButtons = new Map<ShapeKind, HTMLButtonElement>();
 	private readonly sizeGroup: HTMLElement;
@@ -299,6 +305,15 @@ export class Toolbar {
 				this.set(kind === "color" ? { eraserFilter: kind, eraserColor: this.state.penColor } : { eraserFilter: kind })));
 		}
 		this.penSetsEl = this.row(this.optionsEl);
+		// 0.25 (#99): what the highlighter marks: a stroke along the writing, or a rectangle dragged from corner to corner (area highlighter, under the ink).
+		this.highlighterModeGroup = this.row(this.optionsEl);
+		this.highlighterModeGroup.addClass("notebook-segmented", "notebook-hl-mode");
+		this.highlighterModeGroup.setAttribute("aria-label", t("highlighter.mode"));
+		for (const area of [false, true]) {
+			const b = this.textButton(this.highlighterModeGroup, area ? "highlighter.mode.area" : "highlighter.mode.stroke", () => this.set({ highlighterArea: area }));
+			b.dataset.help = area ? "help.highlighter.modeArea" : "help.highlighter.modeStroke";
+			this.highlighterModeButtons.set(area, b);
+		}
 		// 0.22 (#35): the kind of pen (ballpoint, fountain pen, brush, marker) and, for the fountain pen and the marker, the nib angle.
 		this.penKindGroup = this.row(this.optionsEl);
 		this.penKindGroup.addClass("notebook-segmented", "notebook-pen-kinds");
@@ -594,9 +609,17 @@ export class Toolbar {
 		this.nibSlider.value = String(s.nibAngle);
 		this.showNib(s.nibAngle);
 		this.colorGroup.toggleClass("notebook-hidden", !colouring);
-		this.widthGroup.toggleClass("notebook-hidden", !inking);
+		// 0.25 (#99): an area highlighter has no stroke width and does not snap to text lines: those rows go while the highlighter is in Area mode.
+		const areaMode = s.tool === "highlighter" && s.highlighterArea;
+		this.widthGroup.toggleClass("notebook-hidden", !inking || areaMode);
 		this.sizeGroup.toggleClass("notebook-hidden", s.tool !== "text");
-		this.highlighterOptionsEl.toggleClass("notebook-hidden", s.tool !== "highlighter");
+		this.highlighterModeGroup.toggleClass("notebook-hidden", s.tool !== "highlighter");
+		for (const [area, b] of this.highlighterModeButtons) {
+			b.toggleClass("is-active", area === s.highlighterArea);
+			b.setAttribute("aria-pressed", String(area === s.highlighterArea));
+			b.disabled = !this.editable;
+		}
+		this.highlighterOptionsEl.toggleClass("notebook-hidden", s.tool !== "highlighter" || areaMode);
 		this.colorGroup.empty();
 		this.widthGroup.empty();
 		this.sizeGroup.empty();
