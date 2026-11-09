@@ -9,6 +9,7 @@ import {
 	SLIDER_END, SLIDER_START, stepAtAngle, stepDotRadius, widthScale, type DialState,
 } from "../ui/radial-model";
 import { favouriteToolKey, type FavouritePen } from "./favourites";
+import { taperOf } from "../model/taper";
 import type { ShapeKind } from "./view-helpers";
 import type { ToolbarState, ToolName } from "./toolbar";
 
@@ -381,6 +382,7 @@ export class PenRadial {
 			const b = this.item(layer, `fav:${i}`, label, ...this.at(angles[i]!, 96), 44, "is-round is-fav");
 			const active = s.tool === fav.tool && (fav.tool === "pen"
 				? s.penColor.toLowerCase() === fav.color && s.penWidth === fav.width && (fav.kind ?? "pen") === (s.penKind ?? "pen") && (fav.opacity ?? 1) === (s.penOpacity ?? 1)
+					&& taperOf(fav.taperStart) === taperOf(s.penTaperStart) && taperOf(fav.taperEnd) === taperOf(s.penTaperEnd)
 				: s.highlighterColor.toLowerCase() === fav.color && s.highlighterWidth === fav.width && (fav.opacity ?? 1) === (s.highlighterOpacity ?? 1));
 			b.toggleClass("is-active", active && !this.saveMode);
 			b.toggleClass("is-target", this.saveMode);

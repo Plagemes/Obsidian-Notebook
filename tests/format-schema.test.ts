@@ -1,7 +1,7 @@
-// docs/schema/notebook-v24.schema.json against what the serializer really writes (roadmap #167).
+// docs/schema/notebook-v25.schema.json against what the serializer really writes (roadmap #167).
 // The schema is a published contract for other tools: a document the plugin writes must always satisfy it, and a document that
 // breaks one of the writer's rules must not. The validator is a small dependency-free one (tests/json-schema-lite.ts).
-import schemaText from "../docs/schema/notebook-v24.schema.json?raw";
+import schemaText from "../docs/schema/notebook-v25.schema.json?raw";
 import guide from "../docs/format.md?raw";
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
@@ -74,6 +74,8 @@ function fullDocument(): NotebookDocument {
 		stroke("st-a"), stroke("st-b"), stroke("st-c"),
 		// v22: a filled and dashed shape, a solid-filled dotted one (strokes 9 and 10 of page 1).
 		stroke("st-shape-tint", { tool: "shape", render: 1, fill: "#2563eb", fillTint: true, dash: "dashed", opacity: 0.6 }), stroke("st-shape-solid", { tool: "shape", render: 1, fill: "#ff0000", dash: "dotted" }),
+		// v25: a tapered pen line (both ends) and a brush line tapered at its end (strokes 11 and 12 of page 1).
+		stroke("st-tapered", { tool: "pen", render: 2, taperStart: 0.5, taperEnd: 1 }), stroke("st-tapered-brush", { tool: "brush", render: 2, width: 6, taperEnd: 0.05 }),
 	];
 	const graph: GraphElement = {
 		id: "el-graph", type: "graph", x: 40, y: 400, width: 300, height: 200,
@@ -147,7 +149,7 @@ function fullDocument(): NotebookDocument {
 	return doc;
 }
 
-describe("notebook-v24.schema.json: what the serializer writes validates", () => {
+describe("notebook-v25.schema.json: what the serializer writes validates", () => {
 	it("is a well-formed draft 2020-12 schema for the current format version", () => {
 		expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
 		expect((getAt(schema as Raw, ["properties", "version", "const"]))).toBe(CURRENT_VERSION);
@@ -177,7 +179,7 @@ describe("notebook-v24.schema.json: what the serializer writes validates", () =>
 		for (const key of [
 			'"bookmarkInfo"', '"description"', '"coverArt"', '"position"', '"slides"', '"views"', '"tags"', '"background"', '"margins"', '"infinite"', '"locked"',
 			'"states"', '"comments"', '"hidden"', '"slide"', '"group"', '"lockAt"', '"outline"', '"taskAt"', '"sketch"', '"resolved"', '"inline"', '"numbered"',
-			'"startAt"', '"endAt"', '"collapsed"', '"ink"', '"table"', '"params"', '"axes"', '"degrees"', '"opacity"',
+			'"startAt"', '"endAt"', '"collapsed"', '"ink"', '"table"', '"params"', '"axes"', '"degrees"', '"opacity"', '"taperStart"', '"taperEnd"',
 		]) expect(text, key).toContain(key);
 		// ... and the writer keeps it (round trip), so the schema describes what is read back too.
 		const back = parse(text);
@@ -192,7 +194,7 @@ describe("notebook-v24.schema.json: what the serializer writes validates", () =>
 	});
 });
 
-describe("notebook-v24.schema.json: invalid documents are refused", () => {
+describe("notebook-v25.schema.json: invalid documents are refused", () => {
 	const base = (): Raw => parseRaw(written(fullDocument()));
 	const bad = (name: string, edit: (raw: Raw) => void): void => {
 		it(name, () => {
@@ -343,6 +345,15 @@ describe("notebook-v24.schema.json: invalid documents are refused", () => {
 	bad("opacity as a string", set(["pages", 0, "strokes", 5, "opacity"], "half"));
 	bad("opacity 0 on a picture", set(["pages", 0, "elements", 1, "opacity"], 0));
 	bad("opacity on an area above 1", set(["pages", 0, "elements", 14, "opacity"], 2));
+	// v25: the taper of the ends of a line (strokes 11 and 12 are tapered; 0 is a render 1 pen, 1 a highlighter, 5 a marker).
+	bad("taper 0", set(["pages", 0, "strokes", 11, "taperStart"], 0));
+	bad("taper below 5 %", set(["pages", 0, "strokes", 11, "taperEnd"], 0.04));
+	bad("taper above 1", set(["pages", 0, "strokes", 12, "taperEnd"], 1.5));
+	bad("taper as a string", set(["pages", 0, "strokes", 11, "taperStart"], "long"));
+	bad("taper on a marker", set(["pages", 0, "strokes", 5, "taperEnd"], 0.5));
+	bad("taper on a highlighter", set(["pages", 0, "strokes", 1, "taperStart"], 0.5));
+	bad("taper on a shape", set(["pages", 0, "strokes", 2, "taperStart"], 0.5));
+	bad("taper on a pen of the old geometry", set(["pages", 0, "strokes", 0, "taperEnd"], 0.5));
 	bad("element lockAt as a string", set(["pages", 0, "elements", 7, "lockAt"], "now"));
 	bad("element locked false", set(["pages", 0, "elements", 7, "locked"], false));
 	// States.
@@ -392,7 +403,7 @@ describe("docs/format.md", () => {
 	});
 
 	it("names the schema file and the version it describes", () => {
-		expect(guide).toContain("schema/notebook-v24.schema.json");
+		expect(guide).toContain("schema/notebook-v25.schema.json");
 		expect(guide).toContain(`version ${CURRENT_VERSION}`);
 	});
 });

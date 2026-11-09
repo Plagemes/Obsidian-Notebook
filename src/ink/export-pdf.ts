@@ -16,6 +16,7 @@ import { inkPath, type PathSink } from "./ink-geometry";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
 import { HIGHLIGHTER_ALPHA, inkAlpha, MARKER_ALPHA, strokeOutline } from "./stroke-shape";
 import { opacityOf } from "../model/opacity";
+import { strokeTaper } from "../model/taper";
 import { layerFlags, type ExportLayers, type LayerFlags } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
@@ -889,7 +890,8 @@ function strokeOps(stroke: Stroke, res: PageResources): string {
 function lineOps(stroke: Stroke, res: PageResources): string {
 	if (stroke.render === RENDER_INK) {
 		const sink = new PdfPathSink();
-		inkPath(sink, stroke.points, stroke.width, stroke.tool, stroke.nib);
+		// v25 (#351): the taper of the two ends, the very geometry the screen and the SVG draw.
+		inkPath(sink, stroke.points, stroke.width, stroke.tool, stroke.nib, strokeTaper(stroke));
 		if (sink.parts.length === 0) return "";
 		const body = `${rgb(stroke.color)} rg
 ${sink.parts.join(" ")} f`;

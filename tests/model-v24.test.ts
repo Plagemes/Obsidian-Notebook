@@ -118,8 +118,8 @@ describe("opacity: the helpers", () => {
 
 describe("format v24: the fields", () => {
 	it("is a document of the current version", () => {
-		expect(CURRENT_VERSION).toBe(24);
-		expect(parsed(serialize(docWith([]))).doc.version).toBe(24);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(24);
+		expect(parsed(serialize(docWith([]))).doc.version).toBe(CURRENT_VERSION);
 	});
 
 	it("writes opacity after the shape style and before the points, and reads it back byte for byte", () => {
@@ -224,7 +224,7 @@ describe("format v24: migration from v23", () => {
 		expect(r.migratedFrom).toBe(23);
 		expect(r.dropped).toBeUndefined();
 		expect(r.doc.version).toBe(CURRENT_VERSION);
-		expect(getAt(parseRaw(serialize(r.doc)), ["version"])).toBe(24);
+		expect(getAt(parseRaw(serialize(r.doc)), ["version"])).toBe(CURRENT_VERSION);
 	});
 
 	it("reads files of every older version through the chain", () => {
@@ -233,7 +233,7 @@ describe("format v24: migration from v23", () => {
 			setAt(raw, ["version"], version);
 			const r = parsed(JSON.stringify(raw));
 			expect(r.migratedFrom, String(version)).toBe(version);
-			expect(r.doc.version).toBe(24);
+			expect(r.doc.version).toBe(CURRENT_VERSION);
 		}
 	});
 

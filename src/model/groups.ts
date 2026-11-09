@@ -14,6 +14,7 @@
 import { createId } from "./document";
 import type { Command, ElementSwap } from "./history";
 import { freezeElement, freezeStroke } from "./serialize";
+import { pieceTaper } from "./taper";
 import type { NotebookDocument, Page, PageElement, Point, Stroke } from "./types";
 
 /** A stroke or an element of a page. */
@@ -102,10 +103,13 @@ export function hasGroupMate(page: Pick<Page, "strokes" | "elements">, item: Pag
 export function strokePieces(page: Pick<Page, "strokes" | "elements">, stroke: Stroke, runs: readonly Point[][], newId: () => string = createId): Stroke[] {
 	const base = stroke.group === undefined || hasGroupMate(page, stroke) ? stroke : ungroupedItem(stroke);
 	// v22: a piece of a cut shape is an open line: it has no fill (the line style stays).
-	const { fill: _fill, fillTint: _tint, ...plain } = base;
+	const { fill: _fill, fillTint: _tint, taperStart: _ts, taperEnd: _te, ...plain } = base;
 	void _fill;
 	void _tint;
-	return runs.map((points) => freezeStroke({ ...plain, id: newId(), points }));
+	void _ts;
+	void _te;
+	// v25: a piece keeps the taper of an end of the original only when the piece still reaches that end (a cut makes new, untapered ends).
+	return runs.map((points) => freezeStroke({ ...plain, id: newId(), points, ...pieceTaper(stroke, points) }));
 }
 
 /** What a selection says about groups: how many different groups its items belong to and how many items are in one. */

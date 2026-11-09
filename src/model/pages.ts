@@ -46,6 +46,9 @@ export function copyStroke(s: Stroke, id: string = s.id, slide?: string | null, 
 	if (s.dash !== undefined) copy.dash = s.dash;
 	// v24: the opacity.
 	if (s.opacity !== undefined) copy.opacity = s.opacity;
+	// v25: the taper of the two ends.
+	if (s.taperStart !== undefined) copy.taperStart = s.taperStart;
+	if (s.taperEnd !== undefined) copy.taperEnd = s.taperEnd;
 	return freezeStroke(copy);
 }
 

@@ -69,6 +69,7 @@ import {
 import { pageContentCommand } from "../model/page-content";
 import { checkContent, freezeStroke } from "../model/serialize";
 import { normaliseOpacity } from "../model/opacity";
+import { newStrokeTaper, strokeTaper } from "../model/taper";
 import {
 	DEFAULT_META, isLinePen, isNewPen, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
@@ -5550,13 +5551,15 @@ export class NotebookView extends FileView {
 		// 0.26 (#358): the opacity chosen for this pen (absent at full strength, so ordinary ink is stored exactly as before).
 		const opacity = normaliseOpacity(highlighter ? this.tools.highlighterOpacity : this.tools.penOpacity);
 		const own = opacity === undefined ? {} : { opacity };
-		this.ink.reset(inkTool, width, nib);
+		// 0.27 (#351): how much the line thins at its two ends (the line pens only; absent when none, so ordinary ink is stored exactly as before).
+		const taperFields = newStrokeTaper(inkTool, this.tools.penTaperStart, this.tools.penTaperEnd);
+		this.ink.reset(inkTool, width, nib, strokeTaper({ tool: inkTool, render: RENDER_INK, ...taperFields }));
 		this.ink.add(start[0], start[1], p);
 		this.active = {
 			pageIndex,
 			stroke: this.markers?.invisibleInk && !highlighter
-				? { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own, hidden: true }
-				: { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own },
+				? { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own, ...taperFields, hidden: true }
+				: { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own, ...taperFields },
 			wet: true,
 			liveFallback: false,
 			rawX: start[0],
@@ -5750,7 +5753,11 @@ export class NotebookView extends FileView {
 		const points = this.ink.toPoints();
 		points.push([active.rawX, active.rawY, active.rawP]);
 		const { tool, color, width } = active.stroke;
-		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, nib: active.stroke.nib, ...(active.stroke.opacity === undefined ? {} : { opacity: active.stroke.opacity }), points, predicted: [] });
+		this.renderer.setLive({
+			pageIndex: active.pageIndex, tool, color, width, nib: active.stroke.nib, ...(active.stroke.opacity === undefined ? {} : { opacity: active.stroke.opacity }),
+			...(active.stroke.taperStart === undefined ? {} : { taperStart: active.stroke.taperStart }), ...(active.stroke.taperEnd === undefined ? {} : { taperEnd: active.stroke.taperEnd }),
+			points, predicted: [],
+		});
 	}
 
 	/**
@@ -6166,8 +6173,11 @@ export class NotebookView extends FileView {
 		// Highlighter shapes stay highlighter strokes (translucent); pen shapes become constant-width "shape" ink.
 		// Shapes keep the perfect-freehand geometry (render 1), drawn whole on the live layer.
 		// A recognised shape of a new pen (fountain, brush, marker) is a plain shape: those pens have no outline of the old geometry and no nib in a shape.
-		const { nib: _nib, ...flat } = a.stroke;
+		// (v25: a shape has no taper either.)
+		const { nib: _nib, taperStart: _ts, taperEnd: _te, ...flat } = a.stroke;
 		void _nib;
+		void _ts;
+		void _te;
 		a.stroke = { ...flat, tool: a.stroke.tool === "highlighter" ? "highlighter" : "shape", points: first, render: RENDER_FREEHAND };
 		a.extra = shape.points.slice(1);
 		a.wet = false;

@@ -2,6 +2,7 @@
 import { kindHasNib, isPenKind, normaliseNib, type PenKind } from "../ink/pen-kinds";
 import { NIB_DEFAULT } from "../model/types";
 import { isOpacity, normaliseOpacity, opacityOf } from "../model/opacity";
+import { canTaper, isTaper, normaliseTaper, taperOf } from "../model/taper";
 import type { MessageKey } from "../i18n/en";
 
 export type FavouriteTool = "pen" | "highlighter";
@@ -18,6 +19,9 @@ export interface FavouritePen {
 	nib?: number;
 	/** 0.26 (#358): how strongly the pen writes, 0.05 to just under 1 (absent = full strength, as every older setting). */
 	opacity?: number;
+	/** 0.27 (#351): how much the line of the pen thins towards the start and the end of a stroke, 0.05 to 1 (absent = no taper). Only the line pens (pen, fountain pen, brush). */
+	taperStart?: number;
+	taperEnd?: number;
 }
 
 export const FAVOURITE_SLOTS = 6;
@@ -44,6 +48,9 @@ export interface PenState {
 	/** 0.26 (#358): the opacity of new ink of each pen (1 or absent = full strength). */
 	penOpacity?: number;
 	highlighterOpacity?: number;
+	/** 0.27 (#351): the taper of the two ends of new line-pen strokes (0 or absent = none). */
+	penTaperStart?: number;
+	penTaperEnd?: number;
 }
 
 const COLOR = /^#[0-9a-f]{6}$/i;
@@ -67,6 +74,11 @@ export function validPen(v: unknown): FavouritePen | null {
 			const nib = normaliseNib(o.nib);
 			if (nib !== NIB_DEFAULT) pen.nib = nib;
 		}
+	}
+	// 0.27 (#351): a taper that does not fit, or on a pen that cannot taper (a marker, a highlighter), is left out.
+	if (o.tool === "pen" && canTaper(pen.kind ?? "pen")) {
+		if (isTaper(o.taperStart)) pen.taperStart = o.taperStart;
+		if (isTaper(o.taperEnd)) pen.taperEnd = o.taperEnd;
 	}
 	return pen;
 }
@@ -92,6 +104,12 @@ export function captureFavourite(s: PenState): FavouritePen {
 		pen.kind = s.penKind;
 		if (kindHasNib(s.penKind) && normaliseNib(s.nibAngle) !== NIB_DEFAULT) pen.nib = normaliseNib(s.nibAngle);
 	}
+	// 0.27 (#351): the taper of the two ends (only a line pen has one).
+	if (canTaper(pen.kind ?? "pen")) {
+		const start = normaliseTaper(s.penTaperStart), end = normaliseTaper(s.penTaperEnd);
+		if (start !== undefined) pen.taperStart = start;
+		if (end !== undefined) pen.taperEnd = end;
+	}
 	return pen;
 }
 
@@ -99,7 +117,7 @@ export function captureFavourite(s: PenState): FavouritePen {
 export function favouritePatch(fav: FavouritePen): Partial<PenState> {
 	return fav.tool === "highlighter"
 		? { tool: "highlighter", highlighterColor: fav.color, highlighterWidth: fav.width, highlighterOpacity: opacityOf(fav) }
-		: { tool: "pen", penColor: fav.color, penWidth: fav.width, penKind: fav.kind ?? "pen", nibAngle: fav.nib ?? NIB_DEFAULT, penOpacity: opacityOf(fav) };
+		: { tool: "pen", penColor: fav.color, penWidth: fav.width, penKind: fav.kind ?? "pen", nibAngle: fav.nib ?? NIB_DEFAULT, penOpacity: opacityOf(fav), penTaperStart: taperOf(fav.taperStart), penTaperEnd: taperOf(fav.taperEnd) };
 }
 
 /** The name (i18n key) of the pen a favourite holds: the ballpoint pen, the highlighter or one of the new pens. */
@@ -110,7 +128,8 @@ export function favouriteToolKey(fav: FavouritePen): MessageKey {
 
 export function sameFavourite(a: FavouritePen, b: FavouritePen): boolean {
 	return a.tool === b.tool && a.color.toLowerCase() === b.color.toLowerCase() && a.width === b.width
-		&& (a.kind ?? "pen") === (b.kind ?? "pen") && (a.nib ?? NIB_DEFAULT) === (b.nib ?? NIB_DEFAULT) && opacityOf(a) === opacityOf(b);
+		&& (a.kind ?? "pen") === (b.kind ?? "pen") && (a.nib ?? NIB_DEFAULT) === (b.nib ?? NIB_DEFAULT) && opacityOf(a) === opacityOf(b)
+		&& taperOf(a.taperStart) === taperOf(b.taperStart) && taperOf(a.taperEnd) === taperOf(b.taperEnd);
 }
 
 /** Index of the slot holding the pen that is selected now, or -1. */

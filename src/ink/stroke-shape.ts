@@ -1,5 +1,6 @@
 import { getStroke, type StrokeOptions } from "perfect-freehand";
 import { opacityOf } from "../model/opacity";
+import { strokeTaper } from "../model/taper";
 import { RENDER_INK, type Point, type ShapeDash, type Stroke, type Tool } from "../model/types";
 import { inkPath, SvgPathSink } from "./ink-geometry";
 import { dashRuns } from "./shape-style";
@@ -74,14 +75,15 @@ export function strokePath(points: readonly Point[], width: number, complete = t
 }
 
 /** SVG path of a committed stroke with the geometry its render version names (nonzero fill). */
-export function strokeSvgPath(stroke: Pick<Stroke, "width" | "tool" | "render"> & { points: readonly Point[]; nib?: number; dash?: ShapeDash }): string {
+export function strokeSvgPath(stroke: Pick<Stroke, "width" | "tool" | "render"> & { points: readonly Point[]; nib?: number; dash?: ShapeDash; taperStart?: number; taperEnd?: number }): string {
 	// v22 (#37): a dashed or dotted shape is its runs, each drawn as an outline of its own (one path, nonzero fill).
 	if (stroke.dash !== undefined && stroke.tool === "shape") {
 		return dashRuns(stroke.points, stroke.dash, stroke.width).map((run) => strokeSvgPath({ points: run, width: stroke.width, tool: stroke.tool, render: stroke.render })).join("");
 	}
 	if (stroke.render !== RENDER_INK) return strokePath(stroke.points, stroke.width, true, stroke.tool);
 	const sink = new SvgPathSink();
-	inkPath(sink, stroke.points, stroke.width, stroke.tool, stroke.nib);
+	// v25 (#351): the taper of the two ends (undefined for a stroke without one: the geometry is then exactly what it always was).
+	inkPath(sink, stroke.points, stroke.width, stroke.tool, stroke.nib, strokeTaper(stroke));
 	return sink.d;
 }
 

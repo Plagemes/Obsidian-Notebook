@@ -4195,3 +4195,39 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Drag a row into the note (embed text) | yes | harness `doc=related` (drag data only) | | | drop into the editor not tested in a real Obsidian |
 | Setting *Related pages: same course* | yes | `tests/settings-schema.test.ts` | | | |
 | The panel's read-only refresh writes nothing; what it read is saved by the next page-switcher refresh, one entry per path, never over a newer index entry nor for a notebook deleted since | yes | `tests/page-directory-save.test.ts` | | | |
+
+### 0.27 — taper: stroke taper at the start and the end of a line, document format 25 (roadmap #351; steps 3000-3019)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen). Use a notebook with some handwriting and a pen you like.
+
+3000. **Options.** Pick the pen and tap it again: under the colours, the width and the *Opacity* row there is a *Taper* row: a round button, the name, a small picture of a stroke, and two sliders, *Start* and *End*, both *Off*. Long-press the round button: the explanation appears (English and Italian). Pick the fountain pen and the brush: the row is there. Pick the marker, the highlighter (stroke and area) or a shape: no *Taper* row.
+3001. **Picture.** Move *Start* and *End*: the little picture changes at once (a pointed start, a pointed end), before you lift your finger; lifting applies the value (*Off* or a percent).
+3002. **Write.** Set *Start* to about 50 % and *End* to about 100 % and write a long line, then a short word: the line begins thin and swells to its normal width and ends in a long point; the word tapers at both ends and is still readable. While the pen is down the start is already thin; at the lift the end settles into its point (a small change at the very end is expected, nothing else moves). A dot (tap the pen) is still a dot.
+3003. **Width.** Write the same line with a fine and a broad pen at the same taper: the point looks the same, longer on the broad pen (the taper is a length in line widths). Write with the pen at the largest taper on a short stroke (about a finger long): it becomes a leaf shape, thin at both ends and full in the middle.
+3004. **Each pen.** Try the ballpoint, the fountain pen (the nib angle still makes the line thinner along the nib) and the brush (its soft ends and the taper add up). A line written before the change is unchanged.
+3005. **Reset.** The round button puts both ends back to *Off*. A stroke written afterwards has full width to the end. Open the file in a text editor and search for "taper": only the strokes you tapered have the two keys.
+3006. **Favourites and pen sets.** Save the pen with its taper as a favourite (long press a slot, or the radial menu) and in a pen set; pick another pen, then the favourite: the taper comes back. The favourite shows as active only while the taper matches. The style eyedropper on a tapered stroke takes its taper too; on a marker or highlighter stroke it clears the taper.
+3007. **Eraser.** With the segment eraser cut a tapered stroke in the middle: the piece with the start keeps the pointed start, the piece with the end keeps the pointed end, the pieces next to the cut have flat ends. Erase a whole tapered stroke and undo: it comes back tapered.
+3008. **Selection.** Select tapered strokes, move them, scale them up and down, rotate, copy and paste, duplicate the page, move a page to another notebook: the taper is the same (it scales with the line). Smooth strokes and Straighten strokes keep it.
+3009. **Join and shapes.** Two strokes split by a pen dropout are joined by *Join broken strokes*: the result starts as the first started and ends as the second ended. Hold the pen still at the end of a stroke written with a taper so it turns into a shape: the shape has constant width.
+3010. **Exports.** Export a page with tapered strokes as PNG, SVG, PDF, interactive HTML, copy as image, the written area as a transparent picture and a hand-in PDF: the points look the same as on screen. Zoom the page far out: the points stay (no blobs at the ends).
+3011. **Thumbnails.** The Library card and the page navigator show the tapered strokes; after a page changes they follow.
+3012. **Redaction.** Cover a part of a tapered stroke when exporting: the visible parts keep their points at the real ends of the stroke only; the cut ends are flat and nothing of the covered part is left.
+3013. **Night look.** The tapered strokes are drawn the same in the night look and with a coloured paper.
+3014. **Save and reopen.** Close and reopen the notebook: the tapers are as they were. A notebook that never used the *Taper* row is saved without any taper key. Open a notebook written by 0.26: it looks identical and is saved as format 25. A copy of the plugin older than this version opens a notebook saved by this one read-only (it never rewrites it and keeps a backup).
+3015. **Merge and sync.** Write a tapered stroke on one device and open the notebook on another that also has changes: after the merge the stroke is there once with its taper.
+3016. **Looks.** Italian (*Rastremazione*, *Inizio*, *Fine*), light and dark theme, phone and tablet width: the row fits in the pen options, the sliders are easy to drag with a finger and nothing is clipped; the buttons are at least 40 px (44 px on touch).
+3017. **Version history and diff.** A snapshot with a tapered stroke restores tapered; the visual version diff shows a stroke whose taper changed as changed.
+3018. **Large notebook.** Open a large notebook (hundreds of pages) written by 0.26: it opens as fast as before (staged loading) and a page with many tapered strokes scrolls and zooms smoothly on the tablet.
+3019. **Writing feel.** Write quickly with a taper of 100 % on both ends for a few minutes: the ink follows the pen with no extra delay compared with *Off*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v25: optional `taperStart` and `taperEnd` (0.05 to 1) on pen, fountain pen and brush strokes of render 2; migration v24 → v25 (identity plus version; a stray key is dropped), lenient read (out of range, not a number or on a stroke that cannot taper: dropped and counted, the stroke stays), strict write, staged loading of large v24 files, repair, merge key, copies, version diff, schema `docs/schema/notebook-v25.schema.json` | yes | `tests/model-v25.test.ts`, `tests/format-schema.test.ts` | | | |
+| Engine: the start taper in the radius of each point as it is added (causal, so the wet ink thins from the first sample), the end taper at the lift, short strokes shorten it, a dot is a dot; a taper is a length of `value * 12` line widths | yes | `tests/model-v25.test.ts` | | | the end settling at the lift was not seen with the real pen |
+| The same shape in every path: static canvas, live fallback, level of detail (zoomed out and thumbnails), PNG raster, SVG, PDF, HTML | yes | `tests/model-v25.test.ts`; harness `doc=taper` | | | |
+| Golden render hashes unchanged (an absent taper draws exactly as before) | yes | `tests/pens-golden.test.ts` | | | |
+| Taper row in the pen options (two sliders and a picture drawn by the engine) for the pen, the fountain pen and the brush; new strokes store it only when set | yes | state, favourites, strings: `tests/model-v25.test.ts`; harness `doc=taper` | | | the sliders were not dragged with a finger on a device |
+| Favourite pens, pen sets, the radial menu's active mark and the style eyedropper keep the taper | yes | `tests/model-v25.test.ts` | | | |
+| Cuts keep a taper only at a real end of the stroke (eraser pieces, redaction pieces); joining keeps the first start and the last end; a recognised shape loses it | yes | `tests/model-v25.test.ts` | | | |
+| Editing the taper of strokes already written (from the selection bar) | | | | | not part of this item: the taper is a property of new ink |
