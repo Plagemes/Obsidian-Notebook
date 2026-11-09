@@ -139,7 +139,16 @@ export function joinStrokes(first: Stroke, rest: readonly Stroke[]): Stroke {
 		const from = s.points[0] && Math.hypot(s.points[0][0] - last[0], s.points[0][1] - last[1]) < 0.01 ? 1 : 0;
 		for (let i = from; i < s.points.length; i++) points.push(s.points[i]!);
 	}
-	return freezeStroke({ ...first, points });
+	// v25: the joined line begins as `first` begins and ends as the last piece ends: the taper of the ends where the line was split is dropped.
+	const { taperStart: _ts, taperEnd: _te, ...plain } = first;
+	void _ts;
+	void _te;
+	const tail = rest.length > 0 ? rest[rest.length - 1]! : first;
+	return freezeStroke({
+		...plain, points,
+		...(first.taperStart === undefined ? {} : { taperStart: first.taperStart }),
+		...(tail.taperEnd === undefined ? {} : { taperEnd: tail.taperEnd }),
+	});
 }
 
 /** The number of items (strokes and elements) of `page` that are in `group`, and whether one of them is a locked element. */

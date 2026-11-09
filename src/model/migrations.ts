@@ -551,6 +551,25 @@ function v23ToV24(raw: RawObject): RawObject {
 	return out;
 }
 
+/**
+ * v25 adds the optional `taperStart` and `taperEnd` of strokes (#351). Every valid v24 document is a valid v25 document: the migration is the
+ * identity apart from the version. A v24 reader ignored unknown fields, so such a key in a v24 file was never ours and never meant anything: it is
+ * dropped, not interpreted (like `opacity` in v23 -> v24 and `nib` in v19 -> v20). Nothing else changes, so a large v24 file can still be read page
+ * by page (StagedParse), which ignores these keys of each stroke.
+ */
+function v24ToV25(raw: RawObject): RawObject {
+	const out: RawObject = { ...raw, version: 25 };
+	if (!Array.isArray(raw.pages)) return out;
+	const pages = (raw.pages as unknown[]).map((page) => {
+		if (!isRaw(page)) return page;
+		if (!Array.isArray(page.strokes) || !page.strokes.some((s) => isRaw(s) && ("taperStart" in s || "taperEnd" in s))) return page;
+		return { ...page, strokes: (page.strokes as unknown[]).map((s) => withoutKeys(s, ["taperStart", "taperEnd"])) };
+	});
+	// A document with nothing to drop keeps its pages as they were (the migration is the identity but the version).
+	if (pages.some((p, i) => p !== (raw.pages as unknown[])[i])) out.pages = pages;
+	return out;
+}
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -589,6 +608,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	21: v21ToV22,
 	22: v22ToV23,
 	23: v23ToV24,
+	24: v24ToV25,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

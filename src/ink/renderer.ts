@@ -1,6 +1,7 @@
 import type { AreaElement, ExcerptElement, Page, PageElement, Point, ShapeDash, Stroke, TextElement, Tool } from "../model/types";
 import { isNewPen, MM, RENDER_FREEHAND, RENDER_INK } from "../model/types";
 import { opacityOf } from "../model/opacity";
+import { strokeTaper } from "../model/taper";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
@@ -172,6 +173,9 @@ export interface LiveStroke {
 	dash?: ShapeDash;
 	/** Format v24 (#358): the opacity of the stroke being written (multiplies the pen's alpha; absent = 1). */
 	opacity?: number;
+	/** Format v25 (#351): the taper of the two ends of the stroke being written (absent = none). */
+	taperStart?: number;
+	taperEnd?: number;
 	points: readonly Point[];
 	predicted: readonly Point[];
 }
@@ -1355,15 +1359,16 @@ export class Renderer {
 		if (live && live.points.length > 0 && boxes[live.pageIndex]) this.guarded(ctx, "live stroke", () => {
 			this.beginPage(ctx, boxes[live.pageIndex]!);
 			const points = live.predicted.length ? [...live.points, ...live.predicted] : live.points;
+			const taper = strokeTaper({ tool: live.tool, render: RENDER_INK, taperStart: live.taperStart, taperEnd: live.taperEnd });
 			// v22 (#37): the fill of the closed shape being dragged lies under its line (a dashed line is drawn as its runs).
 			if (live.fill !== undefined && isFilled({ tool: live.tool, fill: live.fill, points })) this.fillShape(ctx, live.fill, live.fillTint === true, points, undefined, live.opacity);
 			this.setInk(ctx, live.tool, live.color, live.opacity);
 			if (live.dash !== undefined && live.tool === "shape") {
 				ctx.fill(new Path2D(strokeSvgPath({ points, width: live.width, tool: live.tool, render: RENDER_FREEHAND, dash: live.dash })));
-			} else if (isNewPen(live.tool)) {
-				// The new pens have no perfect-freehand outline: the same geometry as the wet ink, rebuilt from the points.
+			} else if (isNewPen(live.tool) || taper) {
+				// The new pens have no perfect-freehand outline: the same geometry as the wet ink, rebuilt from the points (so has a tapered line, v25).
 				const path = new Path2D();
-				inkPath(path, points, live.width, live.tool, live.nib);
+				inkPath(path, points, live.width, live.tool, live.nib, taper);
 				ctx.fill(path);
 			} else ctx.fill(new Path2D(strokePath(points, live.width, false, live.tool)));
 			ctx.restore();
@@ -1620,7 +1625,7 @@ export class Renderer {
 		// v22: a dashed or dotted shape is drawn exactly (its runs are short; there is nothing to simplify).
 		if (stroke.dash !== undefined) return null;
 		if (stroke.render === RENDER_INK) {
-			const nodes = lodNodes(stroke.points, stroke.width, stroke.tool, lod, stroke.nib);
+			const nodes = lodNodes(stroke.points, stroke.width, stroke.tool, lod, stroke.nib, strokeTaper(stroke));
 			if (!nodes) return null;
 			const path = new Path2D();
 			addLodNodesPath(path, nodes);
@@ -1640,7 +1645,7 @@ export class Renderer {
 		if (stroke.dash !== undefined && stroke.tool === "shape") return new Path2D(strokeSvgPath({ points, width: stroke.width, tool: stroke.tool, render: stroke.render, dash: stroke.dash }));
 		if (stroke.render === RENDER_INK) {
 			const path = new Path2D();
-			inkPath(path, points, stroke.width, stroke.tool, stroke.nib);
+			inkPath(path, points, stroke.width, stroke.tool, stroke.nib, strokeTaper(stroke));
 			return path;
 		}
 		return new Path2D(strokePath(points, stroke.width, true, stroke.tool));
