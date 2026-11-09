@@ -175,6 +175,8 @@ const WRITING: SettingSpec[] = [
 		id: "plannerWeekStart", section: "writing", order: 35, name: "settings.plannerWeekStart", desc: "settings.plannerWeekStart.desc", keywords: "planner calendar week monday sunday agenda settimana lunedi domenica",
 		control: { type: "dropdown", options: options([["auto", "settings.plannerWeekStart.auto"], ["monday", "settings.plannerWeekStart.monday"], ["sunday", "settings.plannerWeekStart.sunday"]]) },
 	},
+	// 0.27 plannertasks (#266): the chip with the vault's tasks due on a planner page
+	{ id: "plannerTasks", section: "writing", order: 36, name: "settings.plannerTasks", desc: "settings.plannerTasks.desc", control: { type: "toggle" }, keywords: "planner tasks due date agenda todo daily weekly attivita scadenze compiti" },
 	{ id: "stabilization", section: "writing", order: 40, name: "settings.stabilization", desc: "settings.stabilization.filter.desc", control: { type: "slider", min: 0, max: 10, step: 1 } },
 	{ id: "inkFollowsObjects", section: "writing", order: 50, name: "settings.inkFollows", desc: "settings.inkFollows.desc", control: { type: "toggle" } },
 	// 0.17 snap (#71): magnetic snap to the paper grid and alignment guides while a selection moves or scales

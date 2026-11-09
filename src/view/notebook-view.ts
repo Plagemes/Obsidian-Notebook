@@ -1,4 +1,4 @@
-import { FileView, getLanguage, Scope, setIcon, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { FileView, getLanguage, Scope, setIcon, TFile, type Menu, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { pageFromState, pageIdFromState, regionFromState } from "../integration/links";
 import { pageTargetFromEphemeralState, pageTargetFromSubpath, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { checkConflicts, openRepair, type ReliabilityDeps } from "../integration/reliability";
@@ -191,6 +191,7 @@ import { ToolFade } from "./tool-fade";
 import { WELCOME_KEY } from "../model/welcome-back";
 import { WelcomeBack } from "./welcome-back";
 import { PageRefs } from "./page-refs";
+import { PlannerTasks } from "./planner-tasks";
 import { SmartAddStrip } from "./smart-add";
 import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
 import {
@@ -587,6 +588,8 @@ export class NotebookView extends FileView {
 	/** 0.23 (#420): the card offered when a notebook is reopened after a while (view/welcome-back.ts). */
 	welcomeBack: WelcomeBack | null = null;
 	pageRefs: PageRefs | null = null;
+	/** 0.27 plannertasks (#266): the chip with the vault's tasks due on a planner page (view/planner-tasks.ts). */
+	plannerTasks: PlannerTasks | null = null;
 	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
 	lectureMode: LectureModeController | null = null;
 	/** 0.22 lecthead (#210): the header of the class on the page being written on. */
@@ -1018,6 +1021,17 @@ export class NotebookView extends FileView {
 			current: () => this.currentPageIndex(),
 			goTo: (index) => this.goToPage(index),
 		});
+		this.plannerTasks = new PlannerTasks({
+			app: this.app,
+			parent: () => this.body,
+			enabled: () => this.host.settings.plannerTasks && this.layout !== null,
+			page: () => this.shownDoc()?.pages[this.currentPageIndex()] ?? null,
+		});
+		this.registerEvent(this.app.metadataCache.on("changed", (f) => this.plannerTasks?.fileChanged(f)));
+		this.registerEvent(this.app.vault.on("delete", (f) => this.plannerTasks?.fileGone(f.path)));
+		this.registerEvent(this.app.vault.on("rename", (f, old) => {
+			if (f instanceof TFile) this.plannerTasks?.fileRenamed(f, old);
+		}));
 		this.smartAdd = new SmartAddStrip({
 			app: this.app,
 			parent: () => this.body,
@@ -1330,6 +1344,8 @@ export class NotebookView extends FileView {
 		this.slideBack = null;
 		this.pageRefs?.destroy();
 		this.pageRefs = null;
+		this.plannerTasks?.destroy();
+		this.plannerTasks = null;
 		this.smartAdd?.destroy();
 		this.smartAdd = null;
 		this.ui?.destroy();
@@ -1794,6 +1810,7 @@ export class NotebookView extends FileView {
 		this.toolFade?.settingsChanged();
 		this.inputLayout?.settingsChanged();
 		this.pageRefs?.reset();
+		this.plannerTasks?.reset();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
 		this.display?.settingsChanged();
@@ -4868,6 +4885,7 @@ export class NotebookView extends FileView {
 		this.pageOffer?.reset();
 		this.slideBack?.documentChanged();
 		this.pageRefs?.reset();
+		this.plannerTasks?.reset();
 		this.multiTap.reset();
 		this.stopHold();
 		this.textEditor?.close();
@@ -5078,6 +5096,7 @@ export class NotebookView extends FileView {
 		this.syncLockBadge(lockedPage);
 		this.mentions?.sync();
 		this.pageRefs?.sync();
+		this.plannerTasks?.sync();
 		this.notifyStatus();
 		if (n) this.practiceHooks?.page(current);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
@@ -5990,6 +6009,7 @@ export class NotebookView extends FileView {
 			window.setTimeout(() => {
 				this.lectureMode?.wrote();
 				this.welcomeBack?.wrote();
+				this.plannerTasks?.wrote();
 				this.noteWrittenForSlideBack(committed);
 			}, 0);
 		}

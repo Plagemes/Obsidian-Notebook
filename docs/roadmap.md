@@ -503,7 +503,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 263. **P2** Links to a precise region of a page, not only to the page.
 264. **P2** 🧪 Saved views: a named region + zoom, recalled instantly. (0.23, format v21: the optional notebook-level `views` list; *Save current view…* and *Go to saved view…* from the sheet, the notebook menu and the palette; rename, reorder, update, remove, all undoable; a view of a deleted page is shown as missing.)
 265. **P2** 🧪 Global bookmarks: pages from different notebooks in one list.
-266. **P2** Planner pages showing Obsidian tasks and due dates on top.
+266. **P2** 🧪 Planner pages showing Obsidian tasks and due dates on top.
 267. **P2** Linked images: if the file in the vault changes (e.g. a plot exported from Python), the image on the page updates.
 268. **P3** Table linked to a CSV in the vault, updating itself.
 269. **P3** Export to Excalidraw.

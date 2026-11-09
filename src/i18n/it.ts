@@ -5031,6 +5031,18 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.relatedCourse.desc": "Elenca anche la prima pagina dei quaderni del corso della nota (dall'orario).",
 	"help.relatedRefresh": "Rilegge i quaderni e ricalcola le pagine collegate. Il pannello si aggiorna anche da solo quando cambi nota.",
 	"help.relatedCopy": "Copia il link a questa pagina. Per inserire la pagina nella nota come incorporamento, trascina la riga nella nota.",
+	// 0.27 plannertasks
+	"settings.plannerTasks": "Attività nelle pagine del planner",
+	"settings.plannerTasks.desc": "Elenca le attività in scadenza nel giorno. Solo lettura; non esportate.",
+	"planTasks.chip": "Attività in scadenza: {n}",
+	"planTasks.chipDone": "Attività in scadenza: tutte fatte",
+	"planTasks.title": "Attività in scadenza",
+	"planTasks.region": "Attività delle tue note in scadenza in questa pagina",
+	"planTasks.status.open": "Da fare",
+	"planTasks.status.done": "Fatta",
+	"planTasks.row": "{task}, in {note}",
+	"planTasks.more": "+ altre {n} nelle tue note",
+	"planTasks.hint": "Solo lettura. Spunta l'attività nella sua nota.",
 	"help.relatedPanel": "Apre il pannello laterale con le pagine scritte a mano collegate alla nota aperta: quelle che rimandano a lei, ne nominano titolo, etichette o titoli di sezione, o sono dello stesso corso.",
 	// 0.27 taper (#351)
 	"taper.title": "Rastremazione",

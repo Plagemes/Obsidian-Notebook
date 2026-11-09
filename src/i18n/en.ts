@@ -5030,6 +5030,18 @@ export const en = {
 	"settings.relatedCourse.desc": "Also list the first page of the notebooks of the note's course (from the timetable).",
 	"help.relatedRefresh": "Read the notebooks again and rank the related pages once more. The panel also updates by itself when you switch notes.",
 	"help.relatedCopy": "Copy a link to this page. To place the page in the note as an embed, drag the row into the note.",
+	// 0.27 plannertasks
+	"settings.plannerTasks": "Tasks on planner pages",
+	"settings.plannerTasks.desc": "Lists notes' tasks due that day on planner pages. Read only; not exported.",
+	"planTasks.chip": "Tasks due: {n}",
+	"planTasks.chipDone": "Tasks due: all done",
+	"planTasks.title": "Tasks due",
+	"planTasks.region": "Tasks from your notes due on this page",
+	"planTasks.status.open": "To do",
+	"planTasks.status.done": "Done",
+	"planTasks.row": "{task}, in {note}",
+	"planTasks.more": "+ {n} more in your notes",
+	"planTasks.hint": "Read only. Tick a task in its note.",
 	"help.relatedPanel": "Open the side panel that lists the handwritten pages related to the open note: pages that link to it, name its title, tags or headings, or belong to the same course.",
 	// 0.27 taper (#351)
 	"taper.title": "Taper",
