@@ -571,6 +571,8 @@ const STUDY: SettingSpec[] = [
 		id: "lectureMode", section: "study", group: "timetable", order: 30, name: "settings.lectureMode", desc: "settings.lectureMode.desc", keywords: "class lesson lecture classe lezione",
 		control: { type: "dropdown", options: options([["off", "settings.lectureMode.off"], ["ask", "settings.lectureMode.ask"], ["auto", "settings.lectureMode.auto"]]) },
 	},
+	// 0.27 workspaces (#375): the Lecture workspace preset (slides, notebook, outline) when a class starts; the presets are picked with the "Workspaces…" action.
+	{ id: "workspaceOnLecture", section: "study", group: "timetable", order: 30.5, name: "settings.workspaceOnLecture", desc: "settings.workspaceOnLecture.desc", control: { type: "toggle" }, keywords: "workspace preset lecture slides outline panels class area di lavoro lezione pannelli diapositive" },
 	// 0.21 slideback (#225): the pill back to where you last wrote during a lecture.
 	{ id: "slideBack", section: "study", group: "timetable", order: 31, name: "settings.slideBack", desc: "settings.slideBack.desc", control: { type: "toggle" }, keywords: "lecture slide back return current page lezione diapositiva torna" },
 	// 0.23 welcomeback (#420): the card with the way back, open questions and gaps when a notebook is reopened after a while.
@@ -685,6 +687,8 @@ export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>
 	favouritePens: "edited on the toolbar (long press on a favourite, radial menu)",
 	writingProfiles: "saved from the profile chip on the pen options (Save current as a profile)",
 	writingProfileActive: "set when a profile is switched to (chip, command, or lecture mode)",
+	workspacePresets: "saved from the Workspaces picker (Save current arrangement)",
+	workspacePresetActive: "set when a workspace preset is applied (picker, command, or lecture mode)",
 	eraserSize: "the eraser's size, edited in its tool options",
 	recentColours: "history of the colour picker",
 	penButtonWindowsMigrated: "set by the app once the old 150 ms default of the before-window was read as the new one",

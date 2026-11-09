@@ -258,6 +258,15 @@ export class Minimap {
 
 	// --- collapse, corner ---
 
+	/** 0.27 (#375): whether the overview is open (not folded into its pill). A workspace preset reads and sets it. */
+	get panelOpen(): boolean {
+		return !this.prefs.collapsed;
+	}
+
+	setPanelOpen(open: boolean): void {
+		this.setCollapsed(!open);
+	}
+
 	private setCollapsed(collapsed: boolean): void {
 		if (this.prefs.collapsed === collapsed) return;
 		this.prefs = { ...this.prefs, collapsed };

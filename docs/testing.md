@@ -4195,3 +4195,32 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Drag a row into the note (embed text) | yes | harness `doc=related` (drag data only) | | | drop into the editor not tested in a real Obsidian |
 | Setting *Related pages: same course* | yes | `tests/settings-schema.test.ts` | | | |
 | The panel's read-only refresh writes nothing; what it read is saved by the next page-switcher refresh, one entry per path, never over a newer index entry nor for a notebook deleted since | yes | `tests/page-directory-save.test.ts` | | | |
+
+### 0.27 — workspaces: workspace presets (roadmap #375; steps 3100-3119)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+3100. **Open.** Run the command *Workspaces: pick a panel layout…* (command palette, All actions or the notebook menu): a dialog lists Lecture, Study and Focus. The one that matches the panels open now carries the pill *Now*.
+3101. **Focus.** Open the page panel and the minimap, then pick *Focus*: both close; the notebook is untouched. A short notice names the workspace.
+3102. **Lecture.** Pick *Lecture*: the page panel opens as the outline, and the slides picker opens (choose a PDF or a notebook): the slides pane sits next to the notebook. Run the command again: nothing flickers and no second picker opens.
+3103. **One command.** Run *Workspace: Lecture (slides, notebook, outline)* from the All actions sheet: the same arrangement without the dialog. During a class (lecture mode on) it is ranked first.
+3104. **Study.** Pick *Study*: the reference window picker opens (choose a file) and the Related pages panel opens in the right sidebar. Pick *Focus* again: the reference window and the Related panel close; no other Obsidian tab or pane moves.
+3105. **Save.** Open a layout by hand (for instance outline and minimap), open the dialog and press *Save current arrangement*, name it: it appears as a tile with the panels it opens. Pick *Focus*, then your tile: the layout returns.
+3106. **Writing profile.** With the Lecture writing profile in use, save a preset: applying it later switches to that profile too.
+3107. **Rename, replace, delete.** On your own tile: the pencil renames it, the refresh button replaces its panels with what is open now, the bin deletes it. Lecture, Study and Focus have none of these buttons.
+3108. **Limit.** After 12 saved presets the save button is disabled and says so.
+3109. **Phone width.** On a phone: *Lecture* keeps the slides split and skips the page drawer; *Study* leaves out the reference window and the Related pages with one notice naming them. Saved presets behave the same.
+3110. **Lecture start.** Settings, Study, *Lecture workspace when a class starts* on: starting lecture mode applies Lecture (off by default).
+3111. **Nothing is edited.** Apply every preset on a notebook and compare the file (modified time and content): unchanged. A read-only notebook can apply presets too.
+3112. **Settings survive.** Restart Obsidian: saved presets are still there; hand-edit `data.json` with a broken entry: it is ignored, the others stay.
+3113. **Help and Italian.** Long-press the *Workspaces…* action: an explanation appears. Switch to Italian: dialog, notices and help are translated.
+3114. **Looks.** Light and dark theme, tablet and phone width; the dialog has the same look as the history panel.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure model (built-in presets, lenient read, bounded list, plan: close/open/skip, narrow degrade, one picker at a time, save/update/rename/delete) | yes | `tests/workspace-presets.test.ts` | | | |
+| Apply a preset (page panel and outline, minimap fold, slides pane, reference window, Related pages panel) through each panel's own open/close | yes | harness `doc=workspaces` (page panel, outline, minimap, saved preset; slides and reference need a file and are not driven) | | | slides/reference pickers and the Related panel in a real Obsidian |
+| Picker dialog (tiles, current marker, save, rename, replace, delete) | yes | harness `doc=workspaces` | | | |
+| All actions entries, command, context rank, long-press help | yes | `tests/actions-registry.test.ts`, `tests/context-rank.test.ts` | | | |
+| Setting *Lecture workspace when a class starts* | yes | `tests/settings-schema.test.ts` | | | |
+| Phone degrade (reference window, minimap, related skipped with one notice) | yes | `tests/workspace-presets.test.ts`, harness `doc=workspaces` (phone) | | | |
