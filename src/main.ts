@@ -6,7 +6,7 @@ import { setArtCacheScope } from "./ui/art/generative-art";
 import { Platform, Plugin, TFile } from "obsidian";
 import { onLanguageChanged, setUiLanguage, t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
-import { readMacros } from "./ui/macros";
+import { readMacros, withRepairedFields } from "./ui/macros";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
 import { stressDocument } from "./model/stress";
 import { NOTEBOOK_EXTENSIONS } from "./storage/format";
@@ -433,10 +433,11 @@ export default class NotebookPlugin extends Plugin {
 			const data: unknown = await this.loadData();
 			const settings = readSettings(data);
 			// Review fix (M7): a macro whose stored id was invalid or doubled got its (stable) new id; saved once, so it is what data.json holds from now on.
-			const stored = typeof data === "object" && data !== null ? (data as Record<string, unknown>).macros : undefined;
-			if (readMacros(stored).repaired) {
+			// Review fix (R4): only for a missing or doubled id, and only the repaired fields change in what was read: a newer version's keys stay as they are.
+			const raw = typeof data === "object" && data !== null && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
+			if (raw && readMacros(raw.macros, raw.macrosExtra).persist) {
 				try {
-					await this.saveData(settings);
+					await this.saveData(withRepairedFields(raw, settings));
 				} catch (e) {
 					console.error("[notebook] saving the repaired macro ids failed; they are repaired again, the same way, at the next start", e);
 				}

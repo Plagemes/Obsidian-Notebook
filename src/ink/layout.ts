@@ -82,6 +82,16 @@ export function pageAt(layout: Layout, x: number, y: number, tolerance = 0): num
 }
 
 /**
+ * Review fix (R5): whether page `index`, one of the `touched` pages, is the one the eraser is on: the point is inside its box, or it is the
+ * only page touched. A locked page that the eraser's circle only reaches into from the mate page is skipped without a word.
+ */
+export function eraserIsOnPage(layout: Layout, touched: readonly number[], index: number, x: number, y: number): boolean {
+	if (touched.length <= 1) return true;
+	const b = layout.boxes[index];
+	return !!b && x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height;
+}
+
+/**
  * Review fix (S4): every page whose box the circle of `radius` around the document point touches, in page order. An eraser by the binding
  * of a spread (or in the gap between two pages of a column) reaches both pages, so it erases on both, not only on the first.
  */

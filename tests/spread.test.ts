@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layoutPages, nearestPage, pageAt, pagesTouching, toPageLocal, visiblePages } from "../src/ink/layout";
+import { eraserIsOnPage, layoutPages, nearestPage, pageAt, pagesTouching, toPageLocal, visiblePages } from "../src/ink/layout";
 import { isScrollMode, layoutForMode, SCROLL_MODES } from "../src/ink/page-mode";
 import { pageAtOffset } from "../src/ink/scrollbar";
 import {
@@ -269,6 +269,22 @@ describe("which page a point is on", () => {
 		expect(pagesTouching({ boxes: [], width: 0, height: 0 }, 0, 0, 10)).toEqual([]);
 	});
 
+	it("the lock notice is for the page the eraser is on, not the locked mate it only reaches (R5)", () => {
+		const mid = A4.width + SPREAD_GAP_H / 2;
+		const touched = pagesTouching(l, mid - 6, 100, 20);
+		expect(touched).toEqual([0, 1]);
+		// the centre is in the gap: neither page is "the" page, so neither says it is locked
+		expect(eraserIsOnPage(l, touched, 0, mid - 6, 100)).toBe(false);
+		expect(eraserIsOnPage(l, touched, 1, mid - 6, 100)).toBe(false);
+		// the centre on the left page (still reaching the right one): only the left page may speak
+		const onLeft = pagesTouching(l, A4.width - 5, 100, 40);
+		expect(onLeft).toEqual([0, 1]);
+		expect(eraserIsOnPage(l, onLeft, 0, A4.width - 5, 100)).toBe(true);
+		expect(eraserIsOnPage(l, onLeft, 1, A4.width - 5, 100)).toBe(false);
+		// the only page touched always speaks (erasing on a locked page by itself)
+		expect(eraserIsOnPage(l, [1], 1, right.x + 3, 100)).toBe(true);
+	});
+
 	it("a resize waits for the stroke in progress, then lays out once (S3)", () => {
 		expect(relayoutStep(false, false)).toBe("idle");
 		expect(relayoutStep(false, true)).toBe("idle");
@@ -357,13 +373,41 @@ describe("position and region in a spread", () => {
 	it("measures the zoom against the page-wide fit, and a fitted spread is still fitted (S2)", () => {
 		const fit = fitWidth(tablet, l);
 		const pos = capturePosition("spread", fit, tablet, l, 1)!;
-		expect(pos.zoom).toBeCloseTo(fit.scale / zoomBase("spread", tablet, l, 1), 3);
-		expect(pos.zoom).toBeLessThan(0.6); // the pair fits at about half the zoom of one page
+		// the fit is stored as zoom 1 in every mode (R1): fitted stays fitted across modes, and an older record (zoom 1 = fitted) reads the same
+		expect(pos.zoom).toBe(1);
 		expect(restoreViewport(pos, "spread", tablet, l)!.fit).toBe(true);
-		// a page that fills the width is not the fit of a spread
+		// a page that fills the width is not the fit of a spread: stored just off 1, so it is not mistaken for it
 		const page = capturePosition("spread", { ...fit, scale: zoomBase("spread", tablet, l, 1) }, tablet, l, 1)!;
-		expect(page.zoom).toBeCloseTo(1, 3);
-		expect(restoreViewport(page, "spread", tablet, l)!.fit).toBe(false);
+		expect(Math.abs(page.zoom - 1)).toBeGreaterThan(0.01);
+		expect(Math.abs(page.zoom - 1)).toBeLessThan(0.02);
+		const back = restoreViewport(page, "spread", tablet, l)!;
+		expect(back.fit).toBe(false);
+		expect(back.viewport.scale / zoomBase("spread", tablet, l, 1)).toBeCloseTo(1, 1);
+	});
+
+	it("fit stays fit across a spread and a single column, both ways, and for a record of 0.26 (R1)", () => {
+		const column = layoutPages(pages);
+		const rotate: Size = { width: 800, height: 1280 };
+		// read at fit in a spread, reopened in a single column (portrait): fitted there, so a later rotation re-fits
+		const inSpread = capturePosition("spread", fitWidth(tablet, l), tablet, l, 3)!;
+		const portrait = restoreViewport(inSpread, "continuous", rotate, column)!;
+		expect(portrait.fit).toBe(true);
+		expect(portrait.viewport.scale).toBeCloseTo(fitWidth(rotate, column).scale, 6);
+		// read at fit in a column, opened in a spread: the spread, fitted
+		const inColumn = capturePosition("continuous", fitWidth(rotate, column), rotate, column, 3)!;
+		const landscape = restoreViewport(inColumn, "spread", tablet, l)!;
+		expect(landscape.fit).toBe(true);
+		expect(landscape.viewport.scale).toBeCloseTo(fitWidth(tablet, l).scale, 6);
+		// a 0.26 record (zoom 1, nothing else) is fitted in either mode; a zoomed one is not
+		const legacy = { page: 4, zoom: 1, x: 0, y: 0 };
+		expect(restoreViewport(legacy, "spread", tablet, l)!.fit).toBe(true);
+		expect(restoreViewport(legacy, "continuous", tablet, column)!.fit).toBe(true);
+		expect(restoreViewport({ ...legacy, zoom: 2 }, "spread", tablet, l)!.fit).toBe(false);
+		// regions too
+		const region = captureRegion("spread", fitWidth(tablet, l), tablet, l, 3)!;
+		expect(region.zoom).toBe(1);
+		expect(restoreRegion(region, 3, "continuous", rotate, column)!.fit).toBe(true);
+		expect(restoreRegion(captureRegion("continuous", fitWidth(rotate, column), rotate, column, 3)!, 3, "spread", tablet, l)!.fit).toBe(true);
 	});
 
 	it("a position saved in a spread comes back at the same page size in a single column, and the reverse (S2)", () => {
@@ -371,19 +415,19 @@ describe("position and region in a spread", () => {
 		const v = viewportOn(l, tablet, 4, 2, 80, 200); // twice the pair fit: about one page wide
 		const pos = capturePosition("spread", v, tablet, l, 4)!;
 		const inColumn = restoreViewport(pos, "continuous", tablet, column)!;
-		// the page is as wide on the screen in both modes
-		expect(inColumn.viewport.scale).toBeCloseTo(v.scale, 3);
+		// the page is as wide on the screen in both modes (a zoom this close to the fit is moved off it by 1.5%, see zoomFor)
+		expect(inColumn.viewport.scale / v.scale).toBeCloseTo(1, 1);
 		expect(inColumn.pageIndex).toBe(4);
 		const [px, py] = screenToPage(inColumn.viewport, 0, 0);
 		expect(px - column.boxes[4]!.x).toBeCloseTo(80, 0);
 		expect(py - column.boxes[4]!.y).toBeCloseTo(200, 0);
 		// ...and back
 		const again = restoreViewport(capturePosition("continuous", inColumn.viewport, tablet, column, 4)!, "spread", tablet, l)!;
-		expect(again.viewport.scale).toBeCloseTo(v.scale, 3);
-		// a fitted column is a page-wide zoom in the spread (not the pair fit): the page keeps its size
+		expect(again.viewport.scale / v.scale).toBeCloseTo(1, 1);
+		// a fitted column is the fit of the spread when opened there (R1)
 		const fitted = capturePosition("continuous", fitWidth(tablet, column), tablet, column, 2)!;
-		expect(fitted.zoom).toBeCloseTo(1, 3);
-		expect(restoreViewport(fitted, "spread", tablet, l)!.viewport.scale).toBeCloseTo(fitWidth(tablet, column).scale, 3);
+		expect(fitted.zoom).toBe(1);
+		expect(restoreViewport(fitted, "spread", tablet, l)!.viewport.scale).toBeCloseTo(fitWidth(tablet, l).scale, 6);
 		expect(restoreViewport(fitted, "continuous", tablet, column)!.fit).toBe(true);
 	});
 

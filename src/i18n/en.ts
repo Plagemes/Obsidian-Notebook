@@ -2685,6 +2685,8 @@ export const en = {
 	"macros.noEffect.one": "1 step changed nothing.",
 	"macros.noEffect.n": "{n} steps changed nothing.",
 	"macros.noChange": "{name}: nothing changed ({n} steps had no effect).",
+	"macros.noChange.one": "{name}: nothing changed (1 step had no effect).",
+	"macros.skippedNote": "{skipped} skipped (not available).",
 	"macros.extraSteps": "{n} more steps from a newer version are kept but not run.",
 	"help.macros": "Make your own button: a list of actions that run in order with one tap, as one undo step. Add it to the toolbar, All actions or a hotkey.",
 	"help.macro": "Runs your macro: its actions in order, as one undo step. Press and hold to pin it to the toolbar or unpin it.",

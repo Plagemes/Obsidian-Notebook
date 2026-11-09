@@ -651,7 +651,10 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.macros = macroRead.macros;
 	s.macrosExtra = macroRead.extra;
 	// Review fix (M7): the pin of a macro that no longer exists (deleted, or its id repaired) would sit in a toolbar slot unseen.
-	s.pinnedQuick = withoutMissingMacros(normalisePinned(d.pinnedQuick), s.macros);
+	// Review fix (R2): but a macro kept apart (a newer version's 14th) still exists, and so does every macro when the list is unreadable.
+	const pinned = normalisePinned(d.pinnedQuick);
+	const kept = s.macrosExtra.flatMap((m) => (typeof m === "object" && m !== null && typeof (m as { id?: unknown }).id === "string" ? [{ id: (m as { id: string }).id }] : []));
+	s.pinnedQuick = d.macros !== undefined && !Array.isArray(d.macros) ? pinned : withoutMissingMacros(pinned, [...s.macros, ...kept]);
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;

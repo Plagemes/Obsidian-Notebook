@@ -11,7 +11,7 @@ import { contextBoost, forThisPage, HERE_MIN_BOOST } from "../src/ui/context-ran
 import { buildLayout, buildSheet } from "../src/ui/layout";
 import { readSettings } from "../src/settings";
 import {
-	cleanName, cloneMacro, currentMacros, isEditStep, readMacros, MACRO_ICONS, MACRO_LABEL, MACRO_SAFE, macroAction, macroActionId, MAX_MACROS, MAX_NAME, MAX_STEPS, newMacroId, normaliseMacros,
+	withRepairedFields, cleanName, cloneMacro, currentMacros, isEditStep, readMacros, MACRO_ICONS, MACRO_LABEL, MACRO_SAFE, macroAction, macroActionId, MAX_MACROS, MAX_NAME, MAX_STEPS, newMacroId, normaliseMacros,
 	runMacro, setMacros, stepName, stepState, usableSteps, withoutMissingMacros, type Macro, type MacroEnv,
 } from "../src/ui/macros";
 import { line, sampleDocument } from "./helpers";
@@ -45,8 +45,9 @@ describe("reading the macros leniently", () => {
 			{ name: 4, icon: "Bad Icon!", steps: "no" },
 		]);
 		expect(read).toHaveLength(3);
-		// A step object that is not a step this version can read ({ action: 7 }) is kept apart, as written; primitives are junk.
-		expect(read[0]).toEqual({ id: "a1", name: "Maths page", icon: "star", steps: [{ action: "tool-pen" }, { action: "page-paper", value: "grid" }], extraSteps: [{ action: 7 }] });
+		// A step object that is not a step this version can read ({ action: 7 }) stays where it was, as written (R3); primitives are junk.
+		expect(read[0]).toEqual({ id: "a1", name: "Maths page", icon: "star", steps: [{ action: "tool-pen" }, { action: "page-paper", value: "grid" }, { action: 7 }] });
+		expect(stepState(read[0]!.steps[2]!)).toBe("unknown");
 		expect(new Set(read.map((m) => m.id)).size).toBe(3);
 		expect(read[1]!.name).toBe("Same id");
 		expect(read[2]).toMatchObject({ name: "Macro", icon: "zap", steps: [] });
@@ -57,8 +58,51 @@ describe("reading the macros leniently", () => {
 
 	it("keeps an action id it does not know, and does not run one that cannot be an id", () => {
 		const [m] = normaliseMacros([{ id: "x", name: "N", steps: [{ action: "from-a-newer-version", value: "42" }, { action: "bad id with spaces" }] }]);
-		expect(m!.steps).toEqual([{ action: "from-a-newer-version", value: "42" }]);
-		expect(m!.extraSteps).toEqual([{ action: "bad id with spaces" }]);
+		expect(m!.steps).toEqual([{ action: "from-a-newer-version", value: "42" }, { action: "bad id with spaces" }]);
+		expect(stepState(m!.steps[1]!)).toBe("unknown");
+		expect(usableSteps(m!)).toBe(0);
+	});
+
+	it("an unreadable step keeps its place, and extras come back in order and without doubles (R3)", () => {
+		const stored = [{ id: "x", name: "N", steps: [{ action: "tool-pen", n: 1 }, { action: { kind: "newer" } }, { action: "tool-eraser", n: 3 }] }];
+		const once = readMacros(stored);
+		expect(once.macros[0]!.steps.map((s) => (typeof s.action === "string" ? s.action : "?"))).toEqual(["tool-pen", "?", "tool-eraser"]);
+		// 25 steps: split by count, written back, and the next read joins them again in order (a newer version sees all 25)
+		const steps = Array.from({ length: MAX_STEPS + 5 }, (_, i) => ({ action: "tool-pen", n: i }));
+		const first = readMacros([{ id: "y", name: "Y", steps }]);
+		const round = JSON.parse(JSON.stringify(first.macros)) as unknown[];
+		const second = readMacros(round);
+		expect(second.macros[0]!.steps).toEqual(first.macros[0]!.steps);
+		expect(second.macros[0]!.extraSteps).toEqual(first.macros[0]!.extraSteps);
+		expect([...second.macros[0]!.steps, ...second.macros[0]!.extraSteps as unknown[]]).toEqual(steps);
+		// a newer version that wrote everything in `steps` again (limits raised) while `extraSteps` is still there: no step twice? the
+		// extras follow the listed steps, so a list of 25 plus the old extras is 30 items: split again, nothing lost
+		// macros: the extra list joins the listed ones, split again by this version's limit, and a macro in both lists counts once
+		const macros = Array.from({ length: MAX_MACROS + 2 }, (_, i) => ({ id: `m${i}`, name: `n${i}`, steps: [] }));
+		const a = readMacros(macros);
+		const b = readMacros([...JSON.parse(JSON.stringify(a.macros)) as unknown[], ...macros.slice(MAX_MACROS)], a.extra);
+		expect(b.macros).toHaveLength(MAX_MACROS);
+		expect(b.extra).toEqual(a.extra);
+		const c = readMacros(JSON.parse(JSON.stringify(a.macros)), JSON.parse(JSON.stringify(a.extra)));
+		expect(c.macros).toEqual(a.macros);
+		expect(c.extra).toEqual(a.extra);
+	});
+
+	it("repairs ids on the first read only when worth saving, and keeps a newer version's settings keys when it saves (R4)", () => {
+		// an id of another format is repaired for this run but not written over the file
+		expect(readMacros([{ id: "NEWER-id-format", name: "A" }]).repaired).toBe(true);
+		expect(readMacros([{ id: "NEWER-id-format", name: "A" }]).persist).toBe(false);
+		expect(readMacros([{ name: "A" }]).persist).toBe(true);
+		expect(readMacros([{ id: "m1", name: "A" }, { id: "m1", name: "B" }]).persist).toBe(true);
+		expect(readMacros([{ id: "m1", name: "A" }]).persist).toBe(false);
+		const raw = { macros: [{ id: "m1", name: "A" }, { id: "m1", name: "B" }], pinnedQuick: ["fit-width"], fromNewerVersion: { a: 1 }, other: [1, 2] };
+		const settings = readSettings(raw);
+		const saved = withRepairedFields(raw, settings);
+		expect(saved.fromNewerVersion).toEqual({ a: 1 });
+		expect(saved.other).toEqual([1, 2]);
+		expect((saved.macros as Macro[]).map((m) => m.id)).toEqual(settings.macros.map((m) => m.id));
+		expect(new Set((saved.macros as Macro[]).map((m) => m.id)).size).toBe(2);
+		expect(saved.pinnedQuick).toEqual(["fit-width"]);
 	});
 
 	it("keeps the fields it does not know, of a macro and of a step, and a value of another kind (M6)", () => {
@@ -123,6 +167,16 @@ describe("reading the macros leniently", () => {
 		expect(many.macros).toHaveLength(MAX_MACROS);
 		expect(many.macrosExtra).toHaveLength(2);
 		expect(readSettings(JSON.parse(JSON.stringify(many))).macrosExtra).toHaveLength(2);
+	});
+
+	it("keeps the pin of a macro that is kept apart, and every pin when the macro list cannot be read (R2)", () => {
+		const macros = Array.from({ length: MAX_MACROS + 2 }, (_, i) => ({ id: `m${i}`, name: "n" }));
+		const pinned = [`macro-m${MAX_MACROS + 1}`, "macro-gone", "fit-width"];
+		const read = readSettings({ macros, pinnedQuick: pinned });
+		expect(read.pinnedQuick).toEqual([`macro-m${MAX_MACROS + 1}`, "fit-width"]);
+		// saved and read again: still there
+		expect(readSettings(JSON.parse(JSON.stringify(read))).pinnedQuick).toEqual(read.pinnedQuick);
+		expect(readSettings({ macros: "broken", pinnedQuick: ["macro-a", "fit-width"] }).pinnedQuick).toEqual(["macro-a", "fit-width"]);
 	});
 
 	it("cuts a long name and falls back for an empty one", () => {

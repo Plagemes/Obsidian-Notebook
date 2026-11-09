@@ -257,14 +257,18 @@ export class MacrosModal extends Modal {
 			text.createSpan({ cls: "nb-macro-step-label", text: actionLabel(a) });
 			const select = text.createEl("select", { cls: "nb-macro-select", attr: { "aria-label": t("macros.step.value", { n: String(i + 1) }) } });
 			for (const value of options) select.createEl("option", { text: choiceLabel(a, value), attr: { value } });
-			// A value that is missing or not one of the choices (an old or edited file) is shown as the first choice and saved as such.
-			if (step.value === undefined || !options.includes(step.value)) step.value = options[0]!;
-			select.value = step.value;
+			// A value that is missing is shown as the first choice and saved as such. Review fix (R3): a value this version does not know (a newer version's paper kind) is kept as it is, as an extra entry, until the
+			// person picks another value for this step.
+			const KEPT = "\u0001kept";
+			if (step.value === undefined) step.value = options[0]!;
+			const kept = typeof step.value !== "string" || !options.includes(step.value);
+			if (kept) select.createEl("option", { text: String(step.value), attr: { value: KEPT } });
+			select.value = kept ? KEPT : step.value;
 			select.addEventListener("change", () => {
-				step.value = select.value;
+				if (select.value !== KEPT) step.value = select.value;
 			});
 		} else {
-			text.createSpan({ cls: "nb-macro-step-label", text: a && state !== "unknown" ? actionLabel(a) : step.action });
+			text.createSpan({ cls: "nb-macro-step-label", text: a && state !== "unknown" ? actionLabel(a) : String(step.action) });
 			if (state === "unknown" || state === "blocked") text.createSpan({ cls: "nb-macro-step-badge", text: t("macros.step.unavailable") });
 		}
 		const tools = row.createDiv({ cls: "nb-macro-tools" });

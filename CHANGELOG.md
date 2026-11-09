@@ -67,6 +67,13 @@
 - **Spread: positions and saved views are portable (S2).** The zoom of a saved position or view is measured against the page-wide fit in every mode, so it comes back at the same page size in a single column (and the reverse); a fitted spread still comes back fitted.
 - **Spread: a resize waits for the pen (S3).** A resize or rotation during a stroke, an erase or a drag lays the pages out after the contact ends, so the stroke keeps the page box it is mapped with.
 - **Spread: the eraser reaches both pages (S4).** Rubbing out near the binding erases on every page the eraser circle touches, not only the first.
+- **Fit stays fit between a spread and a single column (R1).** A position or saved view at the fit is stored as zoom 1 (as in 0.26) in every mode and restores as the fit of the mode it opens in, so it keeps re-fitting after a rotation; an older record with zoom 1 reads as fitted too. Other zooms keep their page size.
+- **Macros: a pin survives a macro kept apart (R2).** The toolbar pin of a macro this version only keeps (a newer version's 14th) is no longer dropped and written back, and no pin is dropped when the macro list cannot be read.
+- **Macros: a newer version's data comes back in order (R3).** A step this version cannot read keeps its place in the macro; the steps and macros kept apart are joined to the listed ones and split again by count (a macro in both lists counts once); the editor keeps a step value it does not know until you pick another.
+- **Macros: the startup id repair keeps your settings (R4).** The one-time save after repairing a missing or doubled macro id changes only the macros, their extras and the pins in what was read (keys of a newer version stay as they are), and an id that is merely of another format is repaired in memory only.
+- **Spread: no lock notice from the mate page (R5).** Rubbing out by the binding with the other page locked erases the open page and skips the locked one silently; the notice appears only when the eraser is on the locked page itself.
+- **Macros: notice wording (R6).** "1 step" / "n steps" (and Italian) in the *nothing changed* notices, and the skipped steps are still mentioned there.
+- **Tapered strokes are frozen by golden hashes (R7).** New `tests/taper-golden.test.ts` pins the nodes, the SVG / export path and the thumbnail outline of tapered strokes (start, end, both; pen, fountain pen, brush; long, short, tiny and fast strokes), so a later change to the ramp cannot silently change every tapered stroke. Test only.
 
 ## 0.26.0 — 2026-11-09
 

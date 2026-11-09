@@ -2687,6 +2687,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"macros.noEffect.one": "1 passaggio non ha cambiato nulla.",
 	"macros.noEffect.n": "{n} passaggi non hanno cambiato nulla.",
 	"macros.noChange": "{name}: non è cambiato nulla ({n} passaggi senza effetto).",
+	"macros.noChange.one": "{name}: non è cambiato nulla (1 passaggio senza effetto).",
+	"macros.skippedNote": "{skipped} saltati (non disponibili).",
 	"macros.extraSteps": "Altri {n} passaggi di una versione più recente sono conservati ma non eseguiti.",
 	"help.macros": "Crea un tuo pulsante: un elenco di azioni eseguite in ordine con un tocco, come un solo passo di annullamento. Mettilo nella barra, in Tutte le azioni o su una scorciatoia.",
 	"help.macro": "Esegue la tua macro: le sue azioni in ordine, come un solo passo di annullamento. Tieni premuto per fissarla nella barra o toglierla.",
