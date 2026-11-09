@@ -315,6 +315,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	fastScrollbar: boolean;
 	/** 0.17 (#173): the minimap of the page in view: automatic (infinite pages, high zoom), always, or never. */
 	minimapMode: MinimapMode;
+	/** 0.27 (#49) two-page spread: the first page alone on the right, like a book (otherwise the pairs are 1-2, 3-4...). */
+	spreadFirstAlone: boolean;
+	/** 0.27 (#49): show the spread by itself on a landscape tablet while the scrolling is continuous. */
+	spreadAuto: boolean;
 	/** Look of the plugin's own surfaces (DESIGN.md §2.2): its own `--nb-*` palette, or those tokens mapped onto the Obsidian theme. */
 	appearanceStyle: AppearanceStyle;
 	// wave 0.13: Home
@@ -461,6 +465,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	recentColours: [],
 	fastScrollbar: true,
 	minimapMode: "auto",
+	spreadFirstAlone: true,
+	spreadAuto: false,
 	symbolStrip: true,
 	symbolCount: 6,
 	dimensionHint: true,
@@ -629,6 +635,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.signDateCustom === "string") s.signDateCustom = cleanSignDateCustom(d.signDateCustom);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
+	if (typeof d.spreadFirstAlone === "boolean") s.spreadFirstAlone = d.spreadFirstAlone;
+	if (typeof d.spreadAuto === "boolean") s.spreadAuto = d.spreadAuto;
 	if (typeof d.symbolStrip === "boolean") s.symbolStrip = d.symbolStrip;
 	s.symbolCount = clampSymbolCount(d.symbolCount);
 	if (typeof d.dimensionHint === "boolean") s.dimensionHint = d.dimensionHint;

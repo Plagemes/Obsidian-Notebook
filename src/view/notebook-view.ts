@@ -51,10 +51,11 @@ import { eraseSegment } from "../ink/segment-erase";
 import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { heavyReasons, pageLoad, planPageSplit } from "../ink/heavy-page";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
-import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
+import { clampToPage, fitWidth, pan, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { drawHeader, exportHeaderFor, headerLayout, pageTimesText, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
 import { pageTimes } from "../model/page-times";
-import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
+import { layoutForMode, type ScrollMode } from "../ink/page-mode";
+import { canSpread, effectiveScrollMode, mateOf, scrollToPageViewport, stepRow } from "../ink/spread";
 import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
 import { captureRegion, restoreRegion, type ViewRegion } from "../ink/view-region";
 import { PageMode } from "./page-mode";
@@ -556,6 +557,9 @@ export class NotebookView extends FileView {
 	private penLinks: PenLinks | null = null;
 	/** One page at a time (#14); its gestures and animation live in page-mode.ts. */
 	private pageMode: PageMode | null = null;
+	/** 0.27 (#49): the pages are laid out in pairs (two-page spread); `spreadFirstAlone` is the choice the layout was built with. */
+	private spreadOn = false;
+	private spreadFirstAlone = true;
 	private stamps: StampPalette | null = null;
 	private symbols: SymbolStrip | null = null;
 	/** ui redesign: quick slots, contextual bar and sheets built from the action registry (view-ui.ts). */
@@ -741,6 +745,7 @@ export class NotebookView extends FileView {
 		this.pageNav = new PageNavigator(this.body, {
 			pages: () => this.shownDoc()?.pages ?? [],
 			current: () => this.currentPageIndex(),
+			companion: () => this.spreadMate(this.currentPageIndex()),
 			bookmarks: () => new Set(this.shownDoc()?.meta?.bookmarks ?? []),
 			thumbnail: (page, width) => this.thumbnail(page, width),
 			goTo: (index) => this.goToPage(index),
@@ -1452,7 +1457,7 @@ export class NotebookView extends FileView {
 	/** Shows the page, zoom and scroll position of a saved place (O16). False if the view cannot show it yet. */
 	private restorePosition(pos: SavedPosition): boolean {
 		const layout = this.layout;
-		const restored = layout ? restoreViewport(pos, this.pageMode?.enabled ? "pages" : "continuous", this.viewSize, layout) : null;
+		const restored = layout ? restoreViewport(pos, this.layoutMode(), this.viewSize, layout) : null;
 		if (!restored) return false;
 		this.pageMode?.goTo(restored.pageIndex);
 		this.fitMode = restored.fit;
@@ -1464,7 +1469,7 @@ export class NotebookView extends FileView {
 	private currentPosition(): SavedPosition | null {
 		const layout = this.layout;
 		if (!layout) return null;
-		return capturePosition(this.pageMode?.enabled ? "pages" : "continuous", this.viewport, this.viewSize, layout, this.currentPageIndex());
+		return capturePosition(this.layoutMode(), this.viewport, this.viewSize, layout, this.currentPageIndex());
 	}
 
 	/** wave 0.6 (v7): the first load of a file starts at the requested page or at the stored reading position. */
@@ -2084,7 +2089,9 @@ export class NotebookView extends FileView {
 	goToRelativePage(delta: number): void {
 		const n = this.shownDoc()?.pages.length ?? 0;
 		if (n === 0) return;
-		this.scrollToPage(Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta)), 0, true);
+		// 0.27 (#49): in a spread "next" turns by pair (the row below), not to the other page of the pair in view.
+		const target = this.spreadOn && this.layout ? stepRow(this.layout, this.currentPageIndex(), delta) : Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta));
+		this.scrollToPage(target, 0, true);
 	}
 
 	private penStore(): PenStore {
@@ -2287,13 +2294,19 @@ export class NotebookView extends FileView {
 	}
 
 	/** Switches between continuous scrolling and one page at a time, staying on the page in view. */
-	setScrollMode(mode: ScrollMode): void {
+	setScrollMode(mode: ScrollMode, keepPage?: number): void {
 		const pm = this.pageMode;
-		const on = mode === "pages";
+		const settings = this.host.settings;
+		// 0.27 (#49): the spread only where the view has room for it; a phone (or a portrait pane) shows one column.
+		const effective = effectiveScrollMode(mode, settings.spreadAuto, this.viewSize);
+		const on = effective === "pages";
+		const spread = effective === "spread";
 		this.refreshUi(); // the page-by-page toggle shows its state
-		if (!pm || pm.enabled === on) return;
-		const index = this.currentPageIndex();
+		if (!pm) return;
+		if (pm.enabled === on && this.spreadOn === spread && !(spread && this.spreadFirstAlone !== settings.spreadFirstAlone)) return;
+		const index = keepPage ?? this.currentPageIndex();
 		pm.setEnabled(on);
+		this.spreadOn = spread;
 		this.fitMode = true;
 		this.refreshLayout();
 		if (!this.layout) return;
@@ -2302,12 +2315,50 @@ export class NotebookView extends FileView {
 			this.refit(false);
 			this.scrollToPage(index);
 		}
+		this.spreadChanged();
+	}
+
+	/** The pairs appeared, went away or were laid out again: the page panel and the buttons show the new state. */
+	private spreadChanged(): void {
+		this.updatePageIndicator();
+		this.pageNav?.refresh();
+		this.refreshUi();
+	}
+
+	/**
+	 * The view changed size: a spread appears when the view gets wide enough (a tablet turned to landscape) and goes
+	 * when it does not have the room any more, staying on the page in view. True when the layout was rebuilt.
+	 */
+	private followSpreadRoom(keepPage: number): boolean {
+		if (this.pageMode?.enabled || !this.layout) return false;
+		const effective = effectiveScrollMode(this.host.settings.scrollMode, this.host.settings.spreadAuto, this.viewSize);
+		if ((effective === "spread") === this.spreadOn) return false;
+		this.setScrollMode(this.host.settings.scrollMode, keepPage);
+		return true;
 	}
 
 	/** Toolbar and command: flips the setting (saved with the plugin settings, applied to every open notebook). */
 	togglePageMode(): void {
 		const s = this.host.settings;
 		s.scrollMode = s.scrollMode === "pages" ? "continuous" : "pages";
+		this.setScrollMode(s.scrollMode);
+		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+	}
+
+	/**
+	 * Page sheet and command (0.27, #49): two pages side by side on or off. Off also turns the automatic spread off,
+	 * otherwise the pairs would come straight back.
+	 */
+	toggleSpread(): void {
+		const s = this.host.settings;
+		if (this.spreadOn) {
+			s.scrollMode = "continuous";
+			s.spreadAuto = false;
+		} else {
+			s.scrollMode = "spread";
+			// The setting is kept (it applies on a wide screen), but this view has no room: say why nothing changes.
+			if (!canSpread(this.viewSize) && this.viewSize.width > 0) showNotice(t("spread.noRoom"), 4000);
+		}
 		this.setScrollMode(s.scrollMode);
 		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
 	}
@@ -2424,10 +2475,10 @@ export class NotebookView extends FileView {
 			}
 			return;
 		}
-		const box = this.layout?.boxes[index];
-		if (!box) return;
-		const offsetY = y > 0 ? -(box.y + y) * this.viewport.scale : PAGE_MARGIN - box.y * this.viewport.scale;
-		this.setViewport({ ...this.viewport, offsetY });
+		const layout = this.layout;
+		if (!layout?.boxes[index]) return;
+		// 0.27 (#49): in a spread the row's top goes to the top of the view, and zoomed in the page is brought into the middle.
+		this.setViewport(scrollToPageViewport(layout, this.viewport, this.viewSize, index, y));
 	}
 
 	/** 0.20 (#102): to a line of a page (a heading of the outline or the map), a little above it so the line is not at the very edge. */
@@ -2854,14 +2905,14 @@ export class NotebookView extends FileView {
 		if (!layout || !doc) return null;
 		const index = this.currentPageIndex();
 		const page = doc.pages[index];
-		const region = page ? captureRegion(this.pageMode?.enabled ? "pages" : "continuous", this.viewport, this.viewSize, layout, index) : null;
+		const region = page ? captureRegion(this.layoutMode(), this.viewport, this.viewSize, layout, index) : null;
 		return page && region ? { pageId: page.id, region } : null;
 	}
 
 	/** 0.23 (#264): shows a saved view: the page region, centred, at its zoom (the same part of the page on any screen size). */
 	private showViewRegion(pageIndex: number, region: Omit<ViewRegion, "pageIndex">): void {
 		const layout = this.layout;
-		const restored = layout ? restoreRegion(region, pageIndex, this.pageMode?.enabled ? "pages" : "continuous", this.viewSize, layout) : null;
+		const restored = layout ? restoreRegion(region, pageIndex, this.layoutMode(), this.viewSize, layout) : null;
 		this.recordJump(pageIndex);
 		if (!restored) {
 			this.scrollToPage(pageIndex);
@@ -4071,7 +4122,8 @@ export class NotebookView extends FileView {
 				const index = this.currentPageIndex();
 				const page = doc.pages[index], box = layout.boxes[index];
 				if (!page || !box) return null;
-				return { pageId: page.id, page: { width: page.width, height: page.height, infinite: page.infinite === true }, box, viewport: this.viewport, view: this.viewSize };
+				const spread = this.spreadOn ? { fitScale: fitWidth(this.viewSize, layout).scale } : {};
+				return { pageId: page.id, page: { width: page.width, height: page.height, infinite: page.infinite === true }, box, viewport: this.viewport, view: this.viewSize, ...spread };
 			},
 			mode: () => this.host.settings.minimapMode,
 			busy: () => !!this.controller?.drawing || this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null,
@@ -4232,7 +4284,7 @@ export class NotebookView extends FileView {
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			states: { open: !!this.statesTools?.open },
 			comments: { panel: this.comments?.panelOpen ?? false, total: this.comments?.counts.total ?? 0, open: this.comments?.counts.open ?? 0, drawing: this.comments?.drawing ?? false },
-			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", highlighterArea: this.tools.highlighterArea, readOnly: this.userReadOnly,
+			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, spread: this.spreadOn, spreadRoom: canSpread(this.viewSize) || this.spreadOn, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", highlighterArea: this.tools.highlighterArea, readOnly: this.userReadOnly,
 				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused },
 			canPrint: canPrint(),
 			markers: {
@@ -4597,8 +4649,19 @@ export class NotebookView extends FileView {
 	private currentPageIndex(): number {
 		if (!this.layout) return 0;
 		if (this.pageMode?.enabled) return this.pageMode.current();
-		const [, y] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
-		return Math.max(0, nearestPage(this.layout, y));
+		const [x, y] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
+		// 0.27 (#49): in a spread the two pages of a row are equally near vertically: the one nearer sideways is the one in view.
+		return Math.max(0, nearestPage(this.layout, y, this.spreadOn ? x : undefined));
+	}
+
+	/** 0.27 (#49): the other page of the pair that page `index` is in (-1: none, or no spread), for the page panel's highlight. */
+	private spreadMate(index: number): number {
+		return this.spreadOn && this.layout ? mateOf(this.layout, index) : -1;
+	}
+
+	/** The scroll mode the pages are laid out for now: what the position and region helpers measure the zoom against. */
+	private layoutMode(): ScrollMode {
+		return this.pageMode?.enabled ? "pages" : this.spreadOn ? "spread" : "continuous";
 	}
 
 	/** The document to show: the complete one, or while a large notebook is still being read, the part-read one. */
@@ -4637,10 +4700,18 @@ export class NotebookView extends FileView {
 
 	private refreshLayout(): void {
 		const doc = this.shownDoc();
-		const plain = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
+		// 0.27 (#49): paged = side by side in one row; spread = pairs, scrolled row by row; else one column.
+		const s = this.host.settings;
+		// A document that has just loaded takes the spread (or not) the setting and the size of the view call for.
+		if (!this.layout && !this.pageMode?.enabled) this.spreadOn = effectiveScrollMode(s.scrollMode, s.spreadAuto, this.viewSize) === "spread";
+		this.spreadFirstAlone = s.spreadFirstAlone;
+		const plain = doc ? layoutForMode(this.layoutMode(), doc.pages, (p) => layoutPages(p), { firstAlone: this.spreadFirstAlone }) : null;
+		const widthBefore = this.layout?.width ?? 0;
 		// wave 0.9 (376): with the margins cropped, the PDF pages carry the window the view fits (nothing else changes).
 		this.layout = plain && doc && this.display ? this.display.shape(plain, doc.pages) : plain;
 		this.renderer?.setDocument(doc ? this.renderPagesOf(doc) : null, this.layout);
+		// A spread is as wide as its pairs: a page added to a one-page notebook, or a wider page, changes the width that "fit" fills.
+		if (this.spreadOn && this.fitMode && this.layout && widthBefore > 0 && Math.abs(this.layout.width - widthBefore) > 0.5) this.refit(true);
 		this.pushRuler();
 		this.reading?.docChanged();
 		this.pdfText?.docChanged();
@@ -4905,7 +4976,7 @@ export class NotebookView extends FileView {
 				this.host.nav?.seen(this.navPlace());
 				this.host.quickTabs?.seen(this.navPlace());
 			}
-			this.pageNav?.markCurrent(current);
+			this.pageNav?.markCurrent(current, this.spreadMate(current));
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
 			this.checklist?.cancelOffer();
 			this.axes?.cancelOffer();
@@ -5156,6 +5227,8 @@ export class NotebookView extends FileView {
 	private measure(): void {
 		const rect = this.stage.getBoundingClientRect();
 		if (rect.width === 0 || rect.height === 0) return;
+		// 0.27 (#49): the page in view before the size changes, to stay on it if a spread appears or goes.
+		const before = this.layout && !this.pageMode?.enabled ? this.currentPageIndex() : 0;
 		this.viewSize = { width: rect.width, height: rect.height };
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
 		const vp = this.vpClass.update(this.contentEl.clientWidth, this.contentEl.clientHeight);
@@ -5165,7 +5238,7 @@ export class NotebookView extends FileView {
 		}
 		this.ui?.refresh();
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
-		this.refit(true);
+		if (!this.followSpreadRoom(before)) this.refit(true);
 		if (this.pendingPage !== null) this.applyStartPosition();
 	}
 
@@ -6871,7 +6944,7 @@ export class NotebookView extends FileView {
 		const [dx, dy] = screenToPage(this.viewport, clientX - rect.left, clientY - rect.top);
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
 		let index = pageAt(layout, dx, dy);
-		if (index < 0) index = nearestPage(layout, dy);
+		if (index < 0) index = nearestPage(layout, dy, this.spreadOn ? dx : undefined);
 		const page = doc.pages[index];
 		const box = layout.boxes[index];
 		if (!page || !box) return null;

@@ -210,6 +210,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"nav-back": (v) => v.navigate(-1),
 	"nav-forward": (v) => v.navigate(1),
 	"toggle-page-mode": (v) => v.togglePageMode(),
+	"toggle-spread": (v) => v.toggleSpread(),
 	"find-replace": (v) => v.openFindReplace(),
 
 	// insert

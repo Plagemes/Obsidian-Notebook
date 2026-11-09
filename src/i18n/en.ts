@@ -641,7 +641,7 @@ export const en = {
 	"pageRestore.done": "Page restored",
 	// wave 0.6: navigation
 	"settings.scrollMode": "Scrolling",
-	"settings.scrollMode.desc": "Continuous vertical pages, or one page at a time with a swipe.",
+	"settings.scrollMode.desc": "Continuous pages, one page at a time, or two pages side by side.",
 	"settings.scrollMode.continuous": "Continuous (vertical)",
 	"settings.scrollMode.pages": "One page at a time",
 	"toolbar.pageMode": "One page at a time",
@@ -5028,6 +5028,16 @@ export const en = {
 	"help.relatedRefresh": "Read the notebooks again and rank the related pages once more. The panel also updates by itself when you switch notes.",
 	"help.relatedCopy": "Copy a link to this page. To place the page in the note as an embed, drag the row into the note.",
 	"help.relatedPanel": "Open the side panel that lists the handwritten pages related to the open note: pages that link to it, name its title, tags or headings, or belong to the same course.",
+	// 0.27 spread
+	"settings.scrollMode.spread": "Two pages side by side",
+	"settings.spreadFirstAlone": "First page alone, like a book",
+	"settings.spreadFirstAlone.desc": "Page 1 alone on the right, then 2-3, 4-5... Off: the pairs are 1-2, 3-4...",
+	"settings.spreadAuto": "Two pages on a landscape tablet",
+	"settings.spreadAuto.desc": "Two pages side by side on a wide landscape screen. A phone keeps one page.",
+	"toolbar.spread": "Two pages side by side",
+	"command.spread": "Toggle two pages side by side",
+	"spread.noRoom": "Two pages side by side need a wide landscape screen. It is set, and will show on one.",
+	"help.spread": "Show the pages in pairs, like an open book, and scroll pair by pair. Needs a wide landscape screen; a phone keeps one page. You can write on both pages.",
 } as const;
 
 export type MessageKey = keyof typeof en;
