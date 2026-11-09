@@ -4195,3 +4195,28 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Drag a row into the note (embed text) | yes | harness `doc=related` (drag data only) | | | drop into the editor not tested in a real Obsidian |
 | Setting *Related pages: same course* | yes | `tests/settings-schema.test.ts` | | | |
 | The panel's read-only refresh writes nothing; what it read is saved by the next page-switcher refresh, one entry per path, never over a newer index entry nor for a notebook deleted since | yes | `tests/page-directory-save.test.ts` | | | |
+
+### 0.27 — semzoom: semantic zoom, headings and titles shown large when zoomed out (roadmap #130; steps 3040-3059)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook with handwritten headings (lines written much larger than the rest), a titled bookmark and a PDF background; Settings, *Pages & navigation*, *Headings when zoomed out* is on by default.
+
+3040. **Off at normal zoom.** At the fit-to-width zoom, and zoomed in, nothing extra is drawn over the pages.
+3041. **Fade in.** Pinch out slowly: from about 60 % of the fit zoom a faint veil and the labels fade in, and they are complete near the smallest zoom. Pinching back fades them out; the pages and the ink under them look exactly as before.
+3042. **Headings.** Each large handwritten heading appears as a big picture of its own ink (no text is recognised), anchored at its place on the page; level 1 headings have a thicker accent edge than level 2.
+3043. **Names.** A titled bookmark, the PDF's name and the top levels of the PDF's outline appear as text labels at the top of their page. Large pictures and excerpts are named after their file / source notebook in a quieter style.
+3044. **Legible and tidy.** Labels are readable on the tablet (at least about 13 px text, 20 px tall), stay inside the page, never overlap and never cover more than a few per page.
+3045. **Tap to go there.** A finger tap (when a finger pans, not draws) or a mouse click on a label zooms to the page's fit-to-width zoom with that line near the top of the view; the Back-jump history knows the jump. A drag or a pinch that starts on a label does not jump. A pen tap on a label draws as usual (it does not jump).
+3046. **Writing.** With the pen on the screen at overview zoom the labels step aside and come back about half a second after the pen lifts.
+3047. **Setting.** Turn *Headings when zoomed out* off: the overlay never appears; on again: it returns without reopening the notebook. The Italian strings read correctly.
+3048. **Not in the output.** Export a PDF / PNG / SVG, start the presentation and make a hand-in PDF from the zoomed-out view: none of them contains a label or the veil. Page-by-page mode never shows it.
+3049. **Edits follow.** Write a new big heading, wait a few seconds and zoom out: it is labelled. Delete the heading (or undo): its label disappears. The notebook file is not modified by looking at the overview (check the file's modified time).
+3050. **Speed.** A notebook of 100+ pages: pinching and panning in the overview stay smooth on the tablet (labels move with the pages; headings are analysed a little at a time in the background).
+3051. **Looks.** Light and dark, "Follow Obsidian theme", phone and tablet width.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure layout: fade range, zoom bands, label sizes, placement inside the page, collision avoidance, per-page cap, cache, visible-label scan, hit test, jump viewport | yes | `tests/semantic-zoom.test.ts` | | | |
+| Label sources from the outline (headings, titled bookmarks, PDF names and sections, excerpts, pictures) | yes | `tests/semantic-sources.test.ts` | | | |
+| Overlay is a view-only layer (not imported by exports, presentation, hand-in; no commands; setting on by default) | yes | `tests/semantic-zoom-isolation.test.ts` | | | |
+| Overlay layer (fade, pooled labels, heading pictures, tap or click to jump, steps aside while writing) | yes | harness `doc=semzoom` | | | pen tap on a label does not jump (pen draws); not measured on the tablet |
+| Setting *Headings when zoomed out* (Pages & navigation) | yes | `tests/settings-schema.test.ts`, `tests/semantic-zoom-isolation.test.ts` | | | |

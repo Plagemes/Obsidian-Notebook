@@ -3180,6 +3180,9 @@ export const en = {
 	"settings.minimap.auto": "Automatic",
 	"settings.minimap.always": "Always",
 	"settings.minimap.never": "Never",
+	// 0.27 semzoom
+	"settings.semanticZoom": "Headings when zoomed out",
+	"settings.semanticZoom.desc": "Zoomed far out, show headings and names large over the pages. Tap one to go there.",
 	// 0.17 hover
 	"hover.open": "Open this page",
 	"hover.pageOf": "Page {n} of {total}",

@@ -292,7 +292,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 
 ### G. Navigation and workflow
 129. **P3** Search by drawing: sketch a shape and find pages with similar drawings (geometric descriptors, no AI).
-130. **P2** Semantic zoom: when zoomed out, headings and excerpts are shown large for orientation.
+130. **P2** 🧪 Semantic zoom: when zoomed out, headings and excerpts are shown large for orientation.
 131. **P3** Arrows linking regions of different pages, visible in the side-by-side view.
 132. **P2** Live lecture mode: a timer and quick buttons ("new page", "important moment"); each mark becomes a timestamped bookmark.
 133. ~~**P2** Course dashboard page that updates itself: next exam, pages due for review, recent notebooks.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)

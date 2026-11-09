@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### semzoom
+- **Semantic zoom (#130).** Zoomed far out, the notebook shows its headings and names large over the pages, so the overview says what is where: each large handwritten heading as a picture of its own ink (level 1 with a stronger accent edge), titled bookmarks, the name and top-level outline of a PDF, and the names of large pictures and excerpts in a quieter style. They fade in below about 60 % of the fit-to-width zoom with a faint veil, are complete near the smallest zoom, stay inside their page and never overlap. A finger tap or a mouse click on a label zooms to that spot (a pen tap draws as usual). A view overlay only: the document, the stroke rendering and the stroke level of detail are untouched, and exports, the presentation, the hand-in and page-by-page mode never show it.
+- **Setting.** *Headings when zoomed out* (Pages & navigation), on by default, in English and Italian.
+- **Cheap on the tablet.** The layout is pure and cached per zoom band (`src/ink/semantic-zoom.ts`), the labels come from the existing headings index and outline (`src/model/semantic-sources.ts`), at most 40 pooled elements move by CSS variables, a frame runs only when the viewport or the document changed, and heading pictures are drawn two per frame and cached.
+- **Tests.** `tests/semantic-zoom.test.ts`, `tests/semantic-sources.test.ts`, `tests/semantic-zoom-isolation.test.ts`; harness `doc=semzoom` (`dev/harness/semzoom-check.ts`).
+
 ## 0.26.0 — 2026-11-09
 
 Eight features: opacity for ink, pictures and areas, smooth and straighten strokes, tidy up handwriting lines, redaction before export, pen width that follows zoom, a context palette in the colour picker, a dynamic gallery block and a related handwritten pages panel. The notebook format moves to version 24 (opacity): the migration from version 23 is automatic, and Notebook 0.25 and older open a v24 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).

@@ -318,6 +318,8 @@ const PAGES: SettingSpec[] = [
 		id: "minimapMode", section: "pages", order: 25, name: "settings.minimap", desc: "settings.minimap.desc",
 		control: { type: "dropdown", options: options([["auto", "settings.minimap.auto"], ["always", "settings.minimap.always"], ["never", "settings.minimap.never"]]) }, keywords: "overview map panoramica mappa",
 	},
+	// 0.27 semzoom (#130)
+	{ id: "semanticZoom", section: "pages", order: 26, name: "settings.semanticZoom", desc: "settings.semanticZoom.desc", control: { type: "toggle" }, keywords: "zoom out overview headings titles labels panoramica titoli orientamento" },
 	{ id: "autoNextPage", section: "pages", order: 30, name: "settings.autoNextPage", desc: "settings.autoNextPage.desc", control: { type: "toggle" } },
 	{ id: "autoScrollWriting", section: "pages", order: 40, name: "settings.autoScroll", desc: "settings.autoScroll.desc", control: { type: "toggle" } },
 	{ id: "pageTurnerKeys", section: "pages", order: 50, name: "settings.pageTurnerKeys", desc: "settings.pageTurnerKeys.desc", control: { type: "toggle" }, keywords: "keyboard tastiera clicker" },
