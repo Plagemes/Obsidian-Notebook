@@ -5029,7 +5029,7 @@ export const en = {
 	"help.relatedCopy": "Copy a link to this page. To place the page in the note as an embed, drag the row into the note.",
 	// 0.27 plannertasks
 	"settings.plannerTasks": "Tasks on planner pages",
-	"settings.plannerTasks.desc": "A small chip on daily and weekly planner pages lists the tasks from your notes that are due on those days: a Tasks plugin date, a Dataview due field, or a task in that day's daily note. Read only: tap a task to open its note. Not included in exports.",
+	"settings.plannerTasks.desc": "Lists notes' tasks due that day on planner pages. Read only; not exported.",
 	"planTasks.chip": "Tasks due: {n}",
 	"planTasks.chipDone": "Tasks due: all done",
 	"planTasks.title": "Tasks due",

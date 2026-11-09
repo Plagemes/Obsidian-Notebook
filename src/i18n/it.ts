@@ -5030,7 +5030,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.relatedCopy": "Copia il link a questa pagina. Per inserire la pagina nella nota come incorporamento, trascina la riga nella nota.",
 	// 0.27 plannertasks
 	"settings.plannerTasks": "Attività nelle pagine del planner",
-	"settings.plannerTasks.desc": "Un piccolo chip nelle pagine giornaliere e settimanali del planner elenca le attività delle tue note in scadenza quei giorni: una data del plugin Tasks, un campo due di Dataview o un'attività nella nota giornaliera di quel giorno. Solo lettura: tocca un'attività per aprire la sua nota. Non incluse nelle esportazioni.",
+	"settings.plannerTasks.desc": "Elenca le attività in scadenza nel giorno. Solo lettura; non esportate.",
 	"planTasks.chip": "Attività in scadenza: {n}",
 	"planTasks.chipDone": "Attività in scadenza: tutte fatte",
 	"planTasks.title": "Attività in scadenza",
