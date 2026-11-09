@@ -357,7 +357,7 @@ export class RedactModal extends Modal {
 		try {
 			await o.prepare?.([page]);
 			// Review fix (R5): excerpts of excerpts of a covered region go too, as in the export.
-			const shown = redactPage(page, boxesOf(this.boxes, page.id), withExcerptChains(this.all, this.boxes));
+			const shown = redactPage(page, boxesOf(this.boxes, page.id), withExcerptChains(this.all, this.boxes, o.redactDoc));
 			const header = o.header;
 			this.renderer ??= new PageImageRenderer(this.host.media, {
 				...(o.hiddenInk ? { hiddenInk: o.hiddenInk } : {}), ...(o.boxLabel ? { boxLabel: o.boxLabel } : {}),

@@ -455,7 +455,9 @@ export function hasRedactions(pages: readonly Page[], redactions: Redactions | u
 const CHAIN = Symbol("notebook.excerptChain");
 /** Review fix (T1): the ids of the pages of the notebook the set belongs to (see `withExcerptChains`). */
 const PAGES = Symbol("notebook.pages");
-type Chained = Redactions & { [CHAIN]?: Readonly<Record<string, readonly RedactBox[]>>; [PAGES]?: ReadonlySet<string> };
+/** Review fix (U1): the document id of the notebook the set belongs to (`NotebookDocument.id`; see `withExcerptChains`). */
+const DOC = Symbol("notebook.doc");
+type Chained = Redactions & { [CHAIN]?: Readonly<Record<string, readonly RedactBox[]>>; [PAGES]?: ReadonlySet<string>; [DOC]?: string };
 
 /**
  * Review fix (R5): the set, with the rectangles of every excerpt that shows covered pixels, at any depth. An excerpt of a region that holds
@@ -463,8 +465,10 @@ type Chained = Redactions & { [CHAIN]?: Readonly<Record<string, readonly RedactB
  * repeating over the excerpts of `pages` until nothing new is covered (each excerpt is added once, so a cycle ends). The rectangles ride
  * on the set in a symbol-keyed field: they decide only `coveredExcerpt`, never cut ink or draw a box, and never reach storage (a symbol is
  * not serialised; `Object.keys` and `boxesOf` do not see it). Chains already found on `redactions` (for a wider set of pages) are kept.
+ * Review fixes (T1, U1): the set also carries the ids of `pages` and `docId`, the document id of the notebook (kept from `redactions` when
+ * it is not given), which `coveredExcerpt` uses to tell the excerpts of this notebook.
  */
-export function withExcerptChains(pages: readonly Page[], redactions: Redactions | undefined): Redactions | undefined {
+export function withExcerptChains(pages: readonly Page[], redactions: Redactions | undefined, docId?: string): Redactions | undefined {
 	if (!redactions) return redactions;
 	const chain: Record<string, RedactBox[]> = {};
 	const prior = (redactions as Chained)[CHAIN];
@@ -472,6 +476,8 @@ export function withExcerptChains(pages: readonly Page[], redactions: Redactions
 	const out: Chained = { ...redactions };
 	out[CHAIN] = chain;
 	out[PAGES] = new Set([...((redactions as Chained)[PAGES] ?? []), ...pages.map((p) => p.id)]);
+	const doc = docId ?? (redactions as Chained)[DOC];
+	if (doc !== undefined) out[DOC] = doc;
 	const excerpts: Array<{ page: string; el: ExcerptElement; done: boolean }> = [];
 	for (const p of pages) for (const el of p.elements ?? []) if (el.type === "excerpt") excerpts.push({ page: p.id, el, done: false });
 	let grew = true;
@@ -499,7 +505,12 @@ export function coveredExcerpt(el: PageElement, redactions: Redactions | undefin
 	// have moved anywhere in the notebook and been boxed there; the current geometry cannot tell. While the notebook has any box, an excerpt
 	// of one of its own pages is therefore left out whole, wherever its source region is. (Its source page having a box also proves it is
 	// one of this notebook's pages when the set does not know them.)
-	if ((redactions as Chained)[PAGES]?.has(s.page) || boxesOf(redactions, s.page).length > 0) return true;
+	const set = redactions as Chained;
+	if (set[PAGES]?.has(s.page) || boxesOf(redactions, s.page).length > 0) return true;
+	// Review fix (U1): also when its source page has since been deleted (or replaced by a copy with a new id): the snapshot still holds what
+	// was there. With the notebook's document id known, every excerpt of this notebook goes; without it, an excerpt of a page the set does
+	// not know may be one of those, so it goes too (an excerpt of another notebook is then left out as well: fail closed).
+	if (set[DOC] === undefined || s.doc === set[DOC]) return true;
 	const area: BBox = { minX: s.x, minY: s.y, maxX: s.x + s.width, maxY: s.y + s.height };
 	return overlaps(area, (redactions as Chained)[CHAIN]?.[s.page] ?? [], ELEMENT_PAD);
 }

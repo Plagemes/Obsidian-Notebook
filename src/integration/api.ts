@@ -1,5 +1,6 @@
 import { normalizePath, type App, type Plugin, type TFile } from "obsidian";
 import { pagesToPdf } from "../ink/export-pdf";
+import { withExcerptChains } from "../ink/redact";
 import { Batch } from "../model/history";
 import { lockedPageIds } from "../model/page-lock";
 import { parse, serializeChecked } from "../model/serialize";
@@ -469,7 +470,8 @@ class NotebookApiImpl implements NotebookApi {
 		if (stored.unreadable) {
 			throw new NotebookApiError("export-failed", `The redaction boxes of "${f.path}" could not be read on this device, so no PDF was written. Open the notebook, Export… › Redact… and press Done to set them again.`, { path: f.path });
 		}
-		const { pages } = withRedaction(doc.pages, isArmed(stored) ? { redact: stored.boxes } : {});
+		// Review fix (U1): the set knows the notebook's id, so every excerpt of it (also of a page since deleted) is left out.
+		const { pages } = withRedaction(doc.pages, isArmed(stored) ? { redact: withExcerptChains(doc.pages, stored.boxes, doc.id) ?? stored.boxes } : {});
 		const media = new NotebookMedia(this.app, () => doc, () => this.settings.folder, () => undefined);
 		try {
 			const { images, skipped } = await collectPageImages(media, pages);
