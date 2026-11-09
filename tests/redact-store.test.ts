@@ -117,9 +117,11 @@ describe("the redaction boxes kept on this device", () => {
 	});
 
 	it("drops bad rows and unusable boxes, reads a value of another shape as nothing usable, and ignores a missing id", () => {
-		const store = normaliseRedactStore({ ok: { on: "yes", at: "x", boxes: { p1: [good] } }, empty: { on: true, at: 1, boxes: {} } });
+		const store = normaliseRedactStore({ ok: { on: false, at: "x", boxes: { p1: [good] } }, empty: { on: true, at: 1, boxes: {} } });
 		expect(Object.keys(store)).toEqual(["ok"]);
 		expect(store.ok).toEqual({ on: false, at: 0, boxes: { p1: [good] } });
+		// U3: a switch that is not a boolean is not read as "off" (the notebook is unreadable, see the U3 tests).
+		expect(normaliseRedactStore({ ok: { on: "yes", at: 1, boxes: { p1: [good] } } })).toEqual({});
 		// T5: a set that loses a box when it is read is not read with fewer boxes (the notebook is unreadable, see the T5 tests).
 		expect(normaliseRedactStore({ ok: { on: true, at: 1, boxes: { p1: [good, { x: 1 }] } } })).toEqual({});
 		// A key or a value this store never writes: the whole value is another format (the R3 tests: it reads as unreadable).
@@ -356,5 +358,32 @@ describe("review fix T9: a full quota on the very first save never refuses every
 		expect(saveRedactState(blocked, "nb-b", { on: true, boxes: { p1: [good] } }, 2).stored).toBe(false);
 		expect(data.get(REDACT_PRESENT_KEY)).toBe(1);
 		expect(loadRedactState(later(data), "nb-a")).toEqual({ on: true, boxes: { p1: [good] } });
+	});
+});
+
+describe("review fix U3: an entry with a switch that is not a boolean, or a field this store never writes, is unreadable", () => {
+	for (const [name, entry] of [
+		["a switch of a newer version", { on: "always", at: 1, boxes: { p1: [good] } }],
+		["a field this store never writes", { on: true, at: 1, boxes: { p1: [good] }, moreBoxes: { p2: [{ ...good, label: "SECRET-future" }] } }],
+		["a cleared mark that is not true", { on: false, at: 1, boxes: { p1: [good] }, cleared: "SECRET-maybe" }],
+	] as const) {
+		it(`${name}: never read as boxes switched off or as fewer boxes; kept aside and told`, () => {
+			const { app, data } = memory();
+			data.set(REDACT_KEY, { "nb-a": JSON.parse(JSON.stringify(entry)) as unknown, "nb-b": { on: true, at: 1, boxes: { p1: [good] } } });
+			data.set(REDACT_PRESENT_KEY, 1);
+			expect(loadRedactState(app, "nb-a").unreadable).toBe(true);
+			expect(loadRedactState(app, "nb-b")).toEqual({ on: true, boxes: { p1: [good] } });
+			expect(copies(data)).toMatchObject([{ scope: "entry", id: "nb-a" }]);
+			expect(takeRedactStoreNotice(app)).toBe("damaged");
+		});
+	}
+
+	it("control: an entry this store wrote (switch off) reads as off, with no copy and no notice", () => {
+		const { app, data } = memory();
+		data.set(REDACT_KEY, { "nb-a": { on: false, at: 1, boxes: { p1: [good] } } });
+		data.set(REDACT_PRESENT_KEY, 1);
+		expect(loadRedactState(app, "nb-a")).toEqual({ on: false, boxes: { p1: [good] } });
+		expect(data.has(REDACT_QUARANTINE_KEY)).toBe(false);
+		expect(takeRedactStoreNotice(app)).toBeNull();
 	});
 });
