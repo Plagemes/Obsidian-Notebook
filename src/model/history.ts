@@ -1026,6 +1026,11 @@ export class History {
 	/** 0.27 (#170): the steps recorded since `group` began (null outside a group). */
 	private grouping: Command[] | null = null;
 
+	/** How many steps the open `group` has recorded so far (0 outside a group): a counter a macro run compares before and after a step. */
+	get groupedSteps(): number {
+		return this.grouping?.length ?? 0;
+	}
+
 	/**
 	 * 0.27 (#170): runs `fn`, which edits through this history step after step (a macro), and makes everything it recorded ONE undo step
 	 * (a `Batch` named `label`). Each step still goes through `execute` with every guard of its own (locks, content check, read-only), so

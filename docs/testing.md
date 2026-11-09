@@ -3999,13 +3999,18 @@ Manual steps (real Obsidian; nothing here is verified on Android or with a real 
 3070. **A macro from a newer version.** (Developer check) Add a step with an unknown action id to a macro in `data.json`: the editor shows it struck through with *Unavailable*, keeps it when you save, and a run skips it and says how many were skipped.
 3071. **Limits.** Twelve macros, twenty steps each: the buttons that would exceed them are disabled with a line saying so.
 3072. **Looks.** Light and dark, phone and tablet width, Italian (*Macro*, *Nuova macro*, *Aggiungi un passaggio*); long-press the editor's small buttons for their explanation.
+3073. **Page steps follow each other (review fix).** In page-by-page mode make a macro *Next page, Next page, Paper: Grid, Bookmark*. Run it: the view lands two pages further (no turn animation during the run) and the paper and the bookmark are on the page you arrive at, not the one you started on.
+3074. **Typing stays yours (review fix).** Type in a text box (or an equation) and, without closing it, run a macro that adds a page by hotkey or from the command palette. Undo once: the macro's page is gone, the text you typed is still there; Undo again takes the text back.
+3075. **Honest report, not under the pen (review fix).** Run a macro whose only step is *Paper: Grid* on a page that already has that paper: the notice says that step changed nothing. With the pen on the page (hold it down) press the macro's hotkey: it does not start and asks to lift the pen first.
+3076. **Nothing lost across versions (developer check).** Put 25 steps in one macro and 14 macros in `data.json`, unknown fields on a step and a macro, a step without a valid action id, then open and save the settings: the extra steps (`extraSteps`) and macros (`macrosExtra`) and the unknown fields are still in the file, the editor says how many steps are kept but not run. A macro with an invalid or doubled id gets the same new id at every start (hotkey and toolbar pin stay put) and its stored file is rewritten once; a toolbar pin of a macro that no longer exists is gone.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Macro data in the plugin settings: lenient reader (unknown action ids kept, bad entries dropped), bounds (12 macros, 20 steps, 32-character names), unique ids | yes | `tests/macros.test.ts` | | | |
 | Explicit allow-list of safe actions (tools, pens, arranging a selection, page paper / size, pages); nothing that deletes, exports, shares, syncs or opens a dialog; unknown / blocked / value-less steps skipped | yes | `tests/macros.test.ts` (list pinned against the registry and the runners) | | | |
 | Runner: steps in order through the tap entry point, context re-read per step, stop at a step that cannot run / is refused / throws with the earlier steps kept, one notice | yes | `tests/macros.test.ts`, `tests/history-group.test.ts` | | | |
-| One undo step per run (`History.group` → `Batch` "Run macro"; guards of every step kept; refused step not part of it) | yes | `tests/history-group.test.ts`, `tests/macros.test.ts` (real History, locked page) | | | |
+| One undo step per run (`History.group` → `Batch` "Run macro"; guards of every step kept; refused step not part of it; a full undo stack gives up one entry for the group) | yes | `tests/history-group.test.ts`, `tests/macros.test.ts` (real History, locked page) | | | |
+| Review fixes: open typing committed before the group, immediate page turns during a run, steps that changed nothing reported, no start under the pen, exceptions caught, unknown fields / extra steps / extra macros kept, stable repaired ids, orphan pins removed | yes | `tests/macros.test.ts`, `tests/page-mode.test.ts`, `tests/history-group.test.ts` | | | |
 | Registry: macros in the sheet's own section, pinnable toolbar button (never ranked in by itself; kept on a phone), context rule, history title, long-press help | yes | `tests/macros.test.ts`, `tests/long-press-help.test.ts` | | | |
 | Manager and editor on the modal shell (list, new / edit / delete with confirmation, icon, steps with values and order, toolbar switch, picker), settings row, command per macro | yes | harness `doc=macros` | | | commands in a real Obsidian not run here |
 
@@ -4303,6 +4308,9 @@ Manual steps (real Obsidian; nothing here is verified on Android hardware). Use 
 3154. **Other tools on a spread.** Lasso, shapes, text boxes, the eraser, the ruler and image drops work on whichever page is under the pen; a lasso that reaches the other page of the pair selects across the two pages exactly as it does across two pages in continuous scrolling. Dropping a file in the gap between the pages goes to the page nearer to it.
 3155. **Looks.** Light and dark theme, English and Italian, the new rows in the Pages section of the settings, the long-press explanation of the button.
 3156. **Nothing written by the mode.** Switching the mode, rotating and scrolling never change the notebook file (no save indicator, no modified time change).
+3157. **Page actions mean the page you touched (review fix).** At fit zoom, write (or tap with a finger in finger-writing mode) on the RIGHT page, then open the page sheet: its title names that page ("Page 5") and Delete page, Paper, Size, Lock act on it, however the view is scrolled by a pixel. Write on the left page: the sheet names the left page. Zoomed in on one page, that page is the one. Delete page in a spread says which page went ("Page 5 deleted") and Undo brings it back.
+3158. **Eraser by the binding (review fix).** With a large eraser, rub out ink on both pages within reach of the binding in one stroke: ink on the right page and on the left page near the gap both go (one undo step).
+3159. **Resize during a stroke (review fix).** Hold the pen on the page, writing, while the pane is resized (or the tablet turned): the stroke keeps its shape; the pairs change when the pen is lifted. Saved views and the last position saved in a spread come back at the same page size in a single column (and the reverse); a fitted spread comes back fitted.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
@@ -4313,6 +4321,7 @@ Manual steps (real Obsidian; nothing here is verified on Android hardware). Use 
 | Page sheet button, command, settings (*Two pages side by side*, *First page alone*, *Two pages on a landscape tablet*) | yes | `tests/spread.test.ts`, `tests/settings-schema.test.ts`, `tests/ui-registry.test.ts` | | | |
 | Writing with the pen on both pages of a pair | yes | harness `doc=spread` (synthetic pen events) | | | the S Pen on a real tablet |
 | Page panel highlights both pages of the pair | yes | harness `doc=spread` | | | |
+| Review fixes: the page the page actions mean in a spread (last touched, decisive only near the binding); eraser reaches both pages by the binding; resize waits for the stroke; positions and saved views measured against the page-wide fit in every mode (pure) | yes | `tests/spread.test.ts` | | | |
 
 ### 0.27 — semzoom: semantic zoom, headings and titles shown large when zoomed out (roadmap #130; steps 3040-3059)
 

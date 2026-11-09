@@ -213,6 +213,8 @@ export class MacrosModal extends Modal {
 		}, { icon: "plus" });
 		addBtn.dataset.help = "help.macroAddStep";
 		const limit = shellNote(body, t("macros.stepsLimit", { n: String(MAX_STEPS) }));
+		// Review fix (M6): steps this version cannot hold (stored by a newer one) are kept in the data, shown as unavailable, never run.
+		if (macro.extraSteps && macro.extraSteps.length > 0) shellNote(body, t("macros.extraSteps", { n: String(macro.extraSteps.length) }));
 		shellNote(body, t("macros.safe"));
 
 		const drawSteps = (): void => {

@@ -307,6 +307,44 @@ describe("PageMode controller", () => {
 		expect(s.viewport).toEqual(clampToAnchor(fitPageViewport(view, s.layout, 1), view, s.layout, 1));
 	});
 
+	it("a turn is still animating, so the page in view is the one being left: a second turn targets the wrong page", () => {
+		const s = setup(4);
+		expect(s.pm.next()).toBe(true);
+		expect(s.pm.busy).toBe(true);
+		expect(s.pm.current()).toBe(0);
+		s.pm.next(); // "Next, Next" without waiting: restarts towards page 1 again
+		s.settle();
+		expect(s.pm.current()).toBe(1);
+	});
+
+	it("instant: every turn lands at once, so Next, Next advances two pages (a macro run)", () => {
+		const s = setup(4);
+		s.pm.instant = true;
+		expect(s.pm.next()).toBe(true);
+		expect(s.pm.busy).toBe(false);
+		expect(s.pm.current()).toBe(1);
+		expect(s.pm.next()).toBe(true);
+		expect(s.pm.current()).toBe(2);
+		expect(s.viewport).toEqual(clampToAnchor(fitPageViewport(view, s.layout, 2), view, s.layout, 2));
+		expect(s.pm.previous()).toBe(true);
+		expect(s.pm.current()).toBe(1);
+		// Back to normal afterwards: the turn animates again.
+		s.pm.instant = false;
+		s.pm.next();
+		expect(s.pm.busy).toBe(true);
+	});
+
+	it("finishing the animation that runs when a macro starts makes its target the current page", () => {
+		const s = setup(4);
+		s.pm.next();
+		expect(s.pm.current()).toBe(0);
+		s.pm.finishAnimation();
+		expect(s.pm.busy).toBe(false);
+		expect(s.pm.current()).toBe(1);
+		s.pm.finishAnimation(); // nothing running: harmless
+		expect(s.pm.current()).toBe(1);
+	});
+
 	it("a short slow drag springs back to the same page", () => {
 		const s = setup();
 		const start = s.viewport;

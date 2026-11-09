@@ -31,7 +31,7 @@ import { ghostApplies, ghostSegments, ghostSpacingPt, inferGhostLines, MAX_STROK
 import { dragSnapSession, snapDragged, type SnapSession } from "./snap-glue";
 import { SnapHold } from "./snap-hold";
 import { applyPlacement, itemsBounds, uniformPlacement } from "../ink/selection-transform";
-import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
+import { layoutPages, nearestPage, pageAt, pagesTouching, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
@@ -55,7 +55,7 @@ import { clampToPage, fitWidth, pan, screenToPage, zoomAt, type Size, type Viewp
 import { drawHeader, exportHeaderFor, headerLayout, pageTimesText, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
 import { pageTimes } from "../model/page-times";
 import { layoutForMode, type ScrollMode } from "../ink/page-mode";
-import { canSpread, effectiveScrollMode, mateOf, scrollToPageViewport, stepRow } from "../ink/spread";
+import { canSpread, effectiveScrollMode, mateOf, relayoutStep, scrollToPageViewport, spreadTarget, stepRow } from "../ink/spread";
 import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
 import { captureRegion, restoreRegion, type ViewRegion } from "../ink/view-region";
 import { PageMode } from "./page-mode";
@@ -2563,6 +2563,7 @@ export class NotebookView extends FileView {
 
 	/** Shows page `index` from its top, or (v7 reading position) with page y `y` at the top of the view. `animate`: page-by-page turn. */
 	private scrollToPage(index: number, y = 0, animate = false): void {
+		if (this.spreadOn) this.touchedPageId = this.shownDoc()?.pages[index]?.id ?? this.touchedPageId; // review fix (S1): going to a page makes it the page
 		if (this.pageMode?.enabled) {
 			this.pageMode.goTo(index, animate);
 			if (y > 0) {
@@ -4409,11 +4410,36 @@ export class NotebookView extends FileView {
 	runGrouped<T>(label: string, fn: () => T): T {
 		const was = this.quietRefusals;
 		this.quietRefusals = true;
+		// Review fix (M1): while a macro runs, page turns are immediate, so the page in view has changed before the next step reads it.
+		const pm = this.pageMode;
+		const wasInstant = pm?.instant ?? false;
+		if (pm) pm.instant = true;
 		try {
 			return this.history.group(label, fn);
 		} finally {
+			if (pm) pm.instant = wasInstant;
 			this.quietRefusals = was;
 		}
+	}
+
+	/**
+	 * Before a macro run opens its undo step (review fix M2): a text box or an equation still open is committed now, as its own undo step,
+	 * so Undo on the macro never takes back what was typed; a page-turn animation still running is finished, so the first page step starts
+	 * from the page the person sees.
+	 */
+	prepareMacroRun(): void {
+		this.commitText();
+		this.pageMode?.finishAnimation();
+	}
+
+	/** Edits recorded in the open macro run so far (see MacroEnv.edits). */
+	get macroEdits(): number {
+		return this.history.groupedSteps;
+	}
+
+	/** A stroke, an erase or a drag is in progress (review fix M8): a macro does not start under the pen. */
+	get strokeInProgress(): boolean {
+		return !!this.controller?.drawing || this.active !== null || this.erasing !== null || this.lasso !== null || this.drag !== null || this.shapeDrag !== null || this.spaceDrag !== null;
 	}
 
 	/** The macro manager: list, editor, toolbar button. The macros live in the plugin settings (shared by every view and the settings tab). */
@@ -4836,7 +4862,20 @@ export class NotebookView extends FileView {
 		if (this.pageMode?.enabled) return this.pageMode.current();
 		const [x, y] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
 		// 0.27 (#49): in a spread the two pages of a row are equally near vertically: the one nearer sideways is the one in view.
-		return Math.max(0, nearestPage(this.layout, y, this.spreadOn ? x : undefined));
+		const nearest = Math.max(0, nearestPage(this.layout, y, this.spreadOn ? x : undefined));
+		if (!this.spreadOn || this.touchedPageId === null) return nearest;
+		// Review fix (S1): with both pages of the pair in view, "the page" (the one Delete page, Paper, Lock... act on, and the number shown) is the one last touched.
+		const id = this.touchedPageId;
+		const touched = this.shownDoc()?.pages.findIndex((p) => p.id === id) ?? -1;
+		return spreadTarget(this.layout, x, nearest, touched);
+	}
+
+	/** The page last written on, tapped or gone to in a spread (null: none yet). Decides which page of the pair in view the page actions mean. */
+	private touchedPageId: string | null = null;
+
+	/** True while the pages are laid out as a two-page spread. */
+	get inSpread(): boolean {
+		return this.spreadOn && !this.pageMode?.enabled;
 	}
 
 	/** 0.27 (#49): the other page of the pair that page `index` is in (-1: none, or no spread), for the page panel's highlight. */
@@ -5427,8 +5466,24 @@ export class NotebookView extends FileView {
 		}
 		this.ui?.refresh();
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
-		if (!this.followSpreadRoom(before)) this.refit(true);
+		// Review fix (S3): the new layout (a spread coming or going) and the re-fit move the pages and the viewport, so they wait until the pen
+		// is up; a stroke in progress keeps the page boxes it is mapped with. The page to stay on is the one in view when the size first changed.
+		if (!this.relayoutPending) this.relayoutKeep = before;
+		this.relayoutPending = true;
+		this.settleRelayout();
 		if (this.pendingPage !== null) this.applyStartPosition();
+	}
+
+	/** The view changed size and the layout has not caught up (a stroke is in progress). */
+	private relayoutPending = false;
+	/** The page to stay on when the layout catches up. */
+	private relayoutKeep = 0;
+
+	/** Lays the pages out for the new view size now, or leaves it for when the stroke ends (see `relayoutStep`). */
+	private settleRelayout(): void {
+		if (relayoutStep(this.relayoutPending, this.strokeInProgress) !== "now") return;
+		this.relayoutPending = false;
+		if (!this.followSpreadRoom(this.relayoutKeep)) this.refit(true);
 	}
 
 	/** In fit mode, rescales to the view width; `keepTop` keeps the same document line at the top (rotation). */
@@ -5712,6 +5767,7 @@ export class NotebookView extends FileView {
 			return false;
 		}
 		const page = this.pageAtIndex(pageIndex);
+		if (page) this.touchedPageId = page.id; // review fix (S1): the page the page actions mean when both pages of a pair are in view
 		const local = toPageLocal(layout.boxes[pageIndex]!, dx, dy);
 		// 0.16 (#124): a locked page takes no ink, text, shape, space or eraser: only the lasso, to select and copy from it.
 		if (page?.locked && tool !== "lasso") {
@@ -6060,6 +6116,8 @@ export class NotebookView extends FileView {
 		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
 		this.session?.gestureEnded();
+		// Review fix (S3): a resize or rotation during the stroke waits for it; the contact is over once this handler returns.
+		if (this.relayoutPending) window.setTimeout(() => this.settleRelayout(), 0);
 		// 0.14: the first stroke written during an automatic lecture is what adds its page (view/lecture-mode.ts). Deferred past the
 		// pointer handler so the contact is over; the document is only touched through the usual edit context.
 		const committed = this.committedIds();
@@ -6476,18 +6534,30 @@ export class NotebookView extends FileView {
 		const [px, py] = erasing.last;
 		erasing.last = [x, y];
 		const radius = eraserRadiusPt(this.tools.eraserSize, this.viewport.scale);
-		const pageIndex = pageAt(layout, x, y, radius);
-		const page = doc.pages[pageIndex];
-		const box = layout.boxes[pageIndex];
-		if (!page || !box) return;
+		// Review fix (S4): by the binding of a spread the circle reaches both pages: it erases on each page it touches.
+		let changed = false;
+		for (const pageIndex of pagesTouching(layout, x, y, radius)) {
+			const page = doc.pages[pageIndex];
+			const box = layout.boxes[pageIndex];
+			if (page && box && this.eraseOnPage(erasing, doc, page, box, [px, py], [x, y], radius)) changed = true;
+		}
+		if (changed) this.renderer.invalidate();
+	}
+
+	/** One page's share of `eraseTo`: the ink and areas the eraser's path from `from` to `to` (document points) touches on `page`. True when something was erased. */
+	private eraseOnPage(
+		erasing: NonNullable<NotebookView["erasing"]>, doc: NotebookDocument, page: Page, box: PageBox, from: readonly [number, number], to: readonly [number, number], radius: number,
+	): boolean {
+		const renderer = this.renderer;
+		if (!renderer) return false;
 		// 0.16 (#124): the eraser leaves a locked page alone.
 		if (page.locked) {
 			this.pagesLocked([page.id]);
-			return;
+			return false;
 		}
-		const [ax, ay] = toPageLocal(box, px, py);
-		const [bx, by] = toPageLocal(box, x, y);
-		const hits = findHitStrokes(filterErasable(this.inkInView(page), this.eraseFilter()), ax, ay, bx, by, radius, this.renderer.boundsOf);
+		const [ax, ay] = toPageLocal(box, from[0], from[1]);
+		const [bx, by] = toPageLocal(box, to[0], to[1]);
+		const hits = findHitStrokes(filterErasable(this.inkInView(page), this.eraseFilter()), ax, ay, bx, by, radius, renderer.boundsOf);
 		let changed = false;
 		for (const stroke of hits) {
 			if (erasing.spare?.has(stroke.id)) continue;
@@ -6495,7 +6565,7 @@ export class NotebookView extends FileView {
 			if (index < 0) continue;
 			let after: Stroke[] = [];
 			if (this.tools.eraserMode === "segment") {
-				const runs = eraseSegment(stroke, ax, ay, bx, by, radius, this.renderer.boundsOf(stroke));
+				const runs = eraseSegment(stroke, ax, ay, bx, by, radius, renderer.boundsOf(stroke));
 				if (runs === null) continue;
 				after = strokePieces(page, stroke, runs);
 			}
@@ -6510,7 +6580,7 @@ export class NotebookView extends FileView {
 		const filter = this.eraseFilter();
 		if (changed) erasing.areas.inkErased(doc, filter);
 		if (erasing.areas.allowed(filter) && erasing.areas.eraseAreas(doc, page.id, areasUnderEraser(page.elements ?? [], ax, ay, bx, by, radius, filter), filter)) changed = true;
-		if (changed) this.renderer.invalidate();
+		return changed;
 	}
 
 	/** Which ink the eraser may touch (selective eraser). */

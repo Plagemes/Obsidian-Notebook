@@ -28,7 +28,7 @@ import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/tool
 import { DEFAULT_INPUT_PREF, isInputPref, type InputPref } from "./ui/input-layout";
 import { cleanFadeSeconds, DEFAULT_TOOL_FADE_MODE, DEFAULT_TOOL_FADE_SECONDS, isToolFadeMode, type ToolFadeMode } from "./ui/tool-fade";
 import { normalisePinned } from "./ui/adapt";
-import { normaliseMacros, type Macro } from "./ui/macros";
+import { readMacros, withoutMissingMacros, type Macro } from "./ui/macros";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { cleanUserName } from "./library/greeting";
 import { normaliseSeen, type HintId } from "./ui/hint-logic";
@@ -273,6 +273,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	pinnedQuick: string[];
 	/** 0.27 (#170): the person's macros (a name, an icon and a list of actions each; at most 12 of at most 20 steps). A macro pinned to the toolbar is in `pinnedQuick` as `macro-<id>`. */
 	macros: Macro[];
+	/** Review fix (M6): macros stored beyond the limit of this version (written by a newer one), kept as written and never run, so saving the settings here does not lose them. */
+	macrosExtra: unknown[];
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
 	pageTurnerKeys: boolean;
 	// wave 0.10: tabs and lines
@@ -463,6 +465,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	relatedCourse: true, // 0.26 related
 	pinnedQuick: [],
 	macros: [],
+	macrosExtra: [],
 	pageTurnerKeys: true,
 	notebookTabs: false,
 	autoLineBreak: false,
@@ -644,8 +647,11 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.toolFadeFirstTouch === "boolean") s.toolFadeFirstTouch = d.toolFadeFirstTouch;
 	if (isInputPref(d.inputLayout)) s.inputLayout = d.inputLayout;
 	if (typeof d.relatedCourse === "boolean") s.relatedCourse = d.relatedCourse; // 0.26 related
-	s.pinnedQuick = normalisePinned(d.pinnedQuick);
-	s.macros = normaliseMacros(d.macros); // 0.27 macros
+	const macroRead = readMacros(d.macros, d.macrosExtra); // 0.27 macros
+	s.macros = macroRead.macros;
+	s.macrosExtra = macroRead.extra;
+	// Review fix (M7): the pin of a macro that no longer exists (deleted, or its id repaired) would sit in a toolbar slot unseen.
+	s.pinnedQuick = withoutMissingMacros(normalisePinned(d.pinnedQuick), s.macros);
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;

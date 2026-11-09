@@ -6,6 +6,7 @@ import { setArtCacheScope } from "./ui/art/generative-art";
 import { Platform, Plugin, TFile } from "obsidian";
 import { onLanguageChanged, setUiLanguage, t } from "./i18n";
 import { readSettings, type NotebookSettings } from "./settings";
+import { readMacros } from "./ui/macros";
 import { positionEquals, type SavedPosition } from "./ink/view-position";
 import { stressDocument } from "./model/stress";
 import { NOTEBOOK_EXTENSIONS } from "./storage/format";
@@ -429,7 +430,18 @@ export default class NotebookPlugin extends Plugin {
 	 */
 	private async readStoredSettings(): Promise<NotebookSettings> {
 		try {
-			return readSettings(await this.loadData());
+			const data: unknown = await this.loadData();
+			const settings = readSettings(data);
+			// Review fix (M7): a macro whose stored id was invalid or doubled got its (stable) new id; saved once, so it is what data.json holds from now on.
+			const stored = typeof data === "object" && data !== null ? (data as Record<string, unknown>).macros : undefined;
+			if (readMacros(stored).repaired) {
+				try {
+					await this.saveData(settings);
+				} catch (e) {
+					console.error("[notebook] saving the repaired macro ids failed; they are repaired again, the same way, at the next start", e);
+				}
+			}
+			return settings;
 		} catch (e) {
 			this.settingsUnreadable = true;
 			this.startupFailures.push("settings file");
