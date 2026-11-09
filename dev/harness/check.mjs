@@ -183,6 +183,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "markedview", theme, device, lowLatency: false });
 // 0.27 spread (#49): two pages side by side on the landscape tablet, one column on the phone (dev/harness/spread-check.ts), dist/shots/design/spread-*.png.
 for (const device of ["tabletLandscape", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "spread", theme, device, lowLatency: false });
+// 0.27 macros (#170): the macro manager, the toolbar button and a run (dev/harness/macros-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "macros", theme, device, lowLatency: false });
 // 0.26 tidy (#238): Tidy up (dev/harness/tidy-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tidy", theme, device, lowLatency: false });
 // 0.23 welcomeback (#420): the welcome-back card (dev/harness/welcomeback-check.ts).
@@ -461,6 +463,7 @@ async function main() {
 				else if (s.doc === "smooth") report = await cdp.evaluate("window.harness.checkSmooth()", 90000); // 0.26 smooth
 				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
 				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
+				else if (s.doc === "macros") report = await cdp.evaluate("window.harness.checkMacros()", 120000); // 0.27 macros
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
 				else if (s.doc === "spread") report = await cdp.evaluate("window.harness.checkSpread()", 120000); // 0.27 spread
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
@@ -716,6 +719,19 @@ async function main() {
 						writeFileSync(join(designDir, `spread-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`spread ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.27 macros: screenshots of the toolbar with its macro buttons, the manager, the editor and the sheet's Macros section.
+			if (s.doc === "macros") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["toolbar", "list", "editor", "sheet"]) {
+					try {
+						await cdp.evaluate(`window.harness.macrosShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `macros-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`macros ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

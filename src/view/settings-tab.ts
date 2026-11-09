@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, readSettings, type NotebookSettings } from "../settin
 import type { TimetableService } from "../timetable/service";
 import { effectivePenHold } from "../ink/pen-button";
 import { openNotebookTemplateManager } from "./notebook-templates";
+import { MacrosModal } from "./macros-modal";
 import { PenSetsModal } from "./pen-sets-modal";
 import { PenTestModal, penSignalInfo } from "./pen-test-modal";
 import { renderPenKeySetting } from "./pen-button-settings";
@@ -234,6 +235,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "gesture-custom": new CustomGesturesModal(this.penGestureHost()).open(); break;
 			case "notebook-templates-manage": openNotebookTemplateManager(this.app, () => this.host.settings); break;
 			case "pen-sets": this.openPenSets(); break;
+			case "macros-manage": this.openMacros(); break;
 			case "board-columns": new BoardColumnsModal({ app: this.app, get: () => this.host.settings.boardColumns, set: (cols) => this.setControlValue("boardColumns", cols) }).open(); break;
 			case "meanings-edit": new MeaningsEditorModal({ app: this.app, tolerance: () => TOLERANCES[this.host.settings.meaningTolerance], globalLegend: () => this.host.settings.colourMeanings, setGlobal: (legend) => this.setControlValue("colourMeanings", legend) }).open(); break;
 		}
@@ -249,6 +251,18 @@ export class NotebookSettingTab extends PluginSettingTab {
 				void this.host.saveSettings().catch((e) => console.error("[notebook] saving settings failed", e));
 			},
 			currentPens: () => null,
+		}).open();
+	}
+
+	/** 0.27 macros (#170): the manager. It saves the macros and the toolbar pins together, through the same lenient reader as the load. */
+	private openMacros(): void {
+		const settings = (): NotebookSettings => this.host.settings;
+		new MacrosModal(this.app, {
+			get: () => ({ macros: settings().macros, pinned: settings().pinnedQuick }),
+			update: (macros, pinned) => {
+				this.host.settings = readSettings({ ...settings(), macros, pinnedQuick: pinned });
+				void this.host.saveSettings().catch((e) => console.error("[notebook] saving settings failed", e));
+			},
 		}).open();
 	}
 

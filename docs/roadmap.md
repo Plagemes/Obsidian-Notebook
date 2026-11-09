@@ -357,7 +357,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### E. Automation
 168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.
 169. **P2** If/then rules (e.g. "notebook in folder Physics → millimetre paper", "on close → update the PDF copy").
-170. **P2** Macros: a sequence of commands on one toolbar button.
+170. **P2** 🧪 Macros: a sequence of commands on one toolbar button. (0.27: a name, an icon and up to 20 steps from an explicit allow-list of safe actions, up to 12 macros in the settings; a toolbar button (pin), the All actions sheet and one Obsidian command each; every run is ONE undo step (`History.group`); a locked page or an unavailable step stops it with one notice. `ui/macros.ts`, `view/macros-modal.ts`.)
 
 ### F. Images and view
 171. **P2** Image editing: crop, rotate, brightness and contrast.

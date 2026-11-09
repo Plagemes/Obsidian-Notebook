@@ -3982,6 +3982,33 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Per-notebook choice in bounded device-local storage (corrupt falls back to all pages) | yes | `tests/nav-marked.test.ts`; harness `doc=markedview` | | | |
 | Marked-only list with badges, sub-filters by kind, empty message, long-press help | yes | harness `doc=markedview` | | | |
 
+### 0.27 — macros: a sequence of actions on one button (roadmap #170; steps 3060-3079)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real hand). Use a notebook with two or three pages, one of them on plain paper.
+
+3060. **Open the manager.** In *All actions* find the *Macros* section (after *View & input*) and tap *Macros…*; the same dialog opens from *Settings → Appearance → Macros* (*Open*) and from the command *Manage macros*. With no macro it says so and offers *New macro*.
+3061. **Make a macro.** Tap *New macro*, type a name ("Maths page"), pick an icon, switch on *Show on the toolbar*. Tap *Add a step* and search: *pen*, then *Paper* (a choice appears: set *Dotted*), then *Bookmark*, then *Add page*. The list offers only safe actions: search for *delete*, *export*, *sync*, *trash*: nothing comes up. *Save* with no step says so.
+3062. **Order.** Move a step up and down with the arrows (the first cannot go up, the last cannot go down); remove a step with the cross. Save: the list shows the name, the number of steps and *On the toolbar*.
+3063. **The button.** The toolbar shows the macro's button (icon, name as its label) in the pinned places, also on a phone width. Press and hold it: the pin menu offers to unpin it. With three buttons already pinned the editor's switch is off and explains why.
+3064. **Run it.** Tap the button: the pen is in hand, the page paper changes, the page is bookmarked, a page is added; one notice says *"Maths page: 4 steps done. One Undo takes them all back."*
+3065. **One undo.** Undo once: the paper, the bookmark and the new page are all gone. Redo: all back. The history panel shows one step, *Macro run*.
+3066. **Locked page.** Lock the current page and tap the button: it stops at the paper step with ONE notice ("Maths page stopped at step 2 (Paper: Dotted) … The 1 earlier steps are done"), the page is unchanged and no page was added. A locked element on the page also refuses a step that would move or change it.
+3067. **Nothing selected.** Make a macro whose first step is *Duplicate selection* (Arranging the selection). With nothing selected, tap it: it stops at step 1 and says nothing was changed. Select some ink first and it works; in *All actions* it qualifies for *For this page* while ink is selected (shown when it is among the five best fits) and steps back when nothing is selected.
+3068. **Run from the sheet and as a command.** *All actions → Macros* lists it (and finds it by name in the search); the command palette has *Macro: Maths page*, which you can give a hotkey. Rename the macro: the command and the button follow at once. Delete it (the question asks first): the button, the sheet row and the command disappear, and the pin is gone.
+3069. **Read-only.** In read-only mode the macro buttons are not offered and the sheet row is disabled.
+3070. **A macro from a newer version.** (Developer check) Add a step with an unknown action id to a macro in `data.json`: the editor shows it struck through with *Unavailable*, keeps it when you save, and a run skips it and says how many were skipped.
+3071. **Limits.** Twelve macros, twenty steps each: the buttons that would exceed them are disabled with a line saying so.
+3072. **Looks.** Light and dark, phone and tablet width, Italian (*Macro*, *Nuova macro*, *Aggiungi un passaggio*); long-press the editor's small buttons for their explanation.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Macro data in the plugin settings: lenient reader (unknown action ids kept, bad entries dropped), bounds (12 macros, 20 steps, 32-character names), unique ids | yes | `tests/macros.test.ts` | | | |
+| Explicit allow-list of safe actions (tools, pens, arranging a selection, page paper / size, pages); nothing that deletes, exports, shares, syncs or opens a dialog; unknown / blocked / value-less steps skipped | yes | `tests/macros.test.ts` (list pinned against the registry and the runners) | | | |
+| Runner: steps in order through the tap entry point, context re-read per step, stop at a step that cannot run / is refused / throws with the earlier steps kept, one notice | yes | `tests/macros.test.ts`, `tests/history-group.test.ts` | | | |
+| One undo step per run (`History.group` → `Batch` "Run macro"; guards of every step kept; refused step not part of it) | yes | `tests/history-group.test.ts`, `tests/macros.test.ts` (real History, locked page) | | | |
+| Registry: macros in the sheet's own section, pinnable toolbar button (never ranked in by itself; kept on a phone), context rule, history title, long-press help | yes | `tests/macros.test.ts`, `tests/long-press-help.test.ts` | | | |
+| Manager and editor on the modal shell (list, new / edit / delete with confirmation, icon, steps with values and order, toolbar switch, picker), settings row, command per macro | yes | harness `doc=macros` | | | commands in a real Obsidian not run here |
+
 ### 0.26 — opacity: opacity of ink, pictures and areas, document format 24 (roadmap #358; steps 2780-2799)
 
 Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen). Use a notebook with a PDF or scanned page, a picture, and some handwriting.

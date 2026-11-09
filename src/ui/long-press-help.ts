@@ -5,6 +5,7 @@
 import { t } from "../i18n";
 import type { MessageKey } from "../i18n/en";
 import { ACTION_HELP } from "./help-text";
+import { isMacroActionId } from "./macros";
 import { cleanHelp, ClickGuard, HELP_LINGER_MS, LongPressTracker, placeBubble, startsHelp, type HelpContent } from "./long-press-logic";
 
 let enabledFlag = true;
@@ -25,7 +26,9 @@ function hideActiveBubble(): void {
 export function resolveHelp(button: HTMLElement): HelpContent | null {
 	if (button.dataset.noHelp !== undefined) return null;
 	const name = button.getAttribute("aria-label") ?? button.getAttribute("title") ?? "";
-	const key = button.dataset.help ?? (button.dataset.action ? ACTION_HELP[button.dataset.action] : undefined);
+	const action = button.dataset.action;
+	// 0.27 macros (#170): every macro button (a name the person chose) shares one explanation.
+	const key = button.dataset.help ?? (action ? (isMacroActionId(action) ? "help.macro" : ACTION_HELP[action]) : undefined);
 	const hintKey = button.dataset.helpHint;
 	return cleanHelp({
 		name,

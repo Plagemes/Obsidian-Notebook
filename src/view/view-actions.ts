@@ -130,6 +130,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"undo": (v) => v.undo(),
 	"redo": (v) => v.redo(),
 	"history-panel": (v) => v.openHistoryPanel(),
+	// 0.27 (#170): the macro manager (the macros themselves run through NotebookView.runAction)
+	"macros-open": (v) => v.openMacros(),
 
 	// selection
 	"selection-copy": (v) => void v.selectionTools?.copy(),

@@ -9,7 +9,7 @@ export type ToolId = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "tex
 
 /** Sections of the sheets and of docs/design-ui.md, in display order. */
 export const GROUP_ORDER = [
-	"tool", "history", "selection", "navigate", "insert", "page", "reading", "side", "lecture", "view", "share", "notebook", "app", "zettel", "integration", "dev",
+	"tool", "history", "selection", "navigate", "insert", "page", "reading", "side", "lecture", "view", "macros", "share", "notebook", "app", "zettel", "integration", "dev",
 ] as const;
 export type ActionGroup = typeof GROUP_ORDER[number];
 
@@ -139,6 +139,10 @@ export interface ActionDef {
 	readonly choices?: "paper" | "size";
 	/** Extra search words (any language). */
 	readonly keywords?: string;
+	/** 0.27 (#170): the name the person gave it, shown instead of the translated `label` (a macro). */
+	readonly name?: string;
+	/** 0.27 (#170): may be pinned to the toolbar but is never ranked into a quick slot by itself (a macro). */
+	readonly pinOnly?: true;
 }
 
 /** Back and Forward only show once the history has somewhere to go. */
@@ -613,6 +617,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-insert-note-svg", label: "noteInsert.actionSvg", icon: "file-image", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.4, scope: "view", command: true, when: hasSelection, keywords: "insert note markdown svg vector embed inserisci nota vettoriale" },
 	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
 
+	// 0.27 macros (#170): the manager (list, editor, toolbar button) of the person's own sequences of actions. The macros themselves are added to the
+	// registry at run time (ui/macros.ts: `macro-<id>`, in this group of the sheet, pinnable to the toolbar, one Obsidian command each).
+	{ id: "macros-open", label: "macros.open", icon: "workflow", group: "macros", surfaces: ["sheet"], priority: 30, scope: "view", command: "macros.command.open", readOnly: true, keywords: "macro sequence automate shortcut record steps toolbar button sequenza automatizza scorciatoia passaggi" },
+
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.
 	banner("safe-open-normally", "safe.banner.openNormally", "shield-off", "notebook", "view/resilience.ts"),
 	banner("safe-repair", "safe.banner.repair", "wrench", "notebook", "view/resilience.ts"),
@@ -629,8 +637,23 @@ export const ACTIONS: readonly ActionDef[] = [
 
 const BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 
+/** 0.27 (#170): actions added at run time (the person's macros, `ui/macros.ts`). Replaced as a whole; empty until a macro exists. */
+let EXTRA: readonly ActionDef[] = [];
+let EXTRA_BY_ID = new Map<string, ActionDef>();
+
+/** Replaces the run-time actions. They never shadow a registry action (an id of ACTIONS is ignored). */
+export function setExtraActions(list: readonly ActionDef[]): void {
+	EXTRA = list.filter((a) => !BY_ID.has(a.id));
+	EXTRA_BY_ID = new Map(EXTRA.map((a) => [a.id, a]));
+}
+
+/** The registry and the run-time actions: what the layout engine and the sheets are built from. */
+export function allActions(): readonly ActionDef[] {
+	return EXTRA.length > 0 ? [...ACTIONS, ...EXTRA] : ACTIONS;
+}
+
 export function actionById(id: string): ActionDef | undefined {
-	return BY_ID.get(id);
+	return BY_ID.get(id) ?? EXTRA_BY_ID.get(id);
 }
 
 /** The action is meaningful in this context (otherwise it is not shown at all). */

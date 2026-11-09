@@ -57,6 +57,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"bookmarks-open": "help.openBookmarks",
 	"hand-in": "help.handIn",
 	"selection-join": "help.joinStrokes",
+	// 0.27 macros (#170): the manager; a macro's own button says "help.macro" (long-press-help.ts)
+	"macros-open": "help.macros",
 	// 0.25 areahl
 	"highlighter-area": "help.highlighterArea",
 	// 0.25 histpanel (#84)
