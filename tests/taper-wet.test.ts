@@ -55,3 +55,55 @@ describe("Z1: the provisional tip follows the start taper", () => {
 		}
 	});
 });
+
+describe("Z5: the start taper does not depend on how far apart the points are", () => {
+	it("a fast stroke thickens by the way travelled, like a slow one", () => {
+		const width = 2;
+		const taper = { start: 0.1, end: 0 };
+		const ramp = taperLength(0.1, width);
+		const slow = InkBuilder.fromPoints(line(60, 1), width, "pen", new InkBuilder(), undefined, taper);
+		const fast = InkBuilder.fromPoints(line(12, 6), width, "pen", new InkBuilder(), undefined, taper);
+		expect(ramp).toBeCloseTo(2.4, 9);
+		const full = inkRadius("pen", width, 0.5);
+		for (const g of [slow, fast]) {
+			let inside = 0;
+			for (let i = 0; i < g.nodeCount; i++) {
+				const arc = g.nx[i]! - 10;
+				if (arc >= ramp) continue;
+				inside++;
+				expect(g.nr[i]!, `x ${arc}`).toBeCloseTo(Math.max(0.01, full * taperFactor(arc / ramp)), 9);
+			}
+			expect(inside).toBeGreaterThan(0);
+		}
+		// The fast stroke has nodes inside a ramp that is shorter than its first segment (6 pt): they are thin at the start and grow.
+		expect(fast.nr[0]!).toBeLessThan(fast.nr[1]!);
+	});
+
+	it("the radius grows along the ramp and meets the rest of the line at its full size", () => {
+		const g = InkBuilder.fromPoints(line(12, 6), 2, "pen", new InkBuilder(), undefined, { start: 0.1, end: 0 });
+		for (let i = 1; i < g.nodeCount; i++) expect(g.nr[i]!).toBeGreaterThanOrEqual(g.nr[i - 1]! - 1e-12);
+		expect(g.nr[g.nodeCount - 1]).toBe(inkRadius("pen", 2, 0.5));
+	});
+
+	it("the wet and the committed stroke agree node for node (the brush's closed last sample included)", () => {
+		const pts: Point[] = [];
+		for (let i = 0; i < 40; i++) pts.push([10 + i * 3, 20 + Math.sin(i / 4) * 6, 0.3 + 0.6 * Math.abs(Math.sin(i / 7))]);
+		for (const tool of ["pen", "fountain", "brush"] as const) {
+			for (const taper of [{ start: 0.3, end: 0.4 }, { start: 1, end: 0 }]) {
+				const committed = InkBuilder.fromPoints(pts, 2, tool, new InkBuilder(), undefined, taper);
+				const live = new InkBuilder();
+				live.reset(tool, 2, undefined, taper);
+				for (const p of pts) live.add(p[0], p[1], p[2]);
+				const midNodes = Array.from(live.nr.subarray(0, live.nodeCount));
+				live.finish();
+				expect(live.nodeCount, tool).toBe(committed.nodeCount);
+				expect(Array.from(live.nr.subarray(0, live.nodeCount)), tool).toEqual(Array.from(committed.nr.subarray(0, committed.nodeCount)));
+				// Nothing already built moved at the lift except the end taper's nodes at the tail.
+				if (taper.end === 0) expect(Array.from(live.nr.subarray(0, midNodes.length - 2)), tool).toEqual(midNodes.slice(0, midNodes.length - 2));
+			}
+		}
+		const brush = InkBuilder.fromPoints(pts, 2, "brush", new InkBuilder(), undefined, { start: 0.3, end: 0 });
+		const plain = InkBuilder.fromPoints(pts, 2, "brush", new InkBuilder(), undefined, { start: 0, end: 0 });
+		expect(brush.nr[brush.nodeCount - 1]).toBeCloseTo(plain.nr[plain.nodeCount - 1]!, 9);
+	});
+});
