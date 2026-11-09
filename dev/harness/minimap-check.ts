@@ -47,6 +47,9 @@ export async function checkMinimap(api: MinimapCheckApi): Promise<{ ok: boolean;
 		el.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: "touch", clientX: x, clientY: y, button: 0, buttons: type === "pointerup" ? 0 : 1, bubbles: true, cancelable: true }));
 	const scrollTop = (): number => -v.viewport.offsetY / v.viewport.scale;
 
+	// 0.27 (#431): the synthetic contacts below are touches, which would switch the input layout (a bigger toolbar, so a refit of
+	// the stage) in the middle of the check; the layout is pinned to the pen, as the check was written for.
+	(v.host.settings as unknown as { inputLayout: string }).inputLayout = "pen";
 	mode("auto");
 	await frames(3);
 	// --- a normal page at fit: no overview ---
