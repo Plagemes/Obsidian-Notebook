@@ -4,11 +4,11 @@ import { OutlineBuilder, type OutlineItem } from "../src/model/outline-builder";
 import type { Asset, Page, PageElement, Stroke } from "../src/model/types";
 
 function page(id: string, elements: PageElement[] = [], strokes: Stroke[] = []): Page {
-	return { id, width: 595, height: 842, paper: { kind: "blank", spacing: 28 }, strokes, elements } as Page;
+	return { id, width: 595, height: 842, paper: { kind: "blank", spacing: 28 }, strokes, elements };
 }
 
 function item(over: Partial<OutlineItem> & Pick<OutlineItem, "kind" | "pageId" | "index">): OutlineItem {
-	return { key: `k:${over.kind}:${over.pageId}`, source: "bookmarks", y: 0, depth: 1, title: "", color: null, category: null, ...over } as OutlineItem;
+	return { key: `k:${over.kind}:${over.pageId}`, source: "bookmarks", y: 0, depth: 1, title: "", color: null, category: null, ...over };
 }
 
 const asset = (id: string, name: string): Asset => ({ id, kind: "image", path: `x/${id}.png`, name, bytes: 10 });
