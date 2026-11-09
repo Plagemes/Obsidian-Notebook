@@ -60,31 +60,34 @@ export async function checkMacros(api: MacrosCheckApi): Promise<{ ok: boolean; r
 
 	// the picker: only allow-listed actions
 	const cap: { picker: SuggestModal<ActionDef> | null } = { picker: null };
-	const open = SuggestModal.prototype.open;
-	SuggestModal.prototype.open = function (this: SuggestModal<ActionDef>) {
+	const proto = SuggestModal.prototype as unknown as { open: (this: SuggestModal<ActionDef>) => void };
+	const open = proto.open;
+	proto.open = function (this: SuggestModal<ActionDef>) {
 		cap.picker = this;
 		open.call(this);
 	};
+	/** What the open picker lists for a search (the picker answers at once; the type allows a promise). */
+	const suggest = (query: string): ActionDef[] => (cap.picker?.getSuggestions(query) ?? []) as ActionDef[];
 	const pick = async (id: string): Promise<void> => {
 		await click(kit.byLabel(t("macros.addStep")));
 		const p = cap.picker;
-		const a = p?.getSuggestions("").find((x) => x.id === id);
-		if (p && a) p.onChooseSuggestion(a);
+		const a = suggest("").find((x) => x.id === id);
+		if (p && a) p.onChooseSuggestion(a, new MouseEvent("click"));
 		p?.close();
 		cap.picker = null;
 		await frames(2);
 	};
 	await click(kit.byLabel(t("macros.addStep")));
-	const offered = cap.picker?.getSuggestions("") ?? [];
+	const offered = suggest("");
 	add("the picker offers allow-listed actions only", offered.length > 20 && offered.every((a) => MACRO_SAFE.has(a.id)) && !offered.some((a) => /delete|export|sync/.test(a.id)), `${offered.length} actions`);
-	add("it can be searched", (cap.picker?.getSuggestions("paper") ?? []).some((a) => a.id === "page-paper"));
+	add("it can be searched", suggest("paper").some((a) => a.id === "page-paper"));
 	cap.picker?.close();
 	cap.picker = null;
 	await pick("tool-pen");
 	await pick("page-paper");
 	await pick("page-bookmark");
 	await pick("add-page");
-	SuggestModal.prototype.open = open;
+	proto.open = open;
 	add("four steps were added, in order", qa(".nb-macro-step-label").map((e) => e.textContent).join("|") === [t("tool.pen"), t("ui.paper"), t("page.bookmark"), t("tool.addPage")].join("|"), qa(".nb-macro-step-label").map((e) => e.textContent).join("|"));
 	const select = q<HTMLSelectElement>(".nb-macro-select");
 	add("the paper step has a value, first choice by default", !!select && select.value.length > 0, select?.value ?? "");
@@ -148,9 +151,7 @@ export async function checkMacros(api: MacrosCheckApi): Promise<{ ok: boolean; r
 	add("a locked page stops the macro with ONE notice naming the step", said.length === 1 && said[0]!.startsWith(`Maths page stopped at step 2 (${t("ui.paper")}: ${t("paper.dotted")})`), said.join(" | "));
 	add("the locked page and the page count are untouched, the bookmark step never ran", locked.paper.kind === paper && v.document.pages.length === pages && (v.document.meta?.bookmarks.length ?? 0) === bookmarksBefore);
 	add("the notice says the earlier step is done", (said[0] ?? "").includes(t("macros.failed.tail.some", { done: "1" })), said[0] ?? "");
-	v.setPageLocked(locked, false);
-	await frames(3);
-	v.undo();
+	v.setPageLocked(locked, false); // (the lock and the unlock are history steps of their own; the stopped macro left none)
 	await frames(3);
 
 	// --- a step of a newer version is shown as unavailable and skipped ---
