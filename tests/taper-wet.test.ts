@@ -132,41 +132,41 @@ describe("Z6: the live fallback draws no end taper while the pen is down", () =>
 });
 
 describe("Z4: a line drawn wider than the stroke (thumbnails) keeps its taper length in pt", () => {
-  it("widenedTaper scales the values back", () => {
-    expect(widenedTaper(undefined, 0.8, 5)).toBeUndefined();
-    const same = { start: 0.5, end: 1 };
-    expect(widenedTaper(same, 2, 2)).toBe(same);
-    const t = widenedTaper({ start: 0.5, end: 1 }, 0.8, 5)!;
-    expect(taperLength(t.start, 5)).toBeCloseTo(taperLength(0.5, 0.8), 9);
-    expect(taperLength(t.end, 5)).toBeCloseTo(taperLength(1, 0.8), 9);
-  });
+	it("widenedTaper scales the values back", () => {
+		expect(widenedTaper(undefined, 0.8, 5)).toBeUndefined();
+		const same = { start: 0.5, end: 1 };
+		expect(widenedTaper(same, 2, 2)).toBe(same);
+		const t = widenedTaper({ start: 0.5, end: 1 }, 0.8, 5)!;
+		expect(taperLength(t.start, 5)).toBeCloseTo(taperLength(0.5, 0.8), 9);
+		expect(taperLength(t.end, 5)).toBeCloseTo(taperLength(1, 0.8), 9);
+	});
 
-  it("a thin pen with a full end taper on a small card is not drawn as a spindle", () => {
-    const pts = line(80, 3);
-    const stroke = { points: pts, width: 0.8, tool: "pen" as const, render: RENDER_INK, taperEnd: 1 };
-    const drawn = 5;
-    const pageLength = taperLength(1, 0.8);
-    expect(pageLength).toBeCloseTo(9.6, 9);
-    const sink = new SvgPathSink();
-    inkPath(sink, pts, drawn, "pen", undefined, widenedTaper({ start: 0, end: 1 }, 0.8, drawn));
-    // Exact path (level 0) and a simplified one (level 3) both use it; the old lengthened taper (60 pt) gives another path.
-    expect(lodSvgPath(stroke, drawn, 0)).toBe(sink.d);
-    const lengthened = new SvgPathSink();
-    inkPath(lengthened, pts, drawn, "pen", undefined, { start: 0, end: 1 });
-    expect(lodSvgPath(stroke, drawn, 0)).not.toBe(lengthened.d);
-    const g = InkBuilder.fromPoints(pts, drawn, "pen", new InkBuilder(), undefined, widenedTaper({ start: 0, end: 1 }, 0.8, drawn));
-    const endX = g.nx[g.nodeCount - 1]!;
-    let full = 0;
-    for (let i = 0; i < g.nodeCount; i++) if (endX - g.nx[i]! >= pageLength + 0.5) full = Math.max(full, g.nr[i]!);
-    expect(full).toBe(inkRadius("pen", drawn, 0.5));
-    expect(lodSvgPath(stroke, drawn, 3)).not.toBe(lodSvgPath({ ...stroke, taperEnd: undefined }, drawn, 3));
-  });
+	it("a thin pen with a full end taper on a small card is not drawn as a spindle", () => {
+		const pts = line(80, 3);
+		const stroke = { points: pts, width: 0.8, tool: "pen", render: RENDER_INK, taperEnd: 1 } as const;
+		const drawn = 5;
+		const pageLength = taperLength(1, 0.8);
+		expect(pageLength).toBeCloseTo(9.6, 9);
+		const sink = new SvgPathSink();
+		inkPath(sink, pts, drawn, "pen", undefined, widenedTaper({ start: 0, end: 1 }, 0.8, drawn));
+		// The exact path (level 0) uses the page's length; the old lengthened taper (60 pt) gives another path.
+		expect(lodSvgPath(stroke, drawn, 0)).toBe(sink.d);
+		const lengthened = new SvgPathSink();
+		inkPath(lengthened, pts, drawn, "pen", undefined, { start: 0, end: 1 });
+		expect(lodSvgPath(stroke, drawn, 0)).not.toBe(lengthened.d);
+		const g = InkBuilder.fromPoints(pts, drawn, "pen", new InkBuilder(), undefined, widenedTaper({ start: 0, end: 1 }, 0.8, drawn));
+		const endX = g.nx[g.nodeCount - 1]!;
+		let full = 0;
+		for (let i = 0; i < g.nodeCount; i++) if (endX - g.nx[i]! >= pageLength + 0.5) full = Math.max(full, g.nr[i]!);
+		expect(full).toBe(inkRadius("pen", drawn, 0.5));
+		expect(lodSvgPath(stroke, drawn, 3)).not.toBe(lodSvgPath({ ...stroke, taperEnd: undefined }, drawn, 3));
+	});
 
-  it("at the stroke's own width nothing changes", () => {
-    const pts = line(80, 3);
-    const stroke = { points: pts, width: 2, tool: "pen" as const, render: RENDER_INK, taperStart: 0.3, taperEnd: 0.6 };
-    expect(lodSvgPath(stroke, 2, 0)).toBe(strokeSvgPath(stroke));
-  });
+	it("at the stroke's own width nothing changes", () => {
+		const pts = line(80, 3);
+		const stroke = { points: pts, width: 2, tool: "pen", render: RENDER_INK, taperStart: 0.3, taperEnd: 0.6 } as const;
+		expect(lodSvgPath(stroke, 2, 0)).toBe(strokeSvgPath(stroke));
+	});
 });
 
 describe("Z2 and Z3: a tapered stroke is hidden from the wet canvas as soon as the static layer has it", () => {
