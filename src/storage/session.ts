@@ -1441,7 +1441,7 @@ export class DocumentSession {
 
 /**
  * Review fix (U2): the text of the unsaved-changes backup, which is never skipped. The strict writer refuses a missing required value (a
- * frozen item without a colour, which the live repair cannot touch), so it falls back to a repaired deep copy (the live and frozen objects
+ * frozen item without a colour, which the live repair cannot touch), so it falls back to a repaired deep copy (made through JSON; the live and frozen objects
  * are never changed), then to the lenient writer (the damaged line is written invalid, the repair's line scan drops it and keeps the
  * rest), and last to the document as plain JSON.
  */
@@ -1453,7 +1453,8 @@ export function backupText(doc: NotebookDocument): string {
 	}
 	let copy: NotebookDocument | null = null;
 	try {
-		copy = structuredClone(doc);
+		// A deep copy through JSON (`structuredClone` is not in every WebView we support): the document is plain data.
+		copy = JSON.parse(JSON.stringify(doc)) as NotebookDocument;
 		repairLiveDocument(copy);
 		return serialize(copy);
 	} catch {

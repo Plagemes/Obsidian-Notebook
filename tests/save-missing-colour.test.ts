@@ -172,7 +172,7 @@ describe("review fix U2: the unsaved-changes backup is never skipped", () => {
 			expect(back.doc.pages[0]!.elements).toEqual([expect.objectContaining({ id: "c1", color: "#1f2430" }), expect.objectContaining({ id: "t9", text: "SECRET-unsaved" })]);
 		}
 		expect(repairNotebookText(io.backups[0]!.text).ok).toBe(true);
-		expect(s.doc!.pages[0]!.elements![0]).toBe(frozen);
+		expect(s.doc?.pages[0]?.elements?.[0]).toBe(frozen);
 		expect(frozen).not.toHaveProperty("color");
 		expect(errors.some((m) => m.includes("could not be written or backed up"))).toBe(false);
 	});
