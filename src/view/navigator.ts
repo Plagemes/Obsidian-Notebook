@@ -201,6 +201,19 @@ export class PageNavigator {
 		return !this.el.hasClass("notebook-hidden");
 	}
 
+	/** 0.27 (#375): the panel shows the outline instead of the page thumbnails. */
+	get showsOutline(): boolean {
+		return this.outlineMode;
+	}
+
+	/** 0.27 (#375): switches between the outline and the thumbnails (a workspace preset); the open or closed state is unchanged. */
+	setOutline(on: boolean): void {
+		if (this.outlineMode === on) return;
+		this.outlineMode = on;
+		this.updateHeader();
+		this.refresh();
+	}
+
 	setOpen(open: boolean): void {
 		this.el.toggleClass("notebook-hidden", !open);
 		if (open) {

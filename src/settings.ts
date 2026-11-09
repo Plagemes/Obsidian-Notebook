@@ -1,6 +1,7 @@
 import type { PressureMode } from "./ink/pressure";
 import { defaultPenSets, MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, type PenSet } from "./view/pen-sets";
 import { normaliseActive, normaliseProfiles, type WritingProfile } from "./view/writing-profiles";
+import { normaliseActivePreset, normalisePresets, type WorkspacePreset } from "./view/workspace-presets";
 import { isToleranceName, parseLegend, type Meaning, type ToleranceName } from "./model/colour-meaning";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
@@ -115,6 +116,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	writingProfileActive: string;
 	/** 0.25 profiles: starting lecture mode switches to the Lecture profile. */
 	writingProfileOnLecture: boolean;
+	/** 0.27 workspaces (#375): the user's own workspace presets (Lecture, Study and Focus are built in). Bounded. */
+	workspacePresets: WorkspacePreset[];
+	/** 0.27 workspaces: the id of the preset last applied ("" none). */
+	workspacePresetActive: string;
+	/** 0.27 workspaces: starting lecture mode applies the Lecture workspace. */
+	workspaceOnLecture: boolean;
 	/** Eraser radius, CSS px. */
 	eraserSize: number;
 	/** Vault path of the loose sheet (quick notes) notebook; empty = `<notebooks folder>/Quick notes.notebook`. */
@@ -377,6 +384,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	writingProfiles: [],
 	writingProfileActive: "",
 	writingProfileOnLecture: false,
+	workspacePresets: [],
+	workspacePresetActive: "",
+	workspaceOnLecture: false,
 	eraserSize: DEFAULT_ERASER_SIZE,
 	looseSheetPath: "",
 	dailyNotebookPath: "",
@@ -551,6 +561,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.writingProfiles = normaliseProfiles(d.writingProfiles); // 0.25 profiles
 	s.writingProfileActive = normaliseActive(d.writingProfileActive, s.writingProfiles);
 	if (typeof d.writingProfileOnLecture === "boolean") s.writingProfileOnLecture = d.writingProfileOnLecture;
+	s.workspacePresets = normalisePresets(d.workspacePresets); // 0.27 workspaces
+	s.workspacePresetActive = normaliseActivePreset(d.workspacePresetActive, s.workspacePresets);
+	if (typeof d.workspaceOnLecture === "boolean") s.workspaceOnLecture = d.workspaceOnLecture;
 	s.eraserSize = normaliseEraserSize(d.eraserSize);
 	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();
 	if (typeof d.dailyNotebookPath === "string") s.dailyNotebookPath = d.dailyNotebookPath.trim();

@@ -68,6 +68,10 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.25 (#219): the Lecture profile comes first during a class (until it is the one in use); Study only leans forward outside a class.
 	if (a.id === "profile-lecture") boost += c.lecture && c.profile !== "lecture" ? 30 : 0;
 	if (a.id === "profile-study") boost += !c.lecture && c.profile !== "study" ? 8 : 0;
+	// 0.27 (#375): during a class the Lecture workspace (slides, notebook, outline) comes first until it holds; the picker leans forward
+	// with a class on, and with the slides pane open (the arrangement is being built), but is never a "For this page" entry otherwise.
+	if (a.id === "workspace-lecture") boost += c.lecture && c.workspace !== "lecture" ? 30 : c.sidePane.open && c.workspace !== "lecture" ? 6 : 0;
+	if (a.id === "workspace-presets") boost += c.lecture ? 12 : c.sidePane.open ? 8 : 0;
 	if (c.comments?.panel && a.id.startsWith("comment")) boost += 15;
 	// 0.25 (#93): lining the words up fits ink on ruled paper above all (the words go onto the ruled line).
 	if (a.id === "selection-baseline" && hasSelection && c.page?.kind === "ruled") boost += 10;

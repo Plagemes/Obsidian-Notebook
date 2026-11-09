@@ -17,6 +17,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"add-page-suggest": "help.addPage",
 	"toggle-ruler": "help.ruler",
 	"pen-only": "help.penOnly",
+	"workspace-presets": "help.workspacePresets",
+	"workspace-lecture": "help.workspaceLecture",
 	"profile-lecture": "help.profileLecture",
 	"profile-study": "help.profileStudy",
 	"profile-next": "help.profileNext",

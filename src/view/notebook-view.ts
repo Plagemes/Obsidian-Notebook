@@ -100,6 +100,8 @@ import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./high
 import { MeaningTools } from "./colour-meaning";
 import { SavedViewTools } from "./saved-views";
 import { HistoryTools } from "./history-tools";
+import { WorkspaceTools, type WorkspaceHost } from "./workspace-tools";
+import { ReferencePickerModal } from "./ref-window-picker";
 import { continueLongJump, JumpRunner, type JumpResult, type JumpTarget } from "../model/history-jump";
 import type { MeaningsStore } from "../library/meanings-store";
 import { canPrint } from "./print";
@@ -658,6 +660,8 @@ export class NotebookView extends FileView {
 	private savedViews: SavedViewTools | null = null;
 	/** 0.25 (#84): the action history panel: every step listed, a tap goes back or forward to that point (view/history-tools.ts). */
 	private historyTools: HistoryTools | null = null;
+	/** 0.27 (#375): workspace presets: which plugin panels are open around the notebook (view/workspace-tools.ts). */
+	private workspaceTools: WorkspaceTools | null = null;
 	private navCurrent = -1;
 	/** Pages whose thumbnail was drawn without all its media; redrawn when media arrives. */
 	private readonly thumbPending = new Set<string>();
@@ -836,6 +840,7 @@ export class NotebookView extends FileView {
 			limit: this.history.limit,
 			jump: (target, progress) => this.jumpHistoryTo(target, progress),
 		});
+		this.workspaceTools = new WorkspaceTools(this.workspaceHost());
 		// 0.16 (#124): a locked page shows a small badge over the page area; a tap on it unlocks the page.
 		const badge = this.body.createEl("button", { cls: "nb-ui nb-lock-badge", attr: { type: "button", "aria-label": t("lock.badge.aria") } });
 		setIcon(badge.createSpan({ cls: "nb-lock-badge-icon", attr: { "aria-hidden": "true" } }), "lock");
@@ -966,6 +971,7 @@ export class NotebookView extends FileView {
 			started: (cls, pageAdded) => {
 				this.lectureHeader?.lectureStarted(cls, pageAdded);
 				this.profileForLecture();
+				if (this.host.settings.workspaceOnLecture) this.applyWorkspacePreset("lecture", true);
 			},
 			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
@@ -1313,6 +1319,7 @@ export class NotebookView extends FileView {
 		this.meaningTools = null;
 		this.savedViews = null;
 		this.historyTools = null;
+		this.workspaceTools = null;
 		this.welcomeBack?.destroy();
 		this.welcomeBack = null;
 		this.toolFade?.destroy();
@@ -2313,6 +2320,49 @@ export class NotebookView extends FileView {
 	/** Lecture mode started: switch to the Lecture profile when the setting asks for it. */
 	private profileForLecture(): void {
 		if (switchOnLecture(this.host.settings.writingProfileOnLecture, this.host.settings)) this.applyWritingProfile("lecture");
+	}
+
+	// --- 0.27 (#375): workspace presets ---
+
+	/** Opens the Workspaces picker (Lecture, Study, Focus and the saved ones). Only opens and closes plugin panels; never edits a document. */
+	openWorkspacePicker(): void {
+		this.workspaceTools?.openPicker();
+	}
+
+	/** Applies a workspace preset by id (`quiet`: no notice unless something was left out). */
+	applyWorkspacePreset(id: string, quiet = false): boolean {
+		return this.workspaceTools?.apply(id, quiet) ?? false;
+	}
+
+	private workspaceHost(): WorkspaceHost {
+		const s = (): NotebookSettings => this.host.settings;
+		return {
+			app: this.app,
+			settings: s,
+			save: () => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e)),
+			narrow: () => this.body?.hasClass("is-narrow") ?? false,
+			available: () => !!this.session?.doc && !!this.body,
+			pdf: {
+				available: () => pdfSideState(this).available,
+				open: () => pdfSideState(this).open,
+				pick: () => void runPdfSideAction(this, "pdf-side-open"),
+				close: () => void runPdfSideAction(this, "pdf-side-close"),
+			},
+			reference: {
+				open: () => this.referenceOpen,
+				pick: () => new ReferencePickerModal(this.app, (file) => void this.openReference(file)).open(),
+				close: () => this.closeReference(),
+			},
+			nav: () => (!this.pageNav?.open ? "closed" : this.pageNav.showsOutline ? "outline" : "pages"),
+			setNav: (mode) => {
+				this.pageNav?.setOutline(mode === "outline");
+				this.setNavigatorOpen(mode !== "closed");
+			},
+			minimap: () => (s().minimapMode === "never" || !this.minimap ? null : { open: this.minimap.panelOpen, set: (open) => this.minimap?.setPanelOpen(open) }),
+			profile: () => this.activeWritingProfileId(),
+			applyProfile: (id) => this.applyWritingProfile(id, true),
+			hasProfile: (id) => findProfile(s().writingProfiles, id) !== null,
+		};
 	}
 
 	/** Switches between continuous scrolling and one page at a time, staying on the page in view. */
@@ -4331,6 +4381,7 @@ export class NotebookView extends FileView {
 			lecture: this.lectureMode?.on ?? false,
 			presenting: this.presenting,
 			profile: this.activeWritingProfileId(),
+			workspace: this.host.settings.workspacePresetActive,
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false, selectText: this.pdfText?.active ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },

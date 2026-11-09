@@ -28,6 +28,12 @@
 - **Cheap on the tablet.** The layout is pure and cached per zoom band (`src/ink/semantic-zoom.ts`), the labels come from the existing headings index and outline (`src/model/semantic-sources.ts`), at most 40 pooled elements move by CSS variables, a frame runs only when the viewport or the document changed, and heading pictures are drawn two per frame and cached.
 - **Tests.** `tests/semantic-zoom.test.ts`, `tests/semantic-sources.test.ts`, `tests/semantic-zoom-isolation.test.ts`; harness `doc=semzoom` (`dev/harness/semzoom-check.ts`).
 
+### workspaces
+- **Workspace presets (#375).** One command (*Workspaces…*, also in the All actions sheet and the notebook menu) lays out the plugin's panels around the notebook: *Lecture* (slides pane and the outline), *Study* (reference window and Related pages) and *Focus* (everything closed). Save the arrangement in front as a preset of your own (with the writing profile in use), then rename, replace or delete it; up to 12.
+- **Panels only.** Applying a preset opens or closes the slides pane, the reference window, the page panel (thumbnails or outline), the minimap and the Related pages panel through their own open and close functions. It never moves other Obsidian tabs or panes and never edits a notebook, so it works on a read-only notebook too. Slides and the reference window ask for a file with their usual picker, one at a time.
+- **Phones.** The reference window, the minimap and the Related pages are left out on a narrow screen (one notice names them); the slides split stays and the page drawer is skipped while it is open.
+- **Also.** *Workspace: Lecture* as a one-tap action (ranked first during a class), the setting *Lecture workspace when a class starts* (Study, off by default), presets stored in the plugin settings (bounded, read leniently), long-press help, English and Italian. Document format unchanged (24).
+
 ## 0.26.0 — 2026-11-09
 
 Eight features: opacity for ink, pictures and areas, smooth and straighten strokes, tidy up handwriting lines, redaction before export, pen width that follows zoom, a context palette in the colour picker, a dynamic gallery block and a related handwritten pages panel. The notebook format moves to version 24 (opacity): the migration from version 23 is automatic, and Notebook 0.25 and older open a v24 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).

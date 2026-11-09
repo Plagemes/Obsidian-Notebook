@@ -680,7 +680,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 372. **P2** 🧪 Page turner: volume keys, a Bluetooth clicker or a keyboard turn pages and undo.
 373. ~~**P3** Phone as a remote page navigator for the tablet.~~ — dropped (user decision, 2026-10-29)
 374. **P1** 🧪 Do not disturb while writing: no notices or pop-ups while the pen is on the screen.
-375. **P2** Workspace presets, e.g. "lecture" (slides, notebook, outline) with one command.
+375. **P2** 🧪 Workspace presets, e.g. "lecture" (slides, notebook, outline) with one command.
 
 ### PDF
 376. **P2** 🧪 View-only crop of a PDF's white margins, for small screens.

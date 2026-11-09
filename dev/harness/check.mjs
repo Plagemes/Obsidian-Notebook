@@ -167,6 +167,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "savedviews", theme, device, lowLatency: false });
 // 0.25 histpanel (#84): the action history panel (dev/harness/histpanel-check.ts), tablet and phone, light and dark (dist/shots/histpanel-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "histpanel", theme, device, lowLatency: false });
+// 0.27 workspaces (#375): workspace presets and their picker (dev/harness/workspaces-check.ts), tablet and phone, light and dark (dist/shots/workspaces-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "workspaces", theme, device, lowLatency: false });
 // 0.26 related (#422): the Related pages panel (dev/harness/related-check.ts), tablet and phone, light and dark (dist/shots/related-*.png, related-empty-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "related", theme, device, lowLatency: false });
 // 0.22 pagerefs (#179): the chip and list of pages that link here (dev/harness/pagerefs-check.ts).
@@ -478,6 +480,7 @@ async function main() {
 				else if (s.doc === "pagetime") report = await cdp.evaluate("window.harness.checkPagetime()", 60000);
 				else if (s.doc === "pens") report = await cdp.evaluate("window.harness.checkPens()", 90000);
 				else if (s.doc === "savedviews") report = await cdp.evaluate("window.harness.checkSavedviews()", 90000); // 0.23 savedviews
+				else if (s.doc === "workspaces") report = await cdp.evaluate("window.harness.checkWorkspaces()", 90000); // 0.27 workspaces
 				else if (s.doc === "histpanel") report = await cdp.evaluate("window.harness.checkHistpanel()", 90000); // 0.25 histpanel
 				else if (s.doc === "related") report = await cdp.evaluate("window.harness.checkRelated()", 60000); // 0.26 related
 				else if (s.doc === "share") report = await cdp.evaluate("window.harness.checkShare()", 180000); // 0.20 share
