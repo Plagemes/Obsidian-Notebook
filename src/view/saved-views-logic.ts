@@ -10,19 +10,33 @@ export interface ViewRow {
 	pageNumber: number | null;
 	/** The saved zoom as a whole percent (100 = the page fills the width). */
 	zoomPercent: number;
+	/** The view is at the fit of the mode it was saved in (zoom 1): shown as "Fit", not as a percentage. */
+	fit: boolean;
 	missing: boolean;
 }
 
-/** The zoom as a whole percent. */
+/**
+ * The zoom as a whole percent of the page-wide fit. A zoom that is a hair above 1 is how a spread zoomed to one page wide is stored (it must
+ * not be taken for the fit, see ink/view-position.ts `zoomFor`): shown as 100 %.
+ */
 export function zoomPercent(zoom: number): number {
+	if (zoom >= 1 && zoom < 1.02) return 100;
 	return Math.max(1, Math.round(zoom * 100));
+}
+
+/**
+ * Review fix (T4): a view at the fit is stored as zoom 1 in every mode, which means a different size in a spread (the fit of the pair, about
+ * half a page) and in a column (a page), so it is shown as "Fit" and never as 100 %, which would be bigger than a "60 %" view next to it.
+ */
+export function zoomIsFit(zoom: number): boolean {
+	return Math.abs(zoom - 1) < 0.01;
 }
 
 /** The list of views as rows, in list order; a view whose page is gone is a missing row. */
 export function viewRows(doc: NotebookDocument): ViewRow[] {
 	return viewsOf(doc).map((v) => {
 		const index = viewPageIndex(doc, v);
-		return { id: v.id, name: v.name, pageNumber: index >= 0 ? index + 1 : null, zoomPercent: zoomPercent(v.zoom), missing: index < 0 };
+		return { id: v.id, name: v.name, pageNumber: index >= 0 ? index + 1 : null, zoomPercent: zoomPercent(v.zoom), fit: zoomIsFit(v.zoom), missing: index < 0 };
 	});
 }
 

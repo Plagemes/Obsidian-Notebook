@@ -12,7 +12,7 @@ import { buildLayout, buildSheet } from "../src/ui/layout";
 import { readSettings } from "../src/settings";
 import {
 	withRepairedFields, cleanName, cloneMacro, currentMacros, isEditStep, readMacros, MACRO_ICONS, MACRO_LABEL, MACRO_SAFE, macroAction, macroActionId, MAX_MACROS, MAX_NAME, MAX_STEPS, newMacroId, normaliseMacros,
-	runMacro, setMacros, stepName, stepState, usableSteps, withoutMissingMacros, type Macro, type MacroEnv,
+	runMacro, setMacros, stepName, stepState, usableSteps, visiblePins, withoutMissingMacros, type Macro, type MacroEnv,
 } from "../src/ui/macros";
 import { line, sampleDocument } from "./helpers";
 
@@ -89,9 +89,17 @@ describe("reading the macros leniently", () => {
 	});
 
 	it("repairs ids on the first read only when worth saving, and keeps a newer version's settings keys when it saves (R4)", () => {
-		// an id of another format is repaired for this run but not written over the file
-		expect(readMacros([{ id: "NEWER-id-format", name: "A" }]).repaired).toBe(true);
-		expect(readMacros([{ id: "NEWER-id-format", name: "A" }]).persist).toBe(false);
+		// an id of another format (T1) is not replaced at all: the macro is kept apart as written, so no save can write another id over it
+		const foreign = readMacros([{ id: "NEWER-id-format", name: "A", extra: 1 }, { id: "m1", name: "B" }]);
+		expect(foreign.repaired).toBe(false);
+		expect(foreign.persist).toBe(false);
+		expect(foreign.macros.map((m) => m.id)).toEqual(["m1"]);
+		expect(foreign.extra).toEqual([{ id: "NEWER-id-format", name: "A", extra: 1 }]);
+		// ...also through a routine save and a new read, whatever room there is
+		const routine = readSettings({ macros: [{ id: "NEWER-id-format", name: "A", extra: 1 }, { id: "m1", name: "B" }] });
+		const again = readSettings(JSON.parse(JSON.stringify(routine)));
+		expect(again.macrosExtra).toEqual([{ id: "NEWER-id-format", name: "A", extra: 1 }]);
+		expect(again.macros.map((m) => m.id)).toEqual(["m1"]);
 		expect(readMacros([{ name: "A" }]).persist).toBe(true);
 		expect(readMacros([{ id: "m1", name: "A" }, { id: "m1", name: "B" }]).persist).toBe(true);
 		expect(readMacros([{ id: "m1", name: "A" }]).persist).toBe(false);
@@ -135,7 +143,7 @@ describe("reading the macros leniently", () => {
 	});
 
 	it("repairs an invalid or doubled id the same way on every start, and never takes a valid id (M7)", () => {
-		const stored = [{ id: "bad id!", name: "A", steps: [] }, { id: "m1", name: "B", steps: [] }, { id: "m1", name: "C", steps: [] }, { name: "D", steps: [] }];
+		const stored = [{ id: "", name: "A", steps: [] }, { id: "m1", name: "B", steps: [] }, { id: "m1", name: "C", steps: [] }, { name: "D", steps: [] }];
 		const first = readMacros(stored);
 		expect(first.repaired).toBe(true);
 		expect(first.macros.map((m) => m.id)[1]).toBe("m1");
@@ -173,10 +181,27 @@ describe("reading the macros leniently", () => {
 		const macros = Array.from({ length: MAX_MACROS + 2 }, (_, i) => ({ id: `m${i}`, name: "n" }));
 		const pinned = [`macro-m${MAX_MACROS + 1}`, "macro-gone", "fit-width"];
 		const read = readSettings({ macros, pinnedQuick: pinned });
-		expect(read.pinnedQuick).toEqual([`macro-m${MAX_MACROS + 1}`, "fit-width"]);
+		// the kept pin is written back, after the visible ones
+		expect(read.pinnedQuick).toEqual(["fit-width", `macro-m${MAX_MACROS + 1}`]);
 		// saved and read again: still there
 		expect(readSettings(JSON.parse(JSON.stringify(read))).pinnedQuick).toEqual(read.pinnedQuick);
 		expect(readSettings({ macros: "broken", pinnedQuick: ["macro-a", "fit-width"] }).pinnedQuick).toEqual(["macro-a", "fit-width"]);
+	});
+
+	it("a kept pin of a macro from a newer version takes none of the three visible places (T2)", () => {
+		const macros = Array.from({ length: MAX_MACROS + 1 }, (_, i) => ({ id: `m${i}`, name: "n" }));
+		const kept = `macro-m${MAX_MACROS}`;
+		// three visible pins and a kept one: nothing is cut, as the kept one does not count
+		const read = readSettings({ macros, pinnedQuick: [kept, "fit-width", "macro-m0", "macro-m1"] });
+		expect(read.pinnedQuick).toEqual(["fit-width", "macro-m0", "macro-m1", kept]);
+		setMacros(read.macros);
+		expect(visiblePins(read.pinnedQuick)).toEqual(["fit-width", "macro-m0", "macro-m1"]);
+		expect(visiblePins(read.pinnedQuick).length).toBeLessThanOrEqual(MAX_PINNED);
+		// with only the kept pin, all three places are free
+		expect(visiblePins([kept])).toEqual([]);
+		// once the macro is in the list (room made), its pin shows
+		setMacros([...read.macros, { id: `m${MAX_MACROS}`, name: "n", icon: "zap", steps: [] }]);
+		expect(visiblePins(read.pinnedQuick)).toEqual(read.pinnedQuick);
 	});
 
 	it("cuts a long name and falls back for an empty one", () => {

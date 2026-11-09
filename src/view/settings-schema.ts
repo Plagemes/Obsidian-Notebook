@@ -701,7 +701,7 @@ export const PEN_BUTTON_EXTENSIONS: SettingSpec[] = [
  * Every other key of DEFAULT_SETTINGS is in exactly one section (tests/settings-schema.test.ts).
  */
 export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>> = {
-	macrosExtra: "macros written by a newer version beyond this version's limit: kept as written and written back, never shown or run",
+	macrosExtra: "macros written by a newer version beyond this version's limit: kept as written and written back; they move into the list when there is room",
 	favouritePens: "edited on the toolbar (long press on a favourite, radial menu)",
 	writingProfiles: "saved from the profile chip on the pen options (Save current as a profile)",
 	writingProfileActive: "set when a profile is switched to (chip, command, or lecture mode)",

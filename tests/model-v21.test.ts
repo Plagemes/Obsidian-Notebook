@@ -23,7 +23,7 @@ import {
 	isStoredViewName, makeView, mergedViews, newViewId, normalizeViewName, SetViews, setViews, sameViews, uniqueViewName, validRegion, viewPageIndex, viewsOf,
 	withViewAdded, withViewMoved, withViewRemoved, withViewRenamed, withViewReplaced,
 } from "../src/model/views";
-import { moveOptions, viewRows, zoomPercent } from "../src/view/saved-views-logic";
+import { moveOptions, viewRows, zoomIsFit, zoomPercent } from "../src/view/saved-views-logic";
 import { delAt, getAt, parseRaw, setAt } from "./raw-json";
 
 const stamp = "2026-11-08T10:00:00.000Z";
@@ -380,6 +380,19 @@ describe("format v21: the model rules", () => {
 		expect(sameViews([view("a")], [view("a")])).toBe(true);
 		expect(sameViews([view("a")], [view("a", { zoom: 2 })])).toBe(false);
 		expect(sameViews([view("a")], [view("a"), view("b")])).toBe(false);
+	});
+
+	it("shows a view at the fit as Fit, never as a percentage that could look bigger than a smaller one (T4)", () => {
+		expect(zoomIsFit(1)).toBe(true);
+		expect(zoomIsFit(1.005)).toBe(true);
+		expect(zoomIsFit(0.6)).toBe(false);
+		// a spread zoomed to one page wide is stored just above 1 (not the fit): 100 %, next to a 60 % view that is smaller on the screen
+		expect(zoomIsFit(1.015)).toBe(false);
+		expect(zoomPercent(1.015)).toBe(100);
+		expect(zoomPercent(0.6)).toBe(60);
+		expect(zoomPercent(1.5)).toBe(150);
+		const rows = viewRows({ ...viewDoc(), views: [view("fit", { zoom: 1 }), view("page", { zoom: 1.015 }), view("small", { zoom: 0.6 })] });
+		expect(rows.map((r) => [r.id, r.fit, r.zoomPercent])).toEqual([["fit", true, 100], ["page", false, 100], ["small", false, 60]]);
 	});
 
 	it("lists rows, a missing page marked, and what can move", () => {

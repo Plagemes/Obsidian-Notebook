@@ -4445,6 +4445,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"views.save.placeholder": "Per esempio: Dimostrazione del lemma 2",
 	"views.save.button": "Salva",
 	"views.save.now": "Salva ciò che vedi ora: pagina {page}, zoom {zoom}%.",
+	"views.save.now.fit": "Salva ciò che vedi ora: pagina {page}, adattata.",
+	"views.row.detail.fit": "Pagina {page} · Adattata",
 	"views.defaultName": "Vista {n}",
 	"views.empty": "Nessuna vista salvata. Inquadra un punto di una pagina, dagli un nome e salvalo: con un tocco ci torni, allo stesso zoom.",
 	"views.count": "{count} di {max} viste",

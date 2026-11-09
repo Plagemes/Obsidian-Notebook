@@ -27,8 +27,8 @@ import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
 import { DEFAULT_INPUT_PREF, isInputPref, type InputPref } from "./ui/input-layout";
 import { cleanFadeSeconds, DEFAULT_TOOL_FADE_MODE, DEFAULT_TOOL_FADE_SECONDS, isToolFadeMode, type ToolFadeMode } from "./ui/tool-fade";
-import { normalisePinned } from "./ui/adapt";
-import { readMacros, withoutMissingMacros, type Macro } from "./ui/macros";
+import { MAX_PINNED, normalisePinned } from "./ui/adapt";
+import { macroActionId, readMacros, withoutMissingMacros, type Macro } from "./ui/macros";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { cleanUserName } from "./library/greeting";
 import { normaliseSeen, type HintId } from "./ui/hint-logic";
@@ -273,7 +273,7 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	pinnedQuick: string[];
 	/** 0.27 (#170): the person's macros (a name, an icon and a list of actions each; at most 12 of at most 20 steps). A macro pinned to the toolbar is in `pinnedQuick` as `macro-<id>`. */
 	macros: Macro[];
-	/** Review fix (M6): macros stored beyond the limit of this version (written by a newer one), kept as written and never run, so saving the settings here does not lose them. */
+	/** Review fix (M6): macros stored beyond the limit of this version (written by a newer one), kept as written and written back, so saving the settings here does not lose them; they move into `macros` when there is room. */
 	macrosExtra: unknown[];
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
 	pageTurnerKeys: boolean;
@@ -652,9 +652,16 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.macrosExtra = macroRead.extra;
 	// Review fix (M7): the pin of a macro that no longer exists (deleted, or its id repaired) would sit in a toolbar slot unseen.
 	// Review fix (R2): but a macro kept apart (a newer version's 14th) still exists, and so does every macro when the list is unreadable.
-	const pinned = normalisePinned(d.pinnedQuick);
 	const kept = s.macrosExtra.flatMap((m) => (typeof m === "object" && m !== null && typeof (m as { id?: unknown }).id === "string" ? [{ id: (m as { id: string }).id }] : []));
-	s.pinnedQuick = d.macros !== undefined && !Array.isArray(d.macros) ? pinned : withoutMissingMacros(pinned, [...s.macros, ...kept]);
+	if (d.macros !== undefined && !Array.isArray(d.macros)) s.pinnedQuick = normalisePinned(d.pinnedQuick);
+	else {
+		// Review fix (T2): the pin of a macro this version only keeps is written back but never takes one of the three visible places.
+		const rawPins = Array.isArray(d.pinnedQuick) ? (d.pinnedQuick as unknown[]) : [];
+		const keptPins = new Set(kept.filter((k) => !s.macros.some((m) => m.id === k.id)).map((k) => macroActionId(k.id)));
+		const hidden = [...new Set(rawPins.filter((p): p is string => typeof p === "string" && keptPins.has(p)))].slice(0, MAX_PINNED);
+		const visible = withoutMissingMacros(normalisePinned(rawPins.filter((p) => !(typeof p === "string" && hidden.includes(p)))), [...s.macros, ...kept]);
+		s.pinnedQuick = [...visible, ...hidden];
+	}
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
