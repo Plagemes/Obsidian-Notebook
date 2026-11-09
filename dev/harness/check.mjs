@@ -123,6 +123,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "clipimage", theme, device, lowLatency: false });
 // 0.24 tagsuggest: suggested tags in the tag editors (dev/harness/tagsuggest-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tagsuggest", theme, device, lowLatency: false });
+// 0.27 pdfsuggest (#418): suggested PDF search terms (dev/harness/pdfsuggest-check.ts), tablet and phone, light and dark (dist/shots/pdfsuggest-*.png, pdfsuggest-typed-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "pdfsuggest", theme, device, lowLatency: false });
 // 0.24 handin (#334): the Hand in dialog and its cover (dev/harness/handin-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "handin", theme, device, lowLatency: false });
 // 0.26 redact (#285): redaction before export, the Redact dialog and its row in the export dialog (dev/harness/redact-check.ts).
@@ -474,6 +476,7 @@ async function main() {
 				else if (s.doc === "exportarea") report = await cdp.evaluate("window.harness.checkExportArea()", 60000);
 				else if (s.doc === "clipimage") report = await cdp.evaluate("window.harness.checkClipImage()", 60000); // 0.25 clipimage
 				else if (s.doc === "tagsuggest") report = await cdp.evaluate("window.harness.checkTagSuggest()", 60000); // 0.24 tagsuggest
+				else if (s.doc === "pdfsuggest") report = await cdp.evaluate("window.harness.checkPdfSuggest()", 60000); // 0.27 pdfsuggest
 				else if (s.doc === "handin") report = await cdp.evaluate("window.harness.checkHandIn()", 60000); // 0.24 handin
 				else if (s.doc === "redact") report = await cdp.evaluate("window.harness.checkRedact()", 90000); // 0.26 redact
 				else if (s.doc === "ghostlines") report = await cdp.evaluate("window.harness.checkGhostlines()", 60000);
@@ -905,6 +908,15 @@ async function main() {
 					} catch (e) {
 						problems.push(`related ${state} screenshot: ${e.message}`);
 					}
+				}
+			}
+			// 0.27 pdfsuggest: the chips filtered by what is typed.
+			if (s.doc === "pdfsuggest") {
+				try {
+					await cdp.evaluate("window.harness.pdfsuggestShot('typed').then(() => true)");
+					writeFileSync(join(shots, `pdfsuggest-typed-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`pdfsuggest typed screenshot: ${e.message}`);
 				}
 			}
 			// 0.16 inbox: the full list over Home (Home itself is the screenshot above).

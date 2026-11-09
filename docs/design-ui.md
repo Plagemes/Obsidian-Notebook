@@ -97,7 +97,7 @@ anywhere in `src/` is in the registry and that every action is placed somewhere.
 | Copy to other devices (`selection-copy-devices`), Paste from another device (`selection-paste-device`; wave 0.10) | Contextual bar of a selection (copy) and of a selection or the lasso (paste), All actions sheet, commands (copy applies only with a selection) | Act on the selection or the lasso next to it; the sheet and the hotkeys keep them reachable on a phone |
 | Find and replace in text boxes (`find-replace`; wave 0.9) | All actions sheet (Go to), command | Notebook-wide, rare; opens a panel |
 | Page information (`page-info`; wave 0.9) | Page sheet, All actions sheet, command | Describes one page, reached from the page |
-| PDF search, hide annotations, dim backgrounds | PDF contextual bar + PDF & reading section; search next/previous in the search panel and commands | Relevant only with PDF pages |
+| PDF search, hide annotations, dim backgrounds | PDF contextual bar + PDF & reading section; search next/previous in the search panel and commands. 0.27: the search panel has a one-line, sideways-scrolling row of suggested-term chips (outline = accent-soft fill, titles = outline, own words = dashed; `notebook-search-chip`, tokens only, long-press help) | Relevant only with PDF pages |
 | PDF margins, update PDF, export annotations | PDF bar (margins), page sheet, PDF & reading section | Page-level PDF work |
 | PDF side by side: open, link, show slide, add notes page, close | PDF bar (open), side-pane bar (the rest), Side by side section | Appear only when they apply |
 | New lecture, exercise paper | Lecture bar during lecture mode, Lecture section | Class-time tools |

@@ -4340,3 +4340,26 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | All actions entries, command, context rank, long-press help | yes | `tests/actions-registry.test.ts`, `tests/context-rank.test.ts` | | | |
 | Setting *Lecture workspace when a class starts* | yes | `tests/settings-schema.test.ts` | | | |
 | Phone degrade (reference window, minimap, related skipped with one notice) | yes | `tests/workspace-presets.test.ts`, harness `doc=workspaces` (phone) | | | |
+
+### 0.27 — pdfsuggest (PDF search with suggested terms, roadmap #418; steps 3020-3039)
+
+Manual steps (real Obsidian; nothing here is verified on Android). You need a notebook with PDF pages whose PDF has an outline (bookmarks), a few typed text boxes that repeat a word, and a box with a title.
+
+3020. **Open.** On a PDF page open *Search PDF text*: under the box a single row of chips appears (outline entries first, then titles, then frequent words). The row scrolls sideways with a finger; the panel never grows wider.
+3021. **Tap.** Tap a chip: its text goes into the box, the keyboard closes and the search runs at once; the results list and the marks on the pages are the usual ones.
+3022. **Typing.** Type *ent*: only the chips that fit stay (starting with it first, then words inside, then one-typo matches such as *carnt* for *Carnot*). Accents and capitals do not matter. A chip equal to what you typed is not offered.
+3023. **Nothing fits.** Type something that matches no chip: the row disappears (no empty bar); clearing the box brings it back.
+3024. **Own text.** The words are the ones you typed in this notebook (text boxes, sticky notes, checklist labels) at least twice; *the*, *and*, *della*, *che*... never show. Handwriting is not read, so it is not a source.
+3025. **Other notebooks.** Words and titles of other notebooks never appear (open two notebooks with different words).
+3026. **No outline.** A PDF without an outline gives chips from titles and words only; a notebook with no PDF page shows the usual message and no chips. Settings, *PDF outline: off*, leaves the outline entries out.
+3027. **Changes.** Add a text box with a new repeated word, close and reopen the search: the word is offered. Opening the search a second time without changes costs nothing visible.
+3028. **Phone.** Narrow view: at most eight chips, one line; tablet: up to fourteen.
+3029. **Help.** Long-press a chip with a finger: a bubble says where the term comes from (outline, title or word). English and Italian.
+3030. **Writing.** While the pen writes, opening the search does not stutter (the chips are prepared when the device is idle).
+3031. **Read-only.** Nothing is written to the vault or the notebook by suggestions.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure ranking and filtering of suggested terms (outline, titles, frequent typed words; en + it stop-words; prefix, word, substring and one-typo matching; bounds; per-document cache) | yes | `tests/pdf-search-suggest.test.ts` | | | |
+| Chips row in the PDF search panel (tap searches, typing filters, long-press help, phone and tablet) | yes | harness `doc=pdfsuggest` | | | |
+| Sources read from the open notebook only, in idle time; no format change, no writes | yes | `tests/pdf-search-suggest.test.ts` (gather) | | | words from handwriting are not available (no recognition) |

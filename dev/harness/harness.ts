@@ -106,6 +106,7 @@ import { htmlExportApi } from "./htmlexport-check";
 import { exportAreaApi } from "./exportarea-check";
 import { clipImageApi } from "./clipimage-check"; // 0.25 clipimage
 import { tagSuggestApi } from "./tagsuggest-check";
+import { pdfSuggestApi } from "./pdfsuggest-check"; // 0.27 pdfsuggest
 import { handInApi } from "./handin-check"; // 0.24 handin
 import { redactApi } from "./redact-check"; // 0.26 redact
 import { shareApi } from "./share-check"; // 0.20 share
@@ -2299,6 +2300,7 @@ Object.assign(harnessApi, htmlExportApi({ app, errors, notices }));
 Object.assign(harnessApi, exportAreaApi({ app, errors, notices }));
 Object.assign(harnessApi, clipImageApi({ app, errors, notices })); // 0.25 clipimage
 Object.assign(harnessApi, tagSuggestApi({ app, errors, notices })); // 0.24 tagsuggest
+Object.assign(harnessApi, pdfSuggestApi({ errors, notices })); // 0.27 pdfsuggest
 Object.assign(harnessApi, handInApi({ app, errors, notices })); // 0.24 handin
 Object.assign(harnessApi, redactApi({ app, errors, notices })); // 0.26 redact
 Object.assign(harnessApi, shareApi({ app, errors, notices })); // 0.20 share

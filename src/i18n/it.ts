@@ -5096,4 +5096,10 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"workspace.notice.later": "Apri tu {panels}: un selettore di file alla volta.",
 	"settings.workspaceOnLecture": "Area di lavoro Lezione all'inizio della lezione",
 	"settings.workspaceOnLecture.desc": "Avviando la lezione si aprono slide e indice e si chiudono gli altri pannelli.",
+	// 0.27 pdfsuggest (#418): termini di ricerca suggeriti
+	"reading.search.suggest": "Termini di ricerca suggeriti",
+	"help.searchSuggest": "Un termine suggerito. Toccalo per cercarlo nel testo del PDF. Scrivi nel campo per restringere i suggerimenti.",
+	"help.searchSuggest.outline": "Dall'indice del PDF.",
+	"help.searchSuggest.heading": "Da un titolo o un'etichetta di questo quaderno.",
+	"help.searchSuggest.text": "Una parola che usi spesso in questo quaderno.",
 };

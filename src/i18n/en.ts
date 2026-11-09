@@ -5095,6 +5095,12 @@ export const en = {
 	"workspace.notice.later": "Open {panels} yourself: one file picker at a time.",
 	"settings.workspaceOnLecture": "Lecture workspace when a class starts",
 	"settings.workspaceOnLecture.desc": "Starting lecture mode opens the slides and the outline and closes the other panels.",
+	// 0.27 pdfsuggest (#418): suggested search terms
+	"reading.search.suggest": "Suggested search terms",
+	"help.searchSuggest": "A suggested term. Tap it to search the PDF text for it. Type in the box to narrow the suggestions.",
+	"help.searchSuggest.outline": "From the outline of the PDF.",
+	"help.searchSuggest.heading": "From a title or label in this notebook.",
+	"help.searchSuggest.text": "A word you often use in this notebook.",
 } as const;
 
 export type MessageKey = keyof typeof en;

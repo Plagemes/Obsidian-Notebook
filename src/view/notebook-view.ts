@@ -177,6 +177,7 @@ import { ExcerptTools } from "./excerpts";
 import { PdfTextTools } from "./pdf-text";
 import { PdfLinks } from "./pdf-links";
 import { PdfOutlineSource } from "../pdf/outline-source";
+import { gatherSuggestInput } from "../pdf/search-suggest"; // 0.27 pdfsuggest (#418)
 import { pageLinkText } from "../integration/page-share";
 import { layerCommand, type LayerMove } from "../model/layers";
 import { SetPageLocked } from "../model/page-lock";
@@ -4300,6 +4301,12 @@ export class NotebookView extends FileView {
 				this.radial?.close();
 			},
 			prefetchAllowed: () => this.resilience?.prefetchAllowed() !== false,
+			// 0.27 pdfsuggest (#418): this notebook's own outline entries, titles and typed text; read in idle time by the search panel.
+			suggestSources: () => {
+				const doc = this.session?.doc ?? null;
+				const ids = doc ? Object.values(doc.assets ?? {}).filter((a) => a.kind === "pdf").map((a) => a.id) : [];
+				return gatherSuggestInput(doc, this.host.settings.outlinePdf === "off" ? {} : (this.pdfOutline?.known(ids) ?? {}));
+			},
 			editingChanged: () => {
 				this.applyInput();
 				this.toolbar.setEditable(this.editable());
