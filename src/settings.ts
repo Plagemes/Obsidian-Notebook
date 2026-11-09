@@ -322,6 +322,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	spreadFirstAlone: boolean;
 	/** 0.27 (#49): show the spread by itself on a landscape tablet while the scrolling is continuous. */
 	spreadAuto: boolean;
+	/** 0.27 (#130): when zoomed far out, headings and titles of excerpts and pictures are shown large over the pages. */
+	semanticZoom: boolean;
 	/** Look of the plugin's own surfaces (DESIGN.md §2.2): its own `--nb-*` palette, or those tokens mapped onto the Obsidian theme. */
 	appearanceStyle: AppearanceStyle;
 	// wave 0.13: Home
@@ -471,6 +473,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	minimapMode: "auto",
 	spreadFirstAlone: true,
 	spreadAuto: false,
+	semanticZoom: true,
 	symbolStrip: true,
 	symbolCount: 6,
 	dimensionHint: true,
@@ -648,6 +651,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (isPenKind(d.defaultPenKind)) s.defaultPenKind = d.defaultPenKind;
 	s.defaultNibAngle = normaliseNib(d.defaultNibAngle);
 	if (isMinimapMode(d.minimapMode)) s.minimapMode = d.minimapMode;
+	if (typeof d.semanticZoom === "boolean") s.semanticZoom = d.semanticZoom;
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
 	if (typeof d.hintsEnabled === "boolean") s.hintsEnabled = d.hintsEnabled;

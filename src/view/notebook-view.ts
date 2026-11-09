@@ -127,6 +127,8 @@ import { NotebookMapModal } from "./notebook-map-modal";
 import type { NavController } from "./nav-controller";
 import { FastScrollbar, type ScrollbarHost } from "./scrollbar";
 import { Minimap, type MinimapHost } from "./minimap";
+import { SemanticZoomLayer, type SemanticZoomHost } from "./semantic-zoom";
+import { SEMANTIC_OUTLINE_SOURCES } from "../model/semantic-sources";
 import type { StatusBarInfo } from "./status-bar-logic";
 import type { NavPlace } from "../model/nav-history";
 import { openPageOpsMenu, type PageOpsHost } from "./page-ops-menu";
@@ -497,6 +499,8 @@ export class NotebookView extends FileView {
 	private scrollbar: FastScrollbar | null = null;
 	/** 0.17 (#173): the floating overview of the page in view (view/minimap.ts). */
 	private minimap: Minimap | null = null;
+	/** 0.27 (#130): the headings and titles shown large when zoomed far out (view/semantic-zoom.ts). A view overlay: never drawn by exports or the presentation. */
+	private semzoom: SemanticZoomLayer | null = null;
 	/** Roadmap 18: stops following the history's changes (the quick slots and the page sheet enable or disable Back and Forward). */
 	private stopNav: (() => void) | null = null;
 	/** 0.25 (#419): stops following the global bookmarks for the marked-pages filter. */
@@ -782,6 +786,7 @@ export class NotebookView extends FileView {
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.scrollbar = new FastScrollbar(this.body, this.scrollbarHost());
 		this.minimap = new Minimap(this.body, this.minimapHost());
+		this.semzoom = new SemanticZoomLayer(this.semanticZoomHost());
 		this.stopNav = this.host.nav?.onChange(() => this.refreshUi()) ?? null;
 		// 0.25 (#419): a global bookmark added or removed (here or on another device) changes the marked-pages list.
 		this.stopMarks = this.host.bookmarks?.onChange(() => this.pageNav?.refresh()) ?? null;
@@ -1277,6 +1282,8 @@ export class NotebookView extends FileView {
 		this.scrollbar?.destroy();
 		this.scrollbar = null;
 		this.minimap?.destroy();
+		this.semzoom?.destroy();
+		this.semzoom = null;
 		this.minimap = null;
 		this.comments?.destroy();
 		this.comments = null;
@@ -1759,6 +1766,7 @@ export class NotebookView extends FileView {
 		this.syncZoomHint();
 		this.scrollbar?.update();
 		this.minimap?.update();
+		this.semzoom?.viewChanged();
 		this.symbols?.sync();
 		this.filter.params = stabilizationParams(settings.stabilization);
 		// wave 0.7: resilience (#346): safe mode turns low-latency ink and prediction off for this view.
@@ -4157,6 +4165,36 @@ export class NotebookView extends FileView {
 		};
 	}
 
+	/** 0.27 (#130): what the semantic zoom overlay reads (pages, outline, layout, viewport) and how a tap on a label moves the view. Nothing here writes the document. */
+	private semanticZoomHost(): SemanticZoomHost {
+		return {
+			stage: () => this.stage,
+			enabled: () => this.host.settings.semanticZoom && !this.pageMode?.enabled && !this.presenting,
+			pages: () => this.shownDoc()?.pages ?? [],
+			assets: () => this.shownDoc()?.assets,
+			layout: () => this.layout,
+			viewport: () => this.viewport,
+			view: () => this.viewSize,
+			busy: () => !!this.controller?.drawing || this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null,
+			outline: () => {
+				const doc = this.shownDoc();
+				if (!doc) return [];
+				const s = this.host.settings;
+				return this.outlineBuilder.build(
+					{ pages: doc.pages, meta: doc.meta, assets: doc.assets, pdfOutlines: s.outlinePdf === "off" ? {} : this.outlineHost().pdfOutlines?.() ?? {} },
+					{ ...SEMANTIC_OUTLINE_SOURCES, headings: s.outlineHeadings, pdf: s.outlinePdf !== "off" },
+				);
+			},
+			warm: (budgetMs) => (this.host.settings.outlineHeadings ? this.outlineBuilder.warm(this.shownDoc()?.pages ?? [], budgetMs) : 0),
+			fingerNavigates: (e) => this.policy.route("touch", e.timeStamp, 0, Math.max(e.width || 0, e.height || 0), e.buttons) === "navigate",
+			jump: (v, pageIndex) => {
+				this.recordJump(pageIndex);
+				this.fitMode = false;
+				this.setViewport(v, true);
+			},
+		};
+	}
+
 	private scrollbarHost(): ScrollbarHost {
 		const pageAtIndex = (i: number): Page | null => this.shownDoc()?.pages[i] ?? null;
 		return {
@@ -4731,6 +4769,7 @@ export class NotebookView extends FileView {
 		this.pdfText?.docChanged();
 		this.display?.docChanged();
 		this.minimap?.invalidate();
+		this.semzoom?.invalidate();
 	}
 
 	/** wave 0.9 (376): the windows of the cropped view changed (or the toggle did): lay the pages out again and fit. */
@@ -4959,6 +4998,7 @@ export class NotebookView extends FileView {
 	private scheduleNavRefresh(): void {
 		this.scheduleHeavyCheck();
 		this.minimap?.invalidate();
+		this.semzoom?.invalidate();
 		if (!this.pageNav?.open || this.navTimer !== null) return;
 		this.navTimer = window.setTimeout(() => {
 			this.navTimer = null;
@@ -5290,6 +5330,7 @@ export class NotebookView extends FileView {
 		this.updatePageIndicator();
 		this.scrollbar?.update();
 		this.minimap?.update();
+		this.semzoom?.viewChanged();
 		this.slideBack?.viewChanged();
 		this.symbols?.sync();
 		this.overlayChanged?.();

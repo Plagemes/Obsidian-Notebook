@@ -3182,6 +3182,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.minimap.auto": "Automatica",
 	"settings.minimap.always": "Sempre",
 	"settings.minimap.never": "Mai",
+	// 0.27 semzoom
+	"settings.semanticZoom": "Titoli con lo zoom lontano",
+	"settings.semanticZoom.desc": "Con lo zoom lontano mostra titoli e nomi grandi sulle pagine. Toccane uno per andarci.",
 	// 0.17 hover
 	"hover.open": "Apri questa pagina",
 	"hover.pageOf": "Pagina {n} di {total}",

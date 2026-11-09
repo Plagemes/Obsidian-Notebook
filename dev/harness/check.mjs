@@ -191,6 +191,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "inputlayout", theme, device, lowLatency: false });
 // 0.26 zoomwidth (#350): pen width follows zoom (dev/harness/zoomwidth-check.ts), dist/shots/design/zoomwidth-*.png.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "zoomwidth", theme, device, lowLatency: false });
+// 0.27 semzoom (#130): semantic zoom (dev/harness/semzoom-check.ts), dist/shots/design/semzoom-*.png.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "semzoom", theme, device, lowLatency: false });
 // 0.22 lecthead (#210): the lecture header (dev/harness/lecthead-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "lecthead", theme, device, lowLatency: false });
 // 0.23 dimcheck (#293): the units hint of the equation editor (dev/harness/dimcheck-check.ts).
@@ -447,6 +449,7 @@ async function main() {
 				else if (s.doc === "toolfade") report = await cdp.evaluate("window.harness.checkToolfade()", 120000); // 0.25 toolfade
 				else if (s.doc === "inputlayout") report = await cdp.evaluate("window.harness.checkInputlayout()", 90000); // 0.27 inputlayout
 				else if (s.doc === "zoomwidth") report = await cdp.evaluate("window.harness.checkZoomwidth()", 120000); // 0.26 zoomwidth
+				else if (s.doc === "semzoom") report = await cdp.evaluate("window.harness.checkSemzoom()", 120000); // 0.27 semzoom
 				else if (s.doc === "navadapt") report = await cdp.evaluate("window.harness.checkNavadapt()", 90000); // 0.24 navadapt
 				else if (s.doc === "smooth") report = await cdp.evaluate("window.harness.checkSmooth()", 90000); // 0.26 smooth
 				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
@@ -751,6 +754,19 @@ async function main() {
 					writeFileSync(join(designDir, `welcomeback-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				} catch (e) {
 					problems.push(`welcomeback screenshot: ${e.message}`);
+				}
+			}
+			// 0.27 semzoom: the overview far out, halfway through the fade and further down the notebook.
+			if (s.doc === "semzoom") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["overview", "fade", "later"]) {
+					try {
+						await cdp.evaluate(`window.harness.semzoomShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `semzoom-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`semzoom ${state} screenshot: ${e.message}`);
+					}
 				}
 			}
 			// 0.26 zoomwidth: the pen options at two zooms, option off and on.
