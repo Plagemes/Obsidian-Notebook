@@ -132,7 +132,9 @@ class FakeIO implements DocumentIO {
 			this.writes.push(next);
 		}
 	}
-	async backup(): Promise<string | null> {
+	async backup(content: string, reason: BackupReason): Promise<string | null> {
+		void content;
+		void reason;
 		return null;
 	}
 }
