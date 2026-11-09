@@ -43,7 +43,7 @@ export interface Macro {
 	name: string;
 	icon: string;
 	steps: MacroStep[];
-	/** Steps stored beyond this version's limit or that this version cannot read as a step: kept as written, written back, never run. */
+	/** Steps stored beyond this version's limit or that this version cannot read as a step: kept as written and written back; they move into `steps` (and run) when there is room. */
 	extraSteps?: unknown[];
 }
 
@@ -150,7 +150,7 @@ const MAX_KEPT = 200;
 /** Where `readMacros` found the macros that do not fit this version, kept as written. */
 export interface MacroRead {
 	macros: Macro[];
-	/** Whole macros beyond MAX_MACROS, as written: written back with the settings, never shown or run. */
+	/** Whole macros beyond MAX_MACROS, as written, and macros with an id of a format this version does not know: written back with the settings; a macro beyond the limit moves into the list when there is room. */
 	extra: unknown[];
 	/** A stored id was invalid or used twice and got a new one. */
 	repaired: boolean;
@@ -183,7 +183,7 @@ function repairedId(taken: ReadonlySet<string>, index: number, name: string): st
 /**
  * Whatever was stored, as a valid list: at most MAX_MACROS macros of at most MAX_STEPS steps, unique ids, a name and an icon each.
  * Nothing that may belong to a newer version is thrown away: unknown action ids and unknown fields (of a macro and of a step) stay as
- * written, steps beyond the limit and macros beyond the limit are kept apart (`extraSteps`, `extra`) and written back, never run.
+ * written, steps beyond the limit and macros beyond the limit are kept apart (`extraSteps`, `extra`) and written back; they move into the list (and run) when there is room.
  * Only what is not a list, a name or a step at all is dropped. `prior` is the `extra` list stored earlier.
  */
 export function readMacros(data: unknown, prior?: unknown): MacroRead {
@@ -201,8 +201,12 @@ export function readMacros(data: unknown, prior?: unknown): MacroRead {
 		return true;
 	});
 	const items = [...listed, ...back];
-	const kept = items.slice(0, MAX_MACROS);
-	const extra = items.slice(MAX_MACROS, MAX_MACROS + MAX_KEPT).map((d) => copyJson(d));
+	// Review fix (T1): a macro whose id is of a format this version does not know (a newer version's) cannot have a command or a pin here, and
+	// its id must not be replaced (the next save would write the replacement over it): it is kept apart as written, whatever room there is.
+	const foreign = (d: Record<string, unknown>): boolean => typeof d.id === "string" && d.id !== "" && !ID_RE.test(d.id);
+	const ours = items.filter((d) => !foreign(d));
+	const kept = ours.slice(0, MAX_MACROS);
+	const extra = [...ours.slice(MAX_MACROS), ...items.filter(foreign)].slice(0, MAX_KEPT).map((d) => copyJson(d));
 	let persist = false;
 	// An id that is fine and first is never changed; only the others get a new one (which avoids all of them).
 	const claimed = new Set<string>();
@@ -217,8 +221,8 @@ export function readMacros(data: unknown, prior?: unknown): MacroRead {
 			id = repairedId(taken, index, name);
 			taken.add(id);
 			repaired = true;
-			// An id that is only invalid by its format (a newer version's kind of id) is repaired for this run but not written over the file.
-			if (!(typeof d.id === "string" && d.id !== "" && !ID_RE.test(d.id))) persist = true;
+			// Only a missing or doubled id is replaced (an id of another format was set apart above), and that is worth saving once.
+			persist = true;
 		}
 		seen.add(id);
 		// Review fix (R3): the steps kept apart earlier follow the listed ones and are split again by count; a step this version cannot read
@@ -256,6 +260,14 @@ export function normaliseMacros(data: unknown): Macro[] {
 
 export function cloneMacro(m: Macro): Macro {
 	return { ...m, steps: m.steps.map((s) => ({ ...s })), ...(m.extraSteps ? { extraSteps: copyJson(m.extraSteps) } : {}) };
+}
+
+/**
+ * Review fix (T2): the pins of macros that are not in the registry of this version (a newer version's, kept in the settings) draw nothing, so
+ * they take none of the visible toolbar places: these are the pins that do.
+ */
+export function visiblePins(pinned: readonly string[]): string[] {
+	return pinned.filter((p) => !isMacroActionId(p) || macroById(p) !== undefined);
 }
 
 /** The pinned toolbar ids without the macros that no longer exist. */

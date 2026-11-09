@@ -13,7 +13,7 @@ import { confirmDestructive } from "../ui/destructive";
 import { attachLongPressHelp, resolveHelp } from "../ui/long-press-help";
 import {
 	allowedActions, cleanName, cloneMacro, DEFAULT_MACRO_ICON, MACRO_ICONS, macroActionId, MAX_MACROS, MAX_NAME, MAX_STEPS, newMacroId, stepChoices, stepName,
-	stepState, usableSteps, withoutMissingMacros, type Macro, type MacroStep,
+	stepState, usableSteps, visiblePins, type Macro, type MacroStep,
 } from "../ui/macros";
 import type { PageSizeName, PaperKind } from "../model/types";
 
@@ -144,7 +144,8 @@ export class MacrosModal extends Modal {
 	private remove(id: string): void {
 		const { macros, pinned } = this.store.get();
 		const next = macros.filter((m) => m.id !== id);
-		this.save([...next], withoutMissingMacros(pinned, next));
+		// Only this macro's pin goes (the kept pin of a newer version's macro stays, T2).
+		this.save([...next], pinned.filter((p) => p !== macroActionId(id)));
 	}
 
 	private save(macros: Macro[], pinned: string[]): void {
@@ -190,7 +191,7 @@ export class MacrosModal extends Modal {
 		}
 		markIcons();
 
-		const full = !wasPinned && pinnedNow.length >= MAX_PINNED;
+		const full = !wasPinned && visiblePins(pinnedNow).length >= MAX_PINNED; // a kept pin of a newer version's macro takes no place (T2)
 		const check = shellCheck(body, t("macros.toolbar"), draft.toolbar && !full, (on) => {
 			draft.toolbar = on;
 		});
@@ -293,7 +294,8 @@ export class MacrosModal extends Modal {
 		const next = draft.isNew ? [...macros, saved] : macros.map((m) => (m.id === saved.id ? saved : m));
 		const id = macroActionId(saved.id);
 		const without = pinned.filter((p) => p !== id);
-		const nextPinned = draft.toolbar && without.length < MAX_PINNED ? [...without, id] : without;
+		const shown = visiblePins(without);
+		const nextPinned = draft.toolbar && shown.length < MAX_PINNED ? [...shown, id, ...without.filter((p) => !shown.includes(p))] : without;
 		this.draft = null;
 		this.save(next, nextPinned);
 	}

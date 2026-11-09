@@ -5,6 +5,7 @@ import type { App } from "obsidian";
 import type { PageSizeName, PaperKind } from "../model/types";
 import { actionById, isChecked, isEnabled, type ContextKind, type UiContext } from "../ui/actions";
 import { MAX_PINNED, togglePinned, type AdaptSwitches } from "../ui/adapt";
+import { visiblePins } from "../ui/macros";
 import { t } from "../i18n";
 import { showNotice } from "./notice";
 import { ActionSheet, actionLabel, type SheetKind } from "../ui/action-sheet";
@@ -101,12 +102,15 @@ export class ViewUi {
 
 	/** 0.14 (393): pins the quick action in the next free pinned place, or unpins it. */
 	togglePin(id: string): void {
-		const pinned = this.host.pinned();
+		const all = this.host.pinned();
+		// Review fix (T2): a kept pin of a macro from a newer version is invisible: it neither fills a place nor is lost.
+		const pinned = visiblePins(all);
+		const hidden = all.filter((p) => !pinned.includes(p));
 		if (!pinned.includes(id) && pinned.length >= MAX_PINNED) {
 			showNotice(t("ui.pin.full", { n: String(MAX_PINNED) }));
 			return;
 		}
-		this.host.setPinned(togglePinned(pinned, id));
+		this.host.setPinned([...togglePinned(pinned, id), ...hidden]);
 		this.refreshNow();
 	}
 
