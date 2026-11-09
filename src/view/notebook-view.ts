@@ -179,6 +179,8 @@ import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
 import { SlideBack } from "./slide-back";
+import { InputLayout } from "./input-layout-view";
+import { effectiveToolbarSize } from "../ui/input-layout";
 import { ToolFade } from "./tool-fade";
 import { WELCOME_KEY } from "../model/welcome-back";
 import { WelcomeBack } from "./welcome-back";
@@ -538,6 +540,7 @@ export class NotebookView extends FileView {
 	private strokeStart = 0;
 	/** 0.25 (#399): the toolbar and floating pills fade while the pen writes (view/tool-fade.ts). */
 	private toolFade: ToolFade | null = null;
+	private inputLayout: InputLayout | null = null;
 	private readonly location = new LocationKeeper(
 		{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
 		(path, page, pos) => {
@@ -891,7 +894,7 @@ export class NotebookView extends FileView {
 				return page ? { paper: page.paper.kind, size: sizeName(page) } : null;
 			},
 			dimControl: () => (this.reading?.dimmed ? this.reading.dimControl : null),
-			toolbarSize: () => this.host.settings.toolbarSize,
+			toolbarSize: () => effectiveToolbarSize(this.host.settings.toolbarSize, this.inputLayout?.kind ?? "pen"), // 0.27 (#431): a finger gets bigger targets
 			adapt: () => ({ pageType: this.host.settings.adaptPageType, learn: this.host.settings.adaptLearn, selection: this.host.settings.adaptSelection }),
 			pinned: () => this.host.settings.pinnedQuick,
 			setPinned: (ids) => {
@@ -1113,6 +1116,14 @@ export class NotebookView extends FileView {
 		// 0.14 slides (#226): badges next to ink written beside a slide; a tap shows the slide again.
 		attachSlideBadges(this, () => this.host.settings);
 		this.toolFade = new ToolFade({ root: this.contentEl, stage: this.stage, settings: () => this.host.settings, blocked: () => !!this.selection || !!this.lasso || !!activeDocument.body.querySelector(".modal-container") });
+		// 0.27 inputlayout (#431): the layout follows the device in use (a passive read of pointerType; the pen pipeline is untouched).
+		this.inputLayout = new InputLayout({
+			app: this.app, root: this.contentEl,
+			pref: () => this.host.settings.inputLayout,
+			busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null || !!this.controller?.drawing,
+			changed: () => this.ui?.refresh(),
+			listen: (type, handler) => this.registerDomEvent(this.contentEl, type, handler, { capture: true, passive: true }),
+		});
 		this.applySettings(this.host.settings);
 
 		this.resizeObserver = new ResizeObserver(() => this.measure());
@@ -1294,6 +1305,7 @@ export class NotebookView extends FileView {
 		this.welcomeBack = null;
 		this.toolFade?.destroy();
 		this.toolFade = null;
+		this.inputLayout = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
 		this.pageRefs?.destroy();
@@ -1759,6 +1771,7 @@ export class NotebookView extends FileView {
 		this.lectureMode?.settingsChanged();
 		this.slideBack?.settingsChanged();
 		this.toolFade?.settingsChanged();
+		this.inputLayout?.settingsChanged();
 		this.pageRefs?.reset();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();

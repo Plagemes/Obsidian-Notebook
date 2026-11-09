@@ -625,6 +625,11 @@ const APPEARANCE: SettingSpec[] = [
 		control: { type: "toggle" }, parent: "toolFade", visible: (s) => s.toolFade !== "off",
 	},
 	{ id: "userName", section: "appearance", order: 15, name: "settings.userName", desc: "settings.userName.desc", keywords: "name nome greeting saluto home", control: { type: "text", placeholder: "Alex" } },
+	// 0.27 inputlayout (#431): the layout follows the pen, the finger or the mouse.
+	{
+		id: "inputLayout", section: "appearance", order: 38, name: "settings.inputLayout", desc: "settings.inputLayout.desc", keywords: "input layout pen finger touch mouse keyboard shortcuts adapt layout penna dito tastiera scorciatoie",
+		control: { type: "dropdown", options: options([["auto", "settings.inputLayout.auto"], ["pen", "settings.inputLayout.pen"], ["touch", "settings.inputLayout.touch"], ["mouse", "settings.inputLayout.mouse"]]) },
+	},
 	{ id: "nightMode", section: "appearance", order: 40, name: "settings.nightMode", desc: "settings.nightMode.desc", control: { type: "toggle" }, keywords: "dark scuro" },
 	// 0.13: just-in-time tips.
 	{ id: "hintsEnabled", section: "appearance", order: 50, name: "settings.hints", desc: "settings.hints.desc", control: { type: "toggle" }, keywords: "tips hints suggerimenti consigli" },

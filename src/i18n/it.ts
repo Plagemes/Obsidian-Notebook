@@ -5038,4 +5038,11 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"taper.value.start": "Rastremazione all'inizio {percent}%",
 	"taper.value.end": "Rastremazione alla fine {percent}%",
 	"help.taper": "Quanto il tratto si assottiglia verso l'inizio e la fine di ogni segno, come il guizzo di una penna: No mantiene lo spessore pieno fino alla punta, di più dà una punta più lunga e sottile. Vale per la penna, la stilografica e il pennello, per quello che scrivi dopo; i segni già sulla pagina non cambiano. Tocca per togliere la rastremazione a entrambe le estremità.",
+	// 0.27 inputlayout
+	"settings.inputLayout": "Adatta il layout all'input",
+	"settings.inputLayout.desc": "Barre grandi per il dito, compatte per la penna, scorciatoie per il mouse.",
+	"settings.inputLayout.auto": "Automatico",
+	"settings.inputLayout.pen": "Penna",
+	"settings.inputLayout.touch": "Dito",
+	"settings.inputLayout.mouse": "Mouse e tastiera",
 };

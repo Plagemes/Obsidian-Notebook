@@ -10,6 +10,10 @@
 - **Code.** `src/model/taper.ts` (limits and helpers, `strokeTaper`), `InkBuilder` in `src/ink/ink-geometry.ts` (start taper in the point radii, end taper at `finish()`), `src/view/taper-row.ts` (the row), `FavouritePen.taperStart` / `taperEnd`, `ToolbarState.penTaperStart` / `penTaperEnd`.
 - **Tests.** `tests/model-v25.test.ts` (helpers, fields, migration, lenient read, staged loading, repair, merge, copies, engine geometry, every export path, cuts and joins, pens), `tests/format-schema.test.ts` (schema v25); harness `doc=taper` (`dev/harness/taper-check.ts`). Not verified on Android hardware.
 
+### inputlayout
+- **Layout by input device (#431).** The notebook view now shapes itself to what you are using: with the pen the compact bar as before; with a finger one toolbar size more (larger touch targets) and more room between buttons; with a mouse and keyboard a clearer hover and focus state, and the tooltip of a bar button shows the keyboard shortcut you assigned to it in Obsidian. *Settings > Appearance > Adapt layout to input*: Automatic (default), Pen, Finger, Mouse and keyboard. Automatic reads the pointer type of events the view already gets: three consistent events switch, never in the middle of a stroke, and a touch right after the pen (a resting palm) is ignored. No format change.
+- **Code.** Pure, tested `src/ui/input-layout.ts`; DOM glue `src/view/input-layout-view.ts` (a passive capture listener, one class on the view root); tests in `tests/input-layout.test.ts`; harness scenario `doc=inputlayout`.
+
 ## 0.26.0 — 2026-11-09
 
 Eight features: opacity for ink, pictures and areas, smooth and straighten strokes, tidy up handwriting lines, redaction before export, pen width that follows zoom, a context palette in the colour picker, a dynamic gallery block and a related handwritten pages panel. The notebook format moves to version 24 (opacity): the migration from version 23 is automatic, and Notebook 0.25 and older open a v24 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).

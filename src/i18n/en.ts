@@ -5037,6 +5037,13 @@ export const en = {
 	"taper.value.start": "Start taper {percent}%",
 	"taper.value.end": "End taper {percent}%",
 	"help.taper": "How much the line thins towards the start and the end of each stroke, like the flick of a pen: Off keeps the full width to the tip, more makes a longer, sharper point. It applies to the pen, the fountain pen and the brush, to what you write next; strokes already on the page are not changed. Tap to turn both ends off.",
+	// 0.27 inputlayout
+	"settings.inputLayout": "Adapt layout to input",
+	"settings.inputLayout.desc": "Big bars for a finger, compact for the pen, shortcut hints for a mouse.",
+	"settings.inputLayout.auto": "Automatic",
+	"settings.inputLayout.pen": "Pen",
+	"settings.inputLayout.touch": "Finger",
+	"settings.inputLayout.mouse": "Mouse and keyboard",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -24,6 +24,7 @@ import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from ".
 import { DEFAULT_LECTURE_SETTINGS, readLectureSettings, type LectureSettings } from "./timetable/lecture-mode";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
+import { DEFAULT_INPUT_PREF, isInputPref, type InputPref } from "./ui/input-layout";
 import { cleanFadeSeconds, DEFAULT_TOOL_FADE_MODE, DEFAULT_TOOL_FADE_SECONDS, isToolFadeMode, type ToolFadeMode } from "./ui/tool-fade";
 import { normalisePinned } from "./ui/adapt";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
@@ -254,6 +255,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	toolFadeSeconds: number;
 	/** The first finger touch on a faded bar only brings it back (the button is not pressed). */
 	toolFadeFirstTouch: boolean;
+	/** 0.27 (#431): the layout follows the input in use (automatic) or is pinned to the pen, the finger or the mouse. */
+	inputLayout: InputPref;
 	/** 0.26 (#422): the Related pages panel also lists the first page of the notebooks of the note's course. */
 	relatedCourse: boolean;
 	/** Quick actions the person pinned to the toolbar, in order (at most 3): the ranking never moves them. */
@@ -434,6 +437,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	toolFade: DEFAULT_TOOL_FADE_MODE,
 	toolFadeSeconds: DEFAULT_TOOL_FADE_SECONDS,
 	toolFadeFirstTouch: true,
+	inputLayout: DEFAULT_INPUT_PREF,
 	relatedCourse: true, // 0.26 related
 	pinnedQuick: [],
 	pageTurnerKeys: true,
@@ -608,6 +612,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (isToolFadeMode(d.toolFade)) s.toolFade = d.toolFade;
 	s.toolFadeSeconds = cleanFadeSeconds(d.toolFadeSeconds);
 	if (typeof d.toolFadeFirstTouch === "boolean") s.toolFadeFirstTouch = d.toolFadeFirstTouch;
+	if (isInputPref(d.inputLayout)) s.inputLayout = d.inputLayout;
 	if (typeof d.relatedCourse === "boolean") s.relatedCourse = d.relatedCourse; // 0.26 related
 	s.pinnedQuick = normalisePinned(d.pinnedQuick);
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
