@@ -239,6 +239,9 @@ import { kindTool, strokeNib } from "../ink/pen-kinds";
 import { hint } from "../ui/hints";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
 import { actionLabel } from "../ui/action-sheet";
+import { cloneMacro, isMacroActionId, macroById, setMacros } from "../ui/macros";
+import { runMacroOn } from "./macro-run";
+import { MacrosModal } from "./macros-modal";
 import {
 	centredPosition, imageElementSize, imagePageSize, mergeMeta, metaEquals, newTextBox, shapePoints, shouldGrabRuler, toggleBookmark,
 	unionBounds,
@@ -444,6 +447,9 @@ export class NotebookView extends FileView {
 	 */
 	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message, step) => {
 		console.error(`[notebook] ${step ?? "edit"} refused, the notebook could not be saved with it:`, message);
+		// 0.27 (#170): a macro counts the refusals and says it once itself, naming the step.
+		if (!step) this.refusalCount++;
+		if (!step && this.quietRefusals) return;
 		// 0.19: an undo or a redo that would leave a notebook the writer refuses is not done and leaves the history (the document is as before).
 		showNotice(step ? t("history.stepRefused", { message }) : t("history.refused", { message }), 10000);
 		if (step) this.updateHistoryButtons();
@@ -3863,6 +3869,8 @@ export class NotebookView extends FileView {
 
 	/** A locked page refused an edit (the history's guard, or a gate before one): says so once, with a button that unlocks the page. */
 	private pagesLocked(pageIds: readonly string[]): void {
+		this.refusalCount++; // 0.27 (#170): a macro stops when a step is refused
+		if (this.quietRefusals) return;
 		const now = Date.now();
 		if (now - this.lockNoticeAt < 5000) return;
 		this.lockNoticeAt = now;
@@ -4160,6 +4168,15 @@ export class NotebookView extends FileView {
 
 	/** Runs an action of the registry (toolbar, contextual bar, sheets, radial menu, commands) and counts the use. */
 	runAction(id: string, arg: ActionArg = {}): void {
+		if (isMacroActionId(id)) {
+			// 0.27 (#170): a macro (toolbar button, sheet, command) runs its steps through this same entry point.
+			const macro = macroById(id);
+			if (!macro) return;
+			runMacroOn(this, cloneMacro(macro));
+			this.ui?.record(id);
+			this.refreshUi();
+			return;
+		}
 		if (actionById(id)?.scope === "global") {
 			// A plugin-level action shown in a sheet (recent pages, sync check…).
 			if (!this.host.runGlobal) return;
@@ -4193,6 +4210,47 @@ export class NotebookView extends FileView {
 	/** Whether a command of the registry applies now (the palette hides it otherwise). */
 	commandApplies(id: string): boolean {
 		return commandApplies(this, id);
+	}
+
+	// --- 0.27 (#170): macros ---
+
+	/** How many edits the History or the page lock refused in this view so far (a macro stops when it grows during a step). */
+	private refusalCount = 0;
+	/** True while a macro runs: the refusal notices are held back, the macro says it once. */
+	private quietRefusals = false;
+
+	get editRefusals(): number {
+		return this.refusalCount;
+	}
+
+	/**
+	 * Runs `fn` (the steps of a macro, each an edit through the History) so that everything it changes is ONE undo step named `label`.
+	 * Every step still has the History's own guards (locked pages and elements, read-only, the content check); a refused step is not part
+	 * of the group and its notice is held back (counted in `editRefusals` instead).
+	 */
+	runGrouped<T>(label: string, fn: () => T): T {
+		const was = this.quietRefusals;
+		this.quietRefusals = true;
+		try {
+			return this.history.group(label, fn);
+		} finally {
+			this.quietRefusals = was;
+		}
+	}
+
+	/** The macro manager: list, editor, toolbar button. The macros live in the plugin settings (shared by every view and the settings tab). */
+	openMacros(): void {
+		const save = (): void => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+		new MacrosModal(this.app, {
+			get: () => ({ macros: this.host.settings.macros, pinned: this.host.settings.pinnedQuick }),
+			update: (macros, pinned) => {
+				this.host.settings.macros = macros;
+				this.host.settings.pinnedQuick = pinned;
+				setMacros(macros);
+				save();
+			},
+			run: (macro) => runMacroOn(this, macro),
+		}, () => this.refreshUi()).open();
 	}
 
 	/** Recomputes the self-building UI (quick slots, contextual bar, open sheet) and the selection's restyle rows. */

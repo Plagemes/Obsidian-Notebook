@@ -32,6 +32,7 @@ import type { NotebookApi } from "./integration/api";
 import { registerReliability } from "./integration/reliability";
 import { LIBRARY_VIEW_TYPE, LibraryView } from "./library/library-view";
 import { registerActionCommands } from "./view/commands";
+import { MacroCommands } from "./view/macro-commands";
 import { openLooseSheet } from "./library/loose-sheet";
 import { openTodaysPage } from "./library/daily";
 import { OpenNotebookModal } from "./view/modals";
@@ -130,6 +131,11 @@ export default class NotebookPlugin extends Plugin {
 		// 0.13 polish: the picture cache (IndexedDB) is per vault; IndexedDB itself is shared by every vault on the device.
 		this.step("art cache", () => setArtCacheScope(this.app.vault.getName()));
 		this.step("appearance", () => this.applyAppearanceStyle());
+		// 0.27 macros (#170): the person's macros join the action registry (sheet, toolbar pins) and the command palette before any view is built.
+		this.step("macros", () => {
+			this.macroCommands = new MacroCommands(this, () => this.app.workspace.getActiveViewOfType(NotebookView));
+			this.macroCommands.sync(this.settings.macros);
+		});
 		// 0.12.1: the settings tab first, so that no later step can take it away. It reads the services below lazily.
 		this.step("settings tab", () => this.addSettingTab(new NotebookSettingTab(this.app, this)));
 		this.step("language notice", () => this.register(onLanguageChanged(() => showNotice(t("settings.uiLanguage.changed")))));
@@ -434,6 +440,8 @@ export default class NotebookPlugin extends Plugin {
 
 	/** Set when data.json could not be read: the settings are never saved over it (see `readStoredSettings`). */
 	private settingsUnreadable = false;
+	/** 0.27 macros (#170): one command per macro, in step with the settings. */
+	private macroCommands: MacroCommands | null = null;
 
 	onunload(): void {
 		// 0.12.1: each step is independent, and a service whose start-up step failed may not exist.
@@ -460,6 +468,7 @@ export default class NotebookPlugin extends Plugin {
 	async saveSettings(): Promise<void> {
 		if (this.settingsUnreadable) showNotice(t("notice.settingsNotSaved"));
 		else await this.saveData(this.settings);
+		this.macroCommands?.sync(this.settings.macros); // 0.27 macros: the registry and the commands follow the settings
 		this.applyAppearanceStyle();
 		setLongPressHelpEnabled(this.settings.iconHelp);
 		for (const view of this.views()) view.applySettings(this.settings);

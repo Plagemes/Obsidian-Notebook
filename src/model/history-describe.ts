@@ -101,6 +101,8 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Delete selection": ["histpanel.t.deleteSelection", "trash-2"],
 	"Delete ink on deleted objects": ["histpanel.t.deleteSelection", "trash-2"],
 	"Duplicate selection": ["histpanel.t.duplicate", "copy"],
+	// 0.27 (#170): everything one macro run changed, as one step (History.group)
+	"Run macro": ["histpanel.t.macro", "workflow"],
 	"Paste": ["histpanel.t.paste", "clipboard-paste"],
 	"Paste image": ["histpanel.t.picture", "image"],
 	"Move selection to page": ["histpanel.t.toPage", "arrow-right-left"],

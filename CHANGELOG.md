@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### macros
+- **Macros (#170).** Make your own button: a name, an icon and an ordered list of the plugin's actions (up to 20 steps, up to 12 macros). Open *Macros…* in All actions (or *Settings → Appearance → Macros*), tap *New macro*, add steps from a searchable list (pen, highlighter, eraser, a favourite pen, the shape, arranging the selection, the paper or size of the page, a bookmark, a new page, the next page…), and choose *Show on the toolbar*. A step that takes a value (the paper, the page size) has its own choice.
+- **Where it lives.** On the toolbar as a pinned button (the same three pinned places as any quick action; press and hold it to unpin, also on a phone, where a pinned macro always keeps its button), in the *Macros* section of All actions, and as an Obsidian command per macro (*Macro: <name>*) you can give a hotkey or put on the mobile toolbar. A macro that starts on the selection qualifies for *For this page* in All actions while something is selected, and steps back when it cannot start.
+- **Safe by construction.** Only actions on an explicit allow-list can be steps: tools and pens, arranging a selection, page paper / size / orientation, bookmark, new and duplicated pages, moving between pages. Nothing that deletes, trashes, overwrites, exports, shares or syncs, and nothing that opens a dialog. Every step runs through the same entry point a tap uses, so a locked page or a locked element refuses as usual; the macro then stops with ONE notice that names the step (and says how many earlier steps are done). A step the plugin does not know (a macro from a newer version) is kept, shown as *Unavailable* and skipped.
+- **One undo step.** Everything one run changes is a single history step (*Macro run* in the history panel): one Undo takes it all back, one Redo does it again. New `History.group(label, fn)` merges the steps recorded inside it into one `Batch`; each step keeps all the history's guards (read-only, locks, content check).
+- **Code.** Pure, Node-tested `src/ui/macros.ts` (data and lenient reader, allow-list, registry entries, context rule helper, runner), the manager `src/view/macros-modal.ts` on the modal shell, `src/view/macro-run.ts`, `src/view/macro-commands.ts`; settings key `macros` (no document format change); `History.group` in `src/model/history.ts`; `tests/macros.test.ts`, `tests/history-group.test.ts`; harness `dev/harness/macros-check.ts`.
+
 ## 0.26.0 — 2026-11-09
 
 Eight features: opacity for ink, pictures and areas, smooth and straighten strokes, tidy up handwriting lines, redaction before export, pen width that follows zoom, a context palette in the colour picker, a dynamic gallery block and a related handwritten pages panel. The notebook format moves to version 24 (opacity): the migration from version 23 is automatic, and Notebook 0.25 and older open a v24 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).

@@ -109,7 +109,7 @@ export const GROUPS: readonly GroupSpec[] = [
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open" | "meanings-edit";
+export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open" | "meanings-edit" | "macros-manage";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info" | "backup-now" | "cloud-account" | "cloud-sync-now" | "cloud-log" | "cloud-secret";
 
@@ -611,6 +611,11 @@ const APPEARANCE: SettingSpec[] = [
 	{ id: "adaptLearn", section: "appearance", order: 32, name: "settings.adaptLearn", desc: "settings.adaptLearn.desc", control: { type: "toggle" }, keywords: "adaptive toolbar learn notebook course usage frequent adattiva impara quaderno corso" },
 	{ id: "adaptSelection", section: "appearance", order: 33, name: "settings.adaptSelection", desc: "settings.adaptSelection.desc", control: { type: "toggle" }, keywords: "adaptive selection bar ink image text lasso adattiva selezione" },
 	{ id: "toolbarReset", section: "appearance", order: 34, name: "settings.toolbarReset", desc: "settings.toolbarReset.desc", control: { type: "action", run: "toolbar-reset", button: "settings.toolbarReset.button" }, keywords: "adaptive toolbar pinned pin reset forget learned fissate azzera dimentica" },
+	// 0.27 macros (#170): a name, an icon and a list of actions on one toolbar button (also in All actions and as an Obsidian command)
+	{
+		id: "macros", section: "appearance", order: 34.5, name: "settings.macros", desc: "settings.macros.desc", keywords: "macro sequence automate shortcut toolbar button steps sequenza automatizza scorciatoia pulsante barra passaggi",
+		control: { type: "action", run: "macros-manage", button: "settings.open" }, edits: ["macros"],
+	},
 	// 0.25 toolfade (#399): the bars step back while the pen writes.
 	{
 		id: "toolFade", section: "appearance", order: 35, name: "settings.toolFade", desc: "settings.toolFade.desc", keywords: "toolbar fade hide writing dim barra sfuma nascondi scrittura",

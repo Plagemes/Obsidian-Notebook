@@ -26,6 +26,7 @@ import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
 import { cleanFadeSeconds, DEFAULT_TOOL_FADE_MODE, DEFAULT_TOOL_FADE_SECONDS, isToolFadeMode, type ToolFadeMode } from "./ui/tool-fade";
 import { normalisePinned } from "./ui/adapt";
+import { normaliseMacros, type Macro } from "./ui/macros";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { cleanUserName } from "./library/greeting";
 import { normaliseSeen, type HintId } from "./ui/hint-logic";
@@ -258,6 +259,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	relatedCourse: boolean;
 	/** Quick actions the person pinned to the toolbar, in order (at most 3): the ranking never moves them. */
 	pinnedQuick: string[];
+	/** 0.27 (#170): the person's macros (a name, an icon and a list of actions each; at most 12 of at most 20 steps). A macro pinned to the toolbar is in `pinnedQuick` as `macro-<id>`. */
+	macros: Macro[];
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
 	pageTurnerKeys: boolean;
 	// wave 0.10: tabs and lines
@@ -436,6 +439,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	toolFadeFirstTouch: true,
 	relatedCourse: true, // 0.26 related
 	pinnedQuick: [],
+	macros: [],
 	pageTurnerKeys: true,
 	notebookTabs: false,
 	autoLineBreak: false,
@@ -610,6 +614,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.toolFadeFirstTouch === "boolean") s.toolFadeFirstTouch = d.toolFadeFirstTouch;
 	if (typeof d.relatedCourse === "boolean") s.relatedCourse = d.relatedCourse; // 0.26 related
 	s.pinnedQuick = normalisePinned(d.pinnedQuick);
+	s.macros = normaliseMacros(d.macros); // 0.27 macros
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;

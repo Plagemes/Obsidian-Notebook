@@ -1,7 +1,7 @@
 // ui redesign: the layout engine. From the action registry, the current context, the width of the view and the use
 // counts, it decides what the primary toolbar shows in its quick slots, what the contextual bar offers, and how the
 // "All actions" and page sheets are organised. Deterministic and pure (no DOM, no 'obsidian'): unit-tested.
-import { ACTIONS, activeContexts, GROUP_ORDER, isRelevant, type ActionDef, type ActionGroup, type ContextKind, type Surface, type ToolId, type UiContext } from "./actions";
+import { ACTIONS, activeContexts, allActions, GROUP_ORDER, isRelevant, type ActionDef, type ActionGroup, type ContextKind, type Surface, type ToolId, type UiContext } from "./actions";
 import { adaptBoost, NO_ADAPT, pageVariant, selectionVariant, suggestedTools, type LayoutAdapt } from "./adapt";
 import { contextScore, forThisPage } from "./context-rank";
 import { usageBoost, type UsageMap } from "./usage";
@@ -68,7 +68,7 @@ export function score(a: ActionDef, usage: UsageMap, now: number): number {
 }
 
 /** Relevant actions placed on `surface`, best first (ties keep the registry order). */
-export function ranked(surface: Surface, c: UiContext, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, adapt: LayoutAdapt = NO_ADAPT): ActionDef[] {
+export function ranked(surface: Surface, c: UiContext, usage: UsageMap, now: number, actions: readonly ActionDef[] = allActions(), adapt: LayoutAdapt = NO_ADAPT): ActionDef[] {
 	// 0.14: the page-type and selection rules add a fixed amount to the designed priority (ui/adapt.ts).
 	const total = (a: ActionDef) => score(a, usage, now) + adaptBoost(a, c, adapt);
 	return actions
@@ -95,7 +95,7 @@ export function contextCapacity(width: number, slot: number = TOOLBAR_METRICS.sl
 }
 
 /** The contextual bar: the most specific context that has something to offer, with its best actions. */
-export function contextBar(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, slot: number = TOOLBAR_METRICS.slot, adapt: LayoutAdapt = NO_ADAPT): ContextBarPlan | null {
+export function contextBar(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = allActions(), slot: number = TOOLBAR_METRICS.slot, adapt: LayoutAdapt = NO_ADAPT): ContextBarPlan | null {
 	if (!c.open) return null;
 	const all = ranked("context", c, usage, now, actions, adapt);
 	for (const kind of activeContexts(c)) {
@@ -122,7 +122,7 @@ export interface ToolbarLayout extends ToolbarPlan {
 }
 
 /** Everything the primary toolbar and the contextual bar show right now. */
-export function buildLayout(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = ACTIONS, slot: number = TOOLBAR_METRICS.slot, adapt: LayoutAdapt = NO_ADAPT): ToolbarLayout {
+export function buildLayout(c: UiContext, width: number, usage: UsageMap, now: number, actions: readonly ActionDef[] = allActions(), slot: number = TOOLBAR_METRICS.slot, adapt: LayoutAdapt = NO_ADAPT): ToolbarLayout {
 	const plan = toolbarPlan(width, slot);
 	const context = contextBar(c, width, usage, now, actions, slot, adapt);
 	const inContext = new Set([...(context?.actions ?? []), ...(context?.second ?? [])]);
@@ -133,9 +133,12 @@ export function buildLayout(c: UiContext, width: number, usage: UsageMap, now: n
 		const a = actions.find((x) => x.id === id);
 		return a && a.surfaces.includes("quick") && isRelevant(a, c) && usable(a) ? [a] : [];
 	});
-	const rest = ranked("quick", c, usage, now, actions, adapt).filter((a) => usable(a) && !pinned.includes(a));
+	// 0.27 (#170): a macro is on the toolbar only when pinned; the ranking never promotes it.
+	const rest = ranked("quick", c, usage, now, actions, adapt).filter((a) => !a.pinOnly && usable(a) && !pinned.includes(a));
 	const order = [...pinned, ...rest];
-	let chosen = order.slice(0, plan.quickSlots);
+	// 0.27 (#170): a macro the person pinned always has its button, also on a phone where no ranked slot fits (the favourites strip gives way).
+	const lastMacro = pinned.reduce((n, a, i) => (a.pinOnly ? i + 1 : n), 0);
+	let chosen = order.slice(0, Math.max(plan.quickSlots, lastMacro));
 	// Back (0.13): with room for three slots it stays among them while there is somewhere to go back to, whatever a page-type or
 	// learned boost ranks above it; it takes the place of the lowest-ranked unpinned slot.
 	const back = rest.find((a) => a.id === "nav-back");
@@ -177,7 +180,7 @@ export function fold(text: string): string {
 }
 
 /** The sections of a sheet: grouped in GROUP_ORDER (registry order inside a group), or the search results. */
-export function buildSheet(c: UiContext, opts: SheetOptions, actions: readonly ActionDef[] = ACTIONS): SheetSection[] {
+export function buildSheet(c: UiContext, opts: SheetOptions, actions: readonly ActionDef[] = allActions()): SheetSection[] {
 	const surfaces: readonly Surface[] = opts.kind === "page" ? ["page"] : ["sheet", "page"];
 	const pool = actions.filter((a) => a.surfaces.some((s) => surfaces.includes(s)) && isRelevant(a, c));
 	const query = fold(opts.query ?? "");

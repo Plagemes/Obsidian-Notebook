@@ -30,6 +30,7 @@ export interface SheetHost {
 }
 
 export function actionLabel(a: ActionDef): string {
+	if (a.name !== undefined) return a.name; // 0.27 (#170): a macro is shown by the name the person gave it
 	return a.id.startsWith("favourite-") ? t(a.label, { n: a.id.slice(10) }) : t(a.label);
 }
 

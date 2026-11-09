@@ -20372,3 +20372,225 @@ body.notebook-style-obsidian {
 .nb-ui.notebook-related .nb-empty-state {
 	padding: 24px 8px;
 }
+
+/* ===== 0.27 macros ===== */
+
+/* The manager (view/macros-modal.ts): a list of rows, and an editor with the steps in a column. */
+.nb-ui.nb-macro-modal .nb-modal-section-title {
+	margin: 14px 0 8px;
+}
+
+.nb-ui.nb-macro-modal .nb-modal-section-title:first-child {
+	margin-top: 0;
+}
+
+.nb-ui.nb-macro-modal .nb-modal-body {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-list,
+.nb-ui.nb-macro-modal .nb-macro-steps {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-row,
+.nb-ui.nb-macro-modal .nb-macro-step {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 56px;
+	padding: 8px 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon {
+	flex: 0 0 auto;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-detail {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-tools {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 2px;
+}
+
+/* The icon choices of the editor: a wrapping grid of 44 px targets. */
+.nb-ui.nb-macro-modal .nb-macro-icons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon-choice {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon-choice .svg-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon-choice:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon-choice.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon-choice:focus-visible,
+.nb-ui.nb-macro-modal .nb-macro-select:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+/* A step: its number, the action's icon, its name (and the value it takes), then the move and remove buttons. */
+.nb-ui.nb-macro-modal .nb-macro-step {
+	min-height: 52px;
+	padding: 6px 8px 6px 12px;
+	gap: 10px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-n {
+	flex: 0 0 auto;
+	min-width: 18px;
+	color: var(--nb-text-faint);
+	font-size: var(--nb-fs-meta);
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	min-width: 0;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-label {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-select {
+	min-height: 40px;
+	max-width: 100%;
+	padding: 4px 28px 4px 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background-color: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-family: inherit;
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step.is-unavailable .nb-macro-step-label,
+.nb-ui.nb-macro-modal .nb-macro-step.is-unavailable .nb-macro-step-icon {
+	color: var(--nb-text-faint);
+	text-decoration: line-through;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-badge {
+	padding: 1px 8px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-macro-modal .nb-modal-note.is-hidden {
+	display: none;
+}
+
+/* The step picker (a prompt): icon, name, and the group at the right. */
+.nb-ui.nb-macro-picker .nb-macro-pick {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 44px;
+}
+
+.nb-ui.nb-macro-picker .nb-macro-pick-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-macro-picker .nb-macro-pick-label {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui.nb-macro-picker .nb-macro-pick-group {
+	flex: 0 0 auto;
+	color: var(--nb-text-faint);
+	font-size: var(--nb-fs-meta);
+}
+
+@media (max-width: 480px) {
+	.nb-ui.nb-macro-modal .nb-macro-row {
+		padding: 8px 8px 8px 10px;
+		gap: 8px;
+	}
+
+	.nb-ui.nb-macro-modal .nb-macro-step {
+		gap: 6px;
+		padding-left: 8px;
+	}
+
+	.nb-ui.nb-macro-modal .nb-macro-step-n {
+		display: none;
+	}
+}

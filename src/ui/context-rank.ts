@@ -3,6 +3,7 @@
 // lecture, the side pane, a presentation, the current tool) comes first, and a short "For this page" section tops the
 // sheet. Pure and deterministic: no 'obsidian' import, unit-tested.
 import { activeContexts, canOpacity, isChecked, isEnabled, isRelevant, type ActionDef, type ToolId, type UiContext } from "./actions";
+import { isMacroActionId, startOfMacroAction } from "./macros";
 import { usageBoost, type UsageMap } from "./usage";
 
 /** At most this many entries in the "For this page" section. */
@@ -81,7 +82,20 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.26 (#66): reshaping handwriting fits a selection of strokes; a long wobbly line (underline, ruler line) on grid or plain paper is likelier meant straight.
 	if (a.id === "selection-smooth" && hasSelection) boost += 4;
 	if (a.id === "selection-straighten" && hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 6;
+	// 0.27 (#170): a macro fits where its first step can start: one that starts on the selection comes first when something is selected (enough for "For this page");
+	// one that starts somewhere it cannot (nothing selected, a locked page) steps back; any other leans forward a little.
+	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
 	return boost;
+}
+
+/** The context boost of a macro (0 for any other action of the macros group). */
+function macroFit(a: ActionDef, c: UiContext, hasSelection: boolean): number {
+	if (!isMacroActionId(a.id)) return 0;
+	const first = startOfMacroAction(a.id);
+	if (!first) return -10;
+	if (!isRelevant(first, c) || !isEnabled(first, c)) return -10;
+	if (first.group === "selection") return hasSelection ? HERE_MIN_BOOST + 5 : 0;
+	return first.group === "page" ? 6 : 4;
 }
 
 /** Score for ordering: designed priority, recent use, and the fit to the context. */
