@@ -20372,3 +20372,98 @@ body.notebook-style-obsidian {
 .nb-ui.notebook-related .nb-empty-state {
 	padding: 24px 8px;
 }
+
+/* ===== 0.27 taper ===== */
+/* Taper (#351): how much the line of a pen thins towards the start and the end of a stroke. A header (reset, name, a small picture drawn by the engine) and one slider per end, in the pen options. */
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-row {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2, 8px);
+	padding: 0 4px;
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-row.notebook-hidden {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-head,
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-end {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-3, 12px);
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-reset {
+	flex: 0 0 auto;
+	min-width: 40px;
+	min-height: 40px;
+	color: var(--nb-text-muted);
+	border-radius: var(--nb-radius-pill);
+}
+
+@media (pointer: coarse) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-taper-reset {
+		min-width: 44px;
+		min-height: 44px;
+	}
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-reset:hover:not(:disabled),
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-reset:focus-visible {
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-label,
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-end-label {
+	flex: 0 0 auto;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-end-label {
+	flex-basis: 3.6em;
+	padding-left: 4px;
+}
+
+/* The picture is decoration (aria-hidden): the same stroke shape the page will get, in the accent colour on a tile. */
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-preview {
+	flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 72px;
+	max-width: 200px;
+	height: 36px;
+	margin-left: auto;
+	padding: 2px 8px;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-tile);
+	border: 1px solid var(--nb-border);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-preview svg {
+	width: 100%;
+	height: 100%;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-preview path {
+	fill: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-slider {
+	flex: 1 1 auto;
+	min-width: 80px;
+	min-height: 32px;
+	accent-color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-value {
+	flex: 0 0 auto;
+	min-width: 3.2em;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text);
+}

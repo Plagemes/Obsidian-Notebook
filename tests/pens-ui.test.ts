@@ -77,7 +77,7 @@ describe("favourite pens and pen sets with the new pens", () => {
 	});
 
 	it("selecting a favourite sets the kind and the nib, a plain one goes back to the ballpoint pen", () => {
-		expect(favouritePatch(fountain)).toEqual({ tool: "pen", penColor: "#1d4ed8", penWidth: 2.4, penKind: "fountain", nibAngle: 120, penOpacity: 1 });
+		expect(favouritePatch(fountain)).toEqual({ tool: "pen", penColor: "#1d4ed8", penWidth: 2.4, penKind: "fountain", nibAngle: 120, penOpacity: 1, penTaperStart: 0, penTaperEnd: 0 });
 		expect(favouritePatch({ tool: "pen", color: "#000000", width: 2 })).toMatchObject({ penKind: "pen", nibAngle: 45 });
 		expect(favouritePatch({ tool: "highlighter", color: "#facc15", width: 14 })).not.toHaveProperty("penKind");
 	});
@@ -138,14 +138,14 @@ describe("settings", () => {
 
 describe("style eyedropper", () => {
 	it("taking a stroke of a new pen selects that pen and its nib", () => {
-		expect(styleOfStroke({ tool: "fountain", color: "#112233", width: 2, nib: 100 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 2, penKind: "fountain", nibAngle: 100, penOpacity: 1 });
-		expect(styleOfStroke({ tool: "marker", color: "#112233", width: 6 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 6, penKind: "marker", nibAngle: 45, penOpacity: 1 });
+		expect(styleOfStroke({ tool: "fountain", color: "#112233", width: 2, nib: 100 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 2, penKind: "fountain", nibAngle: 100, penOpacity: 1, penTaperStart: 0, penTaperEnd: 0 });
+		expect(styleOfStroke({ tool: "marker", color: "#112233", width: 6 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 6, penKind: "marker", nibAngle: 45, penOpacity: 1, penTaperStart: 0, penTaperEnd: 0 });
 		expect(styleOfStroke({ tool: "brush", color: "#112233", width: 6 })).toMatchObject({ penKind: "brush" });
 	});
 
 	it("a ballpoint or shape stroke selects the ballpoint again, so an eyedropper never keeps the fountain pen", () => {
-		expect(styleOfStroke({ tool: "pen", color: "#112233", width: 2 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 2, penKind: "pen", nibAngle: 45, penOpacity: 1 });
-		expect(styleOfStroke({ tool: "shape", color: "#112233", width: 2 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 2, penKind: "pen", nibAngle: 45, penOpacity: 1 });
+		expect(styleOfStroke({ tool: "pen", color: "#112233", width: 2 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 2, penKind: "pen", nibAngle: 45, penOpacity: 1, penTaperStart: 0, penTaperEnd: 0 });
+		expect(styleOfStroke({ tool: "shape", color: "#112233", width: 2 })).toEqual({ tool: "pen", penColor: "#112233", penWidth: 2, penKind: "pen", nibAngle: 45, penOpacity: 1, penTaperStart: 0, penTaperEnd: 0 });
 		expect(styleOfStroke({ tool: "highlighter", color: "#facc15", width: 14 })).toEqual({ tool: "highlighter", highlighterColor: "#facc15", highlighterWidth: 14, highlighterOpacity: 1 });
 	});
 });

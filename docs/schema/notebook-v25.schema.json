@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v24.schema.json",
-  "title": "Notebook document, format version 24",
-  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 24). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
+  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v25.schema.json",
+  "title": "Notebook document, format version 25",
+  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 25). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
   "type": "object",
   "required": ["format", "version", "id", "createdAt", "modifiedAt", "meta", "assets", "pages"],
   "properties": {
     "format": { "const": "obsidian-notebook", "description": "Always this string. Distinguishes the file from any other JSON." },
-    "version": { "const": 24, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
+    "version": { "const": 25, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
     "id": { "type": "string", "minLength": 1, "description": "Document id (a UUID when available). Survives renames and copies made with 'Make a copy'." },
     "createdAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time the notebook was created." },
     "modifiedAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time of the last content save." },
@@ -54,6 +54,7 @@
     "positive": { "type": "number", "exclusiveMinimum": 0 },
     "timeMs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Milliseconds since 1970-01-01T00:00:00Z." },
     "true": { "const": true, "description": "Written only when true; absent means false." },
+    "taper": { "type": "number", "minimum": 0.05, "maximum": 1, "description": "v25: how much a line thins towards an end: a length of `value * 12` line widths (but never more than half the stroke), over which the radius grows from 4 % at the tip to the full size along an ease-out curve. Absent means no taper, the look of every earlier version; the plugin writes it only from 0.05 up." },
     "opacity": { "type": "number", "minimum": 0.05, "maximum": 1, "description": "v24: how strongly the item is drawn. It multiplies the look the item has without it (the highlighter's 35 %, the marker's 85 %, a tint fill, an area's highlighter look); absent means full strength, the look of every earlier version. The plugin writes it only below 1." },
 
     "meta": {
@@ -263,6 +264,16 @@
           "description": "v22: a tint needs a fill.",
           "if": { "required": ["fillTint"] },
           "then": { "required": ["fill"] }
+        },
+        {
+          "description": "v25: only the line pens (pen, fountain, brush) have a taper.",
+          "if": { "properties": { "tool": { "enum": ["highlighter", "shape", "marker"] } }, "required": ["tool"] },
+          "then": { "not": { "anyOf": [{ "required": ["taperStart"] }, { "required": ["taperEnd"] }] } }
+        },
+        {
+          "description": "v25: a taper belongs to the wet-ink geometry (render 2).",
+          "if": { "properties": { "render": { "const": 1 } }, "required": ["render"] },
+          "then": { "not": { "anyOf": [{ "required": ["taperStart"] }, { "required": ["taperEnd"] }] } }
         }
       ],
       "properties": {
@@ -279,6 +290,8 @@
         "fillTint": { "$ref": "#/$defs/true", "description": "v22: the fill is a translucent tint of `fill` instead of the solid colour. Needs `fill`." },
         "dash": { "enum": ["dashed", "dotted"], "description": "v22: the line of a shape is dashed or dotted (absent = solid). Only the shape tool." },
         "opacity": { "$ref": "#/$defs/opacity", "description": "v24: any pen. Multiplies the pen's own translucency, and the fill of a shape." },
+        "taperStart": { "$ref": "#/$defs/taper", "description": "v25: the line thins towards the first point. Pen, fountain pen and brush strokes of render 2 only; absent means no taper." },
+        "taperEnd": { "$ref": "#/$defs/taper", "description": "v25: the line thins towards the last point. Same rules as taperStart." },
         "points": {
           "type": "array",
           "minItems": 1,

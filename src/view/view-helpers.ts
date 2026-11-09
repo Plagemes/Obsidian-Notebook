@@ -64,7 +64,11 @@ export function pageSignature(page: Page): string {
 	const parts: Array<string | number> = [page.width, page.height, page.paper.kind, page.paper.spacing, page.strokes.length];
 	const n = page.strokes.length;
 	const stride = Math.max(1, Math.floor(n / 16));
-	const sample = (s: Stroke) => parts.push(s.id, s.points.length, s.points[0]?.[0] ?? 0, s.points[0]?.[1] ?? 0, s.width, s.opacity ?? 1);
+	const sample = (s: Stroke) => {
+		parts.push(s.id, s.points.length, s.points[0]?.[0] ?? 0, s.points[0]?.[1] ?? 0, s.width, s.opacity ?? 1);
+		// v25 (#351): a taper changes the drawing (only added when there is one, so a page without any keeps its signature).
+		if (s.taperStart !== undefined || s.taperEnd !== undefined) parts.push(`t${s.taperStart ?? 0}:${s.taperEnd ?? 0}`);
+	};
 	for (let i = 0; i < n; i += stride) sample(page.strokes[i]!);
 	if (n > 0 && (n - 1) % stride !== 0) sample(page.strokes[n - 1]!);
 	for (const el of page.elements ?? []) {

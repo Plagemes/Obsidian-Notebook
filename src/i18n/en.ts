@@ -5028,6 +5028,15 @@ export const en = {
 	"help.relatedRefresh": "Read the notebooks again and rank the related pages once more. The panel also updates by itself when you switch notes.",
 	"help.relatedCopy": "Copy a link to this page. To place the page in the note as an embed, drag the row into the note.",
 	"help.relatedPanel": "Open the side panel that lists the handwritten pages related to the open note: pages that link to it, name its title, tags or headings, or belong to the same course.",
+	// 0.27 taper (#351)
+	"taper.title": "Taper",
+	"taper.start": "Start",
+	"taper.end": "End",
+	"taper.reset": "Taper: none",
+	"taper.off": "Off",
+	"taper.value.start": "Start taper {percent}%",
+	"taper.value.end": "End taper {percent}%",
+	"help.taper": "How much the line thins towards the start and the end of each stroke, like the flick of a pen: Off keeps the full width to the tip, more makes a longer, sharper point. It applies to the pen, the fountain pen and the brush, to what you write next; strokes already on the page are not changed. Tap to turn both ends off.",
 } as const;
 
 export type MessageKey = keyof typeof en;

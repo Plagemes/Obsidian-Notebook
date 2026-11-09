@@ -5029,4 +5029,13 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.relatedRefresh": "Rilegge i quaderni e ricalcola le pagine collegate. Il pannello si aggiorna anche da solo quando cambi nota.",
 	"help.relatedCopy": "Copia il link a questa pagina. Per inserire la pagina nella nota come incorporamento, trascina la riga nella nota.",
 	"help.relatedPanel": "Apre il pannello laterale con le pagine scritte a mano collegate alla nota aperta: quelle che rimandano a lei, ne nominano titolo, etichette o titoli di sezione, o sono dello stesso corso.",
+	// 0.27 taper (#351)
+	"taper.title": "Rastremazione",
+	"taper.start": "Inizio",
+	"taper.end": "Fine",
+	"taper.reset": "Rastremazione: nessuna",
+	"taper.off": "No",
+	"taper.value.start": "Rastremazione all'inizio {percent}%",
+	"taper.value.end": "Rastremazione alla fine {percent}%",
+	"help.taper": "Quanto il tratto si assottiglia verso l'inizio e la fine di ogni segno, come il guizzo di una penna: No mantiene lo spessore pieno fino alla punta, di più dà una punta più lunga e sottile. Vale per la penna, la stilografica e il pennello, per quello che scrivi dopo; i segni già sulla pagina non cambiano. Tocca per togliere la rastremazione a entrambe le estremità.",
 };

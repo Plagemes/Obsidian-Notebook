@@ -108,6 +108,16 @@ export function pieceTaper(stroke: { points: readonly (readonly number[])[]; tap
 	};
 }
 
+/**
+ * The taper fields a NEW stroke of `tool` is created with from the pen's settings: only the line pens have them, and an end set to none (or less
+ * than the smallest taper) has no key at all, so ink written without a taper is stored exactly as before.
+ */
+export function newStrokeTaper(tool: Tool, start: number | undefined, end: number | undefined): { taperStart?: number; taperEnd?: number } {
+	if (!isLinePen(tool)) return {};
+	const s = normaliseTaper(start), e = normaliseTaper(end);
+	return { ...(s === undefined ? {} : { taperStart: s }), ...(e === undefined ? {} : { taperEnd: e }) };
+}
+
 /** The two taper fields of `item` as an object to spread into a copy (only the ones that are set). */
 export function taperFields(item: { taperStart?: number; taperEnd?: number }): { taperStart?: number; taperEnd?: number } {
 	return {
