@@ -73,6 +73,7 @@
 - **Macros: the startup id repair keeps your settings (R4).** The one-time save after repairing a missing or doubled macro id changes only the macros, their extras and the pins in what was read (keys of a newer version stay as they are), and an id that is merely of another format is repaired in memory only.
 - **Spread: no lock notice from the mate page (R5).** Rubbing out by the binding with the other page locked erases the open page and skips the locked one silently; the notice appears only when the eraser is on the locked page itself.
 - **Macros: notice wording (R6).** "1 step" / "n steps" (and Italian) in the *nothing changed* notices, and the skipped steps are still mentioned there.
+- **Tapered strokes are frozen by golden hashes (R7).** New `tests/taper-golden.test.ts` pins the nodes, the SVG / export path and the thumbnail outline of tapered strokes (start, end, both; pen, fountain pen, brush; long, short, tiny and fast strokes), so a later change to the ramp cannot silently change every tapered stroke. Test only.
 
 ## 0.26.0 — 2026-11-09
 
