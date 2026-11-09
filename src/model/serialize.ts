@@ -55,14 +55,37 @@ class ValidationError extends Error {}
  */
 function j(v: unknown): string {
 	const text = JSON.stringify(v);
-	if (text === undefined) fail("value", "a required field is missing (undefined)");
+	if (text === undefined) {
+		if (lenientWrite) return "null";
+		fail("value", "a required field is missing (undefined)");
+	}
 	return text;
 }
 
 /** The colour of a stroke or element as JSON text; a colour that is not even a string is refused with the owner named. */
 function jc(owner: { id: string; type?: string; color: unknown }): string {
-	if (typeof owner.color !== "string") fail(`${owner.type ?? "stroke"} ${String(owner.id)}.color`, "expected a #rrggbb colour (it is missing)");
+	if (typeof owner.color !== "string") {
+		if (lenientWrite) return "null";
+		fail(`${owner.type ?? "stroke"} ${String(owner.id)}.color`, "expected a #rrggbb colour (it is missing)");
+	}
 	return JSON.stringify(owner.color);
+}
+
+/** Review fix (U2): set only while `serializeLenient` runs (the writer is synchronous). */
+let lenientWrite = false;
+
+/**
+ * Review fix (U2): the text of `doc` for a BACKUP only, never for the notebook file: a missing required value is written as `null`
+ * instead of stopping the writer, so the line that holds it is invalid (the repair's line scan leaves it out) and every other line is
+ * kept. No cache is filled (`serialize` fills none).
+ */
+export function serializeLenient(doc: NotebookDocument): string {
+	lenientWrite = true;
+	try {
+		return serialize(doc);
+	} finally {
+		lenientWrite = false;
+	}
 }
 
 /**

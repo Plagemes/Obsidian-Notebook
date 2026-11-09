@@ -1,4 +1,4 @@
-import { parse, parseStaged, serialize, serializeChecked, StagedParse, warmStrokeLines, type ParseFailure, type ParseResult } from "../model/serialize";
+import { parse, parseStaged, serialize, serializeChecked, serializeLenient, StagedParse, warmStrokeLines, type ParseFailure, type ParseResult } from "../model/serialize";
 import { repairLiveDocument } from "../model/repair";
 import type { NotebookDocument } from "../model/types";
 import { extractDocId } from "./history";
@@ -1400,7 +1400,7 @@ export class DocumentSession {
 	private async backupUnsaved(): Promise<boolean> {
 		if (!this.doc) return false;
 		try {
-			const path = await this.io.backup(serialize(this.doc), "unsaved");
+			const path = await this.io.backup(backupText(this.doc), "unsaved");
 			if (path) this.events.onBackup?.(path, "unsaved");
 			return true;
 		} catch (e) {
@@ -1437,6 +1437,34 @@ export class DocumentSession {
 		this.deferTimer = null;
 		this.flushDeferredSince = null;
 	}
+}
+
+/**
+ * Review fix (U2): the text of the unsaved-changes backup, which is never skipped. The strict writer refuses a missing required value (a
+ * frozen item without a colour, which the live repair cannot touch), so it falls back to a repaired deep copy (the live and frozen objects
+ * are never changed), then to the lenient writer (the damaged line is written invalid, the repair's line scan drops it and keeps the
+ * rest), and last to the document as plain JSON.
+ */
+export function backupText(doc: NotebookDocument): string {
+	try {
+		return serialize(doc);
+	} catch {
+		// The strict writer refused the live document: try a repaired copy.
+	}
+	let copy: NotebookDocument | null = null;
+	try {
+		copy = structuredClone(doc);
+		repairLiveDocument(copy);
+		return serialize(copy);
+	} catch {
+		// The copy could not be made or still holds a value the strict writer refuses.
+	}
+	try {
+		return serializeLenient(copy ?? doc);
+	} catch {
+		// Not even the lenient writer: the data as plain JSON (not a notebook file, but nothing is lost).
+	}
+	return JSON.stringify(copy ?? doc) ?? "";
 }
 
 /** Same length and the same first and last VERIFY_EDGE_CHARS characters (read-back of a large write). */
