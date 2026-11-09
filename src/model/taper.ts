@@ -73,6 +73,14 @@ export function strokeTaper(stroke: Pick<Stroke, "tool" | "render"> & { taperSta
 	return start === 0 && end === 0 ? undefined : { start, end };
 }
 
+/**
+ * The taper of a stroke that is still being written (the live layer of the fallback path): the start as it is, the end not yet, because the
+ * pen is down and the end of the line is not known until it lifts (the wet ink does the same). Undefined stays undefined.
+ */
+export function writingTaper(taper: Taper | undefined): Taper | undefined {
+	return taper ? { start: taper.start, end: 0 } : undefined;
+}
+
 /** Length (pt) the taper `value` spans on a line of `width`. */
 export function taperLength(value: number, width: number): number {
 	return value * TAPER_SPAN * width;

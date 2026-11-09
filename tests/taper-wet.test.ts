@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { inkRadius, InkBuilder } from "../src/ink/ink-geometry";
-import { TAPER_TIP, taperFactor, taperLength } from "../src/model/taper";
+import { TAPER_TIP, taperFactor, taperLength, writingTaper } from "../src/model/taper";
 import type { Point, Tool } from "../src/model/types";
 
 /** A straight horizontal line of `n` points `step` pt apart, at a steady pressure. */
@@ -105,5 +105,25 @@ describe("Z5: the start taper does not depend on how far apart the points are", 
 		const brush = InkBuilder.fromPoints(pts, 2, "brush", new InkBuilder(), undefined, { start: 0.3, end: 0 });
 		const plain = InkBuilder.fromPoints(pts, 2, "brush", new InkBuilder(), undefined, { start: 0, end: 0 });
 		expect(brush.nr[brush.nodeCount - 1]).toBeCloseTo(plain.nr[plain.nodeCount - 1]!, 9);
+	});
+});
+
+describe("Z6: the live fallback draws no end taper while the pen is down", () => {
+	it("writingTaper keeps the start and drops the end", () => {
+		expect(writingTaper(undefined)).toBeUndefined();
+		expect(writingTaper({ start: 0.4, end: 1 })).toEqual({ start: 0.4, end: 0 });
+		expect(writingTaper({ start: 0, end: 0.5 })).toEqual({ start: 0, end: 0 });
+	});
+
+	it("the stroke built with it keeps a full-width end, the finished one gets its point", () => {
+		const pts = line(40, 3);
+		const taper = { start: 0.3, end: 1 };
+		const live = InkBuilder.fromPoints(pts, 2, "pen", new InkBuilder(), undefined, writingTaper(taper));
+		const done = InkBuilder.fromPoints(pts, 2, "pen", new InkBuilder(), undefined, taper);
+		const full = inkRadius("pen", 2, 0.5);
+		expect(live.nr[live.nodeCount - 1]).toBe(full);
+		expect(done.nr[done.nodeCount - 1]).toBeLessThan(full * 0.1);
+		// The start is the same in both.
+		expect(live.nr[0]).toBe(done.nr[0]);
 	});
 });

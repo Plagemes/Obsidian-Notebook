@@ -1,7 +1,7 @@
 import type { AreaElement, ExcerptElement, Page, PageElement, Point, ShapeDash, Stroke, TextElement, Tool } from "../model/types";
 import { isNewPen, MM, RENDER_FREEHAND, RENDER_INK } from "../model/types";
 import { opacityOf } from "../model/opacity";
-import { strokeTaper } from "../model/taper";
+import { strokeTaper, writingTaper } from "../model/taper";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
@@ -1359,7 +1359,8 @@ export class Renderer {
 		if (live && live.points.length > 0 && boxes[live.pageIndex]) this.guarded(ctx, "live stroke", () => {
 			this.beginPage(ctx, boxes[live.pageIndex]!);
 			const points = live.predicted.length ? [...live.points, ...live.predicted] : live.points;
-			const taper = strokeTaper({ tool: live.tool, render: RENDER_INK, taperStart: live.taperStart, taperEnd: live.taperEnd });
+			// The end of the line is known at the lift only: the stroke in progress has its start taper and a full-width end (as the wet ink).
+			const taper = writingTaper(strokeTaper({ tool: live.tool, render: RENDER_INK, taperStart: live.taperStart, taperEnd: live.taperEnd }));
 			// v22 (#37): the fill of the closed shape being dragged lies under its line (a dashed line is drawn as its runs).
 			if (live.fill !== undefined && isFilled({ tool: live.tool, fill: live.fill, points })) this.fillShape(ctx, live.fill, live.fillTint === true, points, undefined, live.opacity);
 			this.setInk(ctx, live.tool, live.color, live.opacity);
