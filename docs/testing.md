@@ -4209,7 +4209,7 @@ Settings, Writing: *Tasks on planner pages* (on by default). Implemented, not ve
 3126. **Live.** With the page open, edit a task in a note (change its date to that day): within a second or two the count follows. Delete or rename the note: it follows too. Typing in a note does not slow the notebook.
 3127. **Big vault.** In a vault with thousands of notes the first planner page you open stays smooth (notes are read a few at a time); a task found in a fenced code block, in frontmatter or marked cancelled `[-]` is not listed.
 3128. **Setting.** Turn *Tasks on planner pages* off: the chip goes; on: it returns.
-3129. **Stacking.** With the recent-symbols strip, the *Back to slide* pill and the *Referenced on* chip on, the tasks chip sits below them, none overlaps, and the welcome-back card starts below it.
+3129. **Stacking.** With the recent-symbols strip, the *Back to slide* pill and the *Referenced on* chip on, the tasks chip sits below them, none overlaps, and on a phone it steps aside while the welcome-back card is shown.
 3130. **Not in exports and not in the file.** Export the page as PDF/PNG: no task text appears. Reopen the notebook file's JSON: nothing of the tasks is in it.
 3131. **Italian, light, dark, phone.** The texts are in Italian with the plugin in Italian; the chip and list read in light and dark and fit a phone.
 

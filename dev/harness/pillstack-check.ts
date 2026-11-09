@@ -155,7 +155,8 @@ export async function checkPillstack(api: PillstackCheckApi): Promise<{ ok: bool
 		const shown = PIECES.map(([name, sel]) => ({ name, el: body.querySelector<HTMLElement>(`:scope > ${sel}`) })).map((p) => ({ ...p, ok: visible(p.el) }));
 		for (const p of shown) {
 			const r = p.el?.getBoundingClientRect();
-			add(`${p.name} is on screen`, p.ok, r ? `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}` : "missing");
+			add(`${p.name} is on screen`, p.ok || (p.name === "tasks chip" && bodyRect.width <= 600), // (0.27: on a phone the tasks chip steps aside for the welcome-back card)
+			 r ? `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}` : "missing");
 		}
 		const rects = shown.filter((p) => p.ok).map((p) => ({ name: p.name, r: p.el!.getBoundingClientRect() }));
 		for (const p of rects) {
@@ -173,9 +174,10 @@ export async function checkPillstack(api: PillstackCheckApi): Promise<{ ok: bool
 		if (visible(list)) {
 			const lr = list.getBoundingClientRect();
 			add("the opened list stays inside the page area", lr.left >= bodyRect.left - 1 && lr.right <= bodyRect.right + 1 && lr.bottom <= bodyRect.bottom + 1);
-			const under = rects.filter((p) => p.name !== "referenced-on chip" && p.name !== "welcome-back card" && overlap(lr, p.r)).map((p) => p.name);
+			const under = rects.filter((p) => p.name !== "referenced-on chip" && p.name !== "welcome-back card" && p.name !== "tasks chip" && overlap(lr, p.r)).map((p) => p.name);
 			add("the opened list covers none of the other pieces", under.length === 0, under.join(", "));
 			add("the welcome-back card steps aside while the list is open", !visible(body.querySelector<HTMLElement>(":scope > .notebook-welcome-back")));
+			add("the tasks chip steps aside while the list is open", !visible(body.querySelector<HTMLElement>(":scope > .notebook-plantasks")));
 		} else add("the referenced-on list opens", false, "no list");
 		v.pageRefs.closeList();
 		await api.frames(3);

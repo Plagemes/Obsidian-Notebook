@@ -20551,11 +20551,12 @@ body.notebook-style-obsidian {
 	font-size: var(--nb-fs-chip);
 }
 
-/* The welcome-back card is centred and wide: while the chip is shown it starts below it (more specific than the card's own rules). */
-.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks) > .notebook-welcome-back.notebook-welcome-back.notebook-welcome-back.notebook-welcome-back {
-	top: calc(var(--nb-pt-top, 10px) + 42px + var(--nb-top-shift, 0px));
+/* The welcome-back card (once per opening, gone at the first stroke) is as wide as a phone: there the chip steps aside while it is shown. */
+@media (max-width: 600px) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-welcome-back) > .notebook-plantasks { display: none; }
 }
 
-/* The "Referenced on" list and the tasks panel share the right edge: only one is open at a time (opening one closes the other). */
+/* The "Referenced on" list opens at the same place as the chip: the chip steps aside while it is open (and the tasks panel hides that list). */
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-page-refs-list) > .notebook-plantasks { display: none; }
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks-panel) > .notebook-page-refs-list { display: none; }
 /* ===== end 0.27 plannertasks ===== */
