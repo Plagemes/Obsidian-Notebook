@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layoutPages, nearestPage, pageAt, pagesTouching, toPageLocal, visiblePages } from "../src/ink/layout";
+import { eraserIsOnPage, layoutPages, nearestPage, pageAt, pagesTouching, toPageLocal, visiblePages } from "../src/ink/layout";
 import { isScrollMode, layoutForMode, SCROLL_MODES } from "../src/ink/page-mode";
 import { pageAtOffset } from "../src/ink/scrollbar";
 import {
@@ -267,6 +267,22 @@ describe("which page a point is on", () => {
 		// the circle, not the square: a corner just out of reach is not touched
 		expect(pagesTouching(l, mid, A4.height + 100, 10)).toEqual([]);
 		expect(pagesTouching({ boxes: [], width: 0, height: 0 }, 0, 0, 10)).toEqual([]);
+	});
+
+	it("the lock notice is for the page the eraser is on, not the locked mate it only reaches (R5)", () => {
+		const mid = A4.width + SPREAD_GAP_H / 2;
+		const touched = pagesTouching(l, mid - 6, 100, 20);
+		expect(touched).toEqual([0, 1]);
+		// the centre is in the gap: neither page is "the" page, so neither says it is locked
+		expect(eraserIsOnPage(l, touched, 0, mid - 6, 100)).toBe(false);
+		expect(eraserIsOnPage(l, touched, 1, mid - 6, 100)).toBe(false);
+		// the centre on the left page (still reaching the right one): only the left page may speak
+		const onLeft = pagesTouching(l, A4.width - 5, 100, 40);
+		expect(onLeft).toEqual([0, 1]);
+		expect(eraserIsOnPage(l, onLeft, 0, A4.width - 5, 100)).toBe(true);
+		expect(eraserIsOnPage(l, onLeft, 1, A4.width - 5, 100)).toBe(false);
+		// the only page touched always speaks (erasing on a locked page by itself)
+		expect(eraserIsOnPage(l, [1], 1, right.x + 3, 100)).toBe(true);
 	});
 
 	it("a resize waits for the stroke in progress, then lays out once (S3)", () => {

@@ -71,6 +71,8 @@
 - **Macros: a pin survives a macro kept apart (R2).** The toolbar pin of a macro this version only keeps (a newer version's 14th) is no longer dropped and written back, and no pin is dropped when the macro list cannot be read.
 - **Macros: a newer version's data comes back in order (R3).** A step this version cannot read keeps its place in the macro; the steps and macros kept apart are joined to the listed ones and split again by count (a macro in both lists counts once); the editor keeps a step value it does not know until you pick another.
 - **Macros: the startup id repair keeps your settings (R4).** The one-time save after repairing a missing or doubled macro id changes only the macros, their extras and the pins in what was read (keys of a newer version stay as they are), and an id that is merely of another format is repaired in memory only.
+- **Spread: no lock notice from the mate page (R5).** Rubbing out by the binding with the other page locked erases the open page and skips the locked one silently; the notice appears only when the eraser is on the locked page itself.
+- **Macros: notice wording (R6).** "1 step" / "n steps" (and Italian) in the *nothing changed* notices, and the skipped steps are still mentioned there.
 
 ## 0.26.0 — 2026-11-09
 

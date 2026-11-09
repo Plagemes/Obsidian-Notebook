@@ -31,7 +31,7 @@ import { ghostApplies, ghostSegments, ghostSpacingPt, inferGhostLines, MAX_STROK
 import { dragSnapSession, snapDragged, type SnapSession } from "./snap-glue";
 import { SnapHold } from "./snap-hold";
 import { applyPlacement, itemsBounds, uniformPlacement } from "../ink/selection-transform";
-import { layoutPages, nearestPage, pageAt, pagesTouching, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
+import { eraserIsOnPage, layoutPages, nearestPage, pageAt, pagesTouching, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
@@ -6537,23 +6537,26 @@ export class NotebookView extends FileView {
 		const radius = eraserRadiusPt(this.tools.eraserSize, this.viewport.scale);
 		// Review fix (S4): by the binding of a spread the circle reaches both pages: it erases on each page it touches.
 		let changed = false;
-		for (const pageIndex of pagesTouching(layout, x, y, radius)) {
+		const touched = pagesTouching(layout, x, y, radius);
+		for (const pageIndex of touched) {
 			const page = doc.pages[pageIndex];
 			const box = layout.boxes[pageIndex];
-			if (page && box && this.eraseOnPage(erasing, doc, page, box, [px, py], [x, y], radius)) changed = true;
+			// Review fix (R5): a locked page the circle only reaches into from the mate page is skipped without the lock notice.
+			const here = eraserIsOnPage(layout, touched, pageIndex, x, y);
+			if (page && box && this.eraseOnPage(erasing, doc, page, box, [px, py], [x, y], radius, here)) changed = true;
 		}
 		if (changed) this.renderer.invalidate();
 	}
 
 	/** One page's share of `eraseTo`: the ink and areas the eraser's path from `from` to `to` (document points) touches on `page`. True when something was erased. */
 	private eraseOnPage(
-		erasing: NonNullable<NotebookView["erasing"]>, doc: NotebookDocument, page: Page, box: PageBox, from: readonly [number, number], to: readonly [number, number], radius: number,
+		erasing: NonNullable<NotebookView["erasing"]>, doc: NotebookDocument, page: Page, box: PageBox, from: readonly [number, number], to: readonly [number, number], radius: number, saysLocked = true,
 	): boolean {
 		const renderer = this.renderer;
 		if (!renderer) return false;
 		// 0.16 (#124): the eraser leaves a locked page alone.
 		if (page.locked) {
-			this.pagesLocked([page.id]);
+			if (saysLocked) this.pagesLocked([page.id]);
 			return false;
 		}
 		const [ax, ay] = toPageLocal(box, from[0], from[1]);
