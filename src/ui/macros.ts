@@ -80,6 +80,8 @@ export function stepChoices(a: ActionDef): readonly string[] | null {
 
 /** Whether `step` can run in this version: known, on the allow-list and with a valid value when it takes one. */
 export function stepState(step: MacroStep): StepState {
+	// A step kept as written that is not even an action id (a newer version's kind of step) is simply unknown.
+	if (typeof step.action !== "string") return "unknown";
 	const a = actionById(step.action);
 	if (!a || isMacroActionId(step.action)) return "unknown";
 	if (!MACRO_SAFE.has(step.action) || a.danger || a.scope !== "view") return "blocked";
@@ -150,8 +152,10 @@ export interface MacroRead {
 	macros: Macro[];
 	/** Whole macros beyond MAX_MACROS, as written: written back with the settings, never shown or run. */
 	extra: unknown[];
-	/** A stored id was invalid or used twice and got a new one (the settings are worth saving once). */
+	/** A stored id was invalid or used twice and got a new one. */
 	repaired: boolean;
+	/** The repair is worth saving once: an id was missing or used twice (not merely of a format this version does not know). */
+	persist: boolean;
 }
 
 /** FNV-1a, 32 bits: a stable number for a string (the same on every device and every start). */
@@ -183,11 +187,23 @@ function repairedId(taken: ReadonlySet<string>, index: number, name: string): st
  * Only what is not a list, a name or a step at all is dropped. `prior` is the `extra` list stored earlier.
  */
 export function readMacros(data: unknown, prior?: unknown): MacroRead {
-	const extra: unknown[] = Array.isArray(prior) ? prior.filter((x) => typeof x === "object" && x !== null).slice(0, MAX_KEPT) : [];
-	if (!Array.isArray(data)) return { macros: [], extra, repaired: false };
-	const items = data.filter((x): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x));
+	const isObj = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
+	const stored = Array.isArray(prior) ? prior.filter(isObj) : [];
+	if (!Array.isArray(data)) return { macros: [], extra: stored.slice(0, MAX_KEPT), repaired: false, persist: false };
+	const listed = data.filter(isObj);
+	// Review fix (R3): the macros kept apart earlier come back after the listed ones and are split again by this version's limit (a newer
+	// version that wrote its whole list gets it back), without a macro twice: an id already in the list, or kept twice, is dropped.
+	const ids = new Set(listed.flatMap((d) => (typeof d.id === "string" && ID_RE.test(d.id) ? [d.id] : [])));
+	const back = stored.filter((d) => {
+		if (typeof d.id !== "string" || !ID_RE.test(d.id)) return true;
+		if (ids.has(d.id)) return false;
+		ids.add(d.id);
+		return true;
+	});
+	const items = [...listed, ...back];
 	const kept = items.slice(0, MAX_MACROS);
-	for (const over of items.slice(MAX_MACROS)) if (extra.length < MAX_KEPT) extra.push(copyJson(over));
+	const extra = items.slice(MAX_MACROS, MAX_MACROS + MAX_KEPT).map((d) => copyJson(d));
+	let persist = false;
 	// An id that is fine and first is never changed; only the others get a new one (which avoids all of them).
 	const claimed = new Set<string>();
 	for (const d of kept) if (typeof d.id === "string" && ID_RE.test(d.id) && !claimed.has(d.id)) claimed.add(d.id);
@@ -201,22 +217,34 @@ export function readMacros(data: unknown, prior?: unknown): MacroRead {
 			id = repairedId(taken, index, name);
 			taken.add(id);
 			repaired = true;
+			// An id that is only invalid by its format (a newer version's kind of id) is repaired for this run but not written over the file.
+			if (!(typeof d.id === "string" && d.id !== "" && !ID_RE.test(d.id))) persist = true;
 		}
 		seen.add(id);
-		const raw = Array.isArray(d.steps) ? d.steps : [];
+		// Review fix (R3): the steps kept apart earlier follow the listed ones and are split again by count; a step this version cannot read
+		// (not an action id it knows the form of) stays where it was, in `steps`, and is shown and skipped as unavailable.
+		const raw = [...(Array.isArray(d.steps) ? d.steps : []), ...(Array.isArray(d.extraSteps) ? d.extraSteps : [])];
 		const steps: MacroStep[] = [];
-		const extraSteps: unknown[] = Array.isArray(d.extraSteps) ? d.extraSteps.filter((x) => typeof x === "object" && x !== null).slice(0, MAX_KEPT) : [];
+		const extraSteps: unknown[] = [];
 		for (const s of raw) {
-			const step = steps.length < MAX_STEPS ? readStep(s) : null;
-			if (step) steps.push(step);
-			else if (typeof s === "object" && s !== null && extraSteps.length < MAX_KEPT) extraSteps.push(copyJson(s));
+			if (!isObj(s)) continue;
+			if (steps.length < MAX_STEPS) steps.push((readStep(s) ?? copyJson({ ...s })) as unknown as MacroStep);
+			else if (extraSteps.length < MAX_KEPT) extraSteps.push(copyJson(s));
 		}
 		const macro = { ...copyJson(d), id, name, icon: typeof d.icon === "string" && ICON_RE.test(d.icon) ? d.icon : DEFAULT_MACRO_ICON, steps } as Macro;
 		if (extraSteps.length > 0) macro.extraSteps = extraSteps;
 		else delete macro.extraSteps;
 		return macro;
 	});
-	return { macros, extra, repaired };
+	return { macros, extra, repaired, persist };
+}
+
+/**
+ * Review fix (R4): the settings as stored again after a repair of macro ids. Only the fields the repair changed are replaced in what was
+ * read, so keys this version does not know (a newer version's settings) stay exactly as they were.
+ */
+export function withRepairedFields(raw: Record<string, unknown>, fields: { macros: readonly Macro[]; macrosExtra: readonly unknown[]; pinnedQuick: readonly string[] }): Record<string, unknown> {
+	return { ...raw, macros: fields.macros, macrosExtra: fields.macrosExtra, pinnedQuick: fields.pinnedQuick };
 }
 
 /** The macros of `readMacros` (see there). */
@@ -229,7 +257,7 @@ export function cloneMacro(m: Macro): Macro {
 }
 
 /** The pinned toolbar ids without the macros that no longer exist. */
-export function withoutMissingMacros(pinned: readonly string[], macros: readonly Macro[]): string[] {
+export function withoutMissingMacros(pinned: readonly string[], macros: ReadonlyArray<{ id: string }>): string[] {
 	return pinned.filter((p) => !isMacroActionId(p) || macros.some((m) => macroActionId(m.id) === p));
 }
 
@@ -274,6 +302,7 @@ export function startOfMacroAction(id: string): ActionDef | null {
 
 /** A line naming a step ("Paper: Grid"). `label` names an action, `choice` names one of its values. */
 export function stepName(step: MacroStep, label: (a: ActionDef) => string, choice: (a: ActionDef, value: string) => string): string {
+	if (typeof step.action !== "string") return "?";
 	const a = actionById(step.action);
 	if (!a || isMacroActionId(step.action)) return step.action;
 	return step.value !== undefined && stepChoices(a) ? `${label(a)}: ${choice(a, step.value)}` : label(a);
