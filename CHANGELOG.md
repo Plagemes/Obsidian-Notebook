@@ -49,6 +49,9 @@
 - **One undo step.** Everything one run changes is a single history step (*Macro run* in the history panel): one Undo takes it all back, one Redo does it again. New `History.group(label, fn)` merges the steps recorded inside it into one `Batch`; each step keeps all the history's guards (read-only, locks, content check).
 - **Code.** Pure, Node-tested `src/ui/macros.ts` (data and lenient reader, allow-list, registry entries, context rule helper, runner), the manager `src/view/macros-modal.ts` on the modal shell, `src/view/macro-run.ts`, `src/view/macro-commands.ts`; settings key `macros` (no document format change); `History.group` in `src/model/history.ts`; `tests/macros.test.ts`, `tests/history-group.test.ts`; harness `dev/harness/macros-check.ts`.
 
+### Review fixes
+- **Macro group keeps the undo stack honest (M3).** A full undo stack gives up one old step for a whole macro run, as for one normal step (it used to drop up to 19).
+
 ## 0.26.0 — 2026-11-09
 
 Eight features: opacity for ink, pictures and areas, smooth and straighten strokes, tidy up handwriting lines, redaction before export, pen width that follows zoom, a context palette in the colour picker, a dynamic gallery block and a related handwritten pages panel. The notebook format moves to version 24 (opacity): the migration from version 23 is automatic, and Notebook 0.25 and older open a v24 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).
