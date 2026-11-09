@@ -17,6 +17,8 @@ export interface MinimapState {
 	box: PageBox;
 	viewport: Viewport;
 	view: Size;
+	/** 0.27 (#49): the zoom that fits the whole width in view, when that is not the page's own width (a two-page spread). */
+	fitScale?: number;
 }
 
 export interface MinimapHost {
@@ -138,7 +140,7 @@ export class Minimap {
 			mode: this.host.mode(),
 			infinite: s.page.infinite,
 			scale: s.viewport.scale,
-			fitScale: fitScaleFor(s.view.width, s.page.width, PAGE_MARGIN),
+			fitScale: s.fitScale ?? fitScaleFor(s.view.width, s.page.width, PAGE_MARGIN),
 			whole,
 		});
 		if (!show) return this.hide();
@@ -257,6 +259,15 @@ export class Minimap {
 	}
 
 	// --- collapse, corner ---
+
+	/** 0.27 (#375): whether the overview is open (not folded into its pill). A workspace preset reads and sets it. */
+	get panelOpen(): boolean {
+		return !this.prefs.collapsed;
+	}
+
+	setPanelOpen(open: boolean): void {
+		this.setCollapsed(!open);
+	}
 
 	private setCollapsed(collapsed: boolean): void {
 		if (this.prefs.collapsed === collapsed) return;

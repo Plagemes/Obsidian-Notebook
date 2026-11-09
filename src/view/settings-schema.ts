@@ -109,7 +109,7 @@ export const GROUPS: readonly GroupSpec[] = [
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open" | "meanings-edit";
+export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open" | "meanings-edit" | "macros-manage";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info" | "backup-now" | "cloud-account" | "cloud-sync-now" | "cloud-log" | "cloud-secret";
 
@@ -175,6 +175,8 @@ const WRITING: SettingSpec[] = [
 		id: "plannerWeekStart", section: "writing", order: 35, name: "settings.plannerWeekStart", desc: "settings.plannerWeekStart.desc", keywords: "planner calendar week monday sunday agenda settimana lunedi domenica",
 		control: { type: "dropdown", options: options([["auto", "settings.plannerWeekStart.auto"], ["monday", "settings.plannerWeekStart.monday"], ["sunday", "settings.plannerWeekStart.sunday"]]) },
 	},
+	// 0.27 plannertasks (#266): the chip with the vault's tasks due on a planner page
+	{ id: "plannerTasks", section: "writing", order: 36, name: "settings.plannerTasks", desc: "settings.plannerTasks.desc", control: { type: "toggle" }, keywords: "planner tasks due date agenda todo daily weekly attivita scadenze compiti" },
 	{ id: "stabilization", section: "writing", order: 40, name: "settings.stabilization", desc: "settings.stabilization.filter.desc", control: { type: "slider", min: 0, max: 10, step: 1 } },
 	{ id: "inkFollowsObjects", section: "writing", order: 50, name: "settings.inkFollows", desc: "settings.inkFollows.desc", control: { type: "toggle" } },
 	// 0.17 snap (#71): magnetic snap to the paper grid and alignment guides while a selection moves or scales
@@ -310,14 +312,19 @@ const INPUT: SettingSpec[] = [
 const PAGES: SettingSpec[] = [
 	{
 		id: "scrollMode", section: "pages", order: 10, name: "settings.scrollMode", desc: "settings.scrollMode.desc",
-		control: { type: "dropdown", options: options([["continuous", "settings.scrollMode.continuous"], ["pages", "settings.scrollMode.pages"]]) },
+		control: { type: "dropdown", options: options([["continuous", "settings.scrollMode.continuous"], ["pages", "settings.scrollMode.pages"], ["spread", "settings.scrollMode.spread"]]) },
 	},
-	{ id: "fastScrollbar", section: "pages", order: 20, name: "settings.fastScrollbar", desc: "settings.fastScrollbar.desc", control: { type: "toggle" }, parent: "scrollMode", visible: (s) => s.scrollMode === "continuous" },
+	{ id: "fastScrollbar", section: "pages", order: 20, name: "settings.fastScrollbar", desc: "settings.fastScrollbar.desc", control: { type: "toggle" }, parent: "scrollMode", visible: (s) => s.scrollMode !== "pages" },
+	// 0.27 spread (#49): where the first page goes, and the automatic spread on a landscape tablet.
+	{ id: "spreadFirstAlone", section: "pages", order: 21, name: "settings.spreadFirstAlone", desc: "settings.spreadFirstAlone.desc", control: { type: "toggle" }, parent: "scrollMode", visible: (s) => s.scrollMode === "spread" || (s.scrollMode === "continuous" && s.spreadAuto), keywords: "book two pages side by side spread libro due pagine affiancate" },
+	{ id: "spreadAuto", section: "pages", order: 22, name: "settings.spreadAuto", desc: "settings.spreadAuto.desc", control: { type: "toggle" }, parent: "scrollMode", visible: (s) => s.scrollMode === "continuous", keywords: "spread landscape tablet two pages automatic doppia pagina orizzontale" },
 	// 0.17 minimap (#173)
 	{
 		id: "minimapMode", section: "pages", order: 25, name: "settings.minimap", desc: "settings.minimap.desc",
 		control: { type: "dropdown", options: options([["auto", "settings.minimap.auto"], ["always", "settings.minimap.always"], ["never", "settings.minimap.never"]]) }, keywords: "overview map panoramica mappa",
 	},
+	// 0.27 semzoom (#130)
+	{ id: "semanticZoom", section: "pages", order: 26, name: "settings.semanticZoom", desc: "settings.semanticZoom.desc", control: { type: "toggle" }, keywords: "zoom out overview headings titles labels panoramica titoli orientamento" },
 	{ id: "autoNextPage", section: "pages", order: 30, name: "settings.autoNextPage", desc: "settings.autoNextPage.desc", control: { type: "toggle" } },
 	{ id: "autoScrollWriting", section: "pages", order: 40, name: "settings.autoScroll", desc: "settings.autoScroll.desc", control: { type: "toggle" } },
 	{ id: "pageTurnerKeys", section: "pages", order: 50, name: "settings.pageTurnerKeys", desc: "settings.pageTurnerKeys.desc", control: { type: "toggle" }, keywords: "keyboard tastiera clicker" },
@@ -571,6 +578,8 @@ const STUDY: SettingSpec[] = [
 		id: "lectureMode", section: "study", group: "timetable", order: 30, name: "settings.lectureMode", desc: "settings.lectureMode.desc", keywords: "class lesson lecture classe lezione",
 		control: { type: "dropdown", options: options([["off", "settings.lectureMode.off"], ["ask", "settings.lectureMode.ask"], ["auto", "settings.lectureMode.auto"]]) },
 	},
+	// 0.27 workspaces (#375): the Lecture workspace preset (slides, notebook, outline) when a class starts; the presets are picked with the "Workspaces…" action.
+	{ id: "workspaceOnLecture", section: "study", group: "timetable", order: 30.5, name: "settings.workspaceOnLecture", desc: "settings.workspaceOnLecture.desc", control: { type: "toggle" }, keywords: "workspace preset lecture slides outline panels class area di lavoro lezione pannelli diapositive" },
 	// 0.21 slideback (#225): the pill back to where you last wrote during a lecture.
 	{ id: "slideBack", section: "study", group: "timetable", order: 31, name: "settings.slideBack", desc: "settings.slideBack.desc", control: { type: "toggle" }, keywords: "lecture slide back return current page lezione diapositiva torna" },
 	// 0.23 welcomeback (#420): the card with the way back, open questions and gaps when a notebook is reopened after a while.
@@ -611,6 +620,11 @@ const APPEARANCE: SettingSpec[] = [
 	{ id: "adaptLearn", section: "appearance", order: 32, name: "settings.adaptLearn", desc: "settings.adaptLearn.desc", control: { type: "toggle" }, keywords: "adaptive toolbar learn notebook course usage frequent adattiva impara quaderno corso" },
 	{ id: "adaptSelection", section: "appearance", order: 33, name: "settings.adaptSelection", desc: "settings.adaptSelection.desc", control: { type: "toggle" }, keywords: "adaptive selection bar ink image text lasso adattiva selezione" },
 	{ id: "toolbarReset", section: "appearance", order: 34, name: "settings.toolbarReset", desc: "settings.toolbarReset.desc", control: { type: "action", run: "toolbar-reset", button: "settings.toolbarReset.button" }, keywords: "adaptive toolbar pinned pin reset forget learned fissate azzera dimentica" },
+	// 0.27 macros (#170): a name, an icon and a list of actions on one toolbar button (also in All actions and as an Obsidian command)
+	{
+		id: "macros", section: "appearance", order: 34.5, name: "settings.macros", desc: "settings.macros.desc", keywords: "macro sequence automate shortcut toolbar button steps sequenza automatizza scorciatoia pulsante barra passaggi",
+		control: { type: "action", run: "macros-manage", button: "settings.open" }, edits: ["macros"],
+	},
 	// 0.25 toolfade (#399): the bars step back while the pen writes.
 	{
 		id: "toolFade", section: "appearance", order: 35, name: "settings.toolFade", desc: "settings.toolFade.desc", keywords: "toolbar fade hide writing dim barra sfuma nascondi scrittura",
@@ -625,6 +639,11 @@ const APPEARANCE: SettingSpec[] = [
 		control: { type: "toggle" }, parent: "toolFade", visible: (s) => s.toolFade !== "off",
 	},
 	{ id: "userName", section: "appearance", order: 15, name: "settings.userName", desc: "settings.userName.desc", keywords: "name nome greeting saluto home", control: { type: "text", placeholder: "Alex" } },
+	// 0.27 inputlayout (#431): the layout follows the pen, the finger or the mouse.
+	{
+		id: "inputLayout", section: "appearance", order: 38, name: "settings.inputLayout", desc: "settings.inputLayout.desc", keywords: "input layout pen finger touch mouse keyboard shortcuts adapt layout penna dito tastiera scorciatoie",
+		control: { type: "dropdown", options: options([["auto", "settings.inputLayout.auto"], ["pen", "settings.inputLayout.pen"], ["touch", "settings.inputLayout.touch"], ["mouse", "settings.inputLayout.mouse"]]) },
+	},
 	{ id: "nightMode", section: "appearance", order: 40, name: "settings.nightMode", desc: "settings.nightMode.desc", control: { type: "toggle" }, keywords: "dark scuro" },
 	// 0.13: just-in-time tips.
 	{ id: "hintsEnabled", section: "appearance", order: 50, name: "settings.hints", desc: "settings.hints.desc", control: { type: "toggle" }, keywords: "tips hints suggerimenti consigli" },
@@ -682,9 +701,12 @@ export const PEN_BUTTON_EXTENSIONS: SettingSpec[] = [
  * Every other key of DEFAULT_SETTINGS is in exactly one section (tests/settings-schema.test.ts).
  */
 export const INTERNAL_SETTING_KEYS: Readonly<Partial<Record<SettingKey, string>>> = {
+	macrosExtra: "macros written by a newer version beyond this version's limit: kept as written and written back; they move into the list when there is room",
 	favouritePens: "edited on the toolbar (long press on a favourite, radial menu)",
 	writingProfiles: "saved from the profile chip on the pen options (Save current as a profile)",
 	writingProfileActive: "set when a profile is switched to (chip, command, or lecture mode)",
+	workspacePresets: "saved from the Workspaces picker (Save current arrangement)",
+	workspacePresetActive: "set when a workspace preset is applied (picker, command, or lecture mode)",
 	eraserSize: "the eraser's size, edited in its tool options",
 	recentColours: "history of the colour picker",
 	penButtonWindowsMigrated: "set by the app once the old 150 ms default of the before-window was read as the new one",

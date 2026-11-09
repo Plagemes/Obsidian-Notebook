@@ -152,7 +152,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 
 ### Navigation and view
 48. ~~**P1** Double tap to zoom: toggles fit-to-width and 100 %.~~ — dropped (user decision, 2026-10-29)
-49. **P2** Two-page spread view (landscape tablets).
+49. **P2** 🧪 Two-page spread view (landscape tablets): pages in pairs like an open book (first page alone or not), scrolled pair by pair; writing on both pages; page sheet button, settings and an optional automatic spread in landscape; a phone keeps one column.
 50. **P2** 🧪 Fast scrollbar with a page preview while dragging.
 51. **P2** 🧪 Read-only mode to read without accidental marks.
 52. **P2** Coloured sections inside a notebook (tab dividers, as in OneNote).
@@ -292,7 +292,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 
 ### G. Navigation and workflow
 129. **P3** Search by drawing: sketch a shape and find pages with similar drawings (geometric descriptors, no AI).
-130. **P2** Semantic zoom: when zoomed out, headings and excerpts are shown large for orientation.
+130. **P2** 🧪 Semantic zoom: when zoomed out, headings and excerpts are shown large for orientation.
 131. **P3** Arrows linking regions of different pages, visible in the side-by-side view.
 132. **P2** Live lecture mode: a timer and quick buttons ("new page", "important moment"); each mark becomes a timestamped bookmark.
 133. ~~**P2** Course dashboard page that updates itself: next exam, pages due for review, recent notebooks.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
@@ -357,7 +357,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### E. Automation
 168. **P1** 🧪 Public API for other plugins (Templater, QuickAdd, Dataview): create notebooks, add pages, insert images, export. See `docs/api.md`.
 169. **P2** If/then rules (e.g. "notebook in folder Physics → millimetre paper", "on close → update the PDF copy").
-170. **P2** Macros: a sequence of commands on one toolbar button.
+170. **P2** 🧪 Macros: a sequence of commands on one toolbar button. (0.27: a name, an icon and up to 20 steps from an explicit allow-list of safe actions, up to 12 macros in the settings; a toolbar button (pin), the All actions sheet and one Obsidian command each; every run is ONE undo step (`History.group`); a locked page or an unavailable step stops it with one notice. `ui/macros.ts`, `view/macros-modal.ts`.)
 
 ### F. Images and view
 171. **P2** Image editing: crop, rotate, brightness and contrast.
@@ -503,7 +503,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 263. **P2** Links to a precise region of a page, not only to the page.
 264. **P2** 🧪 Saved views: a named region + zoom, recalled instantly. (0.23, format v21: the optional notebook-level `views` list; *Save current view…* and *Go to saved view…* from the sheet, the notebook menu and the palette; rename, reorder, update, remove, all undoable; a view of a deleted page is shown as missing.)
 265. **P2** 🧪 Global bookmarks: pages from different notebooks in one list.
-266. **P2** Planner pages showing Obsidian tasks and due dates on top.
+266. **P2** 🧪 Planner pages showing Obsidian tasks and due dates on top.
 267. **P2** Linked images: if the file in the vault changes (e.g. a plot exported from Python), the image on the page updates.
 268. **P3** Table linked to a CSV in the vault, updating itself.
 269. **P3** Export to Excalidraw.
@@ -652,7 +652,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 ### Writing and pen
 349. **P2** Pressure lock: while the pen button is held, the width stays constant (even lines).
 350. **P2** 🧪 Pen width relative to zoom (option): the same width on screen at any zoom.
-351. **P2** Stroke taper settings: tapering at the start and end of a stroke.
+351. **P2** 🧪 Stroke taper settings: tapering at the start and end of a stroke. (0.27: *Taper* row in the pen options for the pen, fountain pen and brush; format v25 `taperStart` / `taperEnd`.)
 352. **P2** Write big, store small: write margin notes at a comfortable size and they are shrunk into place.
 353. **P2** 🧪 Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
 354. **P3** Right-to-left writing: automatic next page, word detection and the space tool also work for Arabic and Hebrew.
@@ -680,7 +680,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 372. **P2** 🧪 Page turner: volume keys, a Bluetooth clicker or a keyboard turn pages and undo.
 373. ~~**P3** Phone as a remote page navigator for the tablet.~~ — dropped (user decision, 2026-10-29)
 374. **P1** 🧪 Do not disturb while writing: no notices or pop-ups while the pen is on the screen.
-375. **P2** Workspace presets, e.g. "lecture" (slides, notebook, outline) with one command.
+375. **P2** 🧪 Workspace presets, e.g. "lecture" (slides, notebook, outline) with one command.
 
 ### PDF
 376. **P2** 🧪 View-only crop of a PDF's white margins, for small screens.
@@ -747,7 +747,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 
 ### PDF and lecture
 417. **P1** 🧪 Slide strip: for each slide, the exercise page after it, the margin note and the question on this slide.
-418. **P2** PDF search with suggested terms (from the outline, headings and your own text).
+418. **P2** 🧪 PDF search with suggested terms (from the outline, headings and your own text).
 419. **P2** 🧪 Filtered view of marked pages only (bookmarks, markers, questions).
 420. **P2** 🧪 Welcome-back banner when reopening: last slide, open questions and gaps. (0.23: a card after a configurable absence with the way back, the open questions and gaps; look-up list and checkboxes not included.)
 
@@ -766,7 +766,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 
 ### Layout and devices
 430. **P1** 🧪 Layout by orientation and size (`src/ui/viewport-class.ts`, `nb-vp-*` classes; 0.14).
-431. **P2** Layout by input device: pen, finger or mouse and keyboard.
+431. **P2** 🧪 Layout by input device: pen, finger or mouse and keyboard (`src/ui/input-layout.ts`, `nb-input-*` classes; Settings > Appearance > Adapt layout to input; 0.27).
 432. **P3** Larger targets when you often miss.
 433. **P3** Contrast-adaptive toolbar over slides.
 434. ~~**P2** Panels that arrange themselves by available space.~~ — already covered by the UI redesign (layout engine, `docs/design-ui.md` §4)

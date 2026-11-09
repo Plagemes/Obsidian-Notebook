@@ -1,4 +1,5 @@
 import type { Layout } from "./layout";
+import { DEFAULT_SPREAD, layoutSpread, type SpreadOptions } from "./spread";
 import { clampToPage, MAX_SCALE, MIN_SCALE, PAGE_MARGIN, type Size, type Viewport } from "./viewport";
 
 /**
@@ -6,8 +7,8 @@ import { clampToPage, MAX_SCALE, MIN_SCALE, PAGE_MARGIN, type Size, type Viewpor
  * pages sit side by side and a horizontal swipe turns to the next one. Pure geometry; the DOM side is
  * `view/page-mode.ts`. Strokes stay in page coordinates in both modes: only the page boxes move.
  */
-export type ScrollMode = "continuous" | "pages";
-export const SCROLL_MODES: readonly ScrollMode[] = ["continuous", "pages"];
+export type ScrollMode = "continuous" | "pages" | "spread";
+export const SCROLL_MODES: readonly ScrollMode[] = ["continuous", "pages", "spread"];
 
 /**
  * Gap between pages side by side (pt). At the smallest fit scale it is still wider than the page margin, so the
@@ -28,7 +29,7 @@ export const EDGE_RESISTANCE = 0.3;
 export const TURN_MS = 220;
 
 export function isScrollMode(v: unknown): v is ScrollMode {
-	return v === "continuous" || v === "pages";
+	return v === "continuous" || v === "pages" || v === "spread";
 }
 
 /** Pages side by side, top aligned, in document space. `width` is the whole row, `height` the tallest page. */
@@ -44,8 +45,11 @@ export function layoutPagesHorizontal(pages: ReadonlyArray<{ width: number; heig
 	return { boxes, width: pages.length ? x - gap : 0, height };
 }
 
-/** Layout of the pages for a scroll mode. */
-export function layoutForMode(mode: ScrollMode, pages: ReadonlyArray<{ width: number; height: number }>, layoutVertical: (p: typeof pages) => Layout): Layout {
+/** Layout of the pages for a scroll mode (`spread`: pairs side by side, 0.27 #49; `spreadOptions` says where the first page goes). */
+export function layoutForMode(
+	mode: ScrollMode, pages: ReadonlyArray<{ width: number; height: number }>, layoutVertical: (p: typeof pages) => Layout, spreadOptions: SpreadOptions = DEFAULT_SPREAD,
+): Layout {
+	if (mode === "spread") return layoutSpread(pages, spreadOptions);
 	return mode === "pages" ? layoutPagesHorizontal(pages) : layoutVertical(pages);
 }
 

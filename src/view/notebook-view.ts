@@ -1,4 +1,4 @@
-import { FileView, getLanguage, Scope, setIcon, type Menu, type TFile, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { FileView, getLanguage, Scope, setIcon, TFile, type Menu, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import { pageFromState, pageIdFromState, regionFromState } from "../integration/links";
 import { pageTargetFromEphemeralState, pageTargetFromSubpath, resolvePageTarget, type PageTarget } from "../integration/page-links";
 import { checkConflicts, openRepair, type ReliabilityDeps } from "../integration/reliability";
@@ -31,7 +31,7 @@ import { ghostApplies, ghostSegments, ghostSpacingPt, inferGhostLines, MAX_STROK
 import { dragSnapSession, snapDragged, type SnapSession } from "./snap-glue";
 import { SnapHold } from "./snap-hold";
 import { applyPlacement, itemsBounds, uniformPlacement } from "../ink/selection-transform";
-import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
+import { eraserIsOnPage, layoutPages, nearestPage, pageAt, pagesTouching, toPageLocal, visiblePages, type Layout, type PageBox } from "../ink/layout";
 import { HoldTracker } from "../ink/hold";
 import { LastTool } from "../ink/last-tool";
 import { MultiTap } from "../ink/multitap";
@@ -51,10 +51,11 @@ import { eraseSegment } from "../ink/segment-erase";
 import { analyseSpace, planSpaceChange, spacePreview } from "../ink/space";
 import { heavyReasons, pageLoad, planPageSplit } from "../ink/heavy-page";
 import { apply, IDENTITY, invert, isIdentity, multiply, rotateAbout, scaleAbout, translate, type Matrix } from "../ink/transform";
-import { clampToPage, fitWidth, pan, PAGE_MARGIN, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
+import { clampToPage, fitWidth, pan, screenToPage, zoomAt, type Size, type Viewport } from "../ink/viewport";
 import { drawHeader, exportHeaderFor, headerLayout, pageTimesText, type HeaderLayout, type HeaderNotebook, type HeaderSettings } from "../ink/page-header";
 import { pageTimes } from "../model/page-times";
-import { layoutPagesHorizontal, type ScrollMode } from "../ink/page-mode";
+import { layoutForMode, type ScrollMode } from "../ink/page-mode";
+import { canSpread, effectiveScrollMode, mateOf, relayoutStep, scrollToPageViewport, spreadTarget, stepRow } from "../ink/spread";
 import { capturePosition, positionFromState, restoreViewport, type SavedPosition } from "../ink/view-position";
 import { captureRegion, restoreRegion, type ViewRegion } from "../ink/view-region";
 import { PageMode } from "./page-mode";
@@ -69,6 +70,7 @@ import {
 import { pageContentCommand } from "../model/page-content";
 import { checkContent, freezeStroke } from "../model/serialize";
 import { normaliseOpacity } from "../model/opacity";
+import { newStrokeTaper, strokeTaper } from "../model/taper";
 import {
 	DEFAULT_META, isLinePen, isNewPen, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
@@ -98,6 +100,8 @@ import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./high
 import { MeaningTools } from "./colour-meaning";
 import { SavedViewTools } from "./saved-views";
 import { HistoryTools } from "./history-tools";
+import { WorkspaceTools, type WorkspaceHost } from "./workspace-tools";
+import { ReferencePickerModal } from "./ref-window-picker";
 import { continueLongJump, JumpRunner, type JumpResult, type JumpTarget } from "../model/history-jump";
 import type { MeaningsStore } from "../library/meanings-store";
 import { canPrint } from "./print";
@@ -125,6 +129,8 @@ import { NotebookMapModal } from "./notebook-map-modal";
 import type { NavController } from "./nav-controller";
 import { FastScrollbar, type ScrollbarHost } from "./scrollbar";
 import { Minimap, type MinimapHost } from "./minimap";
+import { SemanticZoomLayer, type SemanticZoomHost } from "./semantic-zoom";
+import { SEMANTIC_OUTLINE_SOURCES } from "../model/semantic-sources";
 import type { StatusBarInfo } from "./status-bar-logic";
 import type { NavPlace } from "../model/nav-history";
 import { openPageOpsMenu, type PageOpsHost } from "./page-ops-menu";
@@ -171,6 +177,7 @@ import { ExcerptTools } from "./excerpts";
 import { PdfTextTools } from "./pdf-text";
 import { PdfLinks } from "./pdf-links";
 import { PdfOutlineSource } from "../pdf/outline-source";
+import { gatherSuggestInput } from "../pdf/search-suggest"; // 0.27 pdfsuggest (#418)
 import { pageLinkText } from "../integration/page-share";
 import { layerCommand, type LayerMove } from "../model/layers";
 import { SetPageLocked } from "../model/page-lock";
@@ -178,10 +185,13 @@ import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
 import { SlideBack } from "./slide-back";
+import { InputLayout } from "./input-layout-view";
+import { effectiveToolbarSize } from "../ui/input-layout";
 import { ToolFade } from "./tool-fade";
 import { WELCOME_KEY } from "../model/welcome-back";
 import { WelcomeBack } from "./welcome-back";
 import { PageRefs } from "./page-refs";
+import { PlannerTasks } from "./planner-tasks";
 import { SmartAddStrip } from "./smart-add";
 import { nearbyPapers, type SmartAddChoice, type SmartAddInput } from "../model/smart-add";
 import {
@@ -239,6 +249,9 @@ import { kindTool, strokeNib } from "../ink/pen-kinds";
 import { hint } from "../ui/hints";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
 import { actionLabel } from "../ui/action-sheet";
+import { cloneMacro, isMacroActionId, macroById, setMacros } from "../ui/macros";
+import { runMacroOn } from "./macro-run";
+import { MacrosModal } from "./macros-modal";
 import {
 	centredPosition, imageElementSize, imagePageSize, mergeMeta, metaEquals, newTextBox, shapePoints, shouldGrabRuler, toggleBookmark,
 	unionBounds,
@@ -444,6 +457,9 @@ export class NotebookView extends FileView {
 	 */
 	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message, step) => {
 		console.error(`[notebook] ${step ?? "edit"} refused, the notebook could not be saved with it:`, message);
+		// 0.27 (#170): a macro counts the refusals and says it once itself, naming the step.
+		if (!step) this.refusalCount++;
+		if (!step && this.quietRefusals) return;
 		// 0.19: an undo or a redo that would leave a notebook the writer refuses is not done and leaves the history (the document is as before).
 		showNotice(step ? t("history.stepRefused", { message }) : t("history.refused", { message }), 10000);
 		if (step) this.updateHistoryButtons();
@@ -493,6 +509,8 @@ export class NotebookView extends FileView {
 	private scrollbar: FastScrollbar | null = null;
 	/** 0.17 (#173): the floating overview of the page in view (view/minimap.ts). */
 	private minimap: Minimap | null = null;
+	/** 0.27 (#130): the headings and titles shown large when zoomed far out (view/semantic-zoom.ts). A view overlay: never drawn by exports or the presentation. */
+	private semzoom: SemanticZoomLayer | null = null;
 	/** Roadmap 18: stops following the history's changes (the quick slots and the page sheet enable or disable Back and Forward). */
 	private stopNav: (() => void) | null = null;
 	/** 0.25 (#419): stops following the global bookmarks for the marked-pages filter. */
@@ -537,6 +555,7 @@ export class NotebookView extends FileView {
 	private strokeStart = 0;
 	/** 0.25 (#399): the toolbar and floating pills fade while the pen writes (view/tool-fade.ts). */
 	private toolFade: ToolFade | null = null;
+	private inputLayout: InputLayout | null = null;
 	private readonly location = new LocationKeeper(
 		{ set: (fn, ms) => window.setTimeout(fn, ms), clear: (h) => window.clearTimeout(h) },
 		(path, page, pos) => {
@@ -556,6 +575,9 @@ export class NotebookView extends FileView {
 	private penLinks: PenLinks | null = null;
 	/** One page at a time (#14); its gestures and animation live in page-mode.ts. */
 	private pageMode: PageMode | null = null;
+	/** 0.27 (#49): the pages are laid out in pairs (two-page spread); `spreadFirstAlone` is the choice the layout was built with. */
+	private spreadOn = false;
+	private spreadFirstAlone = true;
 	private stamps: StampPalette | null = null;
 	private symbols: SymbolStrip | null = null;
 	/** ui redesign: quick slots, contextual bar and sheets built from the action registry (view-ui.ts). */
@@ -572,6 +594,8 @@ export class NotebookView extends FileView {
 	/** 0.23 (#420): the card offered when a notebook is reopened after a while (view/welcome-back.ts). */
 	welcomeBack: WelcomeBack | null = null;
 	pageRefs: PageRefs | null = null;
+	/** 0.27 plannertasks (#266): the chip with the vault's tasks due on a planner page (view/planner-tasks.ts). */
+	plannerTasks: PlannerTasks | null = null;
 	/** 0.14 (401): automatic lecture mode of this view (view/lecture-mode.ts). */
 	lectureMode: LectureModeController | null = null;
 	/** 0.22 lecthead (#210): the header of the class on the page being written on. */
@@ -646,6 +670,8 @@ export class NotebookView extends FileView {
 	private savedViews: SavedViewTools | null = null;
 	/** 0.25 (#84): the action history panel: every step listed, a tap goes back or forward to that point (view/history-tools.ts). */
 	private historyTools: HistoryTools | null = null;
+	/** 0.27 (#375): workspace presets: which plugin panels are open around the notebook (view/workspace-tools.ts). */
+	private workspaceTools: WorkspaceTools | null = null;
 	private navCurrent = -1;
 	/** Pages whose thumbnail was drawn without all its media; redrawn when media arrives. */
 	private readonly thumbPending = new Set<string>();
@@ -741,6 +767,7 @@ export class NotebookView extends FileView {
 		this.pageNav = new PageNavigator(this.body, {
 			pages: () => this.shownDoc()?.pages ?? [],
 			current: () => this.currentPageIndex(),
+			companion: () => this.spreadMate(this.currentPageIndex()),
 			bookmarks: () => new Set(this.shownDoc()?.meta?.bookmarks ?? []),
 			thumbnail: (page, width) => this.thumbnail(page, width),
 			goTo: (index) => this.goToPage(index),
@@ -773,6 +800,7 @@ export class NotebookView extends FileView {
 		this.body.insertBefore(this.pageNav.el, this.stage);
 		this.scrollbar = new FastScrollbar(this.body, this.scrollbarHost());
 		this.minimap = new Minimap(this.body, this.minimapHost());
+		this.semzoom = new SemanticZoomLayer(this.semanticZoomHost());
 		this.stopNav = this.host.nav?.onChange(() => this.refreshUi()) ?? null;
 		// 0.25 (#419): a global bookmark added or removed (here or on another device) changes the marked-pages list.
 		this.stopMarks = this.host.bookmarks?.onChange(() => this.pageNav?.refresh()) ?? null;
@@ -822,6 +850,7 @@ export class NotebookView extends FileView {
 			limit: this.history.limit,
 			jump: (target, progress) => this.jumpHistoryTo(target, progress),
 		});
+		this.workspaceTools = new WorkspaceTools(this.workspaceHost());
 		// 0.16 (#124): a locked page shows a small badge over the page area; a tap on it unlocks the page.
 		const badge = this.body.createEl("button", { cls: "nb-ui nb-lock-badge", attr: { type: "button", "aria-label": t("lock.badge.aria") } });
 		setIcon(badge.createSpan({ cls: "nb-lock-badge-icon", attr: { "aria-hidden": "true" } }), "lock");
@@ -890,7 +919,7 @@ export class NotebookView extends FileView {
 				return page ? { paper: page.paper.kind, size: sizeName(page) } : null;
 			},
 			dimControl: () => (this.reading?.dimmed ? this.reading.dimControl : null),
-			toolbarSize: () => this.host.settings.toolbarSize,
+			toolbarSize: () => effectiveToolbarSize(this.host.settings.toolbarSize, this.inputLayout?.kind ?? "pen"), // 0.27 (#431): a finger gets bigger targets
 			adapt: () => ({ pageType: this.host.settings.adaptPageType, learn: this.host.settings.adaptLearn, selection: this.host.settings.adaptSelection }),
 			pinned: () => this.host.settings.pinnedQuick,
 			setPinned: (ids) => {
@@ -952,6 +981,7 @@ export class NotebookView extends FileView {
 			started: (cls, pageAdded) => {
 				this.lectureHeader?.lectureStarted(cls, pageAdded);
 				this.profileForLecture();
+				if (this.host.settings.workspaceOnLecture) this.applyWorkspacePreset("lecture", true);
 			},
 			memory: { load: (): unknown => this.app.loadLocalStorage(LECTURE_MEMORY_KEY), save: (v) => this.app.saveLocalStorage(LECTURE_MEMORY_KEY, v) },
 		});
@@ -997,6 +1027,17 @@ export class NotebookView extends FileView {
 			current: () => this.currentPageIndex(),
 			goTo: (index) => this.goToPage(index),
 		});
+		this.plannerTasks = new PlannerTasks({
+			app: this.app,
+			parent: () => this.body,
+			enabled: () => this.host.settings.plannerTasks && this.layout !== null,
+			page: () => this.shownDoc()?.pages[this.currentPageIndex()] ?? null,
+		});
+		this.registerEvent(this.app.metadataCache.on("changed", (f) => this.plannerTasks?.fileChanged(f)));
+		this.registerEvent(this.app.vault.on("delete", (f) => this.plannerTasks?.fileGone(f.path)));
+		this.registerEvent(this.app.vault.on("rename", (f, old) => {
+			if (f instanceof TFile) this.plannerTasks?.fileRenamed(f, old);
+		}));
 		this.smartAdd = new SmartAddStrip({
 			app: this.app,
 			parent: () => this.body,
@@ -1112,6 +1153,14 @@ export class NotebookView extends FileView {
 		// 0.14 slides (#226): badges next to ink written beside a slide; a tap shows the slide again.
 		attachSlideBadges(this, () => this.host.settings);
 		this.toolFade = new ToolFade({ root: this.contentEl, stage: this.stage, settings: () => this.host.settings, blocked: () => !!this.selection || !!this.lasso || !!activeDocument.body.querySelector(".modal-container") });
+		// 0.27 inputlayout (#431): the layout follows the device in use (a passive read of pointerType; the pen pipeline is untouched).
+		this.inputLayout = new InputLayout({
+			app: this.app, root: this.contentEl,
+			pref: () => this.host.settings.inputLayout,
+			busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null || !!this.controller?.drawing,
+			changed: () => this.ui?.refresh(),
+			listen: (type, handler) => this.registerDomEvent(this.contentEl, type, handler, { capture: true, passive: true }),
+		});
 		this.applySettings(this.host.settings);
 
 		this.resizeObserver = new ResizeObserver(() => this.measure());
@@ -1260,6 +1309,8 @@ export class NotebookView extends FileView {
 		this.scrollbar?.destroy();
 		this.scrollbar = null;
 		this.minimap?.destroy();
+		this.semzoom?.destroy();
+		this.semzoom = null;
 		this.minimap = null;
 		this.comments?.destroy();
 		this.comments = null;
@@ -1289,14 +1340,18 @@ export class NotebookView extends FileView {
 		this.meaningTools = null;
 		this.savedViews = null;
 		this.historyTools = null;
+		this.workspaceTools = null;
 		this.welcomeBack?.destroy();
 		this.welcomeBack = null;
 		this.toolFade?.destroy();
 		this.toolFade = null;
+		this.inputLayout = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
 		this.pageRefs?.destroy();
 		this.pageRefs = null;
+		this.plannerTasks?.destroy();
+		this.plannerTasks = null;
 		this.smartAdd?.destroy();
 		this.smartAdd = null;
 		this.ui?.destroy();
@@ -1452,7 +1507,7 @@ export class NotebookView extends FileView {
 	/** Shows the page, zoom and scroll position of a saved place (O16). False if the view cannot show it yet. */
 	private restorePosition(pos: SavedPosition): boolean {
 		const layout = this.layout;
-		const restored = layout ? restoreViewport(pos, this.pageMode?.enabled ? "pages" : "continuous", this.viewSize, layout) : null;
+		const restored = layout ? restoreViewport(pos, this.layoutMode(), this.viewSize, layout) : null;
 		if (!restored) return false;
 		this.pageMode?.goTo(restored.pageIndex);
 		this.fitMode = restored.fit;
@@ -1464,7 +1519,7 @@ export class NotebookView extends FileView {
 	private currentPosition(): SavedPosition | null {
 		const layout = this.layout;
 		if (!layout) return null;
-		return capturePosition(this.pageMode?.enabled ? "pages" : "continuous", this.viewport, this.viewSize, layout, this.currentPageIndex());
+		return capturePosition(this.layoutMode(), this.viewport, this.viewSize, layout, this.currentPageIndex());
 	}
 
 	/** wave 0.6 (v7): the first load of a file starts at the requested page or at the stored reading position. */
@@ -1741,6 +1796,7 @@ export class NotebookView extends FileView {
 		this.syncZoomHint();
 		this.scrollbar?.update();
 		this.minimap?.update();
+		this.semzoom?.viewChanged();
 		this.symbols?.sync();
 		this.filter.params = stabilizationParams(settings.stabilization);
 		// wave 0.7: resilience (#346): safe mode turns low-latency ink and prediction off for this view.
@@ -1758,7 +1814,9 @@ export class NotebookView extends FileView {
 		this.lectureMode?.settingsChanged();
 		this.slideBack?.settingsChanged();
 		this.toolFade?.settingsChanged();
+		this.inputLayout?.settingsChanged();
 		this.pageRefs?.reset();
+		this.plannerTasks?.reset();
 		// wave 0.9 (370): a new toolbar size changes the bar, the contextual bar and the number of quick slots.
 		this.ui?.refresh();
 		this.display?.settingsChanged();
@@ -2084,7 +2142,9 @@ export class NotebookView extends FileView {
 	goToRelativePage(delta: number): void {
 		const n = this.shownDoc()?.pages.length ?? 0;
 		if (n === 0) return;
-		this.scrollToPage(Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta)), 0, true);
+		// 0.27 (#49): in a spread "next" turns by pair (the row below), not to the other page of the pair in view.
+		const target = this.spreadOn && this.layout ? stepRow(this.layout, this.currentPageIndex(), delta) : Math.min(n - 1, Math.max(0, this.currentPageIndex() + delta));
+		this.scrollToPage(target, 0, true);
 	}
 
 	private penStore(): PenStore {
@@ -2286,14 +2346,63 @@ export class NotebookView extends FileView {
 		if (switchOnLecture(this.host.settings.writingProfileOnLecture, this.host.settings)) this.applyWritingProfile("lecture");
 	}
 
+	// --- 0.27 (#375): workspace presets ---
+
+	/** Opens the Workspaces picker (Lecture, Study, Focus and the saved ones). Only opens and closes plugin panels; never edits a document. */
+	openWorkspacePicker(): void {
+		this.workspaceTools?.openPicker();
+	}
+
+	/** Applies a workspace preset by id (`quiet`: no notice unless something was left out). */
+	applyWorkspacePreset(id: string, quiet = false): boolean {
+		return this.workspaceTools?.apply(id, quiet) ?? false;
+	}
+
+	private workspaceHost(): WorkspaceHost {
+		const s = (): NotebookSettings => this.host.settings;
+		return {
+			app: this.app,
+			settings: s,
+			save: () => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e)),
+			narrow: () => this.body?.hasClass("is-narrow") ?? false,
+			available: () => !!this.session?.doc && !!this.body,
+			pdf: {
+				available: () => pdfSideState(this).available,
+				open: () => pdfSideState(this).open,
+				pick: () => void runPdfSideAction(this, "pdf-side-open"),
+				close: () => void runPdfSideAction(this, "pdf-side-close"),
+			},
+			reference: {
+				open: () => this.referenceOpen,
+				pick: () => new ReferencePickerModal(this.app, (file) => void this.openReference(file)).open(),
+				close: () => this.closeReference(),
+			},
+			nav: () => (!this.pageNav?.open ? "closed" : this.pageNav.showsOutline ? "outline" : "pages"),
+			setNav: (mode) => {
+				this.pageNav?.setOutline(mode === "outline");
+				this.setNavigatorOpen(mode !== "closed");
+			},
+			minimap: () => (s().minimapMode === "never" || !this.minimap ? null : { open: this.minimap.panelOpen, set: (open) => this.minimap?.setPanelOpen(open) }),
+			profile: () => this.activeWritingProfileId(),
+			applyProfile: (id) => this.applyWritingProfile(id, true),
+			hasProfile: (id) => findProfile(s().writingProfiles, id) !== null,
+		};
+	}
+
 	/** Switches between continuous scrolling and one page at a time, staying on the page in view. */
-	setScrollMode(mode: ScrollMode): void {
+	setScrollMode(mode: ScrollMode, keepPage?: number): void {
 		const pm = this.pageMode;
-		const on = mode === "pages";
+		const settings = this.host.settings;
+		// 0.27 (#49): the spread only where the view has room for it; a phone (or a portrait pane) shows one column.
+		const effective = effectiveScrollMode(mode, settings.spreadAuto, this.viewSize);
+		const on = effective === "pages";
+		const spread = effective === "spread";
 		this.refreshUi(); // the page-by-page toggle shows its state
-		if (!pm || pm.enabled === on) return;
-		const index = this.currentPageIndex();
+		if (!pm) return;
+		if (pm.enabled === on && this.spreadOn === spread && !(spread && this.spreadFirstAlone !== settings.spreadFirstAlone)) return;
+		const index = keepPage ?? this.currentPageIndex();
 		pm.setEnabled(on);
+		this.spreadOn = spread;
 		this.fitMode = true;
 		this.refreshLayout();
 		if (!this.layout) return;
@@ -2302,12 +2411,50 @@ export class NotebookView extends FileView {
 			this.refit(false);
 			this.scrollToPage(index);
 		}
+		this.spreadChanged();
+	}
+
+	/** The pairs appeared, went away or were laid out again: the page panel and the buttons show the new state. */
+	private spreadChanged(): void {
+		this.updatePageIndicator();
+		this.pageNav?.refresh();
+		this.refreshUi();
+	}
+
+	/**
+	 * The view changed size: a spread appears when the view gets wide enough (a tablet turned to landscape) and goes
+	 * when it does not have the room any more, staying on the page in view. True when the layout was rebuilt.
+	 */
+	private followSpreadRoom(keepPage: number): boolean {
+		if (this.pageMode?.enabled || !this.layout) return false;
+		const effective = effectiveScrollMode(this.host.settings.scrollMode, this.host.settings.spreadAuto, this.viewSize);
+		if ((effective === "spread") === this.spreadOn) return false;
+		this.setScrollMode(this.host.settings.scrollMode, keepPage);
+		return true;
 	}
 
 	/** Toolbar and command: flips the setting (saved with the plugin settings, applied to every open notebook). */
 	togglePageMode(): void {
 		const s = this.host.settings;
 		s.scrollMode = s.scrollMode === "pages" ? "continuous" : "pages";
+		this.setScrollMode(s.scrollMode);
+		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+	}
+
+	/**
+	 * Page sheet and command (0.27, #49): two pages side by side on or off. Off also turns the automatic spread off,
+	 * otherwise the pairs would come straight back.
+	 */
+	toggleSpread(): void {
+		const s = this.host.settings;
+		if (this.spreadOn) {
+			s.scrollMode = "continuous";
+			s.spreadAuto = false;
+		} else {
+			s.scrollMode = "spread";
+			// The setting is kept (it applies on a wide screen), but this view has no room: say why nothing changes.
+			if (!canSpread(this.viewSize) && this.viewSize.width > 0) showNotice(t("spread.noRoom"), 4000);
+		}
 		this.setScrollMode(s.scrollMode);
 		void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
 	}
@@ -2416,6 +2563,7 @@ export class NotebookView extends FileView {
 
 	/** Shows page `index` from its top, or (v7 reading position) with page y `y` at the top of the view. `animate`: page-by-page turn. */
 	private scrollToPage(index: number, y = 0, animate = false): void {
+		if (this.spreadOn) this.touchedPageId = this.shownDoc()?.pages[index]?.id ?? this.touchedPageId; // review fix (S1): going to a page makes it the page
 		if (this.pageMode?.enabled) {
 			this.pageMode.goTo(index, animate);
 			if (y > 0) {
@@ -2424,10 +2572,10 @@ export class NotebookView extends FileView {
 			}
 			return;
 		}
-		const box = this.layout?.boxes[index];
-		if (!box) return;
-		const offsetY = y > 0 ? -(box.y + y) * this.viewport.scale : PAGE_MARGIN - box.y * this.viewport.scale;
-		this.setViewport({ ...this.viewport, offsetY });
+		const layout = this.layout;
+		if (!layout?.boxes[index]) return;
+		// 0.27 (#49): in a spread the row's top goes to the top of the view, and zoomed in the page is brought into the middle.
+		this.setViewport(scrollToPageViewport(layout, this.viewport, this.viewSize, index, y));
 	}
 
 	/** 0.20 (#102): to a line of a page (a heading of the outline or the map), a little above it so the line is not at the very edge. */
@@ -2854,14 +3002,14 @@ export class NotebookView extends FileView {
 		if (!layout || !doc) return null;
 		const index = this.currentPageIndex();
 		const page = doc.pages[index];
-		const region = page ? captureRegion(this.pageMode?.enabled ? "pages" : "continuous", this.viewport, this.viewSize, layout, index) : null;
+		const region = page ? captureRegion(this.layoutMode(), this.viewport, this.viewSize, layout, index) : null;
 		return page && region ? { pageId: page.id, region } : null;
 	}
 
 	/** 0.23 (#264): shows a saved view: the page region, centred, at its zoom (the same part of the page on any screen size). */
 	private showViewRegion(pageIndex: number, region: Omit<ViewRegion, "pageIndex">): void {
 		const layout = this.layout;
-		const restored = layout ? restoreRegion(region, pageIndex, this.pageMode?.enabled ? "pages" : "continuous", this.viewSize, layout) : null;
+		const restored = layout ? restoreRegion(region, pageIndex, this.layoutMode(), this.viewSize, layout) : null;
 		this.recordJump(pageIndex);
 		if (!restored) {
 			this.scrollToPage(pageIndex);
@@ -3863,6 +4011,8 @@ export class NotebookView extends FileView {
 
 	/** A locked page refused an edit (the history's guard, or a gate before one): says so once, with a button that unlocks the page. */
 	private pagesLocked(pageIds: readonly string[]): void {
+		this.refusalCount++; // 0.27 (#170): a macro stops when a step is refused
+		if (this.quietRefusals) return;
 		const now = Date.now();
 		if (now - this.lockNoticeAt < 5000) return;
 		this.lockNoticeAt = now;
@@ -4071,7 +4221,8 @@ export class NotebookView extends FileView {
 				const index = this.currentPageIndex();
 				const page = doc.pages[index], box = layout.boxes[index];
 				if (!page || !box) return null;
-				return { pageId: page.id, page: { width: page.width, height: page.height, infinite: page.infinite === true }, box, viewport: this.viewport, view: this.viewSize };
+				const spread = this.spreadOn ? { fitScale: fitWidth(this.viewSize, layout).scale } : {};
+				return { pageId: page.id, page: { width: page.width, height: page.height, infinite: page.infinite === true }, box, viewport: this.viewport, view: this.viewSize, ...spread };
 			},
 			mode: () => this.host.settings.minimapMode,
 			busy: () => !!this.controller?.drawing || this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null,
@@ -4088,6 +4239,36 @@ export class NotebookView extends FileView {
 			},
 			loadPrefs: () => this.app.loadLocalStorage(KEY) as unknown,
 			savePrefs: (prefs) => this.app.saveLocalStorage(KEY, prefs),
+		};
+	}
+
+	/** 0.27 (#130): what the semantic zoom overlay reads (pages, outline, layout, viewport) and how a tap on a label moves the view. Nothing here writes the document. */
+	private semanticZoomHost(): SemanticZoomHost {
+		return {
+			stage: () => this.stage,
+			enabled: () => this.host.settings.semanticZoom && !this.pageMode?.enabled && !this.presenting,
+			pages: () => this.shownDoc()?.pages ?? [],
+			assets: () => this.shownDoc()?.assets,
+			layout: () => this.layout,
+			viewport: () => this.viewport,
+			view: () => this.viewSize,
+			busy: () => !!this.controller?.drawing || this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null,
+			outline: () => {
+				const doc = this.shownDoc();
+				if (!doc) return [];
+				const s = this.host.settings;
+				return this.outlineBuilder.build(
+					{ pages: doc.pages, meta: doc.meta, assets: doc.assets, pdfOutlines: s.outlinePdf === "off" ? {} : this.outlineHost().pdfOutlines?.() ?? {} },
+					{ ...SEMANTIC_OUTLINE_SOURCES, headings: s.outlineHeadings, pdf: s.outlinePdf !== "off" },
+				);
+			},
+			warm: (budgetMs) => (this.host.settings.outlineHeadings ? this.outlineBuilder.warm(this.shownDoc()?.pages ?? [], budgetMs) : 0),
+			fingerNavigates: (e) => this.policy.route("touch", e.timeStamp, 0, Math.max(e.width || 0, e.height || 0), e.buttons) === "navigate",
+			jump: (v, pageIndex) => {
+				this.recordJump(pageIndex);
+				this.fitMode = false;
+				this.setViewport(v, true);
+			},
 		};
 	}
 
@@ -4146,6 +4327,12 @@ export class NotebookView extends FileView {
 				this.radial?.close();
 			},
 			prefetchAllowed: () => this.resilience?.prefetchAllowed() !== false,
+			// 0.27 pdfsuggest (#418): this notebook's own outline entries, titles and typed text; read in idle time by the search panel.
+			suggestSources: () => {
+				const doc = this.session?.doc ?? null;
+				const ids = doc ? Object.values(doc.assets ?? {}).filter((a) => a.kind === "pdf").map((a) => a.id) : [];
+				return gatherSuggestInput(doc, this.host.settings.outlinePdf === "off" ? {} : (this.pdfOutline?.known(ids) ?? {}));
+			},
 			editingChanged: () => {
 				this.applyInput();
 				this.toolbar.setEditable(this.editable());
@@ -4160,6 +4347,15 @@ export class NotebookView extends FileView {
 
 	/** Runs an action of the registry (toolbar, contextual bar, sheets, radial menu, commands) and counts the use. */
 	runAction(id: string, arg: ActionArg = {}): void {
+		if (isMacroActionId(id)) {
+			// 0.27 (#170): a macro (toolbar button, sheet, command) runs its steps through this same entry point.
+			const macro = macroById(id);
+			if (!macro) return;
+			runMacroOn(this, cloneMacro(macro));
+			this.ui?.record(id);
+			this.refreshUi();
+			return;
+		}
 		if (actionById(id)?.scope === "global") {
 			// A plugin-level action shown in a sheet (recent pages, sync check…).
 			if (!this.host.runGlobal) return;
@@ -4195,6 +4391,72 @@ export class NotebookView extends FileView {
 		return commandApplies(this, id);
 	}
 
+	// --- 0.27 (#170): macros ---
+
+	/** How many edits the History or the page lock refused in this view so far (a macro stops when it grows during a step). */
+	private refusalCount = 0;
+	/** True while a macro runs: the refusal notices are held back, the macro says it once. */
+	private quietRefusals = false;
+
+	get editRefusals(): number {
+		return this.refusalCount;
+	}
+
+	/**
+	 * Runs `fn` (the steps of a macro, each an edit through the History) so that everything it changes is ONE undo step named `label`.
+	 * Every step still has the History's own guards (locked pages and elements, read-only, the content check); a refused step is not part
+	 * of the group and its notice is held back (counted in `editRefusals` instead).
+	 */
+	runGrouped<T>(label: string, fn: () => T): T {
+		const was = this.quietRefusals;
+		this.quietRefusals = true;
+		// Review fix (M1): while a macro runs, page turns are immediate, so the page in view has changed before the next step reads it.
+		const pm = this.pageMode;
+		const wasInstant = pm?.instant ?? false;
+		if (pm) pm.instant = true;
+		try {
+			return this.history.group(label, fn);
+		} finally {
+			if (pm) pm.instant = wasInstant;
+			this.quietRefusals = was;
+		}
+	}
+
+	/**
+	 * Before a macro run opens its undo step (review fix M2): a text box or an equation still open is committed now, as its own undo step,
+	 * so Undo on the macro never takes back what was typed; a page-turn animation still running is finished, so the first page step starts
+	 * from the page the person sees.
+	 */
+	prepareMacroRun(): void {
+		this.commitText();
+		this.pageMode?.finishAnimation();
+	}
+
+	/** Edits recorded in the open macro run so far (see MacroEnv.edits). */
+	get macroEdits(): number {
+		return this.history.groupedSteps;
+	}
+
+	/** A stroke, an erase or a drag is in progress (review fix M8): a macro does not start under the pen. */
+	get strokeInProgress(): boolean {
+		return !!this.controller?.drawing || this.active !== null || this.erasing !== null || this.lasso !== null || this.drag !== null || this.shapeDrag !== null || this.spaceDrag !== null;
+	}
+
+	/** The macro manager: list, editor, toolbar button. The macros live in the plugin settings (shared by every view and the settings tab). */
+	openMacros(): void {
+		const save = (): void => void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+		new MacrosModal(this.app, {
+			get: () => ({ macros: this.host.settings.macros, pinned: this.host.settings.pinnedQuick }),
+			update: (macros, pinned) => {
+				this.host.settings.macros = macros;
+				this.host.settings.pinnedQuick = pinned;
+				setMacros(macros);
+				save();
+			},
+			run: (macro) => runMacroOn(this, macro),
+		}, () => this.refreshUi()).open();
+	}
+
 	/** Recomputes the self-building UI (quick slots, contextual bar, open sheet) and the selection's restyle rows. */
 	refreshUi(): void {
 		this.selectionActions?.update();
@@ -4227,12 +4489,13 @@ export class NotebookView extends FileView {
 			lecture: this.lectureMode?.on ?? false,
 			presenting: this.presenting,
 			profile: this.activeWritingProfileId(),
+			workspace: this.host.settings.workspacePresetActive,
 			sidePane: pdfSideState(this),
 			reading: { annotationsHidden: this.reading?.annotationsHidden ?? false, dim: this.reading?.dimmed ?? false, snap: this.reading?.snapping ?? false, selectText: this.pdfText?.active ?? false },
 			display: { night: this.display?.night ?? false, crop: this.display?.crop ?? false },
 			states: { open: !!this.statesTools?.open },
 			comments: { panel: this.comments?.panelOpen ?? false, total: this.comments?.counts.total ?? 0, open: this.comments?.counts.open ?? 0, drawing: this.comments?.drawing ?? false },
-			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", highlighterArea: this.tools.highlighterArea, readOnly: this.userReadOnly,
+			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, spread: this.spreadOn, spreadRoom: canSpread(this.viewSize) || this.spreadOn, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", highlighterArea: this.tools.highlighterArea, readOnly: this.userReadOnly,
 				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused },
 			canPrint: canPrint(),
 			markers: {
@@ -4597,8 +4860,32 @@ export class NotebookView extends FileView {
 	private currentPageIndex(): number {
 		if (!this.layout) return 0;
 		if (this.pageMode?.enabled) return this.pageMode.current();
-		const [, y] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
-		return Math.max(0, nearestPage(this.layout, y));
+		const [x, y] = screenToPage(this.viewport, this.viewSize.width / 2, this.viewSize.height / 2);
+		// 0.27 (#49): in a spread the two pages of a row are equally near vertically: the one nearer sideways is the one in view.
+		const nearest = Math.max(0, nearestPage(this.layout, y, this.spreadOn ? x : undefined));
+		if (!this.spreadOn || this.touchedPageId === null) return nearest;
+		// Review fix (S1): with both pages of the pair in view, "the page" (the one Delete page, Paper, Lock... act on, and the number shown) is the one last touched.
+		const id = this.touchedPageId;
+		const touched = this.shownDoc()?.pages.findIndex((p) => p.id === id) ?? -1;
+		return spreadTarget(this.layout, x, nearest, touched);
+	}
+
+	/** The page last written on, tapped or gone to in a spread (null: none yet). Decides which page of the pair in view the page actions mean. */
+	private touchedPageId: string | null = null;
+
+	/** True while the pages are laid out as a two-page spread. */
+	get inSpread(): boolean {
+		return this.spreadOn && !this.pageMode?.enabled;
+	}
+
+	/** 0.27 (#49): the other page of the pair that page `index` is in (-1: none, or no spread), for the page panel's highlight. */
+	private spreadMate(index: number): number {
+		return this.spreadOn && this.layout ? mateOf(this.layout, index) : -1;
+	}
+
+	/** The scroll mode the pages are laid out for now: what the position and region helpers measure the zoom against. */
+	private layoutMode(): ScrollMode {
+		return this.pageMode?.enabled ? "pages" : this.spreadOn ? "spread" : "continuous";
 	}
 
 	/** The document to show: the complete one, or while a large notebook is still being read, the part-read one. */
@@ -4637,15 +4924,24 @@ export class NotebookView extends FileView {
 
 	private refreshLayout(): void {
 		const doc = this.shownDoc();
-		const plain = doc ? (this.pageMode?.enabled ? layoutPagesHorizontal(doc.pages) : layoutPages(doc.pages)) : null;
+		// 0.27 (#49): paged = side by side in one row; spread = pairs, scrolled row by row; else one column.
+		const s = this.host.settings;
+		// A document that has just loaded takes the spread (or not) the setting and the size of the view call for.
+		if (!this.layout && !this.pageMode?.enabled) this.spreadOn = effectiveScrollMode(s.scrollMode, s.spreadAuto, this.viewSize) === "spread";
+		this.spreadFirstAlone = s.spreadFirstAlone;
+		const plain = doc ? layoutForMode(this.layoutMode(), doc.pages, (p) => layoutPages(p), { firstAlone: this.spreadFirstAlone }) : null;
+		const widthBefore = this.layout?.width ?? 0;
 		// wave 0.9 (376): with the margins cropped, the PDF pages carry the window the view fits (nothing else changes).
 		this.layout = plain && doc && this.display ? this.display.shape(plain, doc.pages) : plain;
 		this.renderer?.setDocument(doc ? this.renderPagesOf(doc) : null, this.layout);
+		// A spread is as wide as its pairs: a page added to a one-page notebook, or a wider page, changes the width that "fit" fills.
+		if (this.spreadOn && this.fitMode && this.layout && widthBefore > 0 && Math.abs(this.layout.width - widthBefore) > 0.5) this.refit(true);
 		this.pushRuler();
 		this.reading?.docChanged();
 		this.pdfText?.docChanged();
 		this.display?.docChanged();
 		this.minimap?.invalidate();
+		this.semzoom?.invalidate();
 	}
 
 	/** wave 0.9 (376): the windows of the cropped view changed (or the toggle did): lay the pages out again and fit. */
@@ -4686,6 +4982,7 @@ export class NotebookView extends FileView {
 		this.pageOffer?.reset();
 		this.slideBack?.documentChanged();
 		this.pageRefs?.reset();
+		this.plannerTasks?.reset();
 		this.multiTap.reset();
 		this.stopHold();
 		this.textEditor?.close();
@@ -4874,6 +5171,7 @@ export class NotebookView extends FileView {
 	private scheduleNavRefresh(): void {
 		this.scheduleHeavyCheck();
 		this.minimap?.invalidate();
+		this.semzoom?.invalidate();
 		if (!this.pageNav?.open || this.navTimer !== null) return;
 		this.navTimer = window.setTimeout(() => {
 			this.navTimer = null;
@@ -4895,6 +5193,7 @@ export class NotebookView extends FileView {
 		this.syncLockBadge(lockedPage);
 		this.mentions?.sync();
 		this.pageRefs?.sync();
+		this.plannerTasks?.sync();
 		this.notifyStatus();
 		if (n) this.practiceHooks?.page(current);
 		if (n && this.file) this.pageClock.note(this.file.path, current, new Date());
@@ -4905,7 +5204,7 @@ export class NotebookView extends FileView {
 				this.host.nav?.seen(this.navPlace());
 				this.host.quickTabs?.seen(this.navPlace());
 			}
-			this.pageNav?.markCurrent(current);
+			this.pageNav?.markCurrent(current, this.spreadMate(current));
 			this.pageOffer?.cancel(); // an offer made for the page that was in view
 			this.checklist?.cancelOffer();
 			this.axes?.cancelOffer();
@@ -5156,6 +5455,8 @@ export class NotebookView extends FileView {
 	private measure(): void {
 		const rect = this.stage.getBoundingClientRect();
 		if (rect.width === 0 || rect.height === 0) return;
+		// 0.27 (#49): the page in view before the size changes, to stay on it if a spread appears or goes.
+		const before = this.layout && !this.pageMode?.enabled ? this.currentPageIndex() : 0;
 		this.viewSize = { width: rect.width, height: rect.height };
 		this.body.toggleClass("is-narrow", this.contentEl.clientWidth < NARROW_PX);
 		const vp = this.vpClass.update(this.contentEl.clientWidth, this.contentEl.clientHeight);
@@ -5165,8 +5466,24 @@ export class NotebookView extends FileView {
 		}
 		this.ui?.refresh();
 		this.renderer?.resize(rect.width, rect.height, window.devicePixelRatio || 1);
-		this.refit(true);
+		// Review fix (S3): the new layout (a spread coming or going) and the re-fit move the pages and the viewport, so they wait until the pen
+		// is up; a stroke in progress keeps the page boxes it is mapped with. The page to stay on is the one in view when the size first changed.
+		if (!this.relayoutPending) this.relayoutKeep = before;
+		this.relayoutPending = true;
+		this.settleRelayout();
 		if (this.pendingPage !== null) this.applyStartPosition();
+	}
+
+	/** The view changed size and the layout has not caught up (a stroke is in progress). */
+	private relayoutPending = false;
+	/** The page to stay on when the layout catches up. */
+	private relayoutKeep = 0;
+
+	/** Lays the pages out for the new view size now, or leaves it for when the stroke ends (see `relayoutStep`). */
+	private settleRelayout(): void {
+		if (relayoutStep(this.relayoutPending, this.strokeInProgress) !== "now") return;
+		this.relayoutPending = false;
+		if (!this.followSpreadRoom(this.relayoutKeep)) this.refit(true);
 	}
 
 	/** In fit mode, rescales to the view width; `keepTop` keeps the same document line at the top (rotation). */
@@ -5203,6 +5520,7 @@ export class NotebookView extends FileView {
 		this.updatePageIndicator();
 		this.scrollbar?.update();
 		this.minimap?.update();
+		this.semzoom?.viewChanged();
 		this.slideBack?.viewChanged();
 		this.symbols?.sync();
 		this.overlayChanged?.();
@@ -5449,6 +5767,7 @@ export class NotebookView extends FileView {
 			return false;
 		}
 		const page = this.pageAtIndex(pageIndex);
+		if (page) this.touchedPageId = page.id; // review fix (S1): the page the page actions mean when both pages of a pair are in view
 		const local = toPageLocal(layout.boxes[pageIndex]!, dx, dy);
 		// 0.16 (#124): a locked page takes no ink, text, shape, space or eraser: only the lasso, to select and copy from it.
 		if (page?.locked && tool !== "lasso") {
@@ -5550,13 +5869,15 @@ export class NotebookView extends FileView {
 		// 0.26 (#358): the opacity chosen for this pen (absent at full strength, so ordinary ink is stored exactly as before).
 		const opacity = normaliseOpacity(highlighter ? this.tools.highlighterOpacity : this.tools.penOpacity);
 		const own = opacity === undefined ? {} : { opacity };
-		this.ink.reset(inkTool, width, nib);
+		// 0.27 (#351): how much the line thins at its two ends (the line pens only; absent when none, so ordinary ink is stored exactly as before).
+		const taperFields = newStrokeTaper(inkTool, this.tools.penTaperStart, this.tools.penTaperEnd);
+		this.ink.reset(inkTool, width, nib, strokeTaper({ tool: inkTool, render: RENDER_INK, ...taperFields }));
 		this.ink.add(start[0], start[1], p);
 		this.active = {
 			pageIndex,
 			stroke: this.markers?.invisibleInk && !highlighter
-				? { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own, hidden: true }
-				: { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own },
+				? { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own, ...taperFields, hidden: true }
+				: { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own, ...taperFields },
 			wet: true,
 			liveFallback: false,
 			rawX: start[0],
@@ -5750,7 +6071,11 @@ export class NotebookView extends FileView {
 		const points = this.ink.toPoints();
 		points.push([active.rawX, active.rawY, active.rawP]);
 		const { tool, color, width } = active.stroke;
-		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, nib: active.stroke.nib, ...(active.stroke.opacity === undefined ? {} : { opacity: active.stroke.opacity }), points, predicted: [] });
+		this.renderer.setLive({
+			pageIndex: active.pageIndex, tool, color, width, nib: active.stroke.nib, ...(active.stroke.opacity === undefined ? {} : { opacity: active.stroke.opacity }),
+			...(active.stroke.taperStart === undefined ? {} : { taperStart: active.stroke.taperStart }), ...(active.stroke.taperEnd === undefined ? {} : { taperEnd: active.stroke.taperEnd }),
+			points, predicted: [],
+		});
 	}
 
 	/**
@@ -5791,6 +6116,8 @@ export class NotebookView extends FileView {
 		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
 		this.session?.gestureEnded();
+		// Review fix (S3): a resize or rotation during the stroke waits for it; the contact is over once this handler returns.
+		if (this.relayoutPending) window.setTimeout(() => this.settleRelayout(), 0);
 		// 0.14: the first stroke written during an automatic lecture is what adds its page (view/lecture-mode.ts). Deferred past the
 		// pointer handler so the contact is over; the document is only touched through the usual edit context.
 		const committed = this.committedIds();
@@ -5798,6 +6125,7 @@ export class NotebookView extends FileView {
 			window.setTimeout(() => {
 				this.lectureMode?.wrote();
 				this.welcomeBack?.wrote();
+				this.plannerTasks?.wrote();
 				this.noteWrittenForSlideBack(committed);
 			}, 0);
 		}
@@ -5923,7 +6251,8 @@ export class NotebookView extends FileView {
 				if (active.liveFallback) this.renderer?.setLive(null);
 				return;
 			}
-			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
+			// The wet canvas shows exactly this geometry; the static layer takes it over without a change (a tapered stroke, whose end is thinned
+			// at the lift, is hidden from the wet canvas in the frame the static layer draws it: see Renderer.releaseWet).
 			this.renderer?.endWet(cut ?? stroke);
 			this.trimCommitted(page, stroke, cut, this.addStrokes(active.pageIndex, page, [stroke], true, cut ?? undefined));
 			this.updateGhostLines(active.pageIndex, page, stroke.tool);
@@ -6166,8 +6495,11 @@ export class NotebookView extends FileView {
 		// Highlighter shapes stay highlighter strokes (translucent); pen shapes become constant-width "shape" ink.
 		// Shapes keep the perfect-freehand geometry (render 1), drawn whole on the live layer.
 		// A recognised shape of a new pen (fountain, brush, marker) is a plain shape: those pens have no outline of the old geometry and no nib in a shape.
-		const { nib: _nib, ...flat } = a.stroke;
+		// (v25: a shape has no taper either.)
+		const { nib: _nib, taperStart: _ts, taperEnd: _te, ...flat } = a.stroke;
 		void _nib;
+		void _ts;
+		void _te;
 		a.stroke = { ...flat, tool: a.stroke.tool === "highlighter" ? "highlighter" : "shape", points: first, render: RENDER_FREEHAND };
 		a.extra = shape.points.slice(1);
 		a.wet = false;
@@ -6203,18 +6535,33 @@ export class NotebookView extends FileView {
 		const [px, py] = erasing.last;
 		erasing.last = [x, y];
 		const radius = eraserRadiusPt(this.tools.eraserSize, this.viewport.scale);
-		const pageIndex = pageAt(layout, x, y, radius);
-		const page = doc.pages[pageIndex];
-		const box = layout.boxes[pageIndex];
-		if (!page || !box) return;
+		// Review fix (S4): by the binding of a spread the circle reaches both pages: it erases on each page it touches.
+		let changed = false;
+		const touched = pagesTouching(layout, x, y, radius);
+		for (const pageIndex of touched) {
+			const page = doc.pages[pageIndex];
+			const box = layout.boxes[pageIndex];
+			// Review fix (R5): a locked page the circle only reaches into from the mate page is skipped without the lock notice.
+			const here = eraserIsOnPage(layout, touched, pageIndex, x, y);
+			if (page && box && this.eraseOnPage(erasing, doc, page, box, [px, py], [x, y], radius, here)) changed = true;
+		}
+		if (changed) this.renderer.invalidate();
+	}
+
+	/** One page's share of `eraseTo`: the ink and areas the eraser's path from `from` to `to` (document points) touches on `page`. True when something was erased. */
+	private eraseOnPage(
+		erasing: NonNullable<NotebookView["erasing"]>, doc: NotebookDocument, page: Page, box: PageBox, from: readonly [number, number], to: readonly [number, number], radius: number, saysLocked = true,
+	): boolean {
+		const renderer = this.renderer;
+		if (!renderer) return false;
 		// 0.16 (#124): the eraser leaves a locked page alone.
 		if (page.locked) {
-			this.pagesLocked([page.id]);
-			return;
+			if (saysLocked) this.pagesLocked([page.id]);
+			return false;
 		}
-		const [ax, ay] = toPageLocal(box, px, py);
-		const [bx, by] = toPageLocal(box, x, y);
-		const hits = findHitStrokes(filterErasable(this.inkInView(page), this.eraseFilter()), ax, ay, bx, by, radius, this.renderer.boundsOf);
+		const [ax, ay] = toPageLocal(box, from[0], from[1]);
+		const [bx, by] = toPageLocal(box, to[0], to[1]);
+		const hits = findHitStrokes(filterErasable(this.inkInView(page), this.eraseFilter()), ax, ay, bx, by, radius, renderer.boundsOf);
 		let changed = false;
 		for (const stroke of hits) {
 			if (erasing.spare?.has(stroke.id)) continue;
@@ -6222,7 +6569,7 @@ export class NotebookView extends FileView {
 			if (index < 0) continue;
 			let after: Stroke[] = [];
 			if (this.tools.eraserMode === "segment") {
-				const runs = eraseSegment(stroke, ax, ay, bx, by, radius, this.renderer.boundsOf(stroke));
+				const runs = eraseSegment(stroke, ax, ay, bx, by, radius, renderer.boundsOf(stroke));
 				if (runs === null) continue;
 				after = strokePieces(page, stroke, runs);
 			}
@@ -6237,7 +6584,7 @@ export class NotebookView extends FileView {
 		const filter = this.eraseFilter();
 		if (changed) erasing.areas.inkErased(doc, filter);
 		if (erasing.areas.allowed(filter) && erasing.areas.eraseAreas(doc, page.id, areasUnderEraser(page.elements ?? [], ax, ay, bx, by, radius, filter), filter)) changed = true;
-		if (changed) this.renderer.invalidate();
+		return changed;
 	}
 
 	/** Which ink the eraser may touch (selective eraser). */
@@ -6871,7 +7218,7 @@ export class NotebookView extends FileView {
 		const [dx, dy] = screenToPage(this.viewport, clientX - rect.left, clientY - rect.top);
 		if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
 		let index = pageAt(layout, dx, dy);
-		if (index < 0) index = nearestPage(layout, dy);
+		if (index < 0) index = nearestPage(layout, dy, this.spreadOn ? dx : undefined);
 		const page = doc.pages[index];
 		const box = layout.boxes[index];
 		if (!page || !box) return null;

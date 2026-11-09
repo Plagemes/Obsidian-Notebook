@@ -9,7 +9,7 @@ export type ToolId = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "tex
 
 /** Sections of the sheets and of docs/design-ui.md, in display order. */
 export const GROUP_ORDER = [
-	"tool", "history", "selection", "navigate", "insert", "page", "reading", "side", "lecture", "view", "share", "notebook", "app", "zettel", "integration", "dev",
+	"tool", "history", "selection", "navigate", "insert", "page", "reading", "side", "lecture", "view", "macros", "share", "notebook", "app", "zettel", "integration", "dev",
 ] as const;
 export type ActionGroup = typeof GROUP_ORDER[number];
 
@@ -75,7 +75,7 @@ export interface UiContext {
 	sidePane: { available: boolean; open: boolean };
 	reading: { annotationsHidden: boolean; dim: boolean; /** 0.14 (392): the highlighter snaps to the text lines of PDF pages. Optional (off when absent). */ snap?: boolean; /** 0.16 (#45): the Select text mode of PDF pages is on. Optional (off when absent). */ selectText?: boolean };
 	toggles: {
-		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
+		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** 0.27 (#49): two pages side by side are shown now, and whether the view has room for them (absent: yes). */ spread?: boolean; spreadRoom?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
 		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
 		/** 0.25 (#99): the highlighter marks rectangles (area highlighter) instead of strokes. */ highlighterArea?: boolean;
 		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
@@ -95,6 +95,8 @@ export interface UiContext {
 	presenting?: boolean;
 	/** 0.25 (#219): the writing profile in use ("" none, "lecture", "study" or a custom id). Optional (none when absent). */
 	profile?: string;
+	/** 0.27 (#375): the workspace preset that holds now ("" none, "lecture", "study", "focus" or a saved id). Optional (none when absent). */
+	workspace?: string;
 	/** wave 0.10: how many notebook views are open in the workspace (tabs). Optional (0 when absent). */
 	openNotebooks?: number;
 	/** wave 0.10 (18): the back/forward history of visited pages has somewhere to go. Optional (absent: nothing to go back to). */
@@ -137,6 +139,10 @@ export interface ActionDef {
 	readonly choices?: "paper" | "size";
 	/** Extra search words (any language). */
 	readonly keywords?: string;
+	/** 0.27 (#170): the name the person gave it, shown instead of the translated `label` (a macro). */
+	readonly name?: string;
+	/** 0.27 (#170): may be pinned to the toolbar but is never ranked into a quick slot by itself (a macro). */
+	readonly pinOnly?: true;
 }
 
 /** Back and Forward only show once the history has somewhere to go. */
@@ -294,6 +300,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.26 related (#422): the side panel of handwritten pages related to the open Markdown note.
 	{ id: "related-pages", label: "command.relatedPages", icon: "files", group: "navigate", surfaces: ["sheet", "library"], priority: 52, scope: "global", command: true, readOnly: true, keywords: "related linked backlinks note markdown panel sidebar collegate pagine nota pannello" },
 	{ id: "toggle-page-mode", label: "toolbar.pageMode", icon: "book-open", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 46, scope: "view", command: "command.pageMode", readOnly: true, checked: (c) => !!c.toggles.pageMode, keywords: "swipe paged continuous scroll" },
+	// 0.27 spread (#49): two pages side by side. Only offered where the view has room for a spread (a phone keeps one page).
+	{ id: "toggle-spread", label: "toolbar.spread", icon: "columns-2", group: "navigate", surfaces: ["page", "sheet"], priority: 45, scope: "view", command: "command.spread", readOnly: true, when: (c) => c.toggles.spreadRoom !== false, checked: (c) => !!c.toggles.spread, keywords: "two pages book side by side landscape tablet due pagine affiancate libro" },
 	// wave 0.9 (361): find and replace in the text boxes of the notebook (a panel; the results jump to the page).
 	{ id: "find-replace", label: "command.findReplace", icon: "replace", group: "navigate", surfaces: ["sheet"], priority: 48, scope: "view", command: true, readOnly: true, keywords: "search text box substitute change word" },
 
@@ -450,6 +458,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "toggle-pages-panel", label: "tool.pages", icon: "panel-left", group: "view", surfaces: ["toolbar"], priority: 100, scope: "view", command: "command.toggleNavigator", readOnly: true, checked: (c) => c.toggles.navigator },
 	{ id: "toggle-ruler", label: "tool.ruler", icon: "ruler", group: "view", surfaces: ["quick", "radial", "sheet"], priority: 50, scope: "view", command: "command.toggleRuler", checked: (c) => c.toggles.ruler },
 	{ id: "pen-only", label: "pens.penOnly", icon: "pen-tool", group: "view", surfaces: ["quick", "sheet"], priority: 42, scope: "view", command: "command.penOnly", readOnly: true, checked: (c) => c.toggles.penOnly, keywords: "finger touch palm" },
+	// 0.27 workspaces (#375): presets of the plugin's panels around the notebook (slides, outline, reference window, minimap, related pages). They only open and close panels, so they work on a read-only notebook too.
+	{ id: "workspace-presets", label: "workspace.menu", icon: "layout-dashboard", group: "view", surfaces: ["sheet", "notebook"], priority: 43, scope: "view", command: "command.workspacePresets", readOnly: true, checked: (c) => !!c.workspace, keywords: "workspace preset layout panels lecture study focus slides outline reference area di lavoro disposizione pannelli lezione studio concentrazione" },
+	{ id: "workspace-lecture", label: "workspace.action.lecture", icon: "presentation", group: "view", surfaces: ["sheet"], priority: 37, scope: "view", command: "command.workspaceLecture", readOnly: true, checked: (c) => c.workspace === "lecture", keywords: "workspace lecture slides notebook outline one tap area di lavoro lezione diapositive" },
 	// 0.25 profiles (#219): one tap switches the pens, the stabilization and the paper of new notebooks (view/writing-profiles.ts). They change tools and defaults only, so they work on a read-only notebook too.
 	{ id: "profile-lecture", label: "profiles.action.lecture", icon: "zap", group: "view", surfaces: ["sheet"], priority: 40, scope: "view", command: "command.profileLecture", readOnly: true, checked: (c) => c.profile === "lecture", keywords: "profile lecture fast class quick pens stabilization paper profilo lezione veloce" },
 	{ id: "profile-study", label: "profiles.action.study", icon: "graduation-cap", group: "view", surfaces: ["sheet"], priority: 39, scope: "view", command: "command.profileStudy", readOnly: true, checked: (c) => c.profile === "study", keywords: "profile study careful slow neat pens stabilization paper profilo studio accurato" },
@@ -606,6 +617,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-insert-note-svg", label: "noteInsert.actionSvg", icon: "file-image", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.4, scope: "view", command: true, when: hasSelection, keywords: "insert note markdown svg vector embed inserisci nota vettoriale" },
 	{ id: "selection-paste-device", label: "clipshare.paste", icon: "monitor-down", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection", "lasso"], priority: 47, scope: "view", command: true, when: (c) => c.tool === "lasso" || hasSelection(c), keywords: "clipboard tablet phone sync share vault appunti" },
 
+	// 0.27 macros (#170): the manager (list, editor, toolbar button) of the person's own sequences of actions. The macros themselves are added to the
+	// registry at run time (ui/macros.ts: `macro-<id>`, in this group of the sheet, pinnable to the toolbar, one Obsidian command each).
+	{ id: "macros-open", label: "macros.open", icon: "workflow", group: "macros", surfaces: ["sheet"], priority: 30, scope: "view", command: "macros.command.open", readOnly: true, keywords: "macro sequence automate shortcut record steps toolbar button sequenza automatizza scorciatoia passaggi" },
+
 	// --- status banners (wave 0.7): their buttons, listed so that every visible control has a documented place.
 	banner("safe-open-normally", "safe.banner.openNormally", "shield-off", "notebook", "view/resilience.ts"),
 	banner("safe-repair", "safe.banner.repair", "wrench", "notebook", "view/resilience.ts"),
@@ -622,8 +637,23 @@ export const ACTIONS: readonly ActionDef[] = [
 
 const BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
 
+/** 0.27 (#170): actions added at run time (the person's macros, `ui/macros.ts`). Replaced as a whole; empty until a macro exists. */
+let EXTRA: readonly ActionDef[] = [];
+let EXTRA_BY_ID = new Map<string, ActionDef>();
+
+/** Replaces the run-time actions. They never shadow a registry action (an id of ACTIONS is ignored). */
+export function setExtraActions(list: readonly ActionDef[]): void {
+	EXTRA = list.filter((a) => !BY_ID.has(a.id));
+	EXTRA_BY_ID = new Map(EXTRA.map((a) => [a.id, a]));
+}
+
+/** The registry and the run-time actions: what the layout engine and the sheets are built from. */
+export function allActions(): readonly ActionDef[] {
+	return EXTRA.length > 0 ? [...ACTIONS, ...EXTRA] : ACTIONS;
+}
+
 export function actionById(id: string): ActionDef | undefined {
-	return BY_ID.get(id);
+	return BY_ID.get(id) ?? EXTRA_BY_ID.get(id);
 }
 
 /** The action is meaningful in this context (otherwise it is not shown at all). */

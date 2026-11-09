@@ -20372,3 +20372,829 @@ body.notebook-style-obsidian {
 .nb-ui.notebook-related .nb-empty-state {
 	padding: 24px 8px;
 }
+
+/* ===== 0.27 taper ===== */
+/* Taper (#351): how much the line of a pen thins towards the start and the end of a stroke. A header (reset, name, a small picture drawn by the engine) and one slider per end, in the pen options. */
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-row {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2, 8px);
+	padding: 0 4px;
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-row.notebook-hidden {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-head,
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-end {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-3, 12px);
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-reset {
+	flex: 0 0 auto;
+	min-width: 40px;
+	min-height: 40px;
+	color: var(--nb-text-muted);
+	border-radius: var(--nb-radius-pill);
+}
+
+@media (pointer: coarse) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-taper-reset {
+		min-width: 44px;
+		min-height: 44px;
+	}
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-reset:hover:not(:disabled),
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-reset:focus-visible {
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-label,
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-end-label {
+	flex: 0 0 auto;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-end-label {
+	flex-basis: 3.6em;
+	padding-left: 4px;
+}
+
+/* The picture is decoration (aria-hidden): the same stroke shape the page will get, in the accent colour on a tile. */
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-preview {
+	flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 72px;
+	max-width: 200px;
+	height: 36px;
+	margin-left: auto;
+	padding: 2px 8px;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-tile);
+	border: 1px solid var(--nb-border);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-preview svg {
+	width: 100%;
+	height: 100%;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-preview path {
+	fill: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-slider {
+	flex: 1 1 auto;
+	min-width: 80px;
+	min-height: 32px;
+	accent-color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-taper-value {
+	flex: 0 0 auto;
+	min-width: 3.2em;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text);
+}
+
+/* ===== 0.27 inputlayout ===== */
+/* Layout by input device (src/ui/input-layout.ts, src/view/input-layout-view.ts): nb-input-pen | nb-input-touch | nb-input-mouse on the notebook view root, next to nb-vp-*. */
+/* The pen is the compact default and has no rules of its own. A finger also gets one toolbar size more (--nb-target, set by the view). */
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch .notebook-toolbar-row,
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch .notebook-toolbar-group {
+	gap: var(--nb-space-1);
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch .notebook-toolbar-row {
+	row-gap: var(--nb-space-2);
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch .notebook-context-bar {
+	gap: var(--nb-space-2);
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch .notebook-menu-item {
+	min-height: var(--nb-target);
+	gap: var(--nb-space-3);
+}
+
+/* Short landscape keeps its tight bars even for a finger: vertical space wins there (nb-vp-short rule above). */
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch.nb-vp-short .notebook-toolbar-row {
+	row-gap: 0;
+}
+
+/* Mouse and keyboard: a pointer cursor and a clearer hover and keyboard focus on the bar buttons (the tooltip adds the shortcut). */
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-tool,
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-menu-item {
+	cursor: pointer;
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-tool:hover:not(.is-active) {
+	background: var(--nb-hover);
+	box-shadow: inset 0 0 0 1px var(--nb-border);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-menu-item:hover {
+	background: var(--nb-hover);
+	box-shadow: inset 0 0 0 1px var(--nb-border);
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-tool:focus-visible,
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-menu-item:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+/* ===== 0.27 semzoom ===== */
+.nb-ui.nb-sz-layer {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	overflow: hidden;
+	pointer-events: none;
+	opacity: calc(var(--nb-sz-alpha, 0) * var(--nb-sz-writing, 1));
+	/* A faint veil over the small page ink so the labels read first; it is part of the overlay, the pages are not changed. */
+	background: color-mix(in srgb, var(--nb-bg) 28%, transparent);
+	touch-action: none;
+}
+
+.nb-ui.nb-sz-layer.is-off,
+.nb-ui.nb-sz-layer .nb-sz-label.is-off {
+	display: none;
+}
+
+.nb-ui.nb-sz-layer.is-writing {
+	--nb-sz-writing: 0;
+}
+
+.nb-ui.nb-sz-layer .nb-sz-label {
+	position: absolute;
+	left: 0;
+	top: 0;
+	box-sizing: border-box;
+	width: var(--nb-sz-w, 0px);
+	height: var(--nb-sz-h, 0px);
+	transform: translate(var(--nb-sz-x, 0px), var(--nb-sz-y, 0px));
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	box-shadow: var(--nb-shadow-float);
+	font-family: var(--font-interface);
+	font-size: var(--nb-sz-font, 16px);
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.nb-ui.nb-sz-layer .nb-sz-label.is-text {
+	padding: 0 calc(var(--nb-sz-font, 16px) * 0.65);
+}
+
+.nb-ui.nb-sz-layer .nb-sz-label .nb-sz-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-sz-layer .nb-sz-label.is-l1 {
+	border-left: 4px solid var(--nb-accent);
+}
+
+.nb-ui.nb-sz-layer .nb-sz-label.is-l2 {
+	border-left: 3px solid var(--nb-accent-strong);
+}
+
+.nb-ui.nb-sz-layer .nb-sz-label.is-l3 {
+	border-color: var(--nb-border);
+	background: var(--nb-tile);
+	color: var(--nb-text-muted);
+	font-weight: 500;
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui.nb-sz-layer .nb-sz-label.is-picture {
+	padding: 0;
+	justify-content: center;
+}
+
+.nb-ui.nb-sz-layer .nb-sz-label .nb-sz-picture {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	pointer-events: none;
+}
+
+.nb-ui.nb-sz-layer .nb-sz-label.is-hover {
+	border-color: var(--nb-accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.nb-ui.nb-sz-layer {
+		transition: opacity var(--nb-motion) var(--nb-ease);
+	}
+}
+
+/* ===== 0.27 workspaces ===== */
+/* The Workspaces picker (#375): one tile per preset, the one that holds now marked; saved presets get rename / delete buttons. */
+.nb-ui.nb-ws-modal .nb-ws-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui.nb-ws-modal .nb-ws-row {
+	display: flex;
+	align-items: center;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-ws-modal .nb-ws-row.is-current {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui.nb-ws-modal .nb-ws-row-btn {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	min-height: 56px;
+	margin: 0;
+	padding: 6px 14px;
+	border: 0;
+	border-radius: var(--nb-radius-tile);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.nb-ui.nb-ws-modal .nb-ws-row-icon {
+	display: inline-flex;
+	flex: none;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-ws-modal .nb-ws-row-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.nb-ws-modal .nb-ws-row-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.nb-ui.nb-ws-modal .nb-ws-row-title {
+	overflow: hidden;
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-ws-modal .nb-ws-row-detail {
+	overflow: hidden;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-ws-modal .nb-ws-now {
+	flex: none;
+	padding: 2px 10px;
+	border-radius: var(--nb-radius-pill, 999px);
+	background: var(--nb-accent);
+	color: var(--nb-on-accent, #fff);
+	font-size: var(--nb-fs-meta);
+	font-weight: 600;
+}
+
+.nb-ui.nb-ws-modal .nb-ws-row-actions {
+	display: flex;
+	flex: none;
+	gap: 2px;
+	padding-right: 6px;
+}
+
+.nb-ui.nb-ws-modal .nb-ws-icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-tile);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui.nb-ws-modal .nb-ws-icon-btn:hover,
+.nb-ui.nb-ws-modal .nb-ws-icon-btn:focus-visible {
+	background: var(--nb-hover, var(--nb-tile));
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-ws-modal .nb-ws-icon-btn svg {
+	width: 18px;
+	height: 18px;
+}
+
+/* ===== 0.27 pdfsuggest ===== */
+/* Suggested search terms: one scrolling row of chips under the PDF search box (outline, headings, your own words). */
+.nb-ui.notebook-search-suggest {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--nb-space-2);
+	padding: 2px var(--nb-space-3) var(--nb-space-2);
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+}
+
+.nb-ui.notebook-search-suggest::-webkit-scrollbar {
+	display: none;
+}
+
+.nb-ui.notebook-search-suggest.notebook-hidden {
+	display: none;
+}
+
+.nb-ui button.notebook-search-chip {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
+	max-width: 70vw;
+	height: auto;
+	padding: 2px 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 999px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+}
+
+.nb-ui button.notebook-search-chip.is-outline {
+	border-color: transparent;
+	background: var(--nb-accent-soft);
+}
+
+.nb-ui button.notebook-search-chip.is-text {
+	border-style: dashed;
+}
+
+.nb-ui button.notebook-search-chip:hover,
+.nb-ui button.notebook-search-chip:focus-visible {
+	border-style: solid;
+	border-color: var(--nb-accent);
+}
+
+/* ===== 0.27 plannertasks ===== */
+/* "Tasks due: 3" (roadmap #266): a quiet chip at the top right of a daily or weekly planner page; tapping it opens the list of the vault's
+   tasks due on the page's days (read only; a row opens the note at the task). The chip joins the top stack below the "Referenced on" chip:
+   `--nb-pt-top` is its top edge, from what else sits at the top right (symbols strip, "Back to slide" pill, "Referenced on" chip). */
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks) { --nb-pt-top: 10px; }
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks):has(> .notebook-symbol-strip:not(.notebook-hidden)) { --nb-pt-top: 66px; }
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks):has(> .notebook-slide-back) { --nb-pt-top: 58px; }
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks):has(> .notebook-slide-back):has(> .notebook-symbol-strip:not(.notebook-hidden)) { --nb-pt-top: 114px; }
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks):has(> .notebook-page-refs) { --nb-pt-top: 54px; }
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks):has(> .notebook-page-refs):has(> .notebook-symbol-strip:not(.notebook-hidden)) { --nb-pt-top: 110px; }
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks):has(> .notebook-page-refs):has(> .notebook-slide-back) { --nb-pt-top: 102px; }
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks):has(> .notebook-page-refs):has(> .notebook-slide-back):has(> .notebook-symbol-strip:not(.notebook-hidden)) { --nb-pt-top: 158px; }
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks {
+	position: absolute;
+	top: calc(var(--nb-pt-top, 10px) + var(--nb-top-shift, 0px));
+	right: 56px;
+	z-index: 5;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: min(60%, 320px);
+	min-height: 32px;
+	padding: 0 12px 0 10px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-glass);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks[aria-expanded="true"] {
+	border-color: var(--nb-border-strong);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks.is-done .notebook-plantasks-icon { color: var(--nb-text-muted); }
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-icon .svg-icon {
+	width: 14px;
+	height: 14px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-panel {
+	position: absolute;
+	top: calc(var(--nb-pt-top, 10px) + 38px + var(--nb-top-shift, 0px));
+	right: 56px;
+	z-index: 7;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	box-sizing: border-box;
+	width: min(340px, calc(100% - 72px));
+	max-height: min(60%, 380px);
+	padding: 6px;
+	overflow-y: auto;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-lg, 14px);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-title {
+	padding: 6px 10px 4px;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	min-height: 44px;
+	padding: 8px 10px;
+	border: 0;
+	border-radius: var(--nb-radius-md, 10px);
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	font-size: var(--nb-fs-body, 14px);
+	text-align: left;
+	cursor: pointer;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-row:hover,
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-row:focus-visible {
+	background: var(--nb-accent-soft, var(--nb-glass));
+}
+
+/* A status, not a control: a small ring while to do, a filled disc with a tick when done. The whole row is the button. */
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-mark {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 14px;
+	height: 14px;
+	margin-top: 3px;
+	border: 1.5px solid var(--nb-text-muted);
+	border-radius: 50%;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-row.is-done .notebook-plantasks-mark {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent);
+	color: var(--nb-on-accent, #fff);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-mark .svg-icon {
+	width: 10px;
+	height: 10px;
+	stroke-width: 3;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-task {
+	overflow-wrap: anywhere;
+	line-height: 1.3;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-row.is-done .notebook-plantasks-task {
+	color: var(--nb-text-muted);
+	text-decoration: line-through;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-note {
+	display: flex;
+	gap: 8px;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-day {
+	color: var(--nb-accent);
+	font-weight: 600;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-more,
+.workspace-leaf-content .view-content.notebook-view .notebook-plantasks-hint {
+	padding: 4px 10px;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+}
+
+/* The welcome-back card (once per opening, gone at the first stroke) is as wide as a phone: there the chip steps aside while it is shown. */
+@media (max-width: 600px) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-welcome-back) > .notebook-plantasks { display: none; }
+}
+
+/* The "Referenced on" list opens at the same place as the chip: the chip steps aside while it is open (and the tasks panel hides that list). */
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-page-refs-list) > .notebook-plantasks { display: none; }
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-plantasks-panel) > .notebook-page-refs-list { display: none; }
+/* ===== end 0.27 plannertasks ===== */
+
+/* ===== 0.27 macros ===== */
+
+/* The manager (view/macros-modal.ts): a list of rows, and an editor with the steps in a column. */
+.nb-ui.nb-macro-modal .nb-modal-section-title {
+	margin: 14px 0 8px;
+}
+
+.nb-ui.nb-macro-modal .nb-modal-section-title:first-child {
+	margin-top: 0;
+}
+
+.nb-ui.nb-macro-modal .nb-modal-body {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-list,
+.nb-ui.nb-macro-modal .nb-macro-steps {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-row,
+.nb-ui.nb-macro-modal .nb-macro-step {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 56px;
+	padding: 8px 12px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon {
+	flex: 0 0 auto;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-detail {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-tools {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 2px;
+}
+
+/* The icon choices of the editor: a wrapping grid of 44 px targets. */
+.nb-ui.nb-macro-modal .nb-macro-icons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon-choice {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon-choice .svg-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon-choice:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon-choice.is-active {
+	border-color: var(--nb-accent);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-icon-choice:focus-visible,
+.nb-ui.nb-macro-modal .nb-macro-select:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+/* A step: its number, the action's icon, its name (and the value it takes), then the move and remove buttons. */
+.nb-ui.nb-macro-modal .nb-macro-step {
+	min-height: 52px;
+	padding: 6px 8px 6px 12px;
+	gap: 10px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-n {
+	flex: 0 0 auto;
+	min-width: 18px;
+	color: var(--nb-text-faint);
+	font-size: var(--nb-fs-meta);
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-icon .svg-icon {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	min-width: 0;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-label {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-select {
+	min-height: 40px;
+	max-width: 100%;
+	padding: 4px 28px 4px 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-tile);
+	background-color: var(--nb-bg);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-family: inherit;
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step.is-unavailable .nb-macro-step-label,
+.nb-ui.nb-macro-modal .nb-macro-step.is-unavailable .nb-macro-step-icon {
+	color: var(--nb-text-faint);
+	text-decoration: line-through;
+}
+
+.nb-ui.nb-macro-modal .nb-macro-step-badge {
+	padding: 1px 8px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-macro-modal .nb-modal-note.is-hidden {
+	display: none;
+}
+
+/* The step picker (a prompt): icon, name, and the group at the right. */
+.nb-ui.nb-macro-picker .nb-macro-pick {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 44px;
+}
+
+.nb-ui.nb-macro-picker .nb-macro-pick-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-macro-picker .nb-macro-pick-label {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui.nb-macro-picker .nb-macro-pick-group {
+	flex: 0 0 auto;
+	color: var(--nb-text-faint);
+	font-size: var(--nb-fs-meta);
+}
+
+@media (max-width: 480px) {
+	.nb-ui.nb-macro-modal .nb-macro-row {
+		padding: 8px 8px 8px 10px;
+		gap: 8px;
+	}
+
+	.nb-ui.nb-macro-modal .nb-macro-step {
+		gap: 6px;
+		padding-left: 8px;
+	}
+
+	.nb-ui.nb-macro-modal .nb-macro-step-n {
+		display: none;
+	}
+}

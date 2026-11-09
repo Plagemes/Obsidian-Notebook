@@ -4,6 +4,7 @@
  * dragging it is the same as panning and touches nothing in the document.
  */
 import { nearestPage, type Layout } from "./layout";
+import { isSpreadLayout } from "./spread";
 import { PAGE_MARGIN, screenToPage, type Size, type Viewport } from "./viewport";
 
 /** The thumb is never shorter than this (CSS px), so a long notebook still leaves something to grab. */
@@ -68,6 +69,7 @@ export function offsetForPosition(position: number, layout: Layout, scale: numbe
 
 /** The page in the middle of the view for a given `offsetY`: the page the page indicator shows (and the bubble). */
 export function pageAtOffset(layout: Layout, viewport: Viewport, view: Size, offsetY: number): number {
-	const [, y] = screenToPage({ ...viewport, offsetY }, view.width / 2, view.height / 2);
-	return Math.max(0, nearestPage(layout, y));
+	const [x, y] = screenToPage({ ...viewport, offsetY }, view.width / 2, view.height / 2);
+	// 0.27 (#49): in a two-page spread the pair is equally near vertically; the page nearer to the middle sideways is the one shown.
+	return Math.max(0, nearestPage(layout, y, isSpreadLayout(layout) ? x : undefined));
 }

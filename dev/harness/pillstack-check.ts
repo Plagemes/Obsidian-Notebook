@@ -31,12 +31,13 @@ interface PillstackView extends HarnessView {
 	minimap: { el: HTMLElement; preferences: { corner: string; collapsed: boolean } };
 	meaningTools: { choose(index: number | null): void };
 	welcomeBack: { offer(doc: HarnessView["document"]): void };
-	app: { saveLocalStorage(key: string, data: unknown): void };
+	app: { saveLocalStorage(key: string, data: unknown): void; vault: { create(p: string, data: string): Promise<unknown> }; metadataCache: { caches: Map<string, unknown> } };
+	plannerTasks: { reset(): void };
 	addPage(): void;
 	scrollToPage(index: number, y?: number, animate?: boolean): void;
 	host: HarnessView["host"] & {
 		settings: HarnessView["host"]["settings"] & {
-			lectureHeader: string; welcomeBack: boolean; slideBack: boolean; symbolStrip: boolean; symbolCount: number; pageRefs: boolean; minimapMode: string;
+			lectureHeader: string; plannerTasks: boolean; welcomeBack: boolean; slideBack: boolean; symbolStrip: boolean; symbolCount: number; pageRefs: boolean; minimapMode: string;
 			colourMeanings: Array<{ colour: string; label: string }>;
 		};
 	};
@@ -56,6 +57,7 @@ const PIECES: Array<[string, string]> = [
 	["lecture-mode chip", ".notebook-lecture-chip"],
 	["contextual bar", ".notebook-context-bar:not(.notebook-hidden)"],
 	["welcome-back card", ".notebook-welcome-back"],
+	["tasks chip", ".notebook-plantasks"],
 
 ];
 
@@ -101,6 +103,12 @@ async function prepare(api: PillstackCheckApi): Promise<PillstackView> {
 	const pages = v.document.pages;
 	const last = pages[pages.length - 1]!;
 	const link = `[[New.notebook#p${pages.length}&id=${last.id}|see the new page]]`;
+	// 0.27 plannertasks: the new page is a daily planner page with a task due that day, so its tasks chip joins the stack.
+	Object.assign(last, { paper: { kind: "planner-day", spacing: 28 }, elements: [{ id: "ps-title", type: "text", x: 8, y: 8, width: 500, text: "Thursday, 12 March 2026", fontSize: 17, color: "#1f2937" }] });
+	await v.app.vault.create("Tasks/Pillstack.md", "- [ ] Hand in the form 📅 2026-03-12").catch(() => undefined);
+	v.app.metadataCache.caches.set("Tasks/Pillstack.md", { listItems: [{ task: " " }] });
+	v.host.settings.plannerTasks = true;
+	v.plannerTasks.reset();
 	pages[0]!.elements = [...(pages[0]!.elements ?? []), text("ps-a", `Intro, then ${link}`)];
 	pages[2]!.elements = [...(pages[2]!.elements ?? []), text("ps-c", link)];
 	v.pageRefs.sync();
@@ -147,7 +155,8 @@ export async function checkPillstack(api: PillstackCheckApi): Promise<{ ok: bool
 		const shown = PIECES.map(([name, sel]) => ({ name, el: body.querySelector<HTMLElement>(`:scope > ${sel}`) })).map((p) => ({ ...p, ok: visible(p.el) }));
 		for (const p of shown) {
 			const r = p.el?.getBoundingClientRect();
-			add(`${p.name} is on screen`, p.ok, r ? `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}` : "missing");
+			add(`${p.name} is on screen`, p.ok || (p.name === "tasks chip" && bodyRect.width <= 600), // (0.27: on a phone the tasks chip steps aside for the welcome-back card)
+			 r ? `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}` : "missing");
 		}
 		const rects = shown.filter((p) => p.ok).map((p) => ({ name: p.name, r: p.el!.getBoundingClientRect() }));
 		for (const p of rects) {
@@ -165,9 +174,10 @@ export async function checkPillstack(api: PillstackCheckApi): Promise<{ ok: bool
 		if (visible(list)) {
 			const lr = list.getBoundingClientRect();
 			add("the opened list stays inside the page area", lr.left >= bodyRect.left - 1 && lr.right <= bodyRect.right + 1 && lr.bottom <= bodyRect.bottom + 1);
-			const under = rects.filter((p) => p.name !== "referenced-on chip" && p.name !== "welcome-back card" && overlap(lr, p.r)).map((p) => p.name);
+			const under = rects.filter((p) => p.name !== "referenced-on chip" && p.name !== "welcome-back card" && p.name !== "tasks chip" && overlap(lr, p.r)).map((p) => p.name);
 			add("the opened list covers none of the other pieces", under.length === 0, under.join(", "));
 			add("the welcome-back card steps aside while the list is open", !visible(body.querySelector<HTMLElement>(":scope > .notebook-welcome-back")));
+			add("the tasks chip steps aside while the list is open", !visible(body.querySelector<HTMLElement>(":scope > .notebook-plantasks")));
 		} else add("the referenced-on list opens", false, "no list");
 		v.pageRefs.closeList();
 		await api.frames(3);

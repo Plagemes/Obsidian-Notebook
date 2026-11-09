@@ -130,6 +130,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"undo": (v) => v.undo(),
 	"redo": (v) => v.redo(),
 	"history-panel": (v) => v.openHistoryPanel(),
+	// 0.27 (#170): the macro manager (the macros themselves run through NotebookView.runAction)
+	"macros-open": (v) => v.openMacros(),
 
 	// selection
 	"selection-copy": (v) => void v.selectionTools?.copy(),
@@ -210,6 +212,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"nav-back": (v) => v.navigate(-1),
 	"nav-forward": (v) => v.navigate(1),
 	"toggle-page-mode": (v) => v.togglePageMode(),
+	"toggle-spread": (v) => v.toggleSpread(),
 	"find-replace": (v) => v.openFindReplace(),
 
 	// insert
@@ -322,7 +325,14 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 			return;
 		}
 		// A copy goes to the page trash first; the page is deleted only once that copy is on disk.
-		void deletePageKeepingCopy(v.pageToolsHost(), doc, p, i, (at) => v.applyCommand(new DeletePage(p, at), Math.max(0, at - 1)));
+		// Review fix (S1): in a two-page spread the notice names the page that went, so a wrong target is seen at once (Undo brings it back).
+		let number = i + 1;
+		void deletePageKeepingCopy(v.pageToolsHost(), doc, p, i, (at) => {
+			number = at + 1;
+			return v.applyCommand(new DeletePage(p, at), Math.max(0, at - 1));
+		}).then((done) => {
+			if (done && v.inSpread) showNotice(t("page.deletedNamed", { n: String(number) }), 5000);
+		}, (e: unknown) => console.error("[notebook] deleting the page failed", e));
 	}),
 
 	// PDF and reading
@@ -387,6 +397,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"toggle-pages-panel": (v) => v.toggleNavigator(),
 	"toggle-ruler": (v) => v.toggleRuler(),
 	"pen-only": (v) => v.togglePenOnly(),
+	"workspace-presets": (v) => v.openWorkspacePicker(),
+	"workspace-lecture": (v) => v.applyWorkspacePreset("lecture"),
 	"profile-lecture": (v) => v.applyWritingProfile("lecture"),
 	"profile-study": (v) => v.applyWritingProfile("study"),
 	"profile-next": (v) => v.applyNextWritingProfile(),

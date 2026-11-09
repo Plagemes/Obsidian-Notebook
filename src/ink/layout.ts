@@ -31,6 +31,8 @@ export interface Layout {
 	height: number;
 	/** wave 0.9: the part of the document width the view fits in continuous mode (the union of the boxes' windows). */
 	window?: Range;
+	/** 0.27 (#49): the page indices of each row of a two-page spread, in reading order. Absent: one page per row. */
+	rows?: ReadonlyArray<readonly number[]>;
 }
 
 /** A window that is at least this much of the page width is not worth a different zoom. */
@@ -79,14 +81,44 @@ export function pageAt(layout: Layout, x: number, y: number, tolerance = 0): num
 		x >= b.x - tolerance && x <= b.x + b.width + tolerance && y >= b.y - tolerance && y <= b.y + b.height + tolerance);
 }
 
-/** Page whose box is closest to the document point vertically (for "current page"). */
-export function nearestPage(layout: Layout, y: number): number {
+/**
+ * Review fix (R5): whether page `index`, one of the `touched` pages, is the one the eraser is on: the point is inside its box, or it is the
+ * only page touched. A locked page that the eraser's circle only reaches into from the mate page is skipped without a word.
+ */
+export function eraserIsOnPage(layout: Layout, touched: readonly number[], index: number, x: number, y: number): boolean {
+	if (touched.length <= 1) return true;
+	const b = layout.boxes[index];
+	return !!b && x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height;
+}
+
+/**
+ * Review fix (S4): every page whose box the circle of `radius` around the document point touches, in page order. An eraser by the binding
+ * of a spread (or in the gap between two pages of a column) reaches both pages, so it erases on both, not only on the first.
+ */
+export function pagesTouching(layout: Layout, x: number, y: number, radius: number): number[] {
+	const out: number[] = [];
+	layout.boxes.forEach((b, i) => {
+		const dx = x < b.x ? b.x - x : x > b.x + b.width ? x - b.x - b.width : 0;
+		const dy = y < b.y ? b.y - y : y > b.y + b.height ? y - b.y - b.height : 0;
+		if (dx * dx + dy * dy <= radius * radius) out.push(i);
+	});
+	return out;
+}
+
+/**
+ * Page whose box is closest to the document point vertically (for "current page"). `x` (optional) decides between
+ * pages that are equally near vertically, i.e. the two pages of a spread row: the one nearer sideways wins.
+ */
+export function nearestPage(layout: Layout, y: number, x?: number): number {
 	let best = -1;
 	let bestDist = Infinity;
+	let bestSide = Infinity;
 	layout.boxes.forEach((b, i) => {
 		const d = y < b.y ? b.y - y : y > b.y + b.height ? y - b.y - b.height : 0;
-		if (d < bestDist) {
+		const side = x === undefined ? 0 : x < b.x ? b.x - x : x > b.x + b.width ? x - b.x - b.width : 0;
+		if (d < bestDist || (d === bestDist && side < bestSide)) {
 			bestDist = d;
+			bestSide = side;
 			best = i;
 		}
 	});

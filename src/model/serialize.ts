@@ -11,6 +11,7 @@ import { isStoredViewName, normalizeViewName, validRegion } from "./views";
 import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE, CHECKBOX_PATH_MAX, cleanCheckboxLabel, isOurBlockId } from "./checklist";
 import { AREA_MAX_SIDE, AREA_MIN_SIDE } from "./area";
 import { isOpacity, normaliseOpacity, OPACITY_MAX, OPACITY_MIN } from "./opacity";
+import { canTaper, isTaper, TAPER_MAX, TAPER_MIN } from "./taper";
 import { commentLine, normalizeComments, readComments } from "./comments-format";
 import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
 import { normalizePageTags } from "./page-tags";
@@ -111,7 +112,9 @@ function strokeLine(s: Stroke): string {
 	const fill = (s.fill !== undefined ? `,"fill":${j(s.fill)}` : "") + (s.fillTint !== undefined ? `,"fillTint":${j(s.fillTint)}` : "") + (s.dash !== undefined ? `,"dash":${j(s.dash)}` : "");
 	// v24: `opacity` only when set, after the shape style.
 	const opacity = s.opacity !== undefined ? `,"opacity":${j(s.opacity)}` : "";
-	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${jc(s)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide}${group}${nib}${fill}${opacity},"points":${j(s.points)}}`;
+	// v25: `taperStart` and `taperEnd`, each only when set, after `opacity`.
+	const taper = (s.taperStart !== undefined ? `,"taperStart":${j(s.taperStart)}` : "") + (s.taperEnd !== undefined ? `,"taperEnd":${j(s.taperEnd)}` : "");
+	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${jc(s)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide}${group}${nib}${fill}${opacity}${taper},"points":${j(s.points)}}`;
 }
 
 /**
@@ -533,7 +536,7 @@ function readPoint(v: unknown, path: string): Point {
  */
 type SlideIds = ReadonlySet<string> | "any" | "ignore";
 
-function readStroke(v: unknown, path: string, drop: Dropped | null = null, slides: SlideIds = "any", groups = true, pens = true, shapeStyle = true, withOpacity = true): Stroke {
+function readStroke(v: unknown, path: string, drop: Dropped | null = null, slides: SlideIds = "any", groups = true, pens = true, shapeStyle = true, withOpacity = true, withTaper = true): Stroke {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	// v20: a tool name this version does not know is a detail of the stroke when reading leniently (the stroke is read as a "pen" and
@@ -625,6 +628,21 @@ function readStroke(v: unknown, path: string, drop: Dropped | null = null, slide
 	if (withOpacity) {
 		const opacity = readOpacity(v, path, drop);
 		if (opacity !== undefined) stroke.opacity = opacity;
+	}
+	// v25 (#351): the taper of the two ends (a file of an older format has none of ours: odd keys are ignored, as the migration drops them).
+	if (withTaper) {
+		for (const key of ["taperStart", "taperEnd"] as const) {
+			if (v[key] === undefined) continue;
+			// Details: a value outside [TAPER_MIN, TAPER_MAX], one that is not a number, or one on a stroke that cannot taper (not a line pen, or not
+			// drawn by the wet-ink geometry) is dropped and counted when reading leniently (the end is then not tapered); strictly it fails.
+			const value = orDrop(drop, () => {
+				if (!canTaper(tool, render)) fail(`${path}.${key}`, `a stroke of tool '${tool}' with render ${render} cannot taper`);
+				const raw = v[key];
+				if (!isTaper(raw)) fail(`${path}.${key}`, `expected a number from ${TAPER_MIN} to ${TAPER_MAX}`);
+				return raw;
+			});
+			if (value !== undefined) stroke[key] = value;
+		}
 	}
 	return stroke;
 }
@@ -1548,7 +1566,7 @@ function dissolveSmallGroups(page: Page, path: string, drop: Dropped | null): vo
 	});
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true, withTimes = true, withPens = true, withShapeStyle = true, withOpacity = true): Page {
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true, withTimes = true, withPens = true, withShapeStyle = true, withOpacity = true, withTaper = true): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -1560,7 +1578,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 	if (spacing < MIN_PAPER_SPACING) fail(`${path}.paper.spacing`, `must be at least ${MIN_PAPER_SPACING} pt`);
 	if (!Array.isArray(v.strokes)) fail(`${path}.strokes`, "expected an array");
 	const strokes = v.strokes.map((s, i) => {
-		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop, slides, withGroups, withPens, withShapeStyle, withOpacity);
+		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop, slides, withGroups, withPens, withShapeStyle, withOpacity, withTaper);
 		if (ids.has(stroke.id)) fail(`${path}.strokes[${i}].id`, "duplicate id");
 		ids.add(stroke.id);
 		freezeStroke(stroke);
@@ -1876,7 +1894,7 @@ export class StagedParse {
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18, this.from >= 19, this.from >= 20, this.from >= 22, this.from >= 24);
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18, this.from >= 19, this.from >= 20, this.from >= 22, this.from >= 24, this.from >= 25);
 	}
 
 	get pending(): number {
@@ -1945,7 +1963,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v21 → v22 only drops the strokes' `fill`, `fillTint` and `dash` keys (ignored page by page), so large v21 files are staged too.
 	// v22 → v23 is the identity apart from the version (the area element is new and nothing is dropped), so large v22 files are staged too.
 	// v23 → v24 only drops the `opacity` keys of strokes, images and areas (ignored page by page), so large v23 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22 || pre.version === 23) return StagedParse.create(pre.raw, first, pre.version);
+	// v24 → v25 only drops the `taperStart` and `taperEnd` keys of strokes (ignored page by page), so large v24 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22 || pre.version === 23 || pre.version === 24) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }

@@ -102,7 +102,8 @@ export function sameValue(a: unknown, b: unknown, skip?: ReadonlySet<string>): b
 /** How a stroke on both sides differs: "same", "moved" (the same ink, shifted as a whole) or "changed" (shape or style). */
 export function compareStroke(a: Stroke, b: Stroke): "same" | "moved" | "changed" {
 	if (a.tool !== b.tool || a.color !== b.color || a.width !== b.width || a.render !== b.render || !!a.hidden !== !!b.hidden || a.slide !== b.slide
-		|| a.nib !== b.nib || a.fill !== b.fill || !!a.fillTint !== !!b.fillTint || a.dash !== b.dash || a.opacity !== b.opacity) return "changed";
+		|| a.nib !== b.nib || a.fill !== b.fill || !!a.fillTint !== !!b.fillTint || a.dash !== b.dash || a.opacity !== b.opacity
+			|| a.taperStart !== b.taperStart || a.taperEnd !== b.taperEnd) return "changed";
 	const pa = a.points;
 	const pb = b.points;
 	if (pa.length !== pb.length) return "changed";

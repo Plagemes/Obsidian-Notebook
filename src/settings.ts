@@ -1,6 +1,7 @@
 import type { PressureMode } from "./ink/pressure";
 import { defaultPenSets, MAX_FOLDER_ASSIGNMENTS, MAX_NOTEBOOK_ASSIGNMENTS, normaliseAssignments, normalisePenSets, type PenSet } from "./view/pen-sets";
 import { normaliseActive, normaliseProfiles, type WritingProfile } from "./view/writing-profiles";
+import { normaliseActivePreset, normalisePresets, type WorkspacePreset } from "./view/workspace-presets";
 import { isToleranceName, parseLegend, type Meaning, type ToleranceName } from "./model/colour-meaning";
 import { DEFAULT_ERASER_SIZE, DEFAULT_FAVOURITES, normaliseEraserSize, normaliseFavourites, type FavouritePen } from "./view/favourites";
 import { cleanStampFormat, DEFAULT_STAMP_FORMAT } from "./ink/date-stamp";
@@ -24,8 +25,10 @@ import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from ".
 import { DEFAULT_LECTURE_SETTINGS, readLectureSettings, type LectureSettings } from "./timetable/lecture-mode";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
+import { DEFAULT_INPUT_PREF, isInputPref, type InputPref } from "./ui/input-layout";
 import { cleanFadeSeconds, DEFAULT_TOOL_FADE_MODE, DEFAULT_TOOL_FADE_SECONDS, isToolFadeMode, type ToolFadeMode } from "./ui/tool-fade";
-import { normalisePinned } from "./ui/adapt";
+import { MAX_PINNED, normalisePinned } from "./ui/adapt";
+import { macroActionId, readMacros, withoutMissingMacros, type Macro } from "./ui/macros";
 import { isUiLanguage, type UiLanguage } from "./i18n/languages";
 import { cleanUserName } from "./library/greeting";
 import { normaliseSeen, type HintId } from "./ui/hint-logic";
@@ -79,6 +82,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	defaultLandscape: boolean;
 	/** 0.20 planner: the first day of the week of a generated planner ("auto" follows the device language). */
 	plannerWeekStart: PlannerWeekStart;
+	/** 0.27 plannertasks (#266): a chip on daily and weekly planner pages lists the vault's tasks due on those days. */
+	plannerTasks: boolean;
 	/** Version history: at most one snapshot per notebook per this many hours; 0 turns snapshots off. */
 	snapshotIntervalHours: number;
 	/** Version history: how many snapshots to keep per notebook. */
@@ -114,6 +119,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	writingProfileActive: string;
 	/** 0.25 profiles: starting lecture mode switches to the Lecture profile. */
 	writingProfileOnLecture: boolean;
+	/** 0.27 workspaces (#375): the user's own workspace presets (Lecture, Study and Focus are built in). Bounded. */
+	workspacePresets: WorkspacePreset[];
+	/** 0.27 workspaces: the id of the preset last applied ("" none). */
+	workspacePresetActive: string;
+	/** 0.27 workspaces: starting lecture mode applies the Lecture workspace. */
+	workspaceOnLecture: boolean;
 	/** Eraser radius, CSS px. */
 	eraserSize: number;
 	/** Vault path of the loose sheet (quick notes) notebook; empty = `<notebooks folder>/Quick notes.notebook`. */
@@ -254,10 +265,16 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	toolFadeSeconds: number;
 	/** The first finger touch on a faded bar only brings it back (the button is not pressed). */
 	toolFadeFirstTouch: boolean;
+	/** 0.27 (#431): the layout follows the input in use (automatic) or is pinned to the pen, the finger or the mouse. */
+	inputLayout: InputPref;
 	/** 0.26 (#422): the Related pages panel also lists the first page of the notebooks of the note's course. */
 	relatedCourse: boolean;
 	/** Quick actions the person pinned to the toolbar, in order (at most 3): the ranking never moves them. */
 	pinnedQuick: string[];
+	/** 0.27 (#170): the person's macros (a name, an icon and a list of actions each; at most 12 of at most 20 steps). A macro pinned to the toolbar is in `pinnedQuick` as `macro-<id>`. */
+	macros: Macro[];
+	/** Review fix (M6): macros stored beyond the limit of this version (written by a newer one), kept as written and written back, so saving the settings here does not lose them; they move into `macros` when there is room. */
+	macrosExtra: unknown[];
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
 	pageTurnerKeys: boolean;
 	// wave 0.10: tabs and lines
@@ -315,6 +332,12 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	fastScrollbar: boolean;
 	/** 0.17 (#173): the minimap of the page in view: automatic (infinite pages, high zoom), always, or never. */
 	minimapMode: MinimapMode;
+	/** 0.27 (#49) two-page spread: the first page alone on the right, like a book (otherwise the pairs are 1-2, 3-4...). */
+	spreadFirstAlone: boolean;
+	/** 0.27 (#49): show the spread by itself on a landscape tablet while the scrolling is continuous. */
+	spreadAuto: boolean;
+	/** 0.27 (#130): when zoomed far out, headings and titles of excerpts and pictures are shown large over the pages. */
+	semanticZoom: boolean;
 	/** Look of the plugin's own surfaces (DESIGN.md §2.2): its own `--nb-*` palette, or those tokens mapped onto the Obsidian theme. */
 	appearanceStyle: AppearanceStyle;
 	// wave 0.13: Home
@@ -349,6 +372,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	defaultPageSize: "a4",
 	defaultLandscape: false,
 	plannerWeekStart: "auto",
+	plannerTasks: true, // 0.27 plannertasks
 	snapshotIntervalHours: 24,
 	snapshotsToKeep: 10,
 	lectureSnapshots: true,
@@ -368,6 +392,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	writingProfiles: [],
 	writingProfileActive: "",
 	writingProfileOnLecture: false,
+	workspacePresets: [],
+	workspacePresetActive: "",
+	workspaceOnLecture: false,
 	eraserSize: DEFAULT_ERASER_SIZE,
 	looseSheetPath: "",
 	dailyNotebookPath: "",
@@ -434,8 +461,11 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	toolFade: DEFAULT_TOOL_FADE_MODE,
 	toolFadeSeconds: DEFAULT_TOOL_FADE_SECONDS,
 	toolFadeFirstTouch: true,
+	inputLayout: DEFAULT_INPUT_PREF,
 	relatedCourse: true, // 0.26 related
 	pinnedQuick: [],
+	macros: [],
+	macrosExtra: [],
 	pageTurnerKeys: true,
 	notebookTabs: false,
 	autoLineBreak: false,
@@ -461,6 +491,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	recentColours: [],
 	fastScrollbar: true,
 	minimapMode: "auto",
+	spreadFirstAlone: true,
+	spreadAuto: false,
+	semanticZoom: true,
 	symbolStrip: true,
 	symbolCount: 6,
 	dimensionHint: true,
@@ -519,6 +552,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.defaultPageSize === "string" && Object.prototype.hasOwnProperty.call(PAGE_SIZES, d.defaultPageSize)) s.defaultPageSize = d.defaultPageSize as PageSizeName;
 	if (typeof d.defaultLandscape === "boolean") s.defaultLandscape = d.defaultLandscape;
 	if (isPlannerWeekStart(d.plannerWeekStart)) s.plannerWeekStart = d.plannerWeekStart;
+	if (typeof d.plannerTasks === "boolean") s.plannerTasks = d.plannerTasks; // 0.27 plannertasks
 	if (typeof d.snapshotIntervalHours === "number" && d.snapshotIntervalHours >= 0 && d.snapshotIntervalHours <= 720) s.snapshotIntervalHours = d.snapshotIntervalHours;
 	if (typeof d.snapshotsToKeep === "number" && Number.isInteger(d.snapshotsToKeep) && d.snapshotsToKeep >= 1 && d.snapshotsToKeep <= 100) s.snapshotsToKeep = d.snapshotsToKeep;
 	if (typeof d.lectureSnapshots === "boolean") s.lectureSnapshots = d.lectureSnapshots;
@@ -538,6 +572,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	s.writingProfiles = normaliseProfiles(d.writingProfiles); // 0.25 profiles
 	s.writingProfileActive = normaliseActive(d.writingProfileActive, s.writingProfiles);
 	if (typeof d.writingProfileOnLecture === "boolean") s.writingProfileOnLecture = d.writingProfileOnLecture;
+	s.workspacePresets = normalisePresets(d.workspacePresets); // 0.27 workspaces
+	s.workspacePresetActive = normaliseActivePreset(d.workspacePresetActive, s.workspacePresets);
+	if (typeof d.workspaceOnLecture === "boolean") s.workspaceOnLecture = d.workspaceOnLecture;
 	s.eraserSize = normaliseEraserSize(d.eraserSize);
 	if (typeof d.looseSheetPath === "string") s.looseSheetPath = d.looseSheetPath.trim();
 	if (typeof d.dailyNotebookPath === "string") s.dailyNotebookPath = d.dailyNotebookPath.trim();
@@ -608,8 +645,23 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (isToolFadeMode(d.toolFade)) s.toolFade = d.toolFade;
 	s.toolFadeSeconds = cleanFadeSeconds(d.toolFadeSeconds);
 	if (typeof d.toolFadeFirstTouch === "boolean") s.toolFadeFirstTouch = d.toolFadeFirstTouch;
+	if (isInputPref(d.inputLayout)) s.inputLayout = d.inputLayout;
 	if (typeof d.relatedCourse === "boolean") s.relatedCourse = d.relatedCourse; // 0.26 related
-	s.pinnedQuick = normalisePinned(d.pinnedQuick);
+	const macroRead = readMacros(d.macros, d.macrosExtra); // 0.27 macros
+	s.macros = macroRead.macros;
+	s.macrosExtra = macroRead.extra;
+	// Review fix (M7): the pin of a macro that no longer exists (deleted, or its id repaired) would sit in a toolbar slot unseen.
+	// Review fix (R2): but a macro kept apart (a newer version's 14th) still exists, and so does every macro when the list is unreadable.
+	const kept = s.macrosExtra.flatMap((m) => (typeof m === "object" && m !== null && typeof (m as { id?: unknown }).id === "string" ? [{ id: (m as { id: string }).id }] : []));
+	if (d.macros !== undefined && !Array.isArray(d.macros)) s.pinnedQuick = normalisePinned(d.pinnedQuick);
+	else {
+		// Review fix (T2): the pin of a macro this version only keeps is written back but never takes one of the three visible places.
+		const rawPins = Array.isArray(d.pinnedQuick) ? (d.pinnedQuick as unknown[]) : [];
+		const keptPins = new Set(kept.filter((k) => !s.macros.some((m) => m.id === k.id)).map((k) => macroActionId(k.id)));
+		const hidden = [...new Set(rawPins.filter((p): p is string => typeof p === "string" && keptPins.has(p)))].slice(0, MAX_PINNED);
+		const visible = withoutMissingMacros(normalisePinned(rawPins.filter((p) => !(typeof p === "string" && hidden.includes(p)))), [...s.macros, ...kept]);
+		s.pinnedQuick = [...visible, ...hidden];
+	}
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
@@ -629,12 +681,15 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.signDateCustom === "string") s.signDateCustom = cleanSignDateCustom(d.signDateCustom);
 	s.recentColours = normaliseRecentColours(d.recentColours);
 	if (typeof d.fastScrollbar === "boolean") s.fastScrollbar = d.fastScrollbar;
+	if (typeof d.spreadFirstAlone === "boolean") s.spreadFirstAlone = d.spreadFirstAlone;
+	if (typeof d.spreadAuto === "boolean") s.spreadAuto = d.spreadAuto;
 	if (typeof d.symbolStrip === "boolean") s.symbolStrip = d.symbolStrip;
 	s.symbolCount = clampSymbolCount(d.symbolCount);
 	if (typeof d.dimensionHint === "boolean") s.dimensionHint = d.dimensionHint;
 	if (isPenKind(d.defaultPenKind)) s.defaultPenKind = d.defaultPenKind;
 	s.defaultNibAngle = normaliseNib(d.defaultNibAngle);
 	if (isMinimapMode(d.minimapMode)) s.minimapMode = d.minimapMode;
+	if (typeof d.semanticZoom === "boolean") s.semanticZoom = d.semanticZoom;
 	if (APPEARANCE_STYLES.includes(d.appearanceStyle as AppearanceStyle)) s.appearanceStyle = d.appearanceStyle as AppearanceStyle;
 	if (typeof d.userName === "string") s.userName = cleanUserName(d.userName);
 	if (typeof d.hintsEnabled === "boolean") s.hintsEnabled = d.hintsEnabled;

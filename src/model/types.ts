@@ -2,6 +2,8 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v25: stroke taper (#351): the optional `taperStart` and `taperEnd` (0.05 to 1, a length in line widths, see `model/taper.ts`) of a stroke of a
+ * line pen (pen, fountain pen, brush) drawn with the wet-ink geometry; the line thins towards that end (absent = the look of every earlier version).
  * v24: opacity (#358): the optional `opacity` (0.05 to 1) of a stroke of any pen, of an image and of an area; it multiplies the look the item has
  * without it (absent = the look of every earlier version).
  * v23: area highlighter (#99): the page element "area" (a translucent axis-aligned rectangle in a highlighter colour, drawn under the ink and over the
@@ -25,7 +27,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 24;
+export const CURRENT_VERSION = 25;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -151,6 +153,12 @@ export interface Stroke {
 	 * the tint of a fill). Any pen has one. Written only when set; absent = full strength (the look of every earlier version).
 	 */
 	opacity?: number;
+	/**
+	 * v25 (#351): the line thins towards its first / last point, 0.05 to 1 (a length in line widths: see `model/taper.ts`). Only strokes of a line pen
+	 * (pen, fountain pen, brush) of render version 2 have them. Written only when set; absent = no taper (the look of every earlier version).
+	 */
+	taperStart?: number;
+	taperEnd?: number;
 	points: Point[];
 }
 

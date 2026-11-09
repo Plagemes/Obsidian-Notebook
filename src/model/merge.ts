@@ -146,6 +146,9 @@ export function strokeContentKey(s: Stroke): string {
 	if (s.dash !== undefined) key.push(`dash${s.dash}`);
 	// v24: a different opacity is a different look.
 	if (s.opacity !== undefined) key.push(`op${s.opacity}`);
+	// v25: a different taper is a different look.
+	if (s.taperStart !== undefined) key.push(`ts${s.taperStart}`);
+	if (s.taperEnd !== undefined) key.push(`te${s.taperEnd}`);
 	return JSON.stringify(key);
 }
 

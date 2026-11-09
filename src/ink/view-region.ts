@@ -1,7 +1,7 @@
 import type { Layout } from "./layout";
 import type { ScrollMode } from "./page-mode";
-import { FIT_EPSILON, fitScale, type RestoredView } from "./view-position";
-import { MAX_SCALE, MIN_SCALE, screenToPage, type Size, type Viewport } from "./viewport";
+import { scaleFor, zoomBase, zoomFor, type RestoredView } from "./view-position";
+import { screenToPage, type Size, type Viewport } from "./viewport";
 
 /**
  * Saved views (0.23, #264): what is in view as a region of a page, and the way back. Pure geometry, no 'obsidian'.
@@ -25,10 +25,9 @@ export interface ViewRegion {
 export function captureRegion(mode: ScrollMode, v: Viewport, view: Size, layout: Layout, pageIndex: number): ViewRegion | null {
 	const box = layout.boxes[pageIndex];
 	if (!box || view.width <= 0 || view.height <= 0 || !(v.scale > 0)) return null;
-	const fit = fitScale(mode, view, layout, pageIndex);
-	if (!(fit > 0)) return null;
+	if (!(zoomBase(mode, view, layout, pageIndex) > 0)) return null;
 	const [left, top] = screenToPage(v, 0, 0);
-	const region = { pageIndex, x: left - box.x, y: top - box.y, width: view.width / v.scale, height: view.height / v.scale, zoom: v.scale / fit };
+	const region = { pageIndex, x: left - box.x, y: top - box.y, width: view.width / v.scale, height: view.height / v.scale, zoom: zoomFor(v.scale, mode, view, layout, pageIndex) };
 	return [region.x, region.y, region.width, region.height, region.zoom].every(Number.isFinite) ? region : null;
 }
 
@@ -36,10 +35,10 @@ export function captureRegion(mode: ScrollMode, v: Viewport, view: Size, layout:
 export function restoreRegion(region: Omit<ViewRegion, "pageIndex">, pageIndex: number, mode: ScrollMode, view: Size, layout: Layout): RestoredView | null {
 	const box = layout.boxes[pageIndex];
 	if (!box || view.width <= 0 || view.height <= 0) return null;
-	const fit = fitScale(mode, view, layout, pageIndex);
-	if (!(fit > 0)) return null;
-	const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, region.zoom * fit));
+	const s = scaleFor(region.zoom, mode, view, layout, pageIndex);
+	if (!s) return null;
+	const scale = s.scale;
 	const cx = box.x + region.x + region.width / 2;
 	const cy = box.y + region.y + region.height / 2;
-	return { viewport: { scale, offsetX: view.width / 2 - cx * scale, offsetY: view.height / 2 - cy * scale }, fit: Math.abs(region.zoom - 1) < FIT_EPSILON, pageIndex };
+	return { viewport: { scale, offsetX: view.width / 2 - cx * scale, offsetY: view.height / 2 - cy * scale }, fit: s.fit, pageIndex };
 }

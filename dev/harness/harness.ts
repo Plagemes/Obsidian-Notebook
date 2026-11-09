@@ -54,6 +54,7 @@ import { checkHookclean } from "./hookclean-check";
 import { checkShapefill } from "./shapefill-check";
 import { checkAreahl } from "./areahl-check";
 import { checkOpacity } from "./opacity-check"; // 0.26 opacity
+import { checkTaper } from "./taper-check"; // 0.27 taper
 import { checkCtxpalette } from "./ctxpalette-check"; // 0.26 ctxpalette
 import { checkStrokejoin } from "./strokejoin-check";
 import { checkProfiles } from "./profiles-check";
@@ -63,6 +64,7 @@ import { checkPagetime } from "./pagetime-check";
 import { checkPens } from "./pens-check";
 import { checkSavedviews } from "./savedviews-check";
 import { checkHistpanel } from "./histpanel-check";
+import { checkWorkspaces } from "./workspaces-check";
 import { checkRelated, relatedShot } from "./related-check"; // 0.26 related
 import { checkMinimap } from "./minimap-check";
 import { checkHeader } from "./header-check";
@@ -104,6 +106,7 @@ import { htmlExportApi } from "./htmlexport-check";
 import { exportAreaApi } from "./exportarea-check";
 import { clipImageApi } from "./clipimage-check"; // 0.25 clipimage
 import { tagSuggestApi } from "./tagsuggest-check";
+import { pdfSuggestApi } from "./pdfsuggest-check"; // 0.27 pdfsuggest
 import { handInApi } from "./handin-check"; // 0.24 handin
 import { redactApi } from "./redact-check"; // 0.26 redact
 import { shareApi } from "./share-check"; // 0.20 share
@@ -122,12 +125,17 @@ import { checkPillstack, pillstackShot } from "./pillstack-check";
 import { checkDimcheck, dimcheckShot, type DimcheckState } from "./dimcheck-check";
 import { checkPalettectx, palettectxShot } from "./palettectx-check";
 import { checkWelcomeback, welcomebackShot } from "./welcomeback-check";
+import { checkPlannertasks, plannertasksShot } from "./plannertasks-check";
 import { checkIconhelp, iconhelpShot } from "./iconhelp-check";
 import { checkToolfade, toolfadeShot } from "./toolfade-check";
+import { checkInputlayout, inputlayoutShot } from "./inputlayout-check";
 import { checkZoomwidth, zoomwidthShot } from "./zoomwidth-check";
+import { checkSemzoom, semzoomShot } from "./semzoom-check";
 import { checkNavadapt, navadaptShot } from "./navadapt-check";
 import { baselineShot, checkBaseline } from "./baseline-check"; // 0.25 baseline
 import { checkTidy, tidyShot } from "./tidy-check"; // 0.26 tidy
+import { checkSpread, spreadShot } from "./spread-check"; // 0.27 spread
+import { checkMacros, macrosShot } from "./macros-check"; // 0.27 macros
 import { checkSmooth, smoothShot } from "./smooth-check"; // 0.26 smooth
 import { checkMarkedview, markedviewShot } from "./markedview-check";
 import { checkSymbols } from "./symbols-check";
@@ -351,7 +359,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, lectureHeaderClassFor: doc === "lecthead" || doc === "pillstack" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, bookmarks: doc === "bookmarks" || doc === "markedview" ? harnessBookmarks(app) : undefined, meanings: doc === "colours" || doc === "coloursedit" ? harnessMeanings() : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "savedviews" || doc === "histpanel" || doc === "chembal" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pillstack" || doc === "welcomeback" || doc === "iconhelp" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" || doc === "hookclean" || doc === "shapefill" || doc === "strokejoin" || doc === "navadapt" || doc === "baseline" || doc === "smooth" || doc === "profiles" || doc === "toolfade" || doc === "papersuggest" || doc === "markedview" || doc === "tidy" || doc === "zoomwidth" || doc === "ctxpalettew" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" || doc === "areahl" || doc === "opacity" || doc === "ctxpalette" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "bookmarks" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "savedviews" || doc === "histpanel" || doc === "chembal" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pillstack" || doc === "welcomeback" || doc === "plannertasks" || doc === "iconhelp" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" || doc === "hookclean" || doc === "shapefill" || doc === "strokejoin" || doc === "navadapt" || doc === "baseline" || doc === "smooth" || doc === "profiles" || doc === "toolfade" || doc === "papersuggest" || doc === "markedview" || doc === "tidy" || doc === "zoomwidth" || doc === "ctxpalettew" || doc === "taper" || doc === "inputlayout" || doc === "spread" || doc === "workspaces" || doc === "macros" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" || doc === "areahl" || doc === "opacity" || doc === "ctxpalette" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "semzoom" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "bookmarks" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2205,11 +2213,13 @@ harnessApi.checkPens = () => checkPens({ view, stage, penStroke, setTool, openOp
 harnessApi.checkShapefill = () => checkShapefill({ view, penStroke, setTool, openOptions, frames, errors, notices }); // 0.24 shapefill
 harnessApi.checkAreahl = () => checkAreahl({ view, penStroke, setTool, openOptions, frames, errors, notices }); // 0.25 areahl
 harnessApi.checkOpacity = () => checkOpacity({ view, penStroke, setTool, openOptions, frames, errors, notices }); // 0.26 opacity
+harnessApi.checkTaper = () => checkTaper({ view, penStroke, setTool, openOptions, frames, errors, notices }); // 0.27 taper
 harnessApi.checkCtxpalette = () => checkCtxpalette({ view, frames, errors, notices }, params.get("doc") === "ctxpalettew"); // 0.26 ctxpalette
 // 0.23 savedviews (#264): its own check (dev/harness/savedviews-check.ts).
 harnessApi.checkSavedviews = () => checkSavedviews({ view, frames, errors, notices });
 // 0.25 histpanel (#84): its own check (dev/harness/histpanel-check.ts).
 harnessApi.checkHistpanel = () => checkHistpanel({ view, frames, errors, notices });
+harnessApi.checkWorkspaces = () => checkWorkspaces({ view, frames, errors, notices });
 // 0.26 related (#422): its own check (dev/harness/related-check.ts).
 harnessApi.checkRelated = () => checkRelated({ app, errors, notices });
 harnessApi.relatedShot = (state: "results" | "empty" | "none") => relatedShot({ app, errors, notices }, state);
@@ -2292,6 +2302,7 @@ Object.assign(harnessApi, htmlExportApi({ app, errors, notices }));
 Object.assign(harnessApi, exportAreaApi({ app, errors, notices }));
 Object.assign(harnessApi, clipImageApi({ app, errors, notices })); // 0.25 clipimage
 Object.assign(harnessApi, tagSuggestApi({ app, errors, notices })); // 0.24 tagsuggest
+Object.assign(harnessApi, pdfSuggestApi({ errors, notices })); // 0.27 pdfsuggest
 Object.assign(harnessApi, handInApi({ app, errors, notices })); // 0.24 handin
 Object.assign(harnessApi, redactApi({ app, errors, notices })); // 0.26 redact
 Object.assign(harnessApi, shareApi({ app, errors, notices })); // 0.20 share
@@ -2328,6 +2339,8 @@ Object.assign(harnessApi, { checkSmooth: () => checkSmooth({ get view() { return
 Object.assign(harnessApi, { checkBaseline: () => checkBaseline({ get view() { return view; }, open, frames, errors, notices }), baselineShot: (state: "before" | "after" | "ruled") => baselineShot({ get view() { return view; }, open, frames, errors, notices }, state) });
 // 0.24 navadapt: the adaptive page navigator (doc=navadapt, navadapt-check.ts).
 Object.assign(harnessApi, { checkNavadapt: () => checkNavadapt({ get view() { return view; }, open, frames, errors, notices }), navadaptShot: () => navadaptShot({ get view() { return view; }, open, frames, errors, notices }) });
+// 0.27 plannertasks: the tasks chip on planner pages (doc=plannertasks, plannertasks-check.ts).
+Object.assign(harnessApi, { checkPlannertasks: () => checkPlannertasks({ get view() { return view; }, open, frames, penStroke, errors, notices }), plannertasksShot: (state: "chip" | "panel" | "week") => plannertasksShot({ get view() { return view; }, open, frames, penStroke, errors, notices }, state) });
 // 0.23 welcomeback: the welcome-back card (doc=welcomeback, welcomeback-check.ts).
 Object.assign(harnessApi, { checkWelcomeback: () => checkWelcomeback({ get view() { return view; }, open, frames, penStroke, errors, notices }), welcomebackShot: () => welcomebackShot({ get view() { return view; }, open, frames, penStroke, errors, notices }) });
 // 0.22 review fix: every floating pill at once (doc=pillstack, pillstack-check.ts).
@@ -2349,10 +2362,20 @@ Object.assign(harnessApi, { checkIconhelp: () => checkIconhelp({ get view() { re
 
 // 0.25 toolfade (#399): the toolbar fades while the pen writes (doc=toolfade, toolfade-check.ts).
 Object.assign(harnessApi, { checkToolfade: () => checkToolfade({ get view() { return view; }, open, frames, penStroke, errors, notices }), toolfadeShot: (state: string) => toolfadeShot({ get view() { return view; }, open, frames, penStroke, errors, notices }, state) });
+// 0.27 inputlayout (#431): layout by input device (doc=inputlayout, inputlayout-check.ts).
+Object.assign(harnessApi, { checkInputlayout: () => checkInputlayout({ get view() { return view; }, open, frames, errors, notices }), inputlayoutShot: (kind: string) => inputlayoutShot({ get view() { return view; }, open, frames, errors, notices }, kind) });
 // 0.26 zoomwidth (#350): pen width follows zoom (doc=zoomwidth, zoomwidth-check.ts).
 Object.assign(harnessApi, { checkZoomwidth: () => checkZoomwidth({ get view() { return view; }, penStroke, setTool, openOptions, frames, errors, notices }), zoomwidthShot: (zoom: number, on: boolean) => zoomwidthShot({ get view() { return view; }, penStroke, setTool, openOptions, frames, errors, notices }, zoom, on) });
 // 0.25 markedview: the marked-pages filter of the page navigator (doc=markedview, markedview-check.ts).
 Object.assign(harnessApi, { checkMarkedview: () => checkMarkedview({ get view() { return view; }, open, frames, errors, notices }), markedviewShot: () => markedviewShot({ get view() { return view; }, open, frames, errors, notices }) });
 
+// 0.27 spread (#49): two pages side by side (doc=spread, spread-check.ts).
+Object.assign(harnessApi, { checkSpread: () => checkSpread({ get view() { return view; }, open, penStroke, setTool, frames, errors, notices }), spreadShot: (state: "pair" | "zoom" | "sheet") => spreadShot({ get view() { return view; }, open, penStroke, setTool, frames, errors, notices }, state) });
+
+// 0.27 macros (#170): the macro manager, the toolbar button and a run (doc=macros, macros-check.ts).
+Object.assign(harnessApi, { checkMacros: () => checkMacros({ get view() { return view; }, open, frames, errors, notices }), macrosShot: (state: "toolbar" | "list" | "editor" | "sheet") => macrosShot({ get view() { return view; }, open, frames, errors, notices }, state) });
+
 // 0.26 tidy: Tidy up (doc=tidy, tidy-check.ts).
 Object.assign(harnessApi, { checkTidy: () => checkTidy({ get view() { return view; }, open, frames, errors, notices }), tidyShot: (state: "before" | "sheet" | "after") => tidyShot({ get view() { return view; }, open, frames, errors, notices }, state) });
+// 0.27 semzoom (#130): semantic zoom (doc=semzoom, semzoom-check.ts).
+Object.assign(harnessApi, { checkSemzoom: () => checkSemzoom({ get view() { return view; }, frames, errors, notices }), semzoomShot: (state: "overview" | "fade" | "later") => semzoomShot({ get view() { return view; }, frames, errors, notices }, state) });

@@ -9,6 +9,7 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"nav-back": "help.navBack",
 	"nav-forward": "help.navForward",
 	"toggle-page-mode": "help.pageMode",
+	"toggle-spread": "help.spread",
 	"insert-image": "help.insertImage",
 	stamps: "help.stamps",
 	"board-shot": "help.boardShot",
@@ -16,6 +17,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"add-page-suggest": "help.addPage",
 	"toggle-ruler": "help.ruler",
 	"pen-only": "help.penOnly",
+	"workspace-presets": "help.workspacePresets",
+	"workspace-lecture": "help.workspaceLecture",
 	"profile-lecture": "help.profileLecture",
 	"profile-study": "help.profileStudy",
 	"profile-next": "help.profileNext",
@@ -54,6 +57,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"bookmarks-open": "help.openBookmarks",
 	"hand-in": "help.handIn",
 	"selection-join": "help.joinStrokes",
+	// 0.27 macros (#170): the manager; a macro's own button says "help.macro" (long-press-help.ts)
+	"macros-open": "help.macros",
 	// 0.25 areahl
 	"highlighter-area": "help.highlighterArea",
 	// 0.25 histpanel (#84)

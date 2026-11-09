@@ -1,3 +1,4 @@
+import { taperFactor, taperLength, type Taper } from "../model/taper";
 import { isNewPen, NIB_DEFAULT, type Point, type Tool } from "../model/types";
 
 /**
@@ -131,6 +132,20 @@ export class InkBuilder {
 	/** Number of stored points. */
 	count = 0;
 
+	/**
+	 * Taper (format v25, #351; see `model/taper.ts`): the length (pt) over which the line thins towards its first and its last point, 0 = none.
+	 * The START is applied to the radius of each stored point as it is added (`pr`: it depends on the way travelled so far only, so it is causal
+	 * like everything else here, and the wet ink thins from the first sample; the nodes between two points inside the ramp are thinned by the way
+ * travelled to each of them, so the ramp does not depend on the spacing of the points). The END is known only when the pen lifts: `finish()` thins the last
+	 * nodes of the chain. A stroke shorter than twice the start taper has it shortened at `finish()` (a rebuild), so that the two ends meet at the
+	 * middle at most and a dot stays a dot. `pb` is the radius of a point before the taper and `pa` the length of the polyline to it.
+	 */
+	taperStart = 0;
+	taperEnd = 0;
+	private pb = new Float64Array(256);
+	private pa = new Float64Array(256);
+	private tapered = false;
+
 	/** Nodes: centre and radius. */
 	nx = new Float64Array(512);
 	ny = new Float64Array(512);
@@ -140,10 +155,17 @@ export class InkBuilder {
 	private segments = 0;
 	private finished = false;
 
-	reset(tool: Tool, width: number, nib: number = NIB_DEFAULT): void {
+	reset(tool: Tool, width: number, nib: number = NIB_DEFAULT, taper?: Taper): void {
 		this.tool = tool;
 		this.width = width;
 		this.nib = nib;
+		this.taperStart = taper && taper.start > 0 ? taperLength(taper.start, width) : 0;
+		this.taperEnd = taper && taper.end > 0 ? taperLength(taper.end, width) : 0;
+		this.tapered = this.taperStart > 0 || this.taperEnd > 0;
+		if (this.tapered && this.pb.length < this.px.length) {
+			this.pb = new Float64Array(this.px.length);
+			this.pa = new Float64Array(this.px.length);
+		}
 		const a = (nib * Math.PI) / 180;
 		this.nibSin = Math.sin(a);
 		this.nibCos = Math.cos(a);
@@ -207,10 +229,22 @@ export class InkBuilder {
 	/**
 	 * Disc radius of a provisional tip point (the raw pen position, a predicted point) that is not a stored point: the pressure for the old
 	 * pens, the radius of the last stored point for the new ones (their radius follows the movement, which a tip point does not have yet).
+	 * Format v25: inside the start taper the tip is thinned like the trail (by the way travelled to the tip at `x`, `y`: the polyline to the last
+	 * stored point plus the straight distance from it), so no full-size dot rides at the pen while the line behind it is still thin.
 	 */
-	tipRadius(pressure: number): number {
-		if (isNewPen(this.tool) && this.count > 0) return this.pr[this.count - 1]!;
-		return inkRadius(this.tool, this.width, pressure);
+	tipRadius(pressure: number, x?: number, y?: number): number {
+		const n = this.count;
+		if (isNewPen(this.tool) && n > 0) return this.pr[n - 1]!;
+		const r = inkRadius(this.tool, this.width, pressure);
+		if (this.taperStart > 0) {
+			let arc = 0;
+			if (n > 0) {
+				arc = this.pa[n - 1]!;
+				if (x !== undefined && y !== undefined) arc += Math.hypot(x - this.px[n - 1]!, y - this.py[n - 1]!);
+			}
+			if (arc < this.taperStart) return Math.max(0.01, r * taperFactor(arc / this.taperStart));
+		}
+		return r;
 	}
 
 	/**
@@ -230,11 +264,22 @@ export class InkBuilder {
 			this.pp = grow(this.pp, n + 1);
 			this.pr = grow(this.pr, n + 1);
 		}
+		if (this.tapered && n + 1 > this.pb.length) {
+			this.pb = grow(this.pb, n + 1);
+			this.pa = grow(this.pa, n + 1);
+		}
 		this.px[n] = qx;
 		this.py[n] = qy;
 		this.pp[n] = qpr;
 		// The old pens keep their pressure-only radius (the same number the nodes always had); the new ones follow the movement too.
-		this.pr[n] = isNewPen(this.tool) ? this.movingRadius(n, qx, qy, qpr) : inkRadius(this.tool, this.width, qpr);
+		const radius = isNewPen(this.tool) ? this.movingRadius(n, qx, qy, qpr) : inkRadius(this.tool, this.width, qpr);
+		if (this.tapered) {
+			// The start taper thins the point by the way travelled so far (the polyline through the stored points).
+			const arc = n > 0 ? this.pa[n - 1]! + Math.hypot(qx - this.px[n - 1]!, qy - this.py[n - 1]!) : 0;
+			this.pb[n] = radius;
+			this.pa[n] = arc;
+			this.pr[n] = this.taperStart > 0 ? Math.max(0.01, radius * taperFactor(arc / this.taperStart)) : radius;
+		} else this.pr[n] = radius;
 		this.count = n + 1;
 		if (n === 0) {
 			this.reserveNodes(1);
@@ -252,11 +297,53 @@ export class InkBuilder {
 		if (this.finished) return;
 		this.finished = true;
 		const n = this.count;
+		// Format v25: a tapered stroke is finished by its own routine (the plain one below is untouched, so an untapered stroke is what it always was).
+		if (this.tapered && n >= 1) {
+			this.finishTapered();
+			return;
+		}
 		// Brush: the last sample closes the line to a point. Only the last segment is still to be built, so nothing on screen changes.
 		if (this.tool === "brush" && n >= 2 && this.segments <= n - 2) this.pr[n - 1] = Math.max(0.01, this.pr[n - 1]! * BRUSH_END);
 		while (this.segments < n - 1) {
 			const k = this.segments;
 			this.emit(k, k + 1, Math.min(k + 2, n - 1));
+		}
+	}
+
+	/**
+	 * `finish()` of a stroke with a taper. The start taper is already in the radii of the points; it is shortened to half the stroke's length when
+	 * the stroke is shorter than twice of it (then the nodes are built again from the untapered radii, which is the only case the wet ink and the
+	 * committed stroke differ at the start). The end taper is then applied to the last nodes of the chain, over at most half the stroke's length.
+	 */
+	private finishTapered(): void {
+		const n = this.count;
+		const half = this.pa[n - 1]! / 2;
+		const rebuild = this.taperStart > half;
+		// The brush closes its last sample to a point: in the radius before the start taper too (`pb`), which the nodes of a start taper are built from.
+		const brushEnd = this.tool === "brush" && n >= 2 && (rebuild || this.segments <= n - 2);
+		if (brushEnd) this.pb[n - 1] = Math.max(0.01, this.pb[n - 1]! * BRUSH_END);
+		if (rebuild) {
+			// A start taper longer than half the stroke: rebuild with the shorter one (a dot, with no length, is not tapered at all).
+			this.taperStart = half;
+			for (let k = 0; k < n; k++) this.pr[k] = this.taperStart > 0 ? Math.max(0.01, this.pb[k]! * taperFactor(this.pa[k]! / this.taperStart)) : this.pb[k]!;
+			this.nx[0] = this.px[0]!;
+			this.ny[0] = this.py[0]!;
+			this.nr[0] = this.pr[0]!;
+			this.nodeCount = 1;
+			this.segments = 0;
+		} else if (brushEnd) this.pr[n - 1] = Math.max(0.01, this.pr[n - 1]! * BRUSH_END);
+		while (this.segments < n - 1) {
+			const k = this.segments;
+			this.emit(k, k + 1, Math.min(k + 2, n - 1));
+		}
+		const end = Math.min(this.taperEnd, half);
+		if (end <= 0) return;
+		const { nx, ny, nr, nodeCount: m } = this;
+		let dist = 0;
+		for (let i = m - 1; i >= 0; i--) {
+			if (i < m - 1) dist += Math.hypot(nx[i + 1]! - nx[i]!, ny[i + 1]! - ny[i]!);
+			if (dist >= end) break;
+			nr[i] = Math.max(0.01, nr[i]! * taperFactor(dist / end));
 		}
 	}
 
@@ -268,8 +355,8 @@ export class InkBuilder {
 	}
 
 	/** Builds the whole geometry of saved points. */
-	static fromPoints(points: readonly Point[], width: number, tool: Tool, into = new InkBuilder(), nib: number = NIB_DEFAULT): InkBuilder {
-		into.reset(tool, width, nib);
+	static fromPoints(points: readonly Point[], width: number, tool: Tool, into = new InkBuilder(), nib: number = NIB_DEFAULT, taper?: Taper): InkBuilder {
+		into.reset(tool, width, nib, taper);
 		for (const p of points) into.add(p[0], p[1], p[2]);
 		into.finish();
 		return into;
@@ -288,6 +375,12 @@ export class InkBuilder {
 		this.reserveNodes(steps);
 		const { nx, ny, nr } = this;
 		let i = this.nodeCount;
+		// Format v25: inside the start taper the radius of a node follows the way travelled to it (the chord from point b plus the share along the
+		// segment, like the end taper's distance along the nodes), not the straight line between the radii of the two points, so how fast the line
+		// thickens does not depend on how far apart the points are. Only the segments that still meet the ramp; elsewhere pr is the plain radius.
+		const ramp = this.taperStart;
+		const ramping = ramp > 0 && this.pa[b]! < ramp;
+		const pbb = ramping ? this.pb[b]! : 0, pbc = ramping ? this.pb[c]! : 0, arcb = ramping ? this.pa[b]! : 0;
 		if (steps > 1) {
 			// Centripetal Catmull–Rom (alpha 0.5) as a Hermite segment on [0, 1].
 			const t01 = Math.sqrt(Math.hypot(bx - ax, by - ay));
@@ -308,7 +401,7 @@ export class InkBuilder {
 				const t = j / steps;
 				nx[i] = ((qax * t + qbx) * t + m1x) * t + bx;
 				ny[i] = ((qay * t + qby) * t + m1y) * t + by;
-				nr[i] = rb + (rc - rb) * t;
+				nr[i] = ramping ? Math.max(0.01, (pbb + (pbc - pbb) * t) * taperFactor((arcb + len * t) / ramp)) : rb + (rc - rb) * t;
 				i++;
 			}
 		}
@@ -488,8 +581,8 @@ export function inkBounds(g: InkBuilder): { minX: number; minY: number; maxX: nu
 const shared = new InkBuilder();
 
 /** Committed path of saved points into `sink` (Path2D, canvas, or an export writer). */
-export function inkPath(sink: PathSink, points: readonly Point[], width: number, tool: Tool, nib: number = NIB_DEFAULT): void {
-	addInkPath(sink, InkBuilder.fromPoints(points, width, tool, shared, nib));
+export function inkPath(sink: PathSink, points: readonly Point[], width: number, tool: Tool, nib: number = NIB_DEFAULT, taper?: Taper): void {
+	addInkPath(sink, InkBuilder.fromPoints(points, width, tool, shared, nib, taper));
 }
 
 /** SVG number: 0.01 pt precision. */

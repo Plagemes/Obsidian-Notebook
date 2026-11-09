@@ -349,7 +349,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 6891 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 7181 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -3982,6 +3982,38 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Per-notebook choice in bounded device-local storage (corrupt falls back to all pages) | yes | `tests/nav-marked.test.ts`; harness `doc=markedview` | | | |
 | Marked-only list with badges, sub-filters by kind, empty message, long-press help | yes | harness `doc=markedview` | | | |
 
+### 0.27 — macros: a sequence of actions on one button (roadmap #170; steps 3060-3079)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real hand). Use a notebook with two or three pages, one of them on plain paper.
+
+3060. **Open the manager.** In *All actions* find the *Macros* section (after *View & input*) and tap *Macros…*; the same dialog opens from *Settings → Appearance → Macros* (*Open*) and from the command *Manage macros*. With no macro it says so and offers *New macro*.
+3061. **Make a macro.** Tap *New macro*, type a name ("Maths page"), pick an icon, switch on *Show on the toolbar*. Tap *Add a step* and search: *pen*, then *Paper* (a choice appears: set *Dotted*), then *Bookmark*, then *Add page*. The list offers only safe actions: search for *delete*, *export*, *sync*, *trash*: nothing comes up. *Save* with no step says so.
+3062. **Order.** Move a step up and down with the arrows (the first cannot go up, the last cannot go down); remove a step with the cross. Save: the list shows the name, the number of steps and *On the toolbar*.
+3063. **The button.** The toolbar shows the macro's button (icon, name as its label) in the pinned places, also on a phone width. Press and hold it: the pin menu offers to unpin it. With three buttons already pinned the editor's switch is off and explains why.
+3064. **Run it.** Tap the button: the pen is in hand, the page paper changes, the page is bookmarked, a page is added; one notice says *"Maths page: 4 steps done. One Undo takes them all back."*
+3065. **One undo.** Undo once: the paper, the bookmark and the new page are all gone. Redo: all back. The history panel shows one step, *Macro run*.
+3066. **Locked page.** Lock the current page and tap the button: it stops at the paper step with ONE notice ("Maths page stopped at step 2 (Paper: Dotted) … The 1 earlier steps are done"), the page is unchanged and no page was added. A locked element on the page also refuses a step that would move or change it.
+3067. **Nothing selected.** Make a macro whose first step is *Duplicate selection* (Arranging the selection). With nothing selected, tap it: it stops at step 1 and says nothing was changed. Select some ink first and it works; in *All actions* it qualifies for *For this page* while ink is selected (shown when it is among the five best fits) and steps back when nothing is selected.
+3068. **Run from the sheet and as a command.** *All actions → Macros* lists it (and finds it by name in the search); the command palette has *Macro: Maths page*, which you can give a hotkey. Rename the macro: the command and the button follow at once. Delete it (the question asks first): the button, the sheet row and the command disappear, and the pin is gone.
+3069. **Read-only.** In read-only mode the macro buttons are not offered and the sheet row is disabled.
+3070. **A macro from a newer version.** (Developer check) Add a step with an unknown action id to a macro in `data.json`: the editor shows it struck through with *Unavailable*, keeps it when you save, and a run skips it and says how many were skipped.
+3071. **Limits.** Twelve macros, twenty steps each: the buttons that would exceed them are disabled with a line saying so.
+3072. **Looks.** Light and dark, phone and tablet width, Italian (*Macro*, *Nuova macro*, *Aggiungi un passaggio*); long-press the editor's small buttons for their explanation.
+3073. **Page steps follow each other (review fix).** In page-by-page mode make a macro *Next page, Next page, Paper: Grid, Bookmark*. Run it: the view lands two pages further (no turn animation during the run) and the paper and the bookmark are on the page you arrive at, not the one you started on.
+3074. **Typing stays yours (review fix).** Type in a text box (or an equation) and, without closing it, run a macro that adds a page by hotkey or from the command palette. Undo once: the macro's page is gone, the text you typed is still there; Undo again takes the text back.
+3075. **Honest report, not under the pen (review fix).** Run a macro whose only step is *Paper: Grid* on a page that already has that paper: the notice says that step changed nothing. With the pen on the page (hold it down) press the macro's hotkey: it does not start and asks to lift the pen first.
+3076. **Nothing lost across versions (developer check).** Put 25 steps in one macro and 14 macros in `data.json`, unknown fields on a step and a macro, a step without a valid action id, then open and save the settings: the extra steps (`extraSteps`) and macros (`macrosExtra`) and the unknown fields are still in the file, the editor says how many steps are kept but not run. A macro with an invalid or doubled id gets the same new id at every start (hotkey and toolbar pin stay put) and its stored file is rewritten once; a toolbar pin of a macro that no longer exists is gone.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Macro data in the plugin settings: lenient reader (unknown action ids kept, bad entries dropped), bounds (12 macros, 20 steps, 32-character names), unique ids | yes | `tests/macros.test.ts` | | | |
+| Explicit allow-list of safe actions (tools, pens, arranging a selection, page paper / size, pages); nothing that deletes, exports, shares, syncs or opens a dialog; unknown / blocked / value-less steps skipped | yes | `tests/macros.test.ts` (list pinned against the registry and the runners) | | | |
+| Runner: steps in order through the tap entry point, context re-read per step, stop at a step that cannot run / is refused / throws with the earlier steps kept, one notice | yes | `tests/macros.test.ts`, `tests/history-group.test.ts` | | | |
+| One undo step per run (`History.group` → `Batch` "Run macro"; guards of every step kept; refused step not part of it; a full undo stack gives up one entry for the group) | yes | `tests/history-group.test.ts`, `tests/macros.test.ts` (real History, locked page) | | | |
+| Review fixes: open typing committed before the group, immediate page turns during a run, steps that changed nothing reported, no start under the pen, exceptions caught, unknown fields / extra steps / extra macros kept, stable repaired ids, orphan pins removed | yes | `tests/macros.test.ts`, `tests/page-mode.test.ts`, `tests/history-group.test.ts` | | | |
+| Registry: macros in the sheet's own section, pinnable toolbar button (never ranked in by itself; kept on a phone), context rule, history title, long-press help | yes | `tests/macros.test.ts`, `tests/long-press-help.test.ts` | | | |
+| Manager and editor on the modal shell (list, new / edit / delete with confirmation, icon, steps with values and order, toolbar switch, picker), settings row, command per macro | yes | harness `doc=macros` | | | commands in a real Obsidian not run here |
+
 ### 0.26 — opacity: opacity of ink, pictures and areas, document format 24 (roadmap #358; steps 2780-2799)
 
 Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen). Use a notebook with a PDF or scanned page, a picture, and some handwriting.
@@ -4195,3 +4227,200 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Drag a row into the note (embed text) | yes | harness `doc=related` (drag data only) | | | drop into the editor not tested in a real Obsidian |
 | Setting *Related pages: same course* | yes | `tests/settings-schema.test.ts` | | | |
 | The panel's read-only refresh writes nothing; what it read is saved by the next page-switcher refresh, one entry per path, never over a newer index entry nor for a notebook deleted since | yes | `tests/page-directory-save.test.ts` | | | |
+
+### 0.27 — taper: stroke taper at the start and the end of a line, document format 25 (roadmap #351; steps 3000-3019)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen). Use a notebook with some handwriting and a pen you like.
+
+3000. **Options.** Pick the pen and tap it again: under the colours, the width and the *Opacity* row there is a *Taper* row: a round button, the name, a small picture of a stroke, and two sliders, *Start* and *End*, both *Off*. Long-press the round button: the explanation appears (English and Italian). Pick the fountain pen and the brush: the row is there. Pick the marker, the highlighter (stroke and area) or a shape: no *Taper* row.
+3001. **Picture.** Move *Start* and *End*: the little picture changes at once (a pointed start, a pointed end), before you lift your finger; lifting applies the value (*Off* or a percent).
+3002. **Write.** Set *Start* to about 50 % and *End* to about 100 % and write a long line, then a short word: the line begins thin and swells to its normal width and ends in a long point; the word tapers at both ends and is still readable. While the pen is down the start is already thin, from the first sample, and the dot at the pen tip is thin too; at the lift the end settles into its point in one step, with no fat tail or notch left behind (a small change at the very end is expected; in a stroke shorter than about twice the start taper the start also grows a little at the lift, because the start taper is then shortened to half the stroke). A dot (tap the pen) is still a dot.
+3003. **Width.** Write the same line with a fine and a broad pen at the same taper: the point looks the same, longer on the broad pen (the taper is a length in line widths). Write with the pen at the largest taper on a short stroke (about a finger long): it becomes a leaf shape, thin at both ends and full in the middle.
+3004. **Each pen.** Try the ballpoint, the fountain pen (the nib angle still makes the line thinner along the nib) and the brush (its soft ends and the taper add up). A line written before the change is unchanged.
+3005. **Reset.** The round button puts both ends back to *Off*. A stroke written afterwards has full width to the end. Open the file in a text editor and search for "taper": only the strokes you tapered have the two keys.
+3006. **Favourites and pen sets.** Save the pen with its taper as a favourite (long press a slot, or the radial menu) and in a pen set; pick another pen, then the favourite: the taper comes back. The favourite shows as active only while the taper matches. The style eyedropper on a tapered stroke takes its taper too; on a marker or highlighter stroke it clears the taper.
+3007. **Eraser.** With the segment eraser cut a tapered stroke in the middle: the piece with the start keeps the pointed start, the piece with the end keeps the pointed end, the pieces next to the cut have flat ends. Erase a whole tapered stroke and undo: it comes back tapered.
+3008. **Selection.** Select tapered strokes, move them, scale them up and down, rotate, copy and paste, duplicate the page, move a page to another notebook: the taper is the same (it scales with the line). Smooth strokes and Straighten strokes keep it.
+3009. **Join and shapes.** Two strokes split by a pen dropout are joined by *Join broken strokes*: the result starts as the first started and ends as the second ended. Hold the pen still at the end of a stroke written with a taper so it turns into a shape: the shape has constant width.
+3010. **Exports.** Export a page with tapered strokes as PNG, SVG, PDF, interactive HTML, copy as image, the written area as a transparent picture and a hand-in PDF: the points look the same as on screen. Zoom the page far out: the points stay (no blobs at the ends).
+3011. **Thumbnails.** The Library card and the page navigator show the tapered strokes; after a page changes they follow.
+3012. **Redaction.** Cover a part of a tapered stroke when exporting: the visible parts keep their points at the real ends of the stroke only; the cut ends are flat and nothing of the covered part is left.
+3013. **Night look.** The tapered strokes are drawn the same in the night look and with a coloured paper.
+3014. **Save and reopen.** Close and reopen the notebook: the tapers are as they were. A notebook that never used the *Taper* row is saved without any taper key. Open a notebook written by 0.26: it looks identical and is saved as format 25. A copy of the plugin older than this version opens a notebook saved by this one read-only (it never rewrites it and keeps a backup).
+3015. **Merge and sync.** Write a tapered stroke on one device and open the notebook on another that also has changes: after the merge the stroke is there once with its taper.
+3016. **Looks.** Italian (*Rastremazione*, *Inizio*, *Fine*), light and dark theme, phone and tablet width: the row fits in the pen options, the sliders are easy to drag with a finger and nothing is clipped; the buttons are at least 40 px (44 px on touch).
+3017. **Version history and diff.** A snapshot with a tapered stroke restores tapered; the visual version diff shows a stroke whose taper changed as changed.
+3018. **Large notebook.** Open a large notebook (hundreds of pages) written by 0.26: it opens as fast as before (staged loading) and a page with many tapered strokes scrolls and zooms smoothly on the tablet.
+3019. **Writing feel.** Write quickly with a taper of 100 % on both ends for a few minutes: the ink follows the pen with no extra delay compared with *Off*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v25: optional `taperStart` and `taperEnd` (0.05 to 1) on pen, fountain pen and brush strokes of render 2; migration v24 → v25 (identity plus version; a stray key is dropped), lenient read (out of range, not a number or on a stroke that cannot taper: dropped and counted, the stroke stays), strict write, staged loading of large v24 files, repair, merge key, copies, version diff, schema `docs/schema/notebook-v25.schema.json` | yes | `tests/model-v25.test.ts`, `tests/format-schema.test.ts` | | | |
+| Engine: the start taper in the radius of each point as it is added (causal, so the wet ink thins from the first sample), the end taper at the lift, short strokes shorten it, a dot is a dot; a taper is a length of `value * 12` line widths | yes | `tests/model-v25.test.ts` | | | the end settling at the lift was not seen with the real pen |
+| The same shape in every path: static canvas, live fallback, level of detail (zoomed out and thumbnails), PNG raster, SVG, PDF, HTML | yes | `tests/model-v25.test.ts`; harness `doc=taper` | | | |
+| Golden render hashes unchanged (an absent taper draws exactly as before) | yes | `tests/pens-golden.test.ts` | | | |
+| Taper row in the pen options (two sliders and a picture drawn by the engine) for the pen, the fountain pen and the brush; new strokes store it only when set | yes | state, favourites, strings: `tests/model-v25.test.ts`; harness `doc=taper` | | | the sliders were not dragged with a finger on a device |
+| Favourite pens, pen sets, the radial menu's active mark and the style eyedropper keep the taper | yes | `tests/model-v25.test.ts` | | | |
+| Cuts keep a taper only at a real end of the stroke (eraser pieces, redaction pieces); joining keeps the first start and the last end; a recognised shape loses it | yes | `tests/model-v25.test.ts` | | | |
+| Editing the taper of strokes already written (from the selection bar) | | | | | not part of this item: the taper is a property of new ink |
+
+### 0.27 — inputlayout: layout by input device (roadmap #431; steps 3080-3099)
+
+Implemented, not verified on hardware. No format change. Manual steps (real Obsidian on an Android tablet with S Pen; step 3086 on Windows):
+
+3080. **Setting.** *Settings > Appearance > Adapt layout to input* offers Automatic (default), Pen, Finger, Mouse and keyboard; search finds it by "finger" or "dito".
+3081. **Pen (default).** Open a notebook and write with the S Pen: the toolbar is the compact one you know; nothing moves while you write.
+3082. **Finger.** Touch the toolbar or the page with a finger three times (tap tools, pan): the toolbar buttons grow one size and gain spacing; the page does not jump and a stroke in progress is never interrupted.
+3083. **Back to the pen.** Hover the S Pen over the page for a moment: the compact toolbar returns.
+3084. **Palm.** Write with the pen while resting the palm on the screen: the toolbar never switches to the finger layout.
+3085. **Pinned.** Choose Finger: the large layout stays whatever you use; same with Pen and Mouse.
+3086. **Mouse and keyboard (Windows or a USB mouse).** Move the mouse over the toolbar: hover shows a clear outline; assign a hotkey to *Undo* in Obsidian (Settings > Hotkeys) and hover the Undo button: the tooltip reads "Undo (Ctrl+...)". A button without a hotkey shows its plain name.
+3087. **Leaving the mouse.** Touch with the pen or finger a few times: the hints go away (the tooltip shows the plain name).
+3088. **Phone.** Repeat 3081-3085 on a phone: in the finger layout the row of tools may wrap to a second line (as with the Large toolbar size) and nothing goes past the screen edge; the bars stay usable in landscape.
+3089. **Short landscape.** Finger layout with the keyboard up: the bars stay tight (no extra row spacing).
+3090. **Light, dark, Italian.** The setting and its options read correctly in both themes and in Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Device detection (three consistent events, never mid-stroke, palm window, pinned override) | yes | `tests/input-layout.test.ts` | | | |
+| Classes `nb-input-*` on the view root; finger layout has larger targets | yes | harness `doc=inputlayout` (synthetic pointer events) | | | real S Pen / finger mix not simulated |
+| Shortcut hints in tooltips (mouse layout, from Obsidian's hotkeys) | yes | formatting: `tests/input-layout.test.ts`; hotkey lookup guarded, not tested in a real Obsidian | | yes | the hotkey registry is not public API |
+| Setting *Adapt layout to input* | yes | `tests/settings-schema.test.ts`, `tests/input-layout.test.ts` | | | |
+
+### 0.27 — spread: two pages side by side (roadmap #49; steps 3140-3159)
+
+Manual steps (real Obsidian; nothing here is verified on Android hardware). Use a notebook of at least six pages on a landscape tablet (a view at least 720 px wide and not taller than wide).
+
+3140. **Turn it on.** Page sheet (tap the page indicator) > *Two pages side by side* (or Settings > Pages > Scrolling > *Two pages side by side*): the pages sit in pairs like an open book. Page 1 is alone on the right; the pairs are 2-3, 4-5... The button shows as on.
+3141. **Both pages at once.** At fit zoom both pages of a pair are fully in view, top aligned, with a narrow gap between them; scrolling goes pair by pair (the fast scrollbar works as in continuous scrolling).
+3142. **Write on both pages.** With the S Pen write on the left page, then on the right one: each stroke belongs to the page it started on. Start a stroke on the left page and finish it over the right one: the right page gets nothing from it (the ink is clipped at the left page's edge).
+3143. **Book layout.** Settings > Pages > *First page alone, like a book* off: the pairs become 1-2, 3-4... An odd last page sits alone on the left of its row. Notebooks with one page just show that page.
+3144. **Mixed sizes.** In a notebook with a portrait and a landscape page (or PDF pages of different sizes) next to each other, the pages line up by their top edge with a gap; the binding stays on the same vertical line in every row.
+3145. **Next and previous.** *Next page* / *Previous page* (page-turner keys, the commands) move by pair. *Go to page* on either page of a pair shows that pair; zoomed in on the left page, going to the right page brings it to the middle of the view.
+3146. **Page panel.** Open the page panel: both pages of the pair in view are highlighted; tapping a thumbnail goes to its pair.
+3147. **Zoom and minimap.** Pinch in on the right page: the minimap (when set to *Automatic* or *Always*) shows the right page and its rectangle; tapping the minimap pans inside that page.
+3148. **Saved view.** Save a view zoomed on the right page, scroll away, recall it: the same part of the right page comes back, centred, at the same zoom. The same after turning the tablet and back.
+3149. **Last position.** Close and reopen the notebook in the spread: it opens on the same pair at the same zoom and scroll position.
+3150. **Presentation and reference.** *Write while presenting* switches to one page at a time for the slide and goes back to the spread when you stop. A reference window keeps showing single pages.
+3151. **Automatic.** Settings > Pages > Scrolling = *Continuous* > *Two pages on a landscape tablet* on: the spread appears by itself in landscape and goes away in portrait, staying on the page you were on. Off (default): nothing changes by itself.
+3152. **Phone.** On a phone (or a portrait tablet) the setting *Two pages side by side* shows one column of pages as in continuous scrolling, and the page sheet does not offer the button. Rotating a tablet to landscape brings the spread back.
+3153. **Turning it off.** The button again (or the setting): back to one column on the same page. With the automatic setting on, the button also switches the automatic setting off.
+3154. **Other tools on a spread.** Lasso, shapes, text boxes, the eraser, the ruler and image drops work on whichever page is under the pen; a lasso that reaches the other page of the pair selects across the two pages exactly as it does across two pages in continuous scrolling. Dropping a file in the gap between the pages goes to the page nearer to it.
+3155. **Looks.** Light and dark theme, English and Italian, the new rows in the Pages section of the settings, the long-press explanation of the button.
+3156. **Nothing written by the mode.** Switching the mode, rotating and scrolling never change the notebook file (no save indicator, no modified time change).
+3157. **Page actions mean the page you touched (review fix).** At fit zoom, write (or tap with a finger in finger-writing mode) on the RIGHT page, then open the page sheet: its title names that page ("Page 5") and Delete page, Paper, Size, Lock act on it, however the view is scrolled by a pixel. Write on the left page: the sheet names the left page. Zoomed in on one page, that page is the one. Delete page in a spread says which page went ("Page 5 deleted") and Undo brings it back.
+3158. **Eraser by the binding (review fix).** With a large eraser, rub out ink on both pages within reach of the binding in one stroke: ink on the right page and on the left page near the gap both go (one undo step).
+3159. **Resize during a stroke (review fix).** Hold the pen on the page, writing, while the pane is resized (or the tablet turned): the stroke keeps its shape; the pairs change when the pen is lifted. Saved views and the last position saved in a spread come back at the same page size in a single column (and the reverse); a fitted spread comes back fitted.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Spread layout: pairs, first page alone or not, odd last page, mixed sizes aligned by top, same binding line (pure) | yes | `tests/spread.test.ts` | | | |
+| Which page a point is on, the page of a row nearer sideways, a stroke keeps the page it started on (pure) | yes | `tests/spread.test.ts` | | | |
+| Scroll to page / next page by pair, position and saved-view restore, minimap, scrollbar bubble and drops on a spread (pure) | yes | `tests/spread.test.ts` | | | |
+| Fallback to one column on a phone or a portrait view; automatic spread in landscape | yes | `tests/spread.test.ts`, harness `doc=spread` | | | |
+| Page sheet button, command, settings (*Two pages side by side*, *First page alone*, *Two pages on a landscape tablet*) | yes | `tests/spread.test.ts`, `tests/settings-schema.test.ts`, `tests/ui-registry.test.ts` | | | |
+| Writing with the pen on both pages of a pair | yes | harness `doc=spread` (synthetic pen events) | | | the S Pen on a real tablet |
+| Page panel highlights both pages of the pair | yes | harness `doc=spread` | | | |
+| Review fixes: the page the page actions mean in a spread (last touched, decisive only near the binding); eraser reaches both pages by the binding; resize waits for the stroke; positions and saved views measured against the page-wide fit in every mode (pure) | yes | `tests/spread.test.ts` | | | |
+
+### 0.27 — semzoom: semantic zoom, headings and titles shown large when zoomed out (roadmap #130; steps 3040-3059)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use a notebook with handwritten headings (lines written much larger than the rest), a titled bookmark and a PDF background; Settings, *Pages & navigation*, *Headings when zoomed out* is on by default.
+
+3040. **Off at normal zoom.** At the fit-to-width zoom, and zoomed in, nothing extra is drawn over the pages.
+3041. **Fade in.** Pinch out slowly: from about 60 % of the fit zoom a faint veil and the labels fade in, and they are complete near the smallest zoom. Pinching back fades them out; the pages and the ink under them look exactly as before.
+3042. **Headings.** Each large handwritten heading appears as a big picture of its own ink (no text is recognised), anchored at its place on the page; level 1 headings have a thicker accent edge than level 2.
+3043. **Names.** A titled bookmark, the PDF's name and the top levels of the PDF's outline appear as text labels at the top of their page. Large pictures and excerpts are named after their file / source notebook in a quieter style.
+3044. **Legible and tidy.** Labels are readable on the tablet (at least about 13 px text, 20 px tall), stay inside the page, never overlap and never cover more than a few per page.
+3045. **Tap to go there.** A finger tap (when a finger pans, not draws) or a mouse click on a label zooms to the page's fit-to-width zoom with that line near the top of the view; the Back-jump history knows the jump. A drag or a pinch that starts on a label does not jump. A pen tap on a label draws as usual (it does not jump).
+3046. **Writing.** With the pen on the screen at overview zoom the labels step aside and come back about half a second after the pen lifts.
+3047. **Setting.** Turn *Headings when zoomed out* off: the overlay never appears; on again: it returns without reopening the notebook. The Italian strings read correctly.
+3048. **Not in the output.** Export a PDF / PNG / SVG, start the presentation and make a hand-in PDF from the zoomed-out view: none of them contains a label or the veil. Page-by-page mode never shows it.
+3049. **Edits follow.** Write a new big heading, wait a few seconds and zoom out: it is labelled. Delete the heading (or undo): its label disappears. The notebook file is not modified by looking at the overview (check the file's modified time).
+3050. **Speed.** A notebook of 100+ pages: pinching and panning in the overview stay smooth on the tablet (labels move with the pages; headings are analysed a little at a time in the background).
+3051. **Looks.** Light and dark, "Follow Obsidian theme", phone and tablet width.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure layout: fade range, zoom bands, label sizes, placement inside the page, collision avoidance, per-page cap, cache, visible-label scan, hit test, jump viewport | yes | `tests/semantic-zoom.test.ts` | | | |
+| Label sources from the outline (headings, titled bookmarks, PDF names and sections, excerpts, pictures) | yes | `tests/semantic-sources.test.ts` | | | |
+| Overlay is a view-only layer (not imported by exports, presentation, hand-in; no commands; setting on by default) | yes | `tests/semantic-zoom-isolation.test.ts` | | | |
+| Overlay layer (fade, pooled labels, heading pictures, tap or click to jump, steps aside while writing) | yes | harness `doc=semzoom` | | | pen tap on a label does not jump (pen draws); not measured on the tablet |
+| Setting *Headings when zoomed out* (Pages & navigation) | yes | `tests/settings-schema.test.ts`, `tests/semantic-zoom-isolation.test.ts` | | | |
+
+### 0.27 — workspaces: workspace presets (roadmap #375; steps 3100-3119)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+3100. **Open.** Run the command *Workspaces: pick a panel layout…* (command palette, All actions or the notebook menu): a dialog lists Lecture, Study and Focus. The one that matches the panels open now carries the pill *Now*.
+3101. **Focus.** Open the page panel and the minimap, then pick *Focus*: both close; the notebook is untouched. A short notice names the workspace.
+3102. **Lecture.** Pick *Lecture*: the page panel opens as the outline, and the slides picker opens (choose a PDF or a notebook): the slides pane sits next to the notebook. Run the command again: nothing flickers and no second picker opens.
+3103. **One command.** Run *Workspace: Lecture (slides, notebook, outline)* from the All actions sheet: the same arrangement without the dialog. During a class (lecture mode on) it is ranked first.
+3104. **Study.** Pick *Study*: the reference window picker opens (choose a file) and the Related pages panel opens in the right sidebar. Pick *Focus* again: the reference window and the Related panel close; no other Obsidian tab or pane moves.
+3105. **Save.** Open a layout by hand (for instance outline and minimap), open the dialog and press *Save current arrangement*, name it: it appears as a tile with the panels it opens. Pick *Focus*, then your tile: the layout returns.
+3106. **Writing profile.** With the Lecture writing profile in use, save a preset: applying it later switches to that profile too.
+3107. **Rename, replace, delete.** On your own tile: the pencil renames it, the refresh button replaces its panels with what is open now, the bin deletes it. Lecture, Study and Focus have none of these buttons.
+3108. **Limit.** After 12 saved presets the save button is disabled and says so.
+3109. **Phone width.** On a phone: *Lecture* keeps the slides split and skips the page drawer; *Study* leaves out the reference window and the Related pages with one notice naming them. Saved presets behave the same.
+3110. **Lecture start.** Settings, Study, *Lecture workspace when a class starts* on: starting lecture mode applies Lecture (off by default).
+3111. **Nothing is edited.** Apply every preset on a notebook and compare the file (modified time and content): unchanged. A read-only notebook can apply presets too.
+3112. **Settings survive.** Restart Obsidian: saved presets are still there; hand-edit `data.json` with a broken entry: it is ignored, the others stay.
+3113. **Help and Italian.** Long-press the *Workspaces…* action: an explanation appears. Switch to Italian: dialog, notices and help are translated.
+3114. **Looks.** Light and dark theme, tablet and phone width; the dialog has the same look as the history panel.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure model (built-in presets, lenient read, bounded list, plan: close/open/skip, narrow degrade, one picker at a time, save/update/rename/delete) | yes | `tests/workspace-presets.test.ts` | | | |
+| Apply a preset (page panel and outline, minimap fold, slides pane, reference window, Related pages panel) through each panel's own open/close | yes | harness `doc=workspaces` (page panel, outline, minimap, saved preset; slides and reference need a file and are not driven) | | | slides/reference pickers and the Related panel in a real Obsidian |
+| Picker dialog (tiles, current marker, save, rename, replace, delete) | yes | harness `doc=workspaces` | | | |
+| All actions entries, command, context rank, long-press help | yes | `tests/actions-registry.test.ts`, `tests/context-rank.test.ts` | | | |
+| Setting *Lecture workspace when a class starts* | yes | `tests/settings-schema.test.ts` | | | |
+| Phone degrade (reference window, minimap, related skipped with one notice) | yes | `tests/workspace-presets.test.ts`, harness `doc=workspaces` (phone) | | | |
+
+### 0.27 — pdfsuggest (PDF search with suggested terms, roadmap #418; steps 3020-3039)
+
+Manual steps (real Obsidian; nothing here is verified on Android). You need a notebook with PDF pages whose PDF has an outline (bookmarks), a few typed text boxes that repeat a word, and a box with a title.
+
+3020. **Open.** On a PDF page open *Search PDF text*: under the box a single row of chips appears (outline entries first, then titles, then frequent words). The row scrolls sideways with a finger; the panel never grows wider.
+3021. **Tap.** Tap a chip: its text goes into the box, the keyboard closes and the search runs at once; the results list and the marks on the pages are the usual ones.
+3022. **Typing.** Type *ent*: only the chips that fit stay (starting with it first, then words inside, then one-typo matches such as *carnt* for *Carnot*). Accents and capitals do not matter. A chip equal to what you typed is not offered.
+3023. **Nothing fits.** Type something that matches no chip: the row disappears (no empty bar); clearing the box brings it back.
+3024. **Own text.** The words are the ones you typed in this notebook (text boxes, sticky notes, checklist labels) at least twice; *the*, *and*, *della*, *che*... never show. Handwriting is not read, so it is not a source.
+3025. **Other notebooks.** Words and titles of other notebooks never appear (open two notebooks with different words).
+3026. **No outline.** A PDF without an outline gives chips from titles and words only; a notebook with no PDF page shows the usual message and no chips. Settings, *PDF outline: off*, leaves the outline entries out.
+3027. **Changes.** Add a text box with a new repeated word, close and reopen the search: the word is offered. Opening the search a second time without changes costs nothing visible.
+3028. **Phone.** Narrow view: at most eight chips, one line; tablet: up to fourteen.
+3029. **Help.** Long-press a chip with a finger: a bubble says where the term comes from (outline, title or word). English and Italian.
+3030. **Writing.** While the pen writes, opening the search does not stutter (the chips are prepared when the device is idle).
+3031. **Read-only.** Nothing is written to the vault or the notebook by suggestions.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure ranking and filtering of suggested terms (outline, titles, frequent typed words; en + it stop-words; prefix, word, substring and one-typo matching; bounds; per-document cache) | yes | `tests/pdf-search-suggest.test.ts` | | | |
+| Chips row in the PDF search panel (tap searches, typing filters, long-press help, phone and tablet) | yes | harness `doc=pdfsuggest` | | | |
+| Sources read from the open notebook only, in idle time; no format change, no writes | yes | `tests/pdf-search-suggest.test.ts` (gather) | | | words from handwriting are not available (no recognition) |
+
+### 0.27 — plannertasks: tasks due on planner pages (roadmap #266; steps 3120-3139)
+
+Settings, Writing: *Tasks on planner pages* (on by default). Implemented, not verified on hardware. Needs a planner notebook (create one from the planner generator) and a few notes with tasks. The overlay is derived and per device: nothing is stored in the notebook (no format change), it is **not included in any export** in this wave, and it is read only (the task lines of ordinary notes carry no block id the safe checklist writer could find them by, so nothing is ticked from the chip).
+
+3120. **Chip.** In a vault note write `- [ ] Pay rent 📅 2026-03-12`, in another `- [ ] Book room [due:: 2026-03-12]`, and in a note named `2026-03-12.md` a plain `- [ ] Call the bank`. Open the daily page of 12 March 2026 of a planner: a quiet chip *Tasks due: 3* appears at the top right (a moment after the page settles). It is collapsed: it never covers the page.
+3121. **List.** Tap the chip: a list opens under it, open tasks first (by day, note, line), done ones struck through and last, each with its note name. The round marks are statuses, not buttons.
+3122. **Open the note.** Tap a row: the note opens in a new tab with the cursor on the task's line; the notebook stays where it was.
+3123. **Collapse.** Tap outside, press Escape, change page or write a stroke with the S Pen: the list folds, the chip stays.
+3124. **Weekly page.** On a weekly planner page the chip counts the tasks of the seven days; rows show their weekday.
+3125. **Other pages.** The year, month, notes and ordinary pages have no chip; a day with nothing due has none either.
+3126. **Live.** With the page open, edit a task in a note (change its date to that day): within a second or two the count follows. Delete or rename the note: it follows too. Typing in a note does not slow the notebook.
+3127. **Big vault.** In a vault with thousands of notes the first planner page you open stays smooth (notes are read a few at a time); a task found in a fenced code block, in frontmatter or marked cancelled `[-]` is not listed.
+3128. **Setting.** Turn *Tasks on planner pages* off: the chip goes; on: it returns.
+3129. **Stacking.** With the recent-symbols strip, the *Back to slide* pill and the *Referenced on* chip on, the tasks chip sits below them, none overlaps, and on a phone it steps aside while the welcome-back card is shown.
+3130. **Not in exports and not in the file.** Export the page as PDF/PNG: no task text appears. Reopen the notebook file's JSON: nothing of the tasks is in it.
+3131. **Italian, light, dark, phone.** The texts are in Italian with the plugin in Italian; the chip and list read in light and dark and fit a phone.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Page days from a planner title (day, week, across month and year, en and it; planner paper only) | yes | `tests/planner-tasks.test.ts` | | | |
+| Task due dates (Tasks `📅`, Dataview `[due::]`, daily note name), skipping frontmatter, code, cancelled; bounded index | yes | `tests/planner-tasks.test.ts` | | | |
+| Chip, list, open at line, incremental updates, setting, stacking | yes | harness `doc=plannertasks` and `doc=pillstack` | | | |
+| Tick a task from the chip | no | | | | read only by design (no safe block-id writer for ordinary notes) |
+| Overlay in exports | no | | | | left out in this wave |

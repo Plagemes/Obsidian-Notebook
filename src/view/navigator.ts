@@ -16,6 +16,8 @@ import { pageSignature } from "./view-helpers";
 export interface NavigatorHost {
 	pages(): readonly Page[];
 	current(): number;
+	/** 0.27 (#49): the other page of the two-page spread in view (highlighted with the current one), or -1. Absent: -1. */
+	companion?(): number;
 	bookmarks(): ReadonlySet<string>;
 	/** PNG data URL of a page thumbnail `width` CSS px wide. */
 	thumbnail(page: Page, width: number): string;
@@ -199,6 +201,19 @@ export class PageNavigator {
 		return !this.el.hasClass("notebook-hidden");
 	}
 
+	/** 0.27 (#375): the panel shows the outline instead of the page thumbnails. */
+	get showsOutline(): boolean {
+		return this.outlineMode;
+	}
+
+	/** 0.27 (#375): switches between the outline and the thumbnails (a workspace preset); the open or closed state is unchanged. */
+	setOutline(on: boolean): void {
+		if (this.outlineMode === on) return;
+		this.outlineMode = on;
+		this.updateHeader();
+		this.refresh();
+	}
+
 	setOpen(open: boolean): void {
 		this.el.toggleClass("notebook-hidden", !open);
 		if (open) {
@@ -240,6 +255,7 @@ export class PageNavigator {
 		const pages = this.host.pages();
 		const marks = this.host.bookmarks();
 		const current = this.host.current();
+		this.mate = this.host.companion?.() ?? -1;
 		this.updateTagBar();
 		if (this.outlineMode) {
 			renderOutline(this.listEl, this.host.outline, { category: this.outlineCategory, current }, (category) => {
@@ -304,13 +320,15 @@ export class PageNavigator {
 
 	/** Set when the panel was just opened: the first build brings the current page into the middle. */
 	private centerCurrent = false;
+	/** 0.27 (#49): the other page of the spread in view, highlighted with the current one (-1: none). */
+	private mate = -1;
 
 	/** One page of the list: a thumbnail card (large or usual layout) or a compact row. */
 	private buildItem(page: Page, index: number, current: number, marks: ReadonlySet<string>, info: NonNullable<ReturnType<OutlineHost["meta"]>>["bookmarkInfo"], why?: readonly PageMark[]): void {
 		{
 			const list = this.layout === "list";
 			const item = this.listEl.createDiv({ cls: "notebook-navigator-item", attr: { tabindex: "0", "data-index": String(index), "data-id": page.id } });
-			item.toggleClass("is-current", index === current);
+			item.toggleClass("is-current", index === current || index === this.mate);
 			item.toggleClass("is-selected", this.selected.has(page.id));
 			setIcon(item.createDiv({ cls: "notebook-navigator-check" }), "check");
 			const img = item.createEl("img", { cls: "notebook-navigator-thumb", attr: { alt: t("nav.page", { n: String(index + 1) }), draggable: "false" } });
@@ -568,11 +586,12 @@ export class PageNavigator {
 	}
 
 	/** Highlights the current page without rebuilding the list, and brings it into view. */
-	markCurrent(index: number): void {
+	markCurrent(index: number, mate = -1): void {
+		this.mate = mate;
 		if (!this.open) return;
 		this.listEl.querySelectorAll(".notebook-navigator-item").forEach((el) => {
 			const item = el as HTMLElement;
-			const current = Number(item.dataset.index) === index;
+			const current = Number(item.dataset.index) === index || Number(item.dataset.index) === mate;
 			if (current !== item.hasClass("is-current")) {
 				item.toggleClass("is-current", current);
 				if (current && !this.drag) item.scrollIntoView({ block: "nearest" });

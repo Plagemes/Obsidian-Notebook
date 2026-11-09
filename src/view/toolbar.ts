@@ -12,6 +12,8 @@ import { kindHasNib, NIB_STEP, normaliseNib, PEN_KINDS, type PenKind } from "../
 import type { FillMode, LineStyle } from "../ink/shape-restyle";
 import { renderShapeStyle } from "./shape-style-row";
 import { createOpacityRow, type OpacityRow } from "./opacity-row";
+import { createTaperRow, type TaperRow } from "./taper-row";
+import { canTaper } from "../model/taper";
 
 export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
 export type EraserMode = "stroke" | "segment" | "area";
@@ -58,6 +60,9 @@ export interface ToolbarState {
 	/** 0.26 (#358): how strongly new ink writes, 0.05 to 1 (1 = the pen's own look). The pen's value also serves the shapes and the pen kinds; the highlighter's serves the area highlighter. */
 	penOpacity: number;
 	highlighterOpacity: number;
+	/** 0.27 (#351): how much the line of new strokes of the pen, the fountain pen and the brush thins towards its start and its end (0 = not at all, otherwise 0.05 to 1). */
+	penTaperStart: number;
+	penTaperEnd: number;
 }
 
 export const DEFAULT_TOOLS: ToolbarState = {
@@ -82,6 +87,8 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	highlighterArea: false,
 	penOpacity: 1,
 	highlighterOpacity: 1,
+	penTaperStart: 0,
+	penTaperEnd: 0,
 };
 
 export interface ToolbarActions {
@@ -194,6 +201,8 @@ export class Toolbar {
 	private readonly nibPreview: HTMLElement;
 	/** 0.26 (#358): the opacity of new ink (pen, shapes, highlighter, area highlighter). */
 	private readonly opacityRow: OpacityRow;
+	/** 0.27 (#351): the taper of the start and the end of new strokes of the line pens. */
+	private readonly taperRow: TaperRow;
 	private readonly chipButton: HTMLButtonElement;
 	private readonly readOnlyButton: HTMLButtonElement;
 	private readonly chipDot: HTMLElement;
@@ -352,6 +361,8 @@ export class Toolbar {
 		this.opacityRow = createOpacityRow(this.optionsEl, {
 			commit: (opacity) => this.set(this.state.tool === "highlighter" ? { highlighterOpacity: opacity } : { penOpacity: opacity }),
 		}, "notebook-pen-opacity");
+		// 0.27 (#351): how much the line thins at the start and at the end of a stroke (the line pens only). It applies to the strokes written from now on.
+		this.taperRow = createTaperRow(this.optionsEl, { commit: (patch) => this.set(patch) }, "notebook-pen-taper");
 		this.sizeGroup = this.row(this.optionsEl);
 		this.highlighterOptionsEl = this.row(this.optionsEl);
 
@@ -642,6 +653,10 @@ export class Toolbar {
 		// 0.26 (#358): the opacity of new ink: every inking tool has it (the shape tool and the pen kinds share the pen's, the area highlighter the highlighter's).
 		this.opacityRow.el.toggleClass("notebook-hidden", !inking);
 		this.opacityRow.set(s.tool === "highlighter" ? s.highlighterOpacity : s.penOpacity, this.editable);
+		// 0.27 (#351): the taper belongs to the pen, the fountain pen and the brush (the marker and the highlighter keep their flat ends, shapes have none).
+		const tapers = penTool && canTaper(s.penKind);
+		this.taperRow.el.toggleClass("notebook-hidden", !tapers);
+		if (tapers) this.taperRow.set(s.penTaperStart, s.penTaperEnd, this.editable, s.penWidth, s.penKind as "pen" | "fountain" | "brush");
 		this.sizeGroup.toggleClass("notebook-hidden", s.tool !== "text");
 		this.highlighterModeGroup.toggleClass("notebook-hidden", s.tool !== "highlighter");
 		for (const [area, b] of this.highlighterModeButtons) {

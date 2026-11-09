@@ -1012,8 +1012,55 @@ export class History {
 			// The time is only a label of the step: a clock that fails never stops the step from being recorded.
 		}
 		this.undoStack.push(cmd);
-		if (this.undoStack.length > this.limit) this.undoStack.shift();
+		// 0.27 review (M3): inside a group the stack is trimmed once, when the group ends, so one group costs one entry like one step.
+		if (!this.grouping) this.trimUndo();
 		this.redoStack = [];
+		this.grouping?.push(cmd);
+	}
+
+	/** Drops the oldest steps beyond the limit. */
+	private trimUndo(): void {
+		while (this.undoStack.length > this.limit) this.undoStack.shift();
+	}
+
+	/** 0.27 (#170): the steps recorded since `group` began (null outside a group). */
+	private grouping: Command[] | null = null;
+
+	/** How many steps the open `group` has recorded so far (0 outside a group): a counter a macro run compares before and after a step. */
+	get groupedSteps(): number {
+		return this.grouping?.length ?? 0;
+	}
+
+	/**
+	 * 0.27 (#170): runs `fn`, which edits through this history step after step (a macro), and makes everything it recorded ONE undo step
+	 * (a `Batch` named `label`). Each step still goes through `execute` with every guard of its own (locks, content check, read-only), so
+	 * a refused step is simply not part of the group. Fewer than two recorded steps are left as they are. When anything else touched the
+	 * stacks meanwhile (an undo, `clear`) the steps are left as separate ones: nothing is ever lost or reordered. A group inside a group
+	 * is part of the outer one.
+	 */
+	group<T>(label: string, fn: () => T): T {
+		if (this.grouping) return fn();
+		this.grouping = [];
+		try {
+			return fn();
+		} finally {
+			const made = this.grouping;
+			this.grouping = null;
+			this.merge(label, made);
+			this.trimUndo();
+		}
+	}
+
+	/** Replaces `made`, the last steps of the undo stack, by one `Batch` (only when they are exactly the top of the stack, in order). */
+	private merge(label: string, made: readonly Command[]): void {
+		if (made.length < 2) return;
+		const top = this.undoStack.slice(this.undoStack.length - made.length);
+		if (top.length !== made.length || top.some((c, i) => c !== made[i])) return;
+		this.undoStack.length -= made.length;
+		const batch = new Batch(label, made, made.every((c) => c.lockExempt === true));
+		const at = this.madeAt.get(made[made.length - 1]!);
+		if (at !== undefined) this.madeAt.set(batch, at);
+		this.undoStack.push(batch);
 	}
 
 	undo(): Command | null {

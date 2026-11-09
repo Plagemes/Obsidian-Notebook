@@ -123,6 +123,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "clipimage", theme, device, lowLatency: false });
 // 0.24 tagsuggest: suggested tags in the tag editors (dev/harness/tagsuggest-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tagsuggest", theme, device, lowLatency: false });
+// 0.27 pdfsuggest (#418): suggested PDF search terms (dev/harness/pdfsuggest-check.ts), tablet and phone, light and dark (dist/shots/pdfsuggest-*.png, pdfsuggest-typed-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "pdfsuggest", theme, device, lowLatency: false });
 // 0.24 handin (#334): the Hand in dialog and its cover (dev/harness/handin-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "handin", theme, device, lowLatency: false });
 // 0.26 redact (#285): redaction before export, the Redact dialog and its row in the export dialog (dev/harness/redact-check.ts).
@@ -167,6 +169,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "savedviews", theme, device, lowLatency: false });
 // 0.25 histpanel (#84): the action history panel (dev/harness/histpanel-check.ts), tablet and phone, light and dark (dist/shots/histpanel-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "histpanel", theme, device, lowLatency: false });
+// 0.27 workspaces (#375): workspace presets and their picker (dev/harness/workspaces-check.ts), tablet and phone, light and dark (dist/shots/workspaces-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "workspaces", theme, device, lowLatency: false });
 // 0.26 related (#422): the Related pages panel (dev/harness/related-check.ts), tablet and phone, light and dark (dist/shots/related-*.png, related-empty-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "related", theme, device, lowLatency: false });
 // 0.22 pagerefs (#179): the chip and list of pages that link here (dev/harness/pagerefs-check.ts).
@@ -177,16 +181,26 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "navadapt", theme, device, lowLatency: false });
 // 0.25 markedview (#419): marked pages only in the page navigator (dev/harness/markedview-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "markedview", theme, device, lowLatency: false });
+// 0.27 spread (#49): two pages side by side on the landscape tablet, one column on the phone (dev/harness/spread-check.ts), dist/shots/design/spread-*.png.
+for (const device of ["tabletLandscape", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "spread", theme, device, lowLatency: false });
+// 0.27 macros (#170): the macro manager, the toolbar button and a run (dev/harness/macros-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "macros", theme, device, lowLatency: false });
 // 0.26 tidy (#238): Tidy up (dev/harness/tidy-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tidy", theme, device, lowLatency: false });
 // 0.23 welcomeback (#420): the welcome-back card (dev/harness/welcomeback-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "welcomeback", theme, device, lowLatency: false });
+// 0.27 plannertasks (#266): the tasks chip on planner pages (dev/harness/plannertasks-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "plannertasks", theme, device, lowLatency: false });
 // 0.24 iconhelp (#429): the long-press explanation bubble (dev/harness/iconhelp-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "iconhelp", theme, device, lowLatency: false });
 // 0.25 toolfade (#399): the bars fade while the pen writes (dev/harness/toolfade-check.ts), dist/shots/design/toolfade-*.png.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "toolfade", theme, device, lowLatency: false });
+// 0.27 inputlayout (#431): layout by input device (dev/harness/inputlayout-check.ts), dist/shots/design/inputlayout-*.png.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "inputlayout", theme, device, lowLatency: false });
 // 0.26 zoomwidth (#350): pen width follows zoom (dev/harness/zoomwidth-check.ts), dist/shots/design/zoomwidth-*.png.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "zoomwidth", theme, device, lowLatency: false });
+// 0.27 semzoom (#130): semantic zoom (dev/harness/semzoom-check.ts), dist/shots/design/semzoom-*.png.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "semzoom", theme, device, lowLatency: false });
 // 0.22 lecthead (#210): the lecture header (dev/harness/lecthead-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "lecthead", theme, device, lowLatency: false });
 // 0.23 dimcheck (#293): the units hint of the equation editor (dev/harness/dimcheck-check.ts).
@@ -203,6 +217,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "areahl", theme, device, lowLatency: false });
 // 0.26 opacity (#358): the opacity of ink, pictures and areas (dev/harness/opacity-check.ts), tablet and phone, light and dark (dist/shots/opacity-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "opacity", theme, device, lowLatency: false });
+// 0.27 taper (#351): the taper of the ends of a line (dev/harness/taper-check.ts), tablet and phone, light and dark (dist/shots/taper-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "taper", theme, device, lowLatency: false });
 // 0.26 smooth (#66): Smooth and Straighten strokes (dev/harness/smooth-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "smooth", theme, device, lowLatency: false });
 // 0.26 ctxpalette (#394): the colour picker's context rows on a PDF page and a written page (dev/harness/ctxpalette-check.ts), tablet and phone, light and dark (dist/shots/ctxpalette-*.png, ctxpalettew-*.png).
@@ -430,20 +446,26 @@ async function main() {
 				else if (s.doc === "shapefill") report = await cdp.evaluate("window.harness.checkShapefill()", 90000); // 0.24 shapefill
 				else if (s.doc === "areahl") report = await cdp.evaluate("window.harness.checkAreahl()", 90000); // 0.25 areahl
 				else if (s.doc === "opacity") report = await cdp.evaluate("window.harness.checkOpacity()", 90000); // 0.26 opacity
+				else if (s.doc === "taper") report = await cdp.evaluate("window.harness.checkTaper()", 90000); // 0.27 taper
 				else if (s.doc === "ctxpalette" || s.doc === "ctxpalettew") report = await cdp.evaluate("window.harness.checkCtxpalette()", 90000); // 0.26 ctxpalette
 				else if (s.doc === "papersuggest") report = await cdp.evaluate("window.harness.checkPapersuggest()", 90000); // 0.25 papersuggest
 				else if (s.doc === "strokejoin") report = await cdp.evaluate("window.harness.checkStrokejoin()", 90000); // 0.24 strokejoin
 				else if (s.doc === "profiles") report = await cdp.evaluate("window.harness.checkProfiles()", 90000); // 0.25 profiles
 				else if (s.doc === "pillstack") report = await cdp.evaluate("window.harness.checkPillstack()", 90000); // 0.22 review fix: all the floating pills at once
 				else if (s.doc === "welcomeback") report = await cdp.evaluate("window.harness.checkWelcomeback()", 90000); // 0.23 welcomeback
+				else if (s.doc === "plannertasks") report = await cdp.evaluate("window.harness.checkPlannertasks()", 90000); // 0.27 plannertasks
 				else if (s.doc === "iconhelp") report = await cdp.evaluate("window.harness.checkIconhelp()", 90000); // 0.24 iconhelp
 				else if (s.doc === "toolfade") report = await cdp.evaluate("window.harness.checkToolfade()", 120000); // 0.25 toolfade
+				else if (s.doc === "inputlayout") report = await cdp.evaluate("window.harness.checkInputlayout()", 90000); // 0.27 inputlayout
 				else if (s.doc === "zoomwidth") report = await cdp.evaluate("window.harness.checkZoomwidth()", 120000); // 0.26 zoomwidth
+				else if (s.doc === "semzoom") report = await cdp.evaluate("window.harness.checkSemzoom()", 120000); // 0.27 semzoom
 				else if (s.doc === "navadapt") report = await cdp.evaluate("window.harness.checkNavadapt()", 90000); // 0.24 navadapt
 				else if (s.doc === "smooth") report = await cdp.evaluate("window.harness.checkSmooth()", 90000); // 0.26 smooth
 				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
 				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
+				else if (s.doc === "macros") report = await cdp.evaluate("window.harness.checkMacros()", 120000); // 0.27 macros
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
+				else if (s.doc === "spread") report = await cdp.evaluate("window.harness.checkSpread()", 120000); // 0.27 spread
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -460,12 +482,14 @@ async function main() {
 				else if (s.doc === "exportarea") report = await cdp.evaluate("window.harness.checkExportArea()", 60000);
 				else if (s.doc === "clipimage") report = await cdp.evaluate("window.harness.checkClipImage()", 60000); // 0.25 clipimage
 				else if (s.doc === "tagsuggest") report = await cdp.evaluate("window.harness.checkTagSuggest()", 60000); // 0.24 tagsuggest
+				else if (s.doc === "pdfsuggest") report = await cdp.evaluate("window.harness.checkPdfSuggest()", 60000); // 0.27 pdfsuggest
 				else if (s.doc === "handin") report = await cdp.evaluate("window.harness.checkHandIn()", 60000); // 0.24 handin
 				else if (s.doc === "redact") report = await cdp.evaluate("window.harness.checkRedact()", 90000); // 0.26 redact
 				else if (s.doc === "ghostlines") report = await cdp.evaluate("window.harness.checkGhostlines()", 60000);
 				else if (s.doc === "pagetime") report = await cdp.evaluate("window.harness.checkPagetime()", 60000);
 				else if (s.doc === "pens") report = await cdp.evaluate("window.harness.checkPens()", 90000);
 				else if (s.doc === "savedviews") report = await cdp.evaluate("window.harness.checkSavedviews()", 90000); // 0.23 savedviews
+				else if (s.doc === "workspaces") report = await cdp.evaluate("window.harness.checkWorkspaces()", 90000); // 0.27 workspaces
 				else if (s.doc === "histpanel") report = await cdp.evaluate("window.harness.checkHistpanel()", 90000); // 0.25 histpanel
 				else if (s.doc === "related") report = await cdp.evaluate("window.harness.checkRelated()", 60000); // 0.26 related
 				else if (s.doc === "share") report = await cdp.evaluate("window.harness.checkShare()", 180000); // 0.20 share
@@ -685,6 +709,32 @@ async function main() {
 					}
 				}
 			}
+			// 0.27 spread: the pair with writing on both pages, zoomed on the right page with the minimap, and the page sheet with its toggle.
+			if (s.doc === "spread") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["pair", "zoom", "sheet"]) {
+					try {
+						await cdp.evaluate(`window.harness.spreadShot('${state}').then(() => true)`, 90000);
+						writeFileSync(join(designDir, `spread-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`spread ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.27 macros: screenshots of the toolbar with its macro buttons, the manager, the editor and the sheet's Macros section.
+			if (s.doc === "macros") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["toolbar", "list", "editor", "sheet"]) {
+					try {
+						await cdp.evaluate(`window.harness.macrosShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `macros-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`macros ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
 			// 0.26 tidy: screenshots of the crooked page, the sheet open over it, and the page tidied.
 			if (s.doc === "tidy") {
 				const designDir = join(shots, "design");
@@ -720,6 +770,19 @@ async function main() {
 					problems.push(`navadapt screenshot: ${e.message}`);
 				}
 			}
+			// 0.27 plannertasks: the chip, the open list and the weekly page.
+			if (s.doc === "plannertasks") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["chip", "panel", "week"]) {
+					try {
+						await cdp.evaluate(`window.harness.plannertasksShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `plannertasks-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`plannertasks screenshot ${state}: ${e.message}`);
+					}
+				}
+			}
 			// 0.23 welcomeback: a screenshot of the card.
 			if (s.doc === "welcomeback") {
 				const designDir = join(shots, "design");
@@ -729,6 +792,19 @@ async function main() {
 					writeFileSync(join(designDir, `welcomeback-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				} catch (e) {
 					problems.push(`welcomeback screenshot: ${e.message}`);
+				}
+			}
+			// 0.27 semzoom: the overview far out, halfway through the fade and further down the notebook.
+			if (s.doc === "semzoom") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["overview", "fade", "later"]) {
+					try {
+						await cdp.evaluate(`window.harness.semzoomShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `semzoom-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`semzoom ${state} screenshot: ${e.message}`);
+					}
 				}
 			}
 			// 0.26 zoomwidth: the pen options at two zooms, option off and on.
@@ -741,6 +817,19 @@ async function main() {
 						writeFileSync(join(designDir, `zoomwidth-${on ? "on" : "off"}-${zoom}x-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`zoomwidth ${zoom}x ${on} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.27 inputlayout: screenshots of the pen, finger and mouse layouts.
+			if (s.doc === "inputlayout") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const kind of ["pen", "touch", "mouse"]) {
+					try {
+						await cdp.evaluate(`window.harness.inputlayoutShot('${kind}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `inputlayout-${kind}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`inputlayout ${kind} screenshot: ${e.message}`);
 					}
 				}
 			}
@@ -851,6 +940,15 @@ async function main() {
 					} catch (e) {
 						problems.push(`related ${state} screenshot: ${e.message}`);
 					}
+				}
+			}
+			// 0.27 pdfsuggest: the chips filtered by what is typed.
+			if (s.doc === "pdfsuggest") {
+				try {
+					await cdp.evaluate("window.harness.pdfsuggestShot('typed').then(() => true)");
+					writeFileSync(join(shots, `pdfsuggest-typed-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+				} catch (e) {
+					problems.push(`pdfsuggest typed screenshot: ${e.message}`);
 				}
 			}
 			// 0.16 inbox: the full list over Home (Home itself is the screenshot above).

@@ -4,6 +4,7 @@
 // (settings: "Adaptive toolbar") turn each family off; pinned quick slots always come first, in the order the person
 // chose, whatever the rules say. Nothing here learns by itself: the use counts come from ui/usage-store.ts.
 import { ACTIONS, type ActionDef, type ToolId, type UiContext } from "./actions";
+import { isMacroActionId } from "./macros";
 import type { PageKind } from "./page-kind";
 import { mixFromCounts, selectionKindOf, type SelectionKind } from "./selection-kind";
 
@@ -38,7 +39,8 @@ export function normalisePinned(data: unknown, actions: readonly ActionDef[] = A
 	const out: string[] = [];
 	for (const id of data) {
 		if (typeof id !== "string" || out.includes(id)) continue;
-		if (!actions.some((a) => a.id === id && a.surfaces.includes("quick"))) continue;
+		// 0.27 (#170): a macro is added to the registry at run time, after the settings load: its pin is kept (a deleted macro's pin is removed when it is deleted).
+		if (!isMacroActionId(id) && !actions.some((a) => a.id === id && a.surfaces.includes("quick"))) continue;
 		out.push(id);
 		if (out.length >= MAX_PINNED) break;
 	}

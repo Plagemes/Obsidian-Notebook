@@ -36,6 +36,7 @@ import { normalizePageTags } from "./page-tags";
 import { pageTimesProblem } from "./page-times";
 import { normalizePosition } from "./position";
 import { isOpacity } from "./opacity";
+import { canTaper, isTaper } from "./taper";
 import { freezeElement, freezeStroke, liveGroups, parse, readPageComments, readPageStates, readSlides, readViews, serializeChecked, validate, MAX_FONT_SIZE } from "./serialize";
 import {
 	A4_HEIGHT, A4_WIDTH, CURRENT_VERSION, DEFAULT_META, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, isShapeDash, PAPER_SPACING, RENDER_FREEHAND, RENDER_INK, RENDER_VERSIONS, TOOLS, type Tool,
@@ -419,6 +420,11 @@ function fixStroke(v: unknown, slides: ReadonlySet<string>): RawObject | null {
 	if (tool === "shape" && isShapeDash(v.dash)) out.dash = v.dash;
 	// v24: the opacity stays when it is valid (any pen has one).
 	if (isOpacity(v.opacity)) out.opacity = v.opacity;
+	// v25: the taper of an end stays when it is valid (and only on a stroke that can taper).
+	if (canTaper(tool, out.render as number)) {
+		if (isTaper(v.taperStart)) out.taperStart = v.taperStart;
+		if (isTaper(v.taperEnd)) out.taperEnd = v.taperEnd;
+	}
 	// v8 invisible ink stays invisible: a repaired solution is not revealed.
 	if (v.hidden === true) out.hidden = true;
 	// v12: the link stays when it names an entry of the salvaged table; a dangling one is dropped (the ink stays).
@@ -502,7 +508,7 @@ function fixMathElement(v: RawObject, assets: Record<string, Asset>): RawObject 
 }
 
 function strokeKey(s: Stroke): string {
-	return JSON.stringify([s.tool, s.color, s.width, s.render, s.hidden === true, s.points, s.nib ?? null, s.fill ?? null, s.fillTint === true, s.dash ?? null, s.opacity ?? null]);
+	return JSON.stringify([s.tool, s.color, s.width, s.render, s.hidden === true, s.points, s.nib ?? null, s.fill ?? null, s.fillTint === true, s.dash ?? null, s.opacity ?? null, s.taperStart ?? null, s.taperEnd ?? null]);
 }
 
 function elementKey(e: PageElement): string {

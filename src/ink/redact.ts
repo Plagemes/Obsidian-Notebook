@@ -26,6 +26,7 @@ import { backgroundRect } from "../model/margins";
 import { isCheckbox } from "../model/checklist";
 import { pageCopy } from "../model/states";
 import { countBoxes, rectsOverlap, type RedactBox, type Redactions, boxesOf } from "../model/redact";
+import { pieceTaper } from "../model/taper";
 import { RENDER_INK, type AreaElement, type ExcerptElement, type NotebookMeta, type Page, type PageComment, type PageElement, type Point, type Stroke } from "../model/types";
 import { boundGraphId } from "./attach";
 import { checkboxLabelBounds } from "./checklist";
@@ -293,10 +294,13 @@ export function cutStroke(stroke: Stroke, boxes: readonly RedactBox[]): Stroke[]
 	const pieces: Stroke[] = [];
 	for (const run of runs) {
 		if (!isLine(run)) continue;
-		const { fill: _fill, fillTint: _tint, ...rest } = stroke;
+		const { fill: _fill, fillTint: _tint, taperStart: _ts, taperEnd: _te, ...rest } = stroke;
 		void _fill;
 		void _tint;
-		pieces.push({ ...rest, id: pieces.length === 0 ? stroke.id : `${stroke.id}.r${pieces.length}`, points: run });
+		void _ts;
+		void _te;
+		// v25: a piece keeps the taper of an end of the stroke only when it still reaches that end (a cut end is a plain one).
+		pieces.push({ ...rest, id: pieces.length === 0 ? stroke.id : `${stroke.id}.r${pieces.length}`, points: run, ...pieceTaper(stroke, run) });
 	}
 	return pieces;
 }
