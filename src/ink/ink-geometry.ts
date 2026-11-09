@@ -228,10 +228,22 @@ export class InkBuilder {
 	/**
 	 * Disc radius of a provisional tip point (the raw pen position, a predicted point) that is not a stored point: the pressure for the old
 	 * pens, the radius of the last stored point for the new ones (their radius follows the movement, which a tip point does not have yet).
+	 * Format v25: inside the start taper the tip is thinned like the trail (by the way travelled to the tip at `x`, `y`: the polyline to the last
+	 * stored point plus the straight distance from it), so no full-size dot rides at the pen while the line behind it is still thin.
 	 */
-	tipRadius(pressure: number): number {
-		if (isNewPen(this.tool) && this.count > 0) return this.pr[this.count - 1]!;
-		return inkRadius(this.tool, this.width, pressure);
+	tipRadius(pressure: number, x?: number, y?: number): number {
+		const n = this.count;
+		if (isNewPen(this.tool) && n > 0) return this.pr[n - 1]!;
+		const r = inkRadius(this.tool, this.width, pressure);
+		if (this.taperStart > 0) {
+			let arc = 0;
+			if (n > 0) {
+				arc = this.pa[n - 1]!;
+				if (x !== undefined && y !== undefined) arc += Math.hypot(x - this.px[n - 1]!, y - this.py[n - 1]!);
+			}
+			if (arc < this.taperStart) return Math.max(0.01, r * taperFactor(arc / this.taperStart));
+		}
+		return r;
 	}
 
 	/**

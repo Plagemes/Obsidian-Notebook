@@ -232,7 +232,7 @@ export class WetInk {
 		}
 		this.extra[i] = x;
 		this.extra[i + 1] = y;
-		this.extra[i + 2] = g.tipRadius(pressure);
+		this.extra[i + 2] = g.tipRadius(pressure, x, y);
 		this.extraCount++;
 	}
 
