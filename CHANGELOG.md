@@ -49,6 +49,13 @@
 - **One undo step.** Everything one run changes is a single history step (*Macro run* in the history panel): one Undo takes it all back, one Redo does it again. New `History.group(label, fn)` merges the steps recorded inside it into one `Batch`; each step keeps all the history's guards (read-only, locks, content check).
 - **Code.** Pure, Node-tested `src/ui/macros.ts` (data and lenient reader, allow-list, registry entries, context rule helper, runner), the manager `src/view/macros-modal.ts` on the modal shell, `src/view/macro-run.ts`, `src/view/macro-commands.ts`; settings key `macros` (no document format change); `History.group` in `src/model/history.ts`; `tests/macros.test.ts`, `tests/history-group.test.ts`; harness `dev/harness/macros-check.ts`.
 
+### Review fixes
+- **Taper: ballpoint tip (Z1).** While the start taper is still ramping up, the provisional tip of the ballpoint (the raw pen position and the predicted points) is thinned like the trail, so no full-size dot rides at the pen tip.
+- **Taper: lift (Z2, Z3).** A tapered stroke's wet canvas is hidden in the same frame the static layer draws it, so the end taper no longer leaves a fat tail with a notch for a frame or two; the start of a stroke shorter than twice the start taper still grows a little at the lift (documented in the test steps).
+- **Taper: thumbnails (Z4).** A thumbnail draws thin lines wider; the taper keeps its length in pt instead of lengthening with the line, so short strokes no longer turn into spindles on a card.
+- **Taper: start by arc length (Z5).** The radius of each node inside the start ramp follows the way travelled to it, so the ramp is the same for slow and fast strokes, like the end taper.
+- **Taper: live fallback (Z6).** The live layer of the fallback path draws the start taper but no end taper while the pen is down, like the wet ink.
+
 ## 0.26.0 — 2026-11-09
 
 Eight features: opacity for ink, pictures and areas, smooth and straighten strokes, tidy up handwriting lines, redaction before export, pen width that follows zoom, a context palette in the colour picker, a dynamic gallery block and a related handwritten pages panel. The notebook format moves to version 24 (opacity): the migration from version 23 is automatic, and Notebook 0.25 and older open a v24 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).

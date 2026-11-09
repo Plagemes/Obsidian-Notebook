@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { inkPath, inkRadius, InkBuilder, SvgPathSink } from "../src/ink/ink-geometry";
 import { lodSvgPath, widenedTaper } from "../src/ink/lod";
 import { strokeSvgPath } from "../src/ink/stroke-shape";
+import { wetHiddenAtLift } from "../src/ink/wet-ink";
 import { TAPER_TIP, taperFactor, taperLength, writingTaper } from "../src/model/taper";
 import { RENDER_INK, type Point } from "../src/model/types";
 
@@ -166,4 +167,42 @@ describe("Z4: a line drawn wider than the stroke (thumbnails) keeps its taper le
     const stroke = { points: pts, width: 2, tool: "pen" as const, render: RENDER_INK, taperStart: 0.3, taperEnd: 0.6 };
     expect(lodSvgPath(stroke, 2, 0)).toBe(strokeSvgPath(stroke));
   });
+});
+
+describe("Z2 and Z3: a tapered stroke is hidden from the wet canvas as soon as the static layer has it", () => {
+	it("the decision: opacity or taper hide at once, plain opaque ink keeps the delayed clear", () => {
+		expect(wetHiddenAtLift(false, false)).toBe(false);
+		expect(wetHiddenAtLift(true, false)).toBe(true);
+		expect(wetHiddenAtLift(false, true)).toBe(true);
+		expect(wetHiddenAtLift(true, true)).toBe(true);
+	});
+
+	function written(points: readonly Point[], taper?: { start: number; end: number }): { before: number[]; after: number[]; sameCount: boolean } {
+		const g = new InkBuilder();
+		g.reset("pen", 2, undefined, taper);
+		for (const p of points) g.add(p[0], p[1], p[2]);
+		const before = Array.from(g.nr.subarray(0, g.nodeCount));
+		g.finish();
+		return { before, after: Array.from(g.nr.subarray(0, before.length)), sameCount: g.nodeCount === before.length };
+	}
+
+	it("the lift rewrites nodes the wet canvas already painted when the end is tapered (so the copy there is not the stroke)", () => {
+		const pts = line(60, 3);
+		const plain = written(pts);
+		expect(plain.after).toEqual(plain.before);
+		const none = written(pts, { start: 0.3, end: 0 });
+		expect(none.after.slice(0, none.before.length - 2)).toEqual(none.before.slice(0, none.before.length - 2));
+		const end = written(pts, { start: 0, end: 1 });
+		const changed = end.after.map((r, i) => (r !== end.before[i] ? i : -1)).filter((i) => i >= 0);
+		expect(changed.length).toBeGreaterThan(5);
+		// The first nodes stay as they were written.
+		expect(end.after.slice(0, 20)).toEqual(end.before.slice(0, 20));
+	});
+
+	it("a stroke shorter than twice the start taper has its start rebuilt at the lift (accepted; hidden by the same rule)", () => {
+		const short = written(line(8, 3), { start: 1, end: 0 });
+		expect(short.after).not.toEqual(short.before);
+		const long = written(line(60, 3), { start: 1, end: 0 });
+		expect(long.after).toEqual(long.before);
+	});
 });

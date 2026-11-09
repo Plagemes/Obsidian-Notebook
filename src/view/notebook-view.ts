@@ -6193,7 +6193,8 @@ export class NotebookView extends FileView {
 				if (active.liveFallback) this.renderer?.setLive(null);
 				return;
 			}
-			// The wet canvas shows exactly this geometry; the static layer takes it over without a change.
+			// The wet canvas shows exactly this geometry; the static layer takes it over without a change (a tapered stroke, whose end is thinned
+			// at the lift, is hidden from the wet canvas in the frame the static layer draws it: see Renderer.releaseWet).
 			this.renderer?.endWet(cut ?? stroke);
 			this.trimCommitted(page, stroke, cut, this.addStrokes(active.pageIndex, page, [stroke], true, cut ?? undefined));
 			this.updateGhostLines(active.pageIndex, page, stroke.tool);

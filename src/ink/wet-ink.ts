@@ -59,6 +59,16 @@ export function unionInto(a: DeviceRect, b: DeviceRect): void {
 	a.y1 = Math.max(a.y1, b.y1);
 }
 
+/**
+ * Whether the wet canvas of a stroke that was just committed is hidden in the very frame the static layer shows the stroke, instead of being
+ * cleared a frame or two later. A stroke with its own opacity (format v24) would darken where the two copies overlap; a tapered stroke
+ * (format v25) is thinned at the lift (the end taper rewrites nodes the wet canvas painted long ago, and a short stroke's start is rebuilt), so
+ * the wet copy is not the committed shape. Plain opaque ink is identical in both, and keeps the delayed clear.
+ */
+export function wetHiddenAtLift(hasOwnOpacity: boolean, tapered: boolean): boolean {
+	return hasOwnOpacity || tapered;
+}
+
 /** Capsules per chunk of the spatial index. */
 const CHUNK = 64;
 

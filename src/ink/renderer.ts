@@ -25,7 +25,7 @@ import { HIGHLIGHTER_ALPHA, MARKER_ALPHA, strokePath, strokeSvgPath } from "./st
 import { fillAlpha, fillPathD, isFilled } from "./shape-style";
 import { addLodNodesPath, lodLevel, lodNodes, lodPolygon } from "./lod";
 import { LazyWet } from "./lazy-wet";
-import { WetInk, type PageTransform } from "./wet-ink";
+import { WetInk, wetHiddenAtLift, type PageTransform } from "./wet-ink";
 import { ErrorOnce } from "./errors";
 import type { SpacePreviewEntry } from "./space";
 import type { SnapGuide } from "../model/snap";
@@ -385,7 +385,7 @@ export class Renderer {
 	/** The finished wet stroke, about to be added to the static layer. */
 	private wetDone: Stroke | null = null;
 	/** Wet canvases to clear once the static layer shows their stroke, with the frames to wait. */
-	private readonly wetRelease: Array<{ wet: WetInk; frames: number }> = [];
+	private readonly wetRelease: Array<{ wet: WetInk; frames: number; tapered: boolean }> = [];
 
 	private readonly paths = new WeakMap<Stroke, Path2D>();
 	/** v22 (#37): the polygon of the fill of a closed shape, by stroke. */
@@ -599,7 +599,7 @@ export class Renderer {
 		}
 		if (this.staticDirty || !box || this.staticCanvas.style.transform) {
 			this.invalidate();
-			if (wet && fromWet) this.releaseWet(wet, false);
+			if (wet && fromWet) this.releaseWet(wet, false, strokeTaper(stroke) !== undefined);
 			return;
 		}
 		const ctx = this.staticCtx;
@@ -614,7 +614,7 @@ export class Renderer {
 			ctx.restore();
 		}
 		if (!drawn) this.invalidate();
-		if (wet && fromWet) this.releaseWet(wet, drawn);
+		if (wet && fromWet) this.releaseWet(wet, drawn, strokeTaper(stroke) !== undefined);
 	}
 
 	// --- wet ink (the stroke being written) ---
@@ -740,7 +740,7 @@ export class Renderer {
 	 * of the compositor, so it is cleared two frames later; meanwhile the same opaque ink is shown
 	 * twice at the same place.
 	 */
-	private releaseWet(wet: WetInk, staticHasIt: boolean): void {
+	private releaseWet(wet: WetInk, staticHasIt: boolean, tapered = false): void {
 		if (wet === this.wetMk) this.wetMkLazy.idle();
 		const sync = wet !== this.wetPen;
 		if (sync && staticHasIt) {
@@ -749,14 +749,20 @@ export class Renderer {
 		}
 		// Format v24 (#358): a translucent pen stroke shown twice for the two frames of the delay would darken for a moment (the opaque ink did not
 		// show): its canvas is hidden as soon as the static layer has the stroke (both change in the same frame), and cleared later as before.
-		if (staticHasIt) this.hideTranslucentWet(wet);
-		this.wetRelease.push({ wet, frames: sync ? 0 : 1 });
+		// Format v25 (#351): the same for a tapered stroke, whose end was thinned at the lift: the wet canvas still holds the tail as it was painted
+		// (full width, with a notch where the provisional tip was redrawn), which the static layer's pointed end must replace in the same frame.
+		if (staticHasIt) this.hideWet(wet, tapered);
+		this.wetRelease.push({ wet, frames: sync ? 0 : 1, tapered });
 		this.schedule();
 	}
 
-	/** Hides a wet canvas that holds a stroke with an opacity (its inline opacity is set); an opaque pen canvas is left to the delayed clear. */
-	private hideTranslucentWet(wet: WetInk): void {
-		if (wet.canvas.style.getPropertyValue("opacity") !== "") wet.canvas.setCssProps({ opacity: "0" });
+	/**
+	 * Hides a wet canvas that holds a stroke with an opacity (its inline opacity is set) or a tapered stroke (`tapered`); the canvas of an opaque,
+	 * untapered pen stroke is left to the delayed clear (the same ink shows twice at the same place for a moment). The next stroke on this canvas
+	 * shows it again (`setWetOpacity` runs at its start).
+	 */
+	private hideWet(wet: WetInk, tapered: boolean): void {
+		if (wetHiddenAtLift(wet.canvas.style.getPropertyValue("opacity") !== "", tapered)) wet.canvas.setCssProps({ opacity: "0" });
 	}
 
 	private highlighterWet(): WetInk {
@@ -962,7 +968,7 @@ export class Renderer {
 		for (let i = this.wetRelease.length - 1; i >= 0; i--) {
 			const r = this.wetRelease[i]!;
 			// The static layer has been redrawn by now: a translucent stroke must not show twice.
-			if (!this.staticDirty && r.wet !== this.wet) this.hideTranslucentWet(r.wet);
+			if (!this.staticDirty && r.wet !== this.wet) this.hideWet(r.wet, r.tapered);
 			if (r.frames-- > 0) continue;
 			if (r.wet !== this.wet) r.wet.clear();
 			this.wetRelease.splice(i, 1);
@@ -997,9 +1003,10 @@ export class Renderer {
 		// A finished wet stroke committed without appendStroke() (e.g. the page grew): this redraw shows it.
 		const done = this.wetDone ? this.wet : null;
 		if (done) {
+			const tapered = this.wetDone !== null && strokeTaper(this.wetDone) !== undefined;
 			this.wet = null;
 			this.wetDone = null;
-			this.releaseWet(done, true);
+			this.releaseWet(done, true, tapered);
 		}
 		this.staticDirty = false;
 		this.drawnViewport = this.viewport;
