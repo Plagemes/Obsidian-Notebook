@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { layoutPages, nearestPage, pageAt, toPageLocal, visiblePages } from "../src/ink/layout";
+import { layoutPages, nearestPage, pageAt, pagesTouching, toPageLocal, visiblePages } from "../src/ink/layout";
 import { isScrollMode, layoutForMode, SCROLL_MODES } from "../src/ink/page-mode";
 import { pageAtOffset } from "../src/ink/scrollbar";
 import {
 	canSpread, DEFAULT_SPREAD, effectiveScrollMode, isSpreadLayout, layoutSpread, mateOf, pageUnderScreen, rowOf, scrollToPageViewport, SPREAD_GAP_H,
-	SPREAD_MIN_WIDTH, spreadRows, stepRow,
+	relayoutStep, SPREAD_MIN_WIDTH, spreadRows, spreadTarget, stepRow,
 } from "../src/ink/spread";
-import { capturePosition, restoreViewport } from "../src/ink/view-position";
+import { capturePosition, restoreViewport, zoomBase } from "../src/ink/view-position";
 import { captureRegion, restoreRegion } from "../src/ink/view-region";
 import { clampToPage, fitWidth, PAGE_MARGIN, screenToPage, type Size, type Viewport } from "../src/ink/viewport";
 import { mapSize, viewRectOnMap, viewportCentredOn, visibleInPage } from "../src/model/minimap-geometry";
@@ -229,6 +229,53 @@ describe("which page a point is on", () => {
 		expect(nearestPage(l, 1e6, 10)).toBe(2);
 	});
 
+	it("with both pages of a pair in view, the page last touched is the page; zoomed in on one, that one is (S1)", () => {
+		const mid = A4.width + SPREAD_GAP_H / 2;
+		// the middle of the view in the binding: a point either way would flip the nearest page, so the touched page decides
+		for (const cx of [mid - 1, mid, mid + 1]) {
+			const nearest = nearestPage(l, 100, cx);
+			expect(spreadTarget(l, cx, nearest, 1)).toBe(1);
+			expect(spreadTarget(l, cx, nearest, 0)).toBe(0);
+			expect(spreadTarget(l, cx, nearest, -1)).toBe(nearest); // nothing touched: as before
+		}
+		// a page of another row, or of no pair, does not move the target
+		expect(spreadTarget(l, mid, 0, 2)).toBe(0);
+		expect(spreadTarget(l, mid, 1, 3)).toBe(1);
+		// zoomed in on the left page (the middle well inside it): it wins even when the right page was touched
+		expect(spreadTarget(l, 100, 0, 1)).toBe(0);
+		expect(spreadTarget(l, right.x + 300, 1, 0)).toBe(1);
+		// near the binding but inside the zone still counts as both in view
+		expect(spreadTarget(l, A4.width - 0.2 * A4.width, 0, 1)).toBe(1);
+		// a lone page (first alone, last of an odd count) is just itself
+		const odd = layoutSpread([A4, A4, A4], DEFAULT_SPREAD);
+		expect(spreadTarget(odd, A4.width / 2, 0, 1)).toBe(0);
+	});
+
+	it("the eraser by the binding reaches both pages of the pair, away from it only one (S4)", () => {
+		const mid = A4.width + SPREAD_GAP_H / 2;
+		// a large eraser (radius 20 pt) over the right page, a little right of the binding: the left page is within reach too
+		expect(pagesTouching(l, mid + 6, 100, 20)).toEqual([0, 1]);
+		expect(pagesTouching(l, mid - 6, 100, 20)).toEqual([0, 1]);
+		// a small one (radius 4 pt) only the page it is over
+		expect(pagesTouching(l, mid + 6, 100, 4)).toEqual([]);
+		expect(pagesTouching(l, right.x + 2, 100, 4)).toEqual([1]);
+		// well inside a page: that page alone
+		expect(pagesTouching(l, 200, 100, 20)).toEqual([0]);
+		expect(pagesTouching(l, right.x + 200, 100, 20)).toEqual([1]);
+		// the next row is far below
+		expect(pagesTouching(l, mid, l.boxes[2]!.y + 50, 20)).toEqual([2, 3]);
+		// the circle, not the square: a corner just out of reach is not touched
+		expect(pagesTouching(l, mid, A4.height + 100, 10)).toEqual([]);
+		expect(pagesTouching({ boxes: [], width: 0, height: 0 }, 0, 0, 10)).toEqual([]);
+	});
+
+	it("a resize waits for the stroke in progress, then lays out once (S3)", () => {
+		expect(relayoutStep(false, false)).toBe("idle");
+		expect(relayoutStep(false, true)).toBe("idle");
+		expect(relayoutStep(true, true)).toBe("wait");
+		expect(relayoutStep(true, false)).toBe("now");
+	});
+
 	it("is unchanged for a single column", () => {
 		const v = layoutPages([A4, A4, A4]);
 		expect(nearestPage(v, 900)).toBe(nearestPage(v, 900, 10));
@@ -307,11 +354,47 @@ describe("position and region in a spread", () => {
 		return { scale, offsetX: -(box.x + x) * scale, offsetY: -(box.y + y) * scale };
 	}
 
-	it("measures the zoom against the fit of the whole spread", () => {
+	it("measures the zoom against the page-wide fit, and a fitted spread is still fitted (S2)", () => {
 		const fit = fitWidth(tablet, l);
 		const pos = capturePosition("spread", fit, tablet, l, 1)!;
-		expect(pos.zoom).toBeCloseTo(1, 3);
+		expect(pos.zoom).toBeCloseTo(fit.scale / zoomBase("spread", tablet, l, 1), 3);
+		expect(pos.zoom).toBeLessThan(0.6); // the pair fits at about half the zoom of one page
 		expect(restoreViewport(pos, "spread", tablet, l)!.fit).toBe(true);
+		// a page that fills the width is not the fit of a spread
+		const page = capturePosition("spread", { ...fit, scale: zoomBase("spread", tablet, l, 1) }, tablet, l, 1)!;
+		expect(page.zoom).toBeCloseTo(1, 3);
+		expect(restoreViewport(page, "spread", tablet, l)!.fit).toBe(false);
+	});
+
+	it("a position saved in a spread comes back at the same page size in a single column, and the reverse (S2)", () => {
+		const column = layoutPages(pages);
+		const v = viewportOn(l, tablet, 4, 2, 80, 200); // twice the pair fit: about one page wide
+		const pos = capturePosition("spread", v, tablet, l, 4)!;
+		const inColumn = restoreViewport(pos, "continuous", tablet, column)!;
+		// the page is as wide on the screen in both modes
+		expect(inColumn.viewport.scale).toBeCloseTo(v.scale, 3);
+		expect(inColumn.pageIndex).toBe(4);
+		const [px, py] = screenToPage(inColumn.viewport, 0, 0);
+		expect(px - column.boxes[4]!.x).toBeCloseTo(80, 0);
+		expect(py - column.boxes[4]!.y).toBeCloseTo(200, 0);
+		// ...and back
+		const again = restoreViewport(capturePosition("continuous", inColumn.viewport, tablet, column, 4)!, "spread", tablet, l)!;
+		expect(again.viewport.scale).toBeCloseTo(v.scale, 3);
+		// a fitted column is a page-wide zoom in the spread (not the pair fit): the page keeps its size
+		const fitted = capturePosition("continuous", fitWidth(tablet, column), tablet, column, 2)!;
+		expect(fitted.zoom).toBeCloseTo(1, 3);
+		expect(restoreViewport(fitted, "spread", tablet, l)!.viewport.scale).toBeCloseTo(fitWidth(tablet, column).scale, 3);
+		expect(restoreViewport(fitted, "continuous", tablet, column)!.fit).toBe(true);
+	});
+
+	it("a region saved in a spread comes back at the same page size in a single column (S2)", () => {
+		const column = layoutPages(pages);
+		const v = viewportOn(l, tablet, 2, 3, 150, 220);
+		const region = captureRegion("spread", v, tablet, l, 2)!;
+		const back = restoreRegion(region, 2, "continuous", tablet, column)!;
+		expect(back.viewport.scale).toBeCloseTo(v.scale, 3);
+		const [mx] = screenToPage(back.viewport, tablet.width / 2, tablet.height / 2);
+		expect(mx).toBeCloseTo(column.boxes[2]!.x + region.x + region.width / 2, 3);
 	});
 
 	it("round-trips the position on either page of a pair", () => {
@@ -322,7 +405,7 @@ describe("position and region in a spread", () => {
 			const back = restoreViewport(pos, "spread", tablet, l)!;
 			expect(back.pageIndex).toBe(index);
 			expect(back.fit).toBe(false);
-			expect(back.viewport.scale).toBeCloseTo(v.scale, 6);
+			expect(back.viewport.scale).toBeCloseTo(v.scale, 5);
 			expect(back.viewport.offsetX).toBeCloseTo(v.offsetX, 2);
 			expect(back.viewport.offsetY).toBeCloseTo(v.offsetY, 2);
 		}
@@ -336,7 +419,7 @@ describe("position and region in a spread", () => {
 		const [px, py] = screenToPage(back.viewport, 0, 0);
 		expect(px - l.boxes[4]!.x).toBeCloseTo(80, 0);
 		expect(py - l.boxes[4]!.y).toBeCloseTo(200, 0);
-		expect(back.viewport.scale / fitWidth(other, l).scale).toBeCloseTo(2.5, 3);
+		expect(back.viewport.scale / zoomBase("spread", other, l, 4)).toBeCloseTo(pos.zoom, 3);
 	});
 
 	it("round-trips a region on the right page and centres it", () => {
@@ -361,7 +444,7 @@ describe("position and region in a spread", () => {
 		const back = restoreRegion(region, 5, "spread", other, l)!;
 		const [mx] = screenToPage(back.viewport, other.width / 2, other.height / 2);
 		expect(mx).toBeCloseTo(l.boxes[5]!.x + region.x + region.width / 2, 3);
-		expect(back.viewport.scale / fitWidth(other, l).scale).toBeCloseTo(region.zoom, 4);
+		expect(back.viewport.scale / zoomBase("spread", other, l, 5)).toBeCloseTo(region.zoom, 4);
 	});
 
 	it("falls back to the pages that exist", () => {

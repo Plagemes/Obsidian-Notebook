@@ -9,8 +9,9 @@ import { ACTIONS, actionById, allActions, baseContext, type UiContext } from "..
 import { MAX_PINNED, normalisePinned, togglePinned } from "../src/ui/adapt";
 import { contextBoost, forThisPage, HERE_MIN_BOOST } from "../src/ui/context-rank";
 import { buildLayout, buildSheet } from "../src/ui/layout";
+import { readSettings } from "../src/settings";
 import {
-	cleanName, currentMacros, MACRO_ICONS, MACRO_LABEL, MACRO_SAFE, macroAction, macroActionId, MAX_MACROS, MAX_NAME, MAX_STEPS, newMacroId, normaliseMacros,
+	cleanName, cloneMacro, currentMacros, isEditStep, readMacros, MACRO_ICONS, MACRO_LABEL, MACRO_SAFE, macroAction, macroActionId, MAX_MACROS, MAX_NAME, MAX_STEPS, newMacroId, normaliseMacros,
 	runMacro, setMacros, stepName, stepState, usableSteps, withoutMissingMacros, type Macro, type MacroEnv,
 } from "../src/ui/macros";
 import { line, sampleDocument } from "./helpers";
@@ -44,7 +45,8 @@ describe("reading the macros leniently", () => {
 			{ name: 4, icon: "Bad Icon!", steps: "no" },
 		]);
 		expect(read).toHaveLength(3);
-		expect(read[0]).toEqual({ id: "a1", name: "Maths page", icon: "star", steps: [{ action: "tool-pen" }, { action: "page-paper", value: "grid" }] });
+		// A step object that is not a step this version can read ({ action: 7 }) is kept apart, as written; primitives are junk.
+		expect(read[0]).toEqual({ id: "a1", name: "Maths page", icon: "star", steps: [{ action: "tool-pen" }, { action: "page-paper", value: "grid" }], extraSteps: [{ action: 7 }] });
 		expect(new Set(read.map((m) => m.id)).size).toBe(3);
 		expect(read[1]!.name).toBe("Same id");
 		expect(read[2]).toMatchObject({ name: "Macro", icon: "zap", steps: [] });
@@ -53,9 +55,74 @@ describe("reading the macros leniently", () => {
 		expect(many[0]!.steps).toHaveLength(MAX_STEPS);
 	});
 
-	it("keeps an action id it does not know, and drops one that cannot be an id", () => {
+	it("keeps an action id it does not know, and does not run one that cannot be an id", () => {
 		const [m] = normaliseMacros([{ id: "x", name: "N", steps: [{ action: "from-a-newer-version", value: "42" }, { action: "bad id with spaces" }] }]);
 		expect(m!.steps).toEqual([{ action: "from-a-newer-version", value: "42" }]);
+		expect(m!.extraSteps).toEqual([{ action: "bad id with spaces" }]);
+	});
+
+	it("keeps the fields it does not know, of a macro and of a step, and a value of another kind (M6)", () => {
+		const stored = [{ id: "x", name: "N", icon: "star", colour: "red", steps: [{ action: "page-paper", value: "grid", repeat: 3 }, { action: "tool-pen", pen: { width: 2.5 } }, { action: "page-size", value: 7 }] }];
+		const read = normaliseMacros(stored);
+		expect(read).toEqual(stored);
+		// ...so an older device saving the settings writes everything back, and a second read changes nothing.
+		expect(normaliseMacros(JSON.parse(JSON.stringify(read)))).toEqual(stored);
+		// A copy for the editor keeps them too.
+		expect(cloneMacro(read[0]!)).toEqual(stored[0]);
+		// A value of another kind is not a choice: the step does not run in this version.
+		expect(stepState(read[0]!.steps[2]!)).toBe("value");
+	});
+
+	it("keeps steps and macros beyond this version's limits, apart and as written (M6)", () => {
+		const steps = Array.from({ length: MAX_STEPS + 5 }, (_, i) => ({ action: "tool-pen", n: i }));
+		const macros = Array.from({ length: MAX_MACROS + 3 }, (_, i) => ({ id: `m${i}`, name: `n${i}`, steps: i === 0 ? steps : [], more: i }));
+		const first = readMacros(macros);
+		expect(first.macros).toHaveLength(MAX_MACROS);
+		expect(first.macros[0]!.steps).toHaveLength(MAX_STEPS);
+		expect(first.macros[0]!.extraSteps).toEqual(steps.slice(MAX_STEPS));
+		expect(first.extra).toEqual(macros.slice(MAX_MACROS));
+		expect(first.repaired).toBe(false);
+		// What a save writes (macros, then macros extra) reads back to the same lists: nothing grows or is lost.
+		const again = readMacros(JSON.parse(JSON.stringify(first.macros)), JSON.parse(JSON.stringify(first.extra)));
+		expect(again.macros).toEqual(first.macros);
+		expect(again.extra).toEqual(first.extra);
+		// The extra steps are never run.
+		expect(usableSteps(first.macros[0]!)).toBe(MAX_STEPS);
+	});
+
+	it("repairs an invalid or doubled id the same way on every start, and never takes a valid id (M7)", () => {
+		const stored = [{ id: "bad id!", name: "A", steps: [] }, { id: "m1", name: "B", steps: [] }, { id: "m1", name: "C", steps: [] }, { name: "D", steps: [] }];
+		const first = readMacros(stored);
+		expect(first.repaired).toBe(true);
+		expect(first.macros.map((m) => m.id)[1]).toBe("m1");
+		expect(new Set(first.macros.map((m) => m.id)).size).toBe(4);
+		for (const m of first.macros) expect(m.id).toMatch(/^[a-z0-9]{1,16}$/);
+		// Same data, same ids: the hotkey and the toolbar pin of that macro stay where they are.
+		for (let i = 0; i < 3; i++) expect(readMacros(JSON.parse(JSON.stringify(stored))).macros.map((m) => m.id)).toEqual(first.macros.map((m) => m.id));
+		// Once saved, the ids are valid and nothing is repaired again.
+		const saved = readMacros(JSON.parse(JSON.stringify(first.macros)));
+		expect(saved.repaired).toBe(false);
+		expect(saved.macros.map((m) => m.id)).toEqual(first.macros.map((m) => m.id));
+		expect(readMacros([{ id: "m1", name: "A" }, { id: "m2", name: "B" }]).repaired).toBe(false);
+	});
+
+	it("a repaired id never lands on a valid id that comes later in the list (M7)", () => {
+		const taken = readMacros([{ id: "", name: "X" }]).macros[0]!.id;
+		// The first macro would be repaired to `taken`; a later macro really has that id.
+		const read = readMacros([{ id: "", name: "X" }, { id: taken, name: "Y" }]);
+		expect(read.macros[1]!.id).toBe(taken);
+		expect(read.macros[0]!.id).not.toBe(taken);
+	});
+
+	it("drops the toolbar pin of a macro that no longer exists when the settings are read (M7)", () => {
+		const read = readSettings({ pinnedQuick: ["macro-gone", "macro-here", "fit-width"], macros: [{ id: "here", name: "H", steps: [{ action: "tool-pen" }] }] });
+		expect(read.pinnedQuick).toEqual(["macro-here", "fit-width"]);
+		expect(readSettings({ pinnedQuick: ["macro-gone"] }).pinnedQuick).toEqual([]);
+		// Macros beyond the limit are carried along by the settings.
+		const many = readSettings({ macros: Array.from({ length: MAX_MACROS + 2 }, (_, i) => ({ id: `m${i}`, name: "n" })) });
+		expect(many.macros).toHaveLength(MAX_MACROS);
+		expect(many.macrosExtra).toHaveLength(2);
+		expect(readSettings(JSON.parse(JSON.stringify(many))).macrosExtra).toHaveLength(2);
 	});
 
 	it("cuts a long name and falls back for an empty one", () => {
@@ -302,6 +369,82 @@ describe("running a macro", () => {
 		const r = runMacro(macro("a", [["tool-pen"], ["tool-eraser"], ["tool-lasso"]]), env);
 		expect(r).toEqual({ ok: false, reason: "error", step: 1, action: "tool-eraser", done: 1, skipped: 0 });
 		expect(closed).toBe(true);
+	});
+
+	it("stops with the same error result, group closed, when asking whether a step can run throws (M5)", () => {
+		for (const broken of ["context", "applies"] as const) {
+			let calls = 0;
+			let closed = false;
+			const { env, ran } = fakeEnv({
+				...(broken === "applies" ? { applies: () => { throw new Error("boom"); } } : {}),
+				group: (_l, fn) => { try { return fn(); } finally { closed = true; } },
+			}, () => {
+				if (broken === "context" && ++calls === 2) throw new Error("boom");
+				return baseContext();
+			});
+			const r = runMacro(macro("a", [["tool-pen"], ["tool-eraser"], ["tool-lasso"]]), env);
+			expect(r, broken).toMatchObject({ ok: false, reason: "error" });
+			expect(closed, broken).toBe(true);
+			expect(ran.length, broken).toBeLessThan(3);
+		}
+	});
+
+	it("an exception while it gets ready is an error result, not an exception (M5)", () => {
+		const { env, ran } = fakeEnv({ prepare: () => { throw new Error("boom"); } });
+		expect(runMacro(macro("a", [["tool-pen"]]), env)).toMatchObject({ ok: false, reason: "error", step: 0, done: 0 });
+		expect(ran).toEqual([]);
+	});
+
+	it("gets ready (commits an open text box) BEFORE the group opens, so Undo on the macro never takes typing back (M2)", () => {
+		const trace: string[] = [];
+		const { env } = fakeEnv({
+			prepare: () => void trace.push("prepare"),
+			group: (_l, fn) => { trace.push("group open"); try { return fn(); } finally { trace.push("group closed"); } },
+			run: (id) => void trace.push(id),
+		});
+		runMacro(macro("a", [["tool-pen"]]), env);
+		expect(trace).toEqual(["prepare", "group open", "tool-pen", "group closed"]);
+	});
+
+	it("a text edit committed in prepare stays its own undo step, apart from the macro's (M2)", () => {
+		const doc = sampleDocument(0);
+		const first = doc.pages[0]!;
+		const history = new History(() => doc, 500);
+		let n = 0;
+		const add = () => void history.execute(new AddStroke(first.id, line(0, n * 10, 5, n++ * 10 + 5), first.strokes.length));
+		const env: MacroEnv = {
+			context: () => baseContext(), applies: () => true, run: () => add(), refusals: () => 0, group: (l, fn) => history.group(l, fn),
+			prepare: add, // the open text box, committed
+		};
+		runMacro(macro("a", [["tool-pen"], ["tool-eraser"]]), env);
+		expect(history.depth().undo).toBe(2);
+		history.undo();
+		expect(first.strokes).toHaveLength(1); // the typing is still there
+	});
+
+	it("does not start while a stroke is in progress (M8)", () => {
+		const { env, ran } = fakeEnv({ writing: () => true, prepare: () => { throw new Error("must not get ready"); } });
+		expect(runMacro(macro("a", [["tool-pen"]]), env)).toEqual({ ok: false, reason: "writing" });
+		expect(ran).toEqual([]);
+		const idle = fakeEnv({ writing: () => false });
+		expect(runMacro(macro("a", [["tool-pen"]]), idle.env)).toMatchObject({ ok: true, ran: 1 });
+	});
+
+	it("an edit step that changed nothing is not counted as done and is reported (M4)", () => {
+		let edits = 0;
+		const { env } = fakeEnv({ edits: () => edits, run: (id) => { if (id === "page-bookmark") edits++; } });
+		const r = runMacro(macro("a", [["tool-pen"], ["page-paper", "grid"], ["page-bookmark"], ["selection-duplicate"]]), env);
+		// tool-pen: no edit step, done. page-paper: edit, nothing recorded. page-bookmark: recorded. selection-duplicate cannot run (no selection).
+		expect(r).toMatchObject({ ok: false, reason: "unavailable", step: 3, done: 2, noEffect: 1 });
+		const all = runMacro(macro("a", [["page-paper", "grid"], ["add-page"]]), fakeEnv({ edits: () => 0 }).env);
+		expect(all).toEqual({ ok: true, ran: 0, skipped: 0, noEffect: 2 });
+		// Without a way to tell, a step counts as done as before.
+		expect(runMacro(macro("a", [["page-paper", "grid"]]), fakeEnv().env)).toEqual({ ok: true, ran: 1, skipped: 0 });
+	});
+
+	it("knows which steps are edits", () => {
+		for (const id of ["page-paper", "page-size", "add-page", "insert-blank-page", "page-duplicate", "page-bookmark", "selection-duplicate", "layer-front", "selection-align-left"]) expect(isEditStep(id), id).toBe(true);
+		for (const id of ["tool-pen", "next-page", "previous-page", "fit-width", "toggle-ruler", "eraser-larger", "favourite-1", "shape-line"]) expect(isEditStep(id), id).toBe(false);
 	});
 });
 

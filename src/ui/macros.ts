@@ -28,10 +28,12 @@ export const MACRO_ICONS: readonly string[] = [
 	"zap", "workflow", "play", "star", "heart", "flag", "pencil", "highlighter", "brush", "layers", "grid-3x3", "file-plus", "bookmark", "sparkles", "rocket", "timer",
 ];
 
+// Review fixes (M6): the reader keeps every field it does not know, on the macro and on each step, exactly as stored (the objects carry
+// them along; `{ ...step }` copies them), so data.json written by a newer version survives an older device saving the settings.
 export interface MacroStep {
 	/** An action id of the registry (kept as written when unknown). */
 	action: string;
-	/** The parameter of a step that takes one: a paper kind or a page size. */
+	/** The parameter of a step that takes one: a paper kind or a page size. (Read verbatim: a newer version may store another kind of value, which only stops this version from running the step.) */
 	value?: string;
 }
 
@@ -41,6 +43,8 @@ export interface Macro {
 	name: string;
 	icon: string;
 	steps: MacroStep[];
+	/** Steps stored beyond this version's limit or that this version cannot read as a step: kept as written, written back, never run. */
+	extraSteps?: unknown[];
 }
 
 /**
@@ -80,7 +84,7 @@ export function stepState(step: MacroStep): StepState {
 	if (!a || isMacroActionId(step.action)) return "unknown";
 	if (!MACRO_SAFE.has(step.action) || a.danger || a.scope !== "view") return "blocked";
 	const choices = stepChoices(a);
-	if (choices && (step.value === undefined || !choices.includes(step.value))) return "value";
+	if (choices && (typeof step.value !== "string" || !choices.includes(step.value))) return "value";
 	return "ok";
 }
 
@@ -121,39 +125,107 @@ export function cleanName(name: unknown, fallback = "Macro"): string {
 	return Array.from(s).slice(0, MAX_NAME).join("").trim() || fallback;
 }
 
+/** A plain copy of data that came out of JSON (so it holds only values JSON can hold). */
+function copyJson<T>(v: T): T {
+	try {
+		return JSON.parse(JSON.stringify(v)) as T;
+	} catch {
+		return v;
+	}
+}
+
+/** A step as stored: its fields as written (unknown ones included), with a valid action id; null when it cannot be one. */
 function readStep(data: unknown): MacroStep | null {
-	if (typeof data !== "object" || data === null) return null;
+	if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
 	const d = data as Record<string, unknown>;
 	if (typeof d.action !== "string" || !ACTION_RE.test(d.action)) return null;
-	const step: MacroStep = { action: d.action };
-	if (typeof d.value === "string" && d.value.length > 0 && d.value.length <= 40) step.value = d.value;
-	return step;
+	return copyJson({ ...d }) as unknown as MacroStep;
+}
+
+/** At most this many foreign items (steps of a macro, whole macros) are kept as written; a bound for a stored list that grows without end. */
+const MAX_KEPT = 200;
+
+/** Where `readMacros` found the macros that do not fit this version, kept as written. */
+export interface MacroRead {
+	macros: Macro[];
+	/** Whole macros beyond MAX_MACROS, as written: written back with the settings, never shown or run. */
+	extra: unknown[];
+	/** A stored id was invalid or used twice and got a new one (the settings are worth saving once). */
+	repaired: boolean;
+}
+
+/** FNV-1a, 32 bits: a stable number for a string (the same on every device and every start). */
+function hash32(s: string): number {
+	let h = 0x811c9dc5;
+	for (let i = 0; i < s.length; i++) {
+		h ^= s.charCodeAt(i);
+		h = Math.imul(h, 0x01000193) >>> 0;
+	}
+	return h;
+}
+
+/** The id an invalid or doubled stored id is replaced with: derived from the macro's place and name, so every start gives the same one (hotkeys and pins stay put). */
+function repairedId(taken: ReadonlySet<string>, index: number, name: string): string {
+	for (let attempt = 0; attempt < 1000; attempt++) {
+		const id = `m${(hash32(`${index}|${name}|${attempt}`) % 36 ** 5).toString(36).padStart(5, "0")}`;
+		if (!taken.has(id)) return id;
+	}
+	for (let n = 1; ; n++) {
+		const id = `m${n.toString(36).padStart(5, "0")}`;
+		if (!taken.has(id)) return id;
+	}
 }
 
 /**
  * Whatever was stored, as a valid list: at most MAX_MACROS macros of at most MAX_STEPS steps, unique ids, a name and an icon each.
- * Unknown action ids are kept (they may belong to a newer version); anything that is not a list, a name or a step is dropped.
+ * Nothing that may belong to a newer version is thrown away: unknown action ids and unknown fields (of a macro and of a step) stay as
+ * written, steps beyond the limit and macros beyond the limit are kept apart (`extraSteps`, `extra`) and written back, never run.
+ * Only what is not a list, a name or a step at all is dropped. `prior` is the `extra` list stored earlier.
  */
+export function readMacros(data: unknown, prior?: unknown): MacroRead {
+	const extra: unknown[] = Array.isArray(prior) ? prior.filter((x) => typeof x === "object" && x !== null).slice(0, MAX_KEPT) : [];
+	if (!Array.isArray(data)) return { macros: [], extra, repaired: false };
+	const items = data.filter((x): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x));
+	const kept = items.slice(0, MAX_MACROS);
+	for (const over of items.slice(MAX_MACROS)) if (extra.length < MAX_KEPT) extra.push(copyJson(over));
+	// An id that is fine and first is never changed; only the others get a new one (which avoids all of them).
+	const claimed = new Set<string>();
+	for (const d of kept) if (typeof d.id === "string" && ID_RE.test(d.id) && !claimed.has(d.id)) claimed.add(d.id);
+	const seen = new Set<string>();
+	const taken = new Set(claimed);
+	let repaired = false;
+	const macros = kept.map((d, index): Macro => {
+		let id = typeof d.id === "string" && ID_RE.test(d.id) && !seen.has(d.id) ? d.id : "";
+		const name = cleanName(d.name);
+		if (!id) {
+			id = repairedId(taken, index, name);
+			taken.add(id);
+			repaired = true;
+		}
+		seen.add(id);
+		const raw = Array.isArray(d.steps) ? d.steps : [];
+		const steps: MacroStep[] = [];
+		const extraSteps: unknown[] = Array.isArray(d.extraSteps) ? d.extraSteps.filter((x) => typeof x === "object" && x !== null).slice(0, MAX_KEPT) : [];
+		for (const s of raw) {
+			const step = steps.length < MAX_STEPS ? readStep(s) : null;
+			if (step) steps.push(step);
+			else if (typeof s === "object" && s !== null && extraSteps.length < MAX_KEPT) extraSteps.push(copyJson(s));
+		}
+		const macro = { ...copyJson(d), id, name, icon: typeof d.icon === "string" && ICON_RE.test(d.icon) ? d.icon : DEFAULT_MACRO_ICON, steps } as Macro;
+		if (extraSteps.length > 0) macro.extraSteps = extraSteps;
+		else delete macro.extraSteps;
+		return macro;
+	});
+	return { macros, extra, repaired };
+}
+
+/** The macros of `readMacros` (see there). */
 export function normaliseMacros(data: unknown): Macro[] {
-	if (!Array.isArray(data)) return [];
-	const out: Macro[] = [];
-	for (const item of data) {
-		if (out.length >= MAX_MACROS) break;
-		if (typeof item !== "object" || item === null) continue;
-		const d = item as Record<string, unknown>;
-		let id = typeof d.id === "string" && ID_RE.test(d.id) ? d.id : "";
-		if (!id || out.some((m) => m.id === id)) id = newMacroId(out);
-		const steps = (Array.isArray(d.steps) ? d.steps : []).slice(0, MAX_STEPS).flatMap((s) => {
-			const step = readStep(s);
-			return step ? [step] : [];
-		});
-		out.push({ id, name: cleanName(d.name), icon: typeof d.icon === "string" && ICON_RE.test(d.icon) ? d.icon : DEFAULT_MACRO_ICON, steps });
-	}
-	return out;
+	return readMacros(data).macros;
 }
 
 export function cloneMacro(m: Macro): Macro {
-	return { id: m.id, name: m.name, icon: m.icon, steps: m.steps.map((s) => ({ ...s })) };
+	return { ...m, steps: m.steps.map((s) => ({ ...s })), ...(m.extraSteps ? { extraSteps: copyJson(m.extraSteps) } : {}) };
 }
 
 /** The pinned toolbar ids without the macros that no longer exist. */
@@ -226,25 +298,56 @@ export interface MacroEnv {
 	refusals(): number;
 	/** Runs `fn` so that everything it records in the History is one undo step named `label`. */
 	group<T>(label: string, fn: () => T): T;
+	/** True while a stroke, an erase or a drag is in progress: the macro does not start then (it would relayout under the pen). */
+	writing?(): boolean;
+	/**
+	 * Called once, before the group opens: ends what is still open so it stays its own undo step (a text box or an equation being typed)
+	 * and settles page-turn animations, so every page step starts from the page the one before arrived on.
+	 */
+	prepare?(): void;
+	/** How many edits the History has recorded so far in this run (a counter): an edit step that leaves it unchanged changed nothing. */
+	edits?(): number;
 }
 
 /** Why a macro stopped: the step cannot run now ("unavailable"), the History refused its edit ("refused"), or it threw ("error"). */
 export type MacroFailure = "unavailable" | "refused" | "error";
 
+/** `noEffect`: steps that ran but changed nothing (not counted as done); left out when there are none. */
 export type MacroResult =
-	| { ok: true; ran: number; skipped: number }
-	| { ok: false; reason: "empty" }
-	| { ok: false; reason: MacroFailure; /** 0-based index of the step */ step: number; action: string; done: number; skipped: number };
+	| { ok: true; ran: number; skipped: number; noEffect?: number }
+	| { ok: false; reason: "empty" | "writing" }
+	| { ok: false; reason: MacroFailure; /** 0-based index of the step */ step: number; action: string; done: number; skipped: number; noEffect?: number };
+
+/**
+ * The steps that edit the notebook (through the History). Only these can be told to have had no effect: a tool or pen choice, a page
+ * turn or a ruler leaves no edit behind and is done as soon as it ran.
+ */
+export function isEditStep(id: string): boolean {
+	return /^(layer-|selection-|page-(paper|size|orientation|infinite|bookmark|duplicate)$|add-page$|insert-blank-page$)/.test(id);
+}
 
 /**
  * Runs the steps in order as one undo step. A step the registry does not know, that is not allowed or that lacks its value is skipped; a
  * step that cannot run now, whose edit is refused or that throws stops the macro (the steps before it stay done, in the same undo step).
+ * An edit step that changed nothing (read-only, nothing to arrange, a page that already has that paper) is counted apart, not as done.
+ * Nothing that goes wrong inside a step or while asking whether it can run escapes: it stops the macro with a "error" result.
  */
 export function runMacro(macro: Macro, env: MacroEnv): MacroResult {
 	if (usableSteps(macro) === 0) return { ok: false, reason: "empty" };
+	if (env.writing?.()) return { ok: false, reason: "writing" };
 	let done = 0;
 	let skipped = 0;
+	let noEffect = 0;
+	const failed = (reason: MacroFailure, step: number, action: string): MacroResult => ({
+		ok: false, reason, step, action, done, skipped, ...(noEffect > 0 ? { noEffect } : {}),
+	});
 	const stop: { failure: MacroResult | null } = { failure: null };
+	try {
+		env.prepare?.();
+	} catch (e) {
+		console.error("[notebook] macro could not get ready", e);
+		return failed("error", 0, macro.steps[0]?.action ?? "");
+	}
 	env.group(MACRO_LABEL, () => {
 		for (let i = 0; i < macro.steps.length; i++) {
 			const step = macro.steps[i]!;
@@ -253,25 +356,29 @@ export function runMacro(macro: Macro, env: MacroEnv): MacroResult {
 				skipped++;
 				continue;
 			}
-			const c = env.context();
-			if (!isRelevant(a, c) || !isEnabled(a, c) || !env.applies(step.action)) {
-				stop.failure = { ok: false, reason: "unavailable", step: i, action: step.action, done, skipped };
-				return;
-			}
-			const before = env.refusals();
+			let refusalsBefore = 0;
+			let editsBefore = 0;
 			try {
-				env.run(step.action, stepChoices(a) && step.value !== undefined ? { value: step.value } : {});
+				const c = env.context();
+				if (!isRelevant(a, c) || !isEnabled(a, c) || !env.applies(step.action)) {
+					stop.failure = failed("unavailable", i, step.action);
+					return;
+				}
+				refusalsBefore = env.refusals();
+				editsBefore = env.edits?.() ?? 0;
+				env.run(step.action, stepChoices(a) && typeof step.value === "string" ? { value: step.value } : {});
 			} catch (e) {
 				console.error("[notebook] macro step failed", step.action, e);
-				stop.failure = { ok: false, reason: "error", step: i, action: step.action, done, skipped };
+				stop.failure = failed("error", i, step.action);
 				return;
 			}
-			if (env.refusals() !== before) {
-				stop.failure = { ok: false, reason: "refused", step: i, action: step.action, done, skipped };
+			if (env.refusals() !== refusalsBefore) {
+				stop.failure = failed("refused", i, step.action);
 				return;
 			}
-			done++;
+			if (env.edits && isEditStep(step.action) && env.edits() === editsBefore) noEffect++;
+			else done++;
 		}
 	});
-	return stop.failure ?? { ok: true, ran: done, skipped };
+	return stop.failure ?? { ok: true, ran: done, skipped, ...(noEffect > 0 ? { noEffect } : {}) };
 }

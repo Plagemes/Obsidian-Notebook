@@ -1012,13 +1012,24 @@ export class History {
 			// The time is only a label of the step: a clock that fails never stops the step from being recorded.
 		}
 		this.undoStack.push(cmd);
-		if (this.undoStack.length > this.limit) this.undoStack.shift();
+		// 0.27 review (M3): inside a group the stack is trimmed once, when the group ends, so one group costs one entry like one step.
+		if (!this.grouping) this.trimUndo();
 		this.redoStack = [];
 		this.grouping?.push(cmd);
 	}
 
+	/** Drops the oldest steps beyond the limit. */
+	private trimUndo(): void {
+		while (this.undoStack.length > this.limit) this.undoStack.shift();
+	}
+
 	/** 0.27 (#170): the steps recorded since `group` began (null outside a group). */
 	private grouping: Command[] | null = null;
+
+	/** How many steps the open `group` has recorded so far (0 outside a group): a counter a macro run compares before and after a step. */
+	get groupedSteps(): number {
+		return this.grouping?.length ?? 0;
+	}
 
 	/**
 	 * 0.27 (#170): runs `fn`, which edits through this history step after step (a macro), and makes everything it recorded ONE undo step
@@ -1036,6 +1047,7 @@ export class History {
 			const made = this.grouping;
 			this.grouping = null;
 			this.merge(label, made);
+			this.trimUndo();
 		}
 	}
 

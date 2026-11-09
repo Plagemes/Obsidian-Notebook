@@ -37,6 +37,11 @@ const PINCH_LN = 0.06;
  */
 export class PageMode {
 	enabled = false;
+	/**
+	 * Turns land at once, without the animation (a macro run sets it): the page in view has changed before the next step asks for it.
+	 * While the animation runs `current()` still reports the page being left, so a second turn would target the wrong page.
+	 */
+	instant = false;
 	private anchor = 0;
 	/** What the finger travelled sideways (unresisted); the screen shows `resistDrag` of it. */
 	private rawDrag = 0;
@@ -107,6 +112,11 @@ export class PageMode {
 
 	get busy(): boolean {
 		return this.animating !== null;
+	}
+
+	/** Jumps a running turn animation to its end (the target page becomes the current one). */
+	finishAnimation(): void {
+		this.animating?.finish();
 	}
 
 	/** Viewport clamp for the view's `setViewport`: the anchor page keeps the view, the drag rides on top. */
@@ -333,7 +343,7 @@ export class PageMode {
 	private animate(to: Viewport, target: number, fromViewport = this.host.viewport()): void {
 		this.cancelAnimation();
 		const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-		const duration = reduce ? 0 : TURN_MS;
+		const duration = reduce || this.instant ? 0 : TURN_MS;
 		const done = (): void => {
 			this.animating = null;
 			this.anchor = target;

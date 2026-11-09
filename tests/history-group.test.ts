@@ -113,4 +113,19 @@ describe("History.group (one undo step for a macro run)", () => {
 		});
 		expect(history.depth().undo).toBe(0);
 	});
+
+	it("a full stack gives up as many old steps for a group as for one step (one group = one entry)", () => {
+		const doc = sampleDocument(0);
+		const page = doc.pages[0]!;
+		const history = new History(() => doc, 5);
+		for (let i = 0; i < 5; i++) history.execute(new AddStroke(page.id, line(0, i * 10, 5, i * 10 + 5), i));
+		const oldest = history.entries().undo[1]!.cmd;
+		history.group("Run macro", () => {
+			for (let i = 0; i < 4; i++) history.execute(new AddStroke(page.id, line(50, i * 10, 55, i * 10 + 5), 5 + i));
+		});
+		// 5 old steps + one group: exactly one old step is gone, not four.
+		expect(history.depth().undo).toBe(5);
+		expect(history.entries().undo[0]!.cmd).toBe(oldest);
+		expect(history.entries().undo[4]!.cmd).toBeInstanceOf(Batch);
+	});
 });

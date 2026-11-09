@@ -55,6 +55,18 @@
 - **Taper: thumbnails (Z4).** A thumbnail draws thin lines wider; the taper keeps its length in pt instead of lengthening with the line, so short strokes no longer turn into spindles on a card.
 - **Taper: start by arc length (Z5).** The radius of each node inside the start ramp follows the way travelled to it, so the ramp is the same for slow and fast strokes, like the end taper.
 - **Taper: live fallback (Z6).** The live layer of the fallback path draws the start taper but no end taper while the pen is down, like the wet ink.
+- **Macros: page steps follow each other (M1).** While a macro runs, page turns are immediate (no animation), so *Next page, Next page* advances two pages and a later paper or bookmark step lands on the page you arrived at, in page-by-page mode too.
+- **Macros: typing stays yours (M2).** A text box or equation still open when a macro starts is committed first, as its own undo step: *Undo* on the macro never takes back what you typed.
+- **Macros: a full undo stack gives up one old step (M3).** A whole macro run costs one entry, like one normal step (it used to push out up to 19 old steps).
+- **Macros: honest report (M4).** An edit step that changed nothing (read-only, nothing to arrange, a page that already has that paper) is not counted as done; the closing notice says how many steps changed nothing.
+- **Macros: one clear stop (M5).** An exception while asking whether a step can run, or while the run gets ready, stops the macro with the usual *did not work* notice; the undo step stays consistent.
+- **Macros: nothing from a newer version is lost (M6).** Unknown fields of a macro and of a step, steps beyond 20 and macros beyond 12 are kept as written and written back (`extraSteps`, settings key `macrosExtra`), shown as not run, so an older device saving the settings does not drop them.
+- **Macros: stable ids (M7).** An invalid or doubled stored macro id is replaced once, the same way on every start (hotkey and toolbar pin stay put) and saved; the toolbar pin of a macro that no longer exists is removed.
+- **Macros: not under the pen (M8).** A macro (button or hotkey) does not start while a stroke, an erase or a drag is in progress; a quiet notice says to lift the pen first.
+- **Spread: page actions hit the page you mean (S1).** With both pages of a pair in view, the page that Delete page, Paper, Size, Lock and the page number refer to is the one you last wrote on, tapped or went to (it no longer flips with a one-pixel pan); zoomed in on one page, that page is the one. The page sheet names it and deleting in a spread says which page went.
+- **Spread: positions and saved views are portable (S2).** The zoom of a saved position or view is measured against the page-wide fit in every mode, so it comes back at the same page size in a single column (and the reverse); a fitted spread still comes back fitted.
+- **Spread: a resize waits for the pen (S3).** A resize or rotation during a stroke, an erase or a drag lays the pages out after the contact ends, so the stroke keeps the page box it is mapped with.
+- **Spread: the eraser reaches both pages (S4).** Rubbing out near the binding erases on every page the eraser circle touches, not only the first.
 
 ## 0.26.0 — 2026-11-09
 
