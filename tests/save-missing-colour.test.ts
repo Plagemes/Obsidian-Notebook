@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { repairLiveDocument } from "../src/model/repair";
+import { repairLiveDocument, repairNotebookText } from "../src/model/repair";
 import { History, RemoveElement } from "../src/model/history";
 import { parse, serialize, serializeChecked } from "../src/model/serialize";
 import type { CheckboxElement, NotebookDocument, PageElement, Stroke } from "../src/model/types";
-import { DocumentSession, type DocumentIO, type Timers } from "../src/storage/session";
+import { DocumentSession, backupText, type BackupReason, type DocumentIO, type Timers } from "../src/storage/session";
 import { line, sampleDocument } from "./helpers";
 import { nodeClearTimeout, nodeSetTimeout } from "./node-env";
 
@@ -132,10 +132,80 @@ class FakeIO implements DocumentIO {
 			this.writes.push(next);
 		}
 	}
-	async backup(): Promise<string | null> {
+	async backup(content: string, reason: BackupReason): Promise<string | null> {
+		void content;
+		void reason;
 		return null;
 	}
 }
+
+/** An IO that keeps every backup it is asked for. */
+class BackupIO extends FakeIO {
+	backups: Array<{ text: string; reason: BackupReason }> = [];
+	override async backup(content: string, reason: BackupReason): Promise<string | null> {
+		this.backups.push({ text: content, reason });
+		return `backup-${this.backups.length}`;
+	}
+}
+
+describe("review fix U2: the unsaved-changes backup is never skipped", () => {
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => vi.useRealTimers());
+
+	it("closing with a frozen colourless item writes a repaired copy as the backup; nothing live is changed", async () => {
+		const original = serialize(sampleDocument(1));
+		const io = new BackupIO(original);
+		const errors: string[] = [];
+		const s = new DocumentSession(io, timers, { onError: (m: string) => errors.push(m) });
+		await s.load();
+		const frozen = colourless(BOX);
+		s.doc!.pages[0]!.elements = [frozen, { id: "t9", type: "text", x: 10, y: 60, width: 200, text: "SECRET-unsaved", fontSize: 18, color: "#222222" }];
+		s.markChanged();
+		// Control: the strict writer refuses this document (the backup was skipped before the fix).
+		expect(() => serialize(s.doc!)).toThrow(/colour/);
+		expect(await s.flushForClose()).toBe(true);
+		expect(io.content).toBe(original);
+		expect(io.backups.map((b) => b.reason)).toEqual(["unsaved"]);
+		const back = parse(io.backups[0]!.text);
+		expect(back.ok).toBe(true);
+		if (back.ok) {
+			expect(back.doc.pages[0]!.elements).toEqual([expect.objectContaining({ id: "c1", color: "#1f2430" }), expect.objectContaining({ id: "t9", text: "SECRET-unsaved" })]);
+		}
+		expect(repairNotebookText(io.backups[0]!.text).ok).toBe(true);
+		expect(s.doc?.pages[0]?.elements?.[0]).toBe(frozen);
+		expect(frozen).not.toHaveProperty("color");
+		expect(errors.some((m) => m.includes("could not be written or backed up"))).toBe(false);
+	});
+
+	it("damage the repair cannot fix still gets a backup (lenient writer) whose line scan keeps every other item, on close and on deletion", async () => {
+		const broken = Object.freeze({ id: "t0", type: "text", x: 10, y: 10, width: 200, fontSize: 18, color: "#222222" }) as unknown as PageElement; // no text
+		const kept: PageElement = { id: "t9", type: "text", x: 10, y: 60, width: 200, text: "SECRET-kept", fontSize: 18, color: "#222222" };
+		const doc = docWith(null);
+		doc.pages[0]!.elements = [broken, colourless(BOX), kept];
+		// Control: neither the strict writer nor a repaired copy can write it.
+		expect(() => serialize(doc)).toThrow();
+		const text = backupText(doc);
+		expect(text).not.toContain("undefined");
+		const repaired = repairNotebookText(text);
+		expect(repaired.ok).toBe(true);
+		if (repaired.ok) {
+			const ids = repaired.doc.pages[0]!.elements!.map((e) => e.id);
+			expect(ids).toEqual(expect.arrayContaining(["t9", "c1"]));
+			expect(JSON.stringify(repaired.doc)).toContain("SECRET-kept");
+		}
+		for (const end of ["close", "delete"] as const) {
+			const io = new BackupIO(serialize(sampleDocument(1)));
+			const s = new DocumentSession(io, timers, {});
+			await s.load();
+			s.doc!.pages[0]!.elements = [broken, kept];
+			s.markChanged();
+			if (end === "close") await s.flushForClose();
+			else await s.markDeleted();
+			expect(io.backups.map((b) => b.reason)).toEqual(["unsaved"]);
+			expect(io.backups[0]!.text).toContain("SECRET-kept");
+		}
+	});
+});
 
 describe("the save path does not stay stuck", () => {
 	beforeEach(() => vi.useFakeTimers());

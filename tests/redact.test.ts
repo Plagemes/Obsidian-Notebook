@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { burnPixelRects, burnPlan, coveredExcerpt, cutStroke, hasRedactions, headerAfterRedaction, metaWithoutRedactedTitles, outsideRuns, pessimisticMeasure, redactBounds, redactionOf, redactPage, redactPages, redactReach } from "../src/ink/redact";
+import { burnPixelRects, burnPlan, coveredExcerpt, cutStroke, hasRedactions, headerAfterRedaction, metaWithoutRedactedTitles, outsideRuns, pessimisticMeasure, redactBounds, redactionOf, redactPage, redactPages, redactReach, withExcerptChains } from "../src/ink/redact";
 import { layoutText } from "../src/ink/text-layout";
 import { cleanPageForExport } from "../src/model/clean-export";
 import { pageTexts } from "../src/model/export-markdown";
@@ -363,7 +363,11 @@ describe("review fixes (0.26 privacy review)", () => {
 		expect(out[1]!.id).toBe("dst");
 		expect(JSON.stringify(out)).not.toContain("SECRETSNAP");
 		expect(coveredExcerpt(ex, { src: [box] })).toBe(true);
-		expect(coveredExcerpt(ex, { dst: [box] })).toBe(false);
+		// Review fix (U1): a set that does not know the notebook leaves out every excerpt while it has a box; one that knows it is another
+		// notebook (doc "d" is not this one) keeps an excerpt whose page it does not have.
+		expect(coveredExcerpt(ex, { dst: [box] })).toBe(true);
+		expect(coveredExcerpt(ex, withExcerptChains([shows], { dst: [box] }, "this-notebook"))).toBe(false);
+		expect(coveredExcerpt(ex, withExcerptChains([shows], { dst: [box] }, "d"))).toBe(true);
 		expect(hasRedactions([shows], { src: [box] })).toBe(true);
 		// The page that shows it can have its own boxes too.
 		const both = redactPage(shows, [{ x: 400, y: 400, width: 40, height: 40 }], { src: [box] });

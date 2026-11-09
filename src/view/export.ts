@@ -135,6 +135,11 @@ export interface ExportOptions {
 	redactBlocked?: true;
 	/** Review fix (P10): how many boxes the notebook keeps switched off; non-dialog exports say once that they are off. */
 	redactOff?: number;
+	/**
+	 * Review fix (U1): the document id of the notebook, so the boxes the export dialog hands over tell the excerpts of this notebook (left
+	 * out while it has a box) from those of another (`withExcerptChains`). Absent: every excerpt is left out while there is a box.
+	 */
+	redactDoc?: string;
 }
 
 /**
@@ -323,7 +328,7 @@ export async function runExport(app: App, notebook: TFile, allPages: readonly Pa
 	delete base.redactOff;
 	if (request.redact && countBoxes(request.redact) > 0) {
 		// Review fix (R5): excerpt chains over every page of the notebook, also when only a range is exported.
-		base.redact = withExcerptChains(allPages, request.redact) ?? request.redact;
+		base.redact = withExcerptChains(allPages, request.redact, options.redactDoc) ?? request.redact;
 		delete base.redactBlocked;
 	} else delete base.redact;
 	const opts: ExportOptions = { ...base, layers: request.layers, ...(splits ? { split: request.split! } : {}) };

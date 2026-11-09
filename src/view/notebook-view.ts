@@ -2479,6 +2479,7 @@ export class NotebookView extends FileView {
 				state: () => this.redactState(),
 				save: (state) => this.saveRedact(state),
 				edit: (closed) => this.openRedact(Math.min(doc.pages.length - 1, Math.max(0, pageIndex ?? this.currentPageIndex())), closed),
+				doc: doc.id,
 			},
 			run: (request) => void runExport(this.app, file, this.renderPagesOf(doc), request, this.media, this.exportOptions()),
 		}).open();
@@ -2955,6 +2956,8 @@ export class NotebookView extends FileView {
 			...(header ? { header: (page: Page) => headerAfterRedaction(header(page), page) } : {}),
 			// 0.18 (#86): the margin comments as notes in the PDF, when the setting asks for them.
 			...(this.host.settings.commentsInPdf ? { comments: pdfCommentLabels() } : {}),
+			// Review fix (U1): tells the excerpts of this notebook from those of another, also for the boxes of the export dialog.
+			...(doc ? { redactDoc: doc.id } : {}),
 			...this.redactOptions(),
 		};
 	}
@@ -2974,7 +2977,7 @@ export class NotebookView extends FileView {
 		}
 		// Review fix (R5): the chains of excerpts are found over the whole notebook once, so a writer given one page still knows them.
 		const doc = this.session?.doc;
-		if (isArmed(stored)) return { redact: (doc ? withExcerptChains(doc.pages, stored.boxes) : undefined) ?? stored.boxes };
+		if (isArmed(stored)) return { redact: (doc ? withExcerptChains(doc.pages, stored.boxes, doc.id) : undefined) ?? stored.boxes };
 		const off = countBoxes(stored.boxes);
 		return off > 0 ? { redactOff: off } : {};
 	}

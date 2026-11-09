@@ -12,7 +12,8 @@
 //   is kept as an explicit "none") or resets the redaction storage (`resetRedactStorage`, after a confirmation).
 // - One entry that cannot be read (also one whose set loses a page or a box when it is read: this store writes its sets already
 //   normalised) makes that notebook unreadable, is kept as it is by later saves of other notebooks, and is copied aside before a save of
-//   its own notebook replaces it (T5). Each distinct unreadable value gets its own bounded copy (at most `QUARANTINE_MAX_COPIES`); when
+//   its own notebook replaces it (T5); so does an entry whose switch is not a boolean or that has a field this store never writes (U3).
+//   Each distinct unreadable value gets its own bounded copy (at most `QUARANTINE_MAX_COPIES`); when
 //   no copy can be made nothing is overwritten (T6).
 // - A very first save whose value cannot be written (a full quota) takes back the sentinel, so other notebooks are not refused (T9).
 // - A notebook whose switch is on is never forgotten to make room: only switched-off notebooks are, oldest first, and the caller is told
@@ -87,6 +88,12 @@ function parse(data: unknown, present = false): Parsed {
 		if (!plainKey(id) || typeof v !== "object" || v === null || Array.isArray(v)) return { ...out, corrupt: true };
 		const o = v as Record<string, unknown>;
 		if (!ENTRY_FIELDS.some((f) => f in o)) return { ...out, corrupt: true };
+		// Review fix (U3): a switch that is not true or false, a `cleared` that is not true, or a field this store never writes was written by
+		// something else (a newer version, another tool): the notebook is unreadable, never read as boxes switched off or as fewer boxes.
+		if (("on" in o && typeof o.on !== "boolean") || ("cleared" in o && o.cleared !== true) || Object.keys(o).some((f) => !ENTRY_FIELDS.includes(f))) {
+			out.bad.set(id, v);
+			continue;
+		}
 		const boxes = normaliseRedactions(o.boxes);
 		const at = typeof o.at === "number" && Number.isFinite(o.at) ? o.at : 0;
 		if (Object.keys(boxes).length === 0) {

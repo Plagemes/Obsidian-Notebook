@@ -43,6 +43,8 @@ export interface ExportDialogHost {
 		state(): RedactState;
 		save(state: RedactState): void;
 		edit(closed: () => void): void;
+		/** Review fix (U1): the notebook's document id (tells its own excerpts from those of another notebook in the preview). */
+		doc?: string;
 	};
 	run(request: ExportRequest): void;
 }
@@ -257,7 +259,7 @@ export class ExportModal extends Modal {
 		const boxes = this.activeRedactions();
 		if (!page || !boxes) return page;
 		// Review fix (R5): excerpt chains over the whole notebook, like the export.
-		const set = withExcerptChains(this.host.pages?.() ?? [page], boxes) ?? boxes;
+		const set = withExcerptChains(this.host.pages?.() ?? [page], boxes, this.host.redact?.doc) ?? boxes;
 		return redactPage(page, boxesOf(set, page.id), set);
 	}
 

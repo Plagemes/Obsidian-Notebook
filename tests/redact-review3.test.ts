@@ -60,6 +60,44 @@ describe("T1: an excerpt of a page of this notebook never shows a stale snapshot
 	});
 });
 
+// ------------------------------------------------------------------------------------------------------------------------------ U1
+
+describe("U1: an excerpt of this notebook whose source page was deleted is left out while the notebook has a box", () => {
+	// Page p2 held the secret; the excerpt A on p5 was taken from it. p2 was duplicated (the copy p3 has a new id) and deleted, and the
+	// secret is boxed on the copy. Neither the set nor the pages know p2 any more.
+	const copy: PageElement = { id: "t", type: "text", x: 100, y: 100, width: 160, text: "SECRET-iban", fontSize: 14, color: "#000000" };
+	const p3 = page("p3", [copy]);
+	const a: ExcerptElement = { id: "A", type: "excerpt", x: 50, y: 50, width: 200, height: 100, asset: "snapSECRET-iban", source: { notebook: "Demo", doc: "doc-this", page: "p2", x: 100, y: 100, width: 50, height: 20 } };
+	const other: ExcerptElement = { id: "O", type: "excerpt", x: 50, y: 300, width: 200, height: 100, asset: "snapOTHER", source: { notebook: "Other", doc: "doc-other", page: "q9", x: 0, y: 0, width: 50, height: 20 } };
+	const p5 = page("p5", [a, other]);
+	const boxed: Redactions = { p3: [{ x: 90, y: 90, width: 200, height: 40 }] };
+
+	it("every export and Figures › Copy leave it out; an excerpt of another notebook stays; with no box both stay", () => {
+		const set = withExcerptChains([p3, p5], boxed, "doc-this");
+		const out = redactPages([p3, p5], set);
+		expect(holds(out[0], "SECRET-iban")).toBe(false);
+		expect(holds(out[1], "snapSECRET-iban")).toBe(false);
+		expect(elementKept(p5, "A", set)).toBe(false);
+		expect(holds(redactPages([p5], set)[0], "snapSECRET-iban")).toBe(false);
+		// The excerpt of another notebook is not covered by these boxes (listed as not covered).
+		expect(holds(out[1], "snapOTHER")).toBe(true);
+		expect(elementKept(p5, "O", set)).toBe(true);
+		// Control: no box in the notebook.
+		const none = withExcerptChains([p3, p5], {}, "doc-this");
+		expect(holds(redactPages([p3, p5], none)[1], "snapSECRET-iban")).toBe(true);
+		expect(elementKept(p5, "A", none)).toBe(true);
+	});
+
+	it("a set that does not know the notebook's id fails closed: every excerpt goes while there is a box", () => {
+		const out = redactPages([p3, p5], boxed);
+		expect(holds(out[1], "snapSECRET-iban")).toBe(false);
+		expect(holds(out[1], "snapOTHER")).toBe(false);
+		expect(elementKept(p5, "A", boxed)).toBe(false);
+		// Control: no box.
+		expect(holds(redactPages([p3, p5], {})[1], "snapSECRET-iban")).toBe(true);
+	});
+});
+
 // ------------------------------------------------------------------------------------------------------------------------------ T2
 
 describe("T2: a picture of a selection applies every box that touches the selected text measured at its widest", () => {
