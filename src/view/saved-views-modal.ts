@@ -11,7 +11,7 @@ export interface SavedViewsApi {
 	/** The notebook can be changed (false: read-only mode, a document still loading). Views can always be recalled. */
 	canEdit(): boolean;
 	/** Where the view is now (page number and zoom percent), or null while there is nothing to measure. */
-	current(): { page: number; zoom: number } | null;
+	current(): { page: number; zoom: number; fit: boolean } | null;
 	/** A name for the next view that no view has yet. */
 	suggestedName(): string;
 	/** Saves what is in view under this name as one undo step; true when it was saved (the reason is said when not). */
@@ -74,7 +74,7 @@ export class SavedViewsModal extends Modal {
 			if (!save.disabled) this.saveNow();
 		});
 		const now = this.api.current();
-		if (now) field.createDiv({ cls: "nb-modal-note nb-views-now", text: t("views.save.now", { page: String(now.page), zoom: String(now.zoom) }) });
+		if (now) field.createDiv({ cls: "nb-modal-note nb-views-now", text: now.fit ? t("views.save.now.fit", { page: String(now.page) }) : t("views.save.now", { page: String(now.page), zoom: String(now.zoom) }) });
 		if (!editable) shellNote(shell.body, t("views.readOnly"));
 
 		if (rows.length === 0) {
@@ -138,7 +138,7 @@ export class SavedViewsModal extends Modal {
 		}
 		const go = el.createEl("button", { cls: "nb-views-row-text", attr: { type: "button", "aria-label": t("views.go", { name: row.name }), title: row.missing ? t("views.missing.hint") : t("views.go", { name: row.name }) } });
 		go.createSpan({ cls: "nb-views-row-label", text: row.name });
-		go.createSpan({ cls: "nb-views-row-detail", text: row.missing ? t("views.missing") : t("views.row.detail", { page: String(row.pageNumber ?? 0), zoom: String(row.zoomPercent) }) });
+		go.createSpan({ cls: "nb-views-row-detail", text: row.missing ? t("views.missing") : row.fit ? t("views.row.detail.fit", { page: String(row.pageNumber ?? 0) }) : t("views.row.detail", { page: String(row.pageNumber ?? 0), zoom: String(row.zoomPercent) }) });
 		go.addEventListener("click", () => {
 			if (this.api.go(row.id)) this.close();
 		});

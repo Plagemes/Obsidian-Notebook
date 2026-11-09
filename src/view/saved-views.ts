@@ -9,7 +9,7 @@ import {
 	isUsableViewPage, makeView, setViews, uniqueViewName, viewsOf, withViewAdded, withViewMoved, withViewRemoved, withViewRenamed, withViewReplaced,
 } from "../model/views";
 import { showNotice } from "./notice";
-import { findView, viewRows, zoomPercent, type ViewRow } from "./saved-views-logic";
+import { findView, viewRows, zoomIsFit, zoomPercent, type ViewRow } from "./saved-views-logic";
 import { SavedViewsModal, type SavedViewsApi } from "./saved-views-modal";
 
 /** What the tools need from the notebook view. */
@@ -45,11 +45,11 @@ export class SavedViewTools implements SavedViewsApi {
 		return this.host.editable();
 	}
 
-	current(): { page: number; zoom: number } | null {
+	current(): { page: number; zoom: number; fit: boolean } | null {
 		const doc = this.host.doc();
 		const cap = this.host.capture();
 		if (!doc || !cap) return null;
-		return { page: cap.region.pageIndex + 1, zoom: zoomPercent(cap.region.zoom) };
+		return { page: cap.region.pageIndex + 1, zoom: zoomPercent(cap.region.zoom), fit: zoomIsFit(cap.region.zoom) };
 	}
 
 	suggestedName(): string {

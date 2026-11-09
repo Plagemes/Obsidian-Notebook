@@ -4444,6 +4444,8 @@ export const en = {
 	"views.save.placeholder": "For example: Proof of lemma 2",
 	"views.save.button": "Save",
 	"views.save.now": "Saves what is on screen now: page {page}, zoom {zoom}%.",
+	"views.save.now.fit": "Saves what is on screen now: page {page}, fit.",
+	"views.row.detail.fit": "Page {page} · Fit",
 	"views.defaultName": "View {n}",
 	"views.empty": "No saved views yet. Frame a place on a page, give it a name and save it: one tap brings you back to it, at the same zoom.",
 	"views.count": "{count} of {max} views",

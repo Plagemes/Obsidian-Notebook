@@ -74,6 +74,9 @@
 - **Spread: no lock notice from the mate page (R5).** Rubbing out by the binding with the other page locked erases the open page and skips the locked one silently; the notice appears only when the eraser is on the locked page itself.
 - **Macros: notice wording (R6).** "1 step" / "n steps" (and Italian) in the *nothing changed* notices, and the skipped steps are still mentioned there.
 - **Tapered strokes are frozen by golden hashes (R7).** New `tests/taper-golden.test.ts` pins the nodes, the SVG / export path and the thumbnail outline of tapered strokes (start, end, both; pen, fountain pen, brush; long, short, tiny and fast strokes), so a later change to the ramp cannot silently change every tapered stroke. Test only.
+- **Macros: an id of another format is never replaced (T1).** A macro whose stored id this version cannot use (a newer version's format) is kept apart exactly as written, so no routine save writes another id over it and the newer device's hotkey and pin keep working. Only a missing or doubled id is replaced.
+- **Macros: a kept pin takes no visible place (T2).** The toolbar pin of a macro this version only keeps no longer counts toward the three pinned places, so *Show on the toolbar* is not refused for a pin you cannot see; deleting a macro removes only its own pin.
+- **Saved views: Fit is shown as Fit (T4).** A saved view at the fit reads "Fit" (*Adattata*) instead of a percentage that meant a different size in a spread and in a single column; other zooms are percentages of the page-wide fit.
 
 ## 0.26.0 — 2026-11-09
 
