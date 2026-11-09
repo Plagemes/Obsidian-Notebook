@@ -223,7 +223,9 @@ export function readMacros(data: unknown, prior?: unknown): MacroRead {
 		seen.add(id);
 		// Review fix (R3): the steps kept apart earlier follow the listed ones and are split again by count; a step this version cannot read
 		// (not an action id it knows the form of) stays where it was, in `steps`, and is shown and skipped as unavailable.
-		const raw = [...(Array.isArray(d.steps) ? d.steps : []), ...(Array.isArray(d.extraSteps) ? d.extraSteps : [])];
+		const listedSteps: unknown[] = Array.isArray(d.steps) ? (d.steps as unknown[]) : [];
+		const keptSteps: unknown[] = Array.isArray(d.extraSteps) ? (d.extraSteps as unknown[]) : [];
+		const raw: unknown[] = [...listedSteps, ...keptSteps];
 		const steps: MacroStep[] = [];
 		const extraSteps: unknown[] = [];
 		for (const s of raw) {

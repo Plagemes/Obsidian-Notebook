@@ -263,7 +263,7 @@ export class MacrosModal extends Modal {
 			if (step.value === undefined) step.value = options[0]!;
 			const kept = typeof step.value !== "string" || !options.includes(step.value);
 			if (kept) select.createEl("option", { text: String(step.value), attr: { value: KEPT } });
-			select.value = kept ? KEPT : (step.value as string);
+			select.value = kept ? KEPT : step.value;
 			select.addEventListener("change", () => {
 				if (select.value !== KEPT) step.value = select.value;
 			});
