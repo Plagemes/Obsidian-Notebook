@@ -20375,7 +20375,7 @@ body.notebook-style-obsidian {
 
 /* ===== 0.27 pdfsuggest ===== */
 /* Suggested search terms: one scrolling row of chips under the PDF search box (outline, headings, your own words). */
-.notebook-search .notebook-search-suggest {
+.nb-ui.notebook-search-suggest {
 	display: flex;
 	flex-wrap: nowrap;
 	align-items: center;
@@ -20387,15 +20387,15 @@ body.notebook-style-obsidian {
 	-webkit-overflow-scrolling: touch;
 }
 
-.notebook-search .notebook-search-suggest::-webkit-scrollbar {
+.nb-ui.notebook-search-suggest::-webkit-scrollbar {
 	display: none;
 }
 
-.notebook-search .notebook-search-suggest.notebook-hidden {
+.nb-ui.notebook-search-suggest.notebook-hidden {
 	display: none;
 }
 
-.notebook-search button.notebook-search-chip {
+.nb-ui button.notebook-search-chip {
 	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
@@ -20415,17 +20415,17 @@ body.notebook-style-obsidian {
 	cursor: pointer;
 }
 
-.notebook-search button.notebook-search-chip.is-outline {
+.nb-ui button.notebook-search-chip.is-outline {
 	border-color: transparent;
 	background: var(--nb-accent-soft);
 }
 
-.notebook-search button.notebook-search-chip.is-text {
+.nb-ui button.notebook-search-chip.is-text {
 	border-style: dashed;
 }
 
-.notebook-search button.notebook-search-chip:hover,
-.notebook-search button.notebook-search-chip:focus-visible {
+.nb-ui button.notebook-search-chip:hover,
+.nb-ui button.notebook-search-chip:focus-visible {
 	border-style: solid;
 	border-color: var(--nb-accent);
 }

@@ -92,7 +92,7 @@ export class SearchPanel {
 			this.syncList();
 		});
 		this.button(bar, "x", "reading.search.close", () => this.actions.close());
-		this.chips = this.el.createDiv({ cls: "notebook-search-suggest notebook-hidden", attr: { role: "group", "aria-label": t("reading.search.suggest") } });
+		this.chips = this.el.createDiv({ cls: "nb-ui notebook-search-suggest notebook-hidden", attr: { role: "group", "aria-label": t("reading.search.suggest") } });
 		this.stopHelp = attachLongPressHelp(this.el, (b) => (b.dataset.help ? resolveHelp(b) : null));
 		this.status = this.el.createDiv({ cls: "notebook-search-status notebook-hidden", attr: { role: "status" } });
 		this.list = this.el.createDiv({ cls: "notebook-search-list", attr: { role: "listbox", "aria-label": t("reading.search.list") } });

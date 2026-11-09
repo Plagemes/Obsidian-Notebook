@@ -130,13 +130,13 @@ export function boundedDistance(a: string, b: string, max: number): number {
 	return prev[b.length]!;
 }
 
-/** How well `typed` (folded) fits a term (folded): 4 prefix, 3 prefix of a word, 2 inside, 1 one typo in a word's start, 0 no. */
+/** How well `typed` (folded) fits a term (folded): 4 prefix, 3 prefix of a word, 2 inside, 1 one typo in a word's start (from four letters typed), 0 no. */
 export function matchTier(typed: string, term: string): number {
 	if (term.startsWith(typed)) return 4;
 	const words = term.split(/[\s\-_/.,;:()]+/).filter(Boolean);
 	if (words.some((w) => w.startsWith(typed))) return 3;
 	if (term.includes(typed)) return 2;
-	if ([...typed].length >= 3) {
+	if ([...typed].length >= 4) {
 		for (const w of words) {
 			// Compare with the start of the word as long as what was typed (and one longer/shorter, for a missing or extra letter).
 			for (const len of [typed.length, typed.length + 1, typed.length - 1]) {
