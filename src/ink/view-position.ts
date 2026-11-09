@@ -49,6 +49,27 @@ export function isFitScale(scale: number, mode: ScrollMode, view: Size, layout: 
 	return fit > 0 && Math.abs(scale / fit - 1) < FIT_EPSILON;
 }
 
+/**
+ * Review fix (R1): the zoom to store for `scale`. A view at the mode's fit is stored as exactly 1, whatever the mode, so "fitted" survives a
+ * switch between a spread and a single column (the format is the one of 0.26: zoom 1 = fitted, so an older record reads the same). Any
+ * other scale is measured against the page-wide fit (`zoomBase`); where that lands within FIT_EPSILON of 1 (a spread zoomed in until one
+ * page fills the width) it is nudged just outside, so it is not mistaken for the fit.
+ */
+export function zoomFor(scale: number, mode: ScrollMode, view: Size, layout: Layout, pageIndex: number): number {
+	if (isFitScale(scale, mode, view, layout, pageIndex)) return 1;
+	const z = scale / zoomBase(mode, view, layout, pageIndex);
+	return Math.abs(z - 1) < FIT_EPSILON ? 1 + Math.sign(z - 1 || 1) * FIT_EPSILON * 1.5 : z;
+}
+
+/** The scale a stored zoom means in this mode, and whether it is the fit (zoom 1: the mode's own fit, which the view keeps re-fitting). */
+export function scaleFor(zoom: number, mode: ScrollMode, view: Size, layout: Layout, pageIndex: number): { scale: number; fit: boolean } | null {
+	const base = zoomBase(mode, view, layout, pageIndex);
+	const fit = fitScale(mode, view, layout, pageIndex);
+	if (!(base > 0) || !(fit > 0)) return null;
+	const isFit = Math.abs(zoom - 1) < FIT_EPSILON;
+	return { scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, isFit ? fit : zoom * base)), fit: isFit };
+}
+
 const round = (n: number, digits: number): number => {
 	const k = 10 ** digits;
 	return Math.round(n * k) / k;
@@ -58,10 +79,9 @@ const round = (n: number, digits: number): number => {
 export function capturePosition(mode: ScrollMode, v: Viewport, view: Size, layout: Layout, pageIndex: number): SavedPosition | null {
 	const box = layout.boxes[pageIndex];
 	if (!box || view.width <= 0 || view.height <= 0 || !(v.scale > 0)) return null;
-	const fit = zoomBase(mode, view, layout, pageIndex);
-	if (!(fit > 0)) return null;
+	if (!(zoomBase(mode, view, layout, pageIndex) > 0)) return null;
 	const [dx, dy] = screenToPage(v, 0, 0);
-	const pos = { page: pageIndex + 1, zoom: round(v.scale / fit, 6), x: round(dx - box.x, 1), y: round(dy - box.y, 1) };
+	const pos = { page: pageIndex + 1, zoom: round(zoomFor(v.scale, mode, view, layout, pageIndex), 6), x: round(dx - box.x, 1), y: round(dy - box.y, 1) };
 	return isFinitePosition(pos) ? pos : null;
 }
 
@@ -78,10 +98,10 @@ export function restoreViewport(pos: SavedPosition, mode: ScrollMode, view: Size
 	if (layout.boxes.length === 0 || view.width <= 0 || view.height <= 0) return null;
 	const pageIndex = Math.min(layout.boxes.length - 1, Math.max(0, pos.page - 1));
 	const box = layout.boxes[pageIndex]!;
-	const base = zoomBase(mode, view, layout, pageIndex);
-	const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, pos.zoom * base));
-	const viewport = { scale, offsetX: -(box.x + pos.x) * scale, offsetY: -(box.y + pos.y) * scale };
-	return { viewport, fit: isFitScale(pos.zoom * base, mode, view, layout, pageIndex), pageIndex };
+	const s = scaleFor(pos.zoom, mode, view, layout, pageIndex);
+	if (!s) return null;
+	const viewport = { scale: s.scale, offsetX: -(box.x + pos.x) * s.scale, offsetY: -(box.y + pos.y) * s.scale };
+	return { viewport, fit: s.fit, pageIndex };
 }
 
 function isFinitePosition(p: SavedPosition): boolean {
