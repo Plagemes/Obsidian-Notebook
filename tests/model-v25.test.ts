@@ -18,7 +18,7 @@ import {
 	canTaper, isTaper, newStrokeTaper, normaliseTaper, pieceTaper, strokeTaper, TAPER_MAX, TAPER_MIN, TAPER_SPAN, TAPER_TIP, taperFactor, taperFromPercent, taperLength, taperOf, taperPercent, withTaper,
 } from "../src/model/taper";
 import { CURRENT_VERSION, FORMAT_ID, RENDER_INK, TOOLS, type NotebookDocument, type Page, type Point, type Stroke } from "../src/model/types";
-import { InkBuilder, inkPath, SvgPathSink, type PathSink } from "../src/ink/ink-geometry";
+import { InkBuilder, inkPath, SvgPathSink } from "../src/ink/ink-geometry";
 import { lodNodes, lodSvgPath } from "../src/ink/lod";
 import { strokeSvgPath } from "../src/ink/stroke-shape";
 import { joinStrokes } from "../src/ink/stroke-join";

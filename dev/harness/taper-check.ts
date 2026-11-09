@@ -9,7 +9,7 @@
 import { AddStroke, Batch } from "../../src/model/history";
 import { parse, serialize } from "../../src/model/serialize";
 import { createStroke } from "../../src/model/document";
-import { captureFavourite } from "../../src/view/favourites";
+import { captureFavourite, type PenState } from "../../src/view/favourites";
 import { styleOfStroke } from "../../src/ink/colour";
 import type { NotebookDocument, Page, Stroke, Tool } from "../../src/model/types";
 import type { CheckResult } from "./reading-check";
@@ -141,7 +141,7 @@ export async function checkTaper(api: TaperCheckApi): Promise<{ ok: boolean; res
 	add("a brush stroke keeps only the end that was set", brush.tool === "brush" && !("taperStart" in brush) && brush.taperEnd === 0.6, JSON.stringify({ tool: brush.tool, start: brush.taperStart, end: brush.taperEnd }));
 
 	// --- the pens that keep it ---
-	const fav = captureFavourite({ ...(v.toolbar.state as never), tool: "pen", penKind: "pen", penTaperStart: 0.4, penTaperEnd: 0.2 });
+	const fav = captureFavourite({ ...(v.toolbar.state as unknown as PenState), tool: "pen", penKind: "pen", penTaperStart: 0.4, penTaperEnd: 0.2 });
 	add("a favourite pen and a pen set keep the taper", fav.taperStart === 0.4 && fav.taperEnd === 0.2);
 	add("the style eyedropper takes it from a stroke", JSON.stringify(styleOfStroke(tapered)).includes('"penTaperStart":0.5') && JSON.stringify(styleOfStroke(tapered)).includes('"penTaperEnd":1'));
 
