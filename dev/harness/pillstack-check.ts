@@ -31,12 +31,13 @@ interface PillstackView extends HarnessView {
 	minimap: { el: HTMLElement; preferences: { corner: string; collapsed: boolean } };
 	meaningTools: { choose(index: number | null): void };
 	welcomeBack: { offer(doc: HarnessView["document"]): void };
-	app: { saveLocalStorage(key: string, data: unknown): void };
+	app: { saveLocalStorage(key: string, data: unknown): void; vault: { create(p: string, data: string): Promise<unknown> }; metadataCache: { caches: Map<string, unknown> } };
+	plannerTasks: { reset(): void };
 	addPage(): void;
 	scrollToPage(index: number, y?: number, animate?: boolean): void;
 	host: HarnessView["host"] & {
 		settings: HarnessView["host"]["settings"] & {
-			lectureHeader: string; welcomeBack: boolean; slideBack: boolean; symbolStrip: boolean; symbolCount: number; pageRefs: boolean; minimapMode: string;
+			lectureHeader: string; plannerTasks: boolean; welcomeBack: boolean; slideBack: boolean; symbolStrip: boolean; symbolCount: number; pageRefs: boolean; minimapMode: string;
 			colourMeanings: Array<{ colour: string; label: string }>;
 		};
 	};
@@ -56,6 +57,7 @@ const PIECES: Array<[string, string]> = [
 	["lecture-mode chip", ".notebook-lecture-chip"],
 	["contextual bar", ".notebook-context-bar:not(.notebook-hidden)"],
 	["welcome-back card", ".notebook-welcome-back"],
+	["tasks chip", ".notebook-plantasks"],
 
 ];
 
@@ -101,6 +103,12 @@ async function prepare(api: PillstackCheckApi): Promise<PillstackView> {
 	const pages = v.document.pages;
 	const last = pages[pages.length - 1]!;
 	const link = `[[New.notebook#p${pages.length}&id=${last.id}|see the new page]]`;
+	// 0.27 plannertasks: the new page is a daily planner page with a task due that day, so its tasks chip joins the stack.
+	Object.assign(last, { paper: { kind: "planner-day", spacing: 28 }, elements: [{ id: "ps-title", type: "text", x: 8, y: 8, width: 500, text: "Thursday, 12 March 2026", fontSize: 17, color: "#1f2937" }] });
+	await v.app.vault.create("Tasks/Pillstack.md", "- [ ] Hand in the form 📅 2026-03-12").catch(() => undefined);
+	v.app.metadataCache.caches.set("Tasks/Pillstack.md", { listItems: [{ task: " " }] });
+	v.host.settings.plannerTasks = true;
+	v.plannerTasks.reset();
 	pages[0]!.elements = [...(pages[0]!.elements ?? []), text("ps-a", `Intro, then ${link}`)];
 	pages[2]!.elements = [...(pages[2]!.elements ?? []), text("ps-c", link)];
 	v.pageRefs.sync();

@@ -4195,3 +4195,28 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Drag a row into the note (embed text) | yes | harness `doc=related` (drag data only) | | | drop into the editor not tested in a real Obsidian |
 | Setting *Related pages: same course* | yes | `tests/settings-schema.test.ts` | | | |
 | The panel's read-only refresh writes nothing; what it read is saved by the next page-switcher refresh, one entry per path, never over a newer index entry nor for a notebook deleted since | yes | `tests/page-directory-save.test.ts` | | | |
+
+### 0.27 — plannertasks: tasks due on planner pages (roadmap #266; steps 3120-3139)
+
+Settings, Writing: *Tasks on planner pages* (on by default). Implemented, not verified on hardware. Needs a planner notebook (create one from the planner generator) and a few notes with tasks. The overlay is derived and per device: nothing is stored in the notebook (no format change), it is **not included in any export** in this wave, and it is read only (the task lines of ordinary notes carry no block id the safe checklist writer could find them by, so nothing is ticked from the chip).
+
+3120. **Chip.** In a vault note write `- [ ] Pay rent 📅 2026-03-12`, in another `- [ ] Book room [due:: 2026-03-12]`, and in a note named `2026-03-12.md` a plain `- [ ] Call the bank`. Open the daily page of 12 March 2026 of a planner: a quiet chip *Tasks due: 3* appears at the top right (a moment after the page settles). It is collapsed: it never covers the page.
+3121. **List.** Tap the chip: a list opens under it, open tasks first (by day, note, line), done ones struck through and last, each with its note name. The round marks are statuses, not buttons.
+3122. **Open the note.** Tap a row: the note opens in a new tab with the cursor on the task's line; the notebook stays where it was.
+3123. **Collapse.** Tap outside, press Escape, change page or write a stroke with the S Pen: the list folds, the chip stays.
+3124. **Weekly page.** On a weekly planner page the chip counts the tasks of the seven days; rows show their weekday.
+3125. **Other pages.** The year, month, notes and ordinary pages have no chip; a day with nothing due has none either.
+3126. **Live.** With the page open, edit a task in a note (change its date to that day): within a second or two the count follows. Delete or rename the note: it follows too. Typing in a note does not slow the notebook.
+3127. **Big vault.** In a vault with thousands of notes the first planner page you open stays smooth (notes are read a few at a time); a task found in a fenced code block, in frontmatter or marked cancelled `[-]` is not listed.
+3128. **Setting.** Turn *Tasks on planner pages* off: the chip goes; on: it returns.
+3129. **Stacking.** With the recent-symbols strip, the *Back to slide* pill and the *Referenced on* chip on, the tasks chip sits below them, none overlaps, and the welcome-back card starts below it.
+3130. **Not in exports and not in the file.** Export the page as PDF/PNG: no task text appears. Reopen the notebook file's JSON: nothing of the tasks is in it.
+3131. **Italian, light, dark, phone.** The texts are in Italian with the plugin in Italian; the chip and list read in light and dark and fit a phone.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Page days from a planner title (day, week, across month and year, en and it; planner paper only) | yes | `tests/planner-tasks.test.ts` | | | |
+| Task due dates (Tasks `📅`, Dataview `[due::]`, daily note name), skipping frontmatter, code, cancelled; bounded index | yes | `tests/planner-tasks.test.ts` | | | |
+| Chip, list, open at line, incremental updates, setting, stacking | yes | harness `doc=plannertasks` and `doc=pillstack` | | | |
+| Tick a task from the chip | no | | | | read only by design (no safe block-id writer for ordinary notes) |
+| Overlay in exports | no | | | | left out in this wave |

@@ -181,6 +181,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tidy", theme, device, lowLatency: false });
 // 0.23 welcomeback (#420): the welcome-back card (dev/harness/welcomeback-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "welcomeback", theme, device, lowLatency: false });
+// 0.27 plannertasks (#266): the tasks chip on planner pages (dev/harness/plannertasks-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "plannertasks", theme, device, lowLatency: false });
 // 0.24 iconhelp (#429): the long-press explanation bubble (dev/harness/iconhelp-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "iconhelp", theme, device, lowLatency: false });
 // 0.25 toolfade (#399): the bars fade while the pen writes (dev/harness/toolfade-check.ts), dist/shots/design/toolfade-*.png.
@@ -436,6 +438,7 @@ async function main() {
 				else if (s.doc === "profiles") report = await cdp.evaluate("window.harness.checkProfiles()", 90000); // 0.25 profiles
 				else if (s.doc === "pillstack") report = await cdp.evaluate("window.harness.checkPillstack()", 90000); // 0.22 review fix: all the floating pills at once
 				else if (s.doc === "welcomeback") report = await cdp.evaluate("window.harness.checkWelcomeback()", 90000); // 0.23 welcomeback
+				else if (s.doc === "plannertasks") report = await cdp.evaluate("window.harness.checkPlannertasks()", 90000); // 0.27 plannertasks
 				else if (s.doc === "iconhelp") report = await cdp.evaluate("window.harness.checkIconhelp()", 90000); // 0.24 iconhelp
 				else if (s.doc === "toolfade") report = await cdp.evaluate("window.harness.checkToolfade()", 120000); // 0.25 toolfade
 				else if (s.doc === "zoomwidth") report = await cdp.evaluate("window.harness.checkZoomwidth()", 120000); // 0.26 zoomwidth
@@ -718,6 +721,19 @@ async function main() {
 					writeFileSync(join(designDir, `navadapt-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				} catch (e) {
 					problems.push(`navadapt screenshot: ${e.message}`);
+				}
+			}
+			// 0.27 plannertasks: the chip, the open list and the weekly page.
+			if (s.doc === "plannertasks") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["chip", "panel", "week"]) {
+					try {
+						await cdp.evaluate(`window.harness.plannertasksShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `plannertasks-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`plannertasks screenshot ${state}: ${e.message}`);
+					}
 				}
 			}
 			// 0.23 welcomeback: a screenshot of the card.

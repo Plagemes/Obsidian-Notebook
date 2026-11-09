@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### plannertasks
+- **Tasks due on planner pages (#266).** On a daily or weekly planner page a quiet chip *Tasks due: n* lists the vault's Markdown tasks due on the page's days: a Tasks plugin date, a Dataview `[due:: ...]` field, or a task in that day's daily note. Tap a row to open the note at the task. Read only (no tick is written from the chip), derived and per device: nothing is stored in the notebook (no format change) and the overlay is not part of any export. The index is built lazily in small slices from the metadata cache and kept up to date from its change events. Setting *Tasks on planner pages* (Writing, on by default).
+
 ## 0.26.0 — 2026-11-09
 
 Eight features: opacity for ink, pictures and areas, smooth and straighten strokes, tidy up handwriting lines, redaction before export, pen width that follows zoom, a context palette in the colour picker, a dynamic gallery block and a related handwritten pages panel. The notebook format moves to version 24 (opacity): the migration from version 23 is automatic, and Notebook 0.25 and older open a v24 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).
