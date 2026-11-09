@@ -185,6 +185,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "iconhelp", theme, device, lowLatency: false });
 // 0.25 toolfade (#399): the bars fade while the pen writes (dev/harness/toolfade-check.ts), dist/shots/design/toolfade-*.png.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "toolfade", theme, device, lowLatency: false });
+// 0.27 inputlayout (#431): layout by input device (dev/harness/inputlayout-check.ts), dist/shots/design/inputlayout-*.png.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "inputlayout", theme, device, lowLatency: false });
 // 0.26 zoomwidth (#350): pen width follows zoom (dev/harness/zoomwidth-check.ts), dist/shots/design/zoomwidth-*.png.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "zoomwidth", theme, device, lowLatency: false });
 // 0.22 lecthead (#210): the lecture header (dev/harness/lecthead-check.ts).
@@ -438,6 +440,7 @@ async function main() {
 				else if (s.doc === "welcomeback") report = await cdp.evaluate("window.harness.checkWelcomeback()", 90000); // 0.23 welcomeback
 				else if (s.doc === "iconhelp") report = await cdp.evaluate("window.harness.checkIconhelp()", 90000); // 0.24 iconhelp
 				else if (s.doc === "toolfade") report = await cdp.evaluate("window.harness.checkToolfade()", 120000); // 0.25 toolfade
+				else if (s.doc === "inputlayout") report = await cdp.evaluate("window.harness.checkInputlayout()", 90000); // 0.27 inputlayout
 				else if (s.doc === "zoomwidth") report = await cdp.evaluate("window.harness.checkZoomwidth()", 120000); // 0.26 zoomwidth
 				else if (s.doc === "navadapt") report = await cdp.evaluate("window.harness.checkNavadapt()", 90000); // 0.24 navadapt
 				else if (s.doc === "smooth") report = await cdp.evaluate("window.harness.checkSmooth()", 90000); // 0.26 smooth
@@ -741,6 +744,19 @@ async function main() {
 						writeFileSync(join(designDir, `zoomwidth-${on ? "on" : "off"}-${zoom}x-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`zoomwidth ${zoom}x ${on} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.27 inputlayout: screenshots of the pen, finger and mouse layouts.
+			if (s.doc === "inputlayout") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const kind of ["pen", "touch", "mouse"]) {
+					try {
+						await cdp.evaluate(`window.harness.inputlayoutShot('${kind}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `inputlayout-${kind}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`inputlayout ${kind} screenshot: ${e.message}`);
 					}
 				}
 			}

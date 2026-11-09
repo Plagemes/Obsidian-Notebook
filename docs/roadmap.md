@@ -766,7 +766,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 
 ### Layout and devices
 430. **P1** 🧪 Layout by orientation and size (`src/ui/viewport-class.ts`, `nb-vp-*` classes; 0.14).
-431. **P2** Layout by input device: pen, finger or mouse and keyboard.
+431. **P2** 🧪 Layout by input device: pen, finger or mouse and keyboard (`src/ui/input-layout.ts`, `nb-input-*` classes; Settings > Appearance > Adapt layout to input; 0.27).
 432. **P3** Larger targets when you often miss.
 433. **P3** Contrast-adaptive toolbar over slides.
 434. ~~**P2** Panels that arrange themselves by available space.~~ — already covered by the UI redesign (layout engine, `docs/design-ui.md` §4)

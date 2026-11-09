@@ -4195,3 +4195,26 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Drag a row into the note (embed text) | yes | harness `doc=related` (drag data only) | | | drop into the editor not tested in a real Obsidian |
 | Setting *Related pages: same course* | yes | `tests/settings-schema.test.ts` | | | |
 | The panel's read-only refresh writes nothing; what it read is saved by the next page-switcher refresh, one entry per path, never over a newer index entry nor for a notebook deleted since | yes | `tests/page-directory-save.test.ts` | | | |
+
+### 0.27 — inputlayout: layout by input device (roadmap #431; steps 3080-3099)
+
+Implemented, not verified on hardware. No format change. Manual steps (real Obsidian on an Android tablet with S Pen; step 3086 on Windows):
+
+3080. **Setting.** *Settings > Appearance > Adapt layout to input* offers Automatic (default), Pen, Finger, Mouse and keyboard; search finds it by "finger" or "dito".
+3081. **Pen (default).** Open a notebook and write with the S Pen: the toolbar is the compact one you know; nothing moves while you write.
+3082. **Finger.** Touch the toolbar or the page with a finger three times (tap tools, pan): the toolbar buttons grow one size and gain spacing; the page does not jump and a stroke in progress is never interrupted.
+3083. **Back to the pen.** Hover the S Pen over the page for a moment: the compact toolbar returns.
+3084. **Palm.** Write with the pen while resting the palm on the screen: the toolbar never switches to the finger layout.
+3085. **Pinned.** Choose Finger: the large layout stays whatever you use; same with Pen and Mouse.
+3086. **Mouse and keyboard (Windows or a USB mouse).** Move the mouse over the toolbar: hover shows a clear outline; assign a hotkey to *Undo* in Obsidian (Settings > Hotkeys) and hover the Undo button: the tooltip reads "Undo (Ctrl+...)". A button without a hotkey shows its plain name.
+3087. **Leaving the mouse.** Touch with the pen or finger a few times: the hints go away (the tooltip shows the plain name).
+3088. **Phone.** Repeat 3081-3085 on a phone: in the finger layout the row of tools may wrap to a second line (as with the Large toolbar size) and nothing goes past the screen edge; the bars stay usable in landscape.
+3089. **Short landscape.** Finger layout with the keyboard up: the bars stay tight (no extra row spacing).
+3090. **Light, dark, Italian.** The setting and its options read correctly in both themes and in Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Device detection (three consistent events, never mid-stroke, palm window, pinned override) | yes | `tests/input-layout.test.ts` | | | |
+| Classes `nb-input-*` on the view root; finger layout has larger targets | yes | harness `doc=inputlayout` (synthetic pointer events) | | | real S Pen / finger mix not simulated |
+| Shortcut hints in tooltips (mouse layout, from Obsidian's hotkeys) | yes | formatting: `tests/input-layout.test.ts`; hotkey lookup guarded, not tested in a real Obsidian | | yes | the hotkey registry is not public API |
+| Setting *Adapt layout to input* | yes | `tests/settings-schema.test.ts`, `tests/input-layout.test.ts` | | | |

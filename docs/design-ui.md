@@ -180,6 +180,7 @@ action's priority, so the same context, width and settings always give the same 
   or bar never reaches the page.
 - **Finger** pans and zooms (pen-only mode) or writes (finger mode). Taps on controls; long press on a favourite saves
   the current pen. Two-/three-finger taps undo/redo. Sheets on a phone are bottom sheets within thumb reach.
+- **Layout follows the device** (0.27, #431): the view root carries `nb-input-pen`, `nb-input-touch` or `nb-input-mouse` next to the `nb-vp-*` classes. Detected passively from `pointerType` (three consistent events, never mid-stroke, a touch right after the pen is a palm and is ignored) or pinned in *Settings > Appearance > Adapt layout to input*. Pen is the compact default; a finger gets one toolbar size more (bigger targets) and more spacing; the mouse gets a clearer hover and focus ring and the tooltip of a bar button names the shortcut the person set in Obsidian (nothing is shown when none is set).
 - **Mouse** clicks; right click on a favourite offers save/reset (also reachable by long press and from the radial).
   Escape closes popovers, sheets and the radial menu. Every action has a command for hotkeys.
 - A tap outside an open popover/sheet closes it and is swallowed (no stray ink), as in Samsung Notes.

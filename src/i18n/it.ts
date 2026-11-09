@@ -5029,4 +5029,11 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.relatedRefresh": "Rilegge i quaderni e ricalcola le pagine collegate. Il pannello si aggiorna anche da solo quando cambi nota.",
 	"help.relatedCopy": "Copia il link a questa pagina. Per inserire la pagina nella nota come incorporamento, trascina la riga nella nota.",
 	"help.relatedPanel": "Apre il pannello laterale con le pagine scritte a mano collegate alla nota aperta: quelle che rimandano a lei, ne nominano titolo, etichette o titoli di sezione, o sono dello stesso corso.",
+	// 0.27 inputlayout
+	"settings.inputLayout": "Adatta il layout all'input",
+	"settings.inputLayout.desc": "Barre grandi per il dito, compatte per la penna, scorciatoie per il mouse.",
+	"settings.inputLayout.auto": "Automatico",
+	"settings.inputLayout.pen": "Penna",
+	"settings.inputLayout.touch": "Dito",
+	"settings.inputLayout.mouse": "Mouse e tastiera",
 };

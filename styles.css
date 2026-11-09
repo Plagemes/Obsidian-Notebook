@@ -20372,3 +20372,52 @@ body.notebook-style-obsidian {
 .nb-ui.notebook-related .nb-empty-state {
 	padding: 24px 8px;
 }
+
+/* ===== 0.27 inputlayout ===== */
+/* Layout by input device (src/ui/input-layout.ts, src/view/input-layout-view.ts): nb-input-pen | nb-input-touch | nb-input-mouse on the notebook view root, next to nb-vp-*. */
+/* The pen is the compact default and has no rules of its own. A finger also gets one toolbar size more (--nb-target, set by the view). */
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch .notebook-toolbar-row,
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch .notebook-toolbar-group {
+	gap: var(--nb-space-1);
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch .notebook-toolbar-row {
+	row-gap: var(--nb-space-2);
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch .notebook-context-bar {
+	gap: var(--nb-space-2);
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch .notebook-menu-item {
+	min-height: var(--nb-target);
+	gap: var(--nb-space-3);
+}
+
+/* Short landscape keeps its tight bars even for a finger: vertical space wins there (nb-vp-short rule above). */
+.workspace-leaf-content .view-content.notebook-view.nb-input-touch.nb-vp-short .notebook-toolbar-row {
+	row-gap: 0;
+}
+
+/* Mouse and keyboard: a pointer cursor and a clearer hover and keyboard focus on the bar buttons (the tooltip adds the shortcut). */
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-tool,
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-menu-item {
+	cursor: pointer;
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-tool:hover:not(.is-active) {
+	background: var(--nb-hover);
+	box-shadow: inset 0 0 0 1px var(--nb-border);
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-menu-item:hover {
+	background: var(--nb-hover);
+	box-shadow: inset 0 0 0 1px var(--nb-border);
+}
+
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-tool:focus-visible,
+.workspace-leaf-content .view-content.notebook-view.nb-input-mouse .notebook-menu-item:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}

@@ -5028,6 +5028,13 @@ export const en = {
 	"help.relatedRefresh": "Read the notebooks again and rank the related pages once more. The panel also updates by itself when you switch notes.",
 	"help.relatedCopy": "Copy a link to this page. To place the page in the note as an embed, drag the row into the note.",
 	"help.relatedPanel": "Open the side panel that lists the handwritten pages related to the open note: pages that link to it, name its title, tags or headings, or belong to the same course.",
+	// 0.27 inputlayout
+	"settings.inputLayout": "Adapt layout to input",
+	"settings.inputLayout.desc": "Big bars for a finger, compact for the pen, shortcut hints for a mouse.",
+	"settings.inputLayout.auto": "Automatic",
+	"settings.inputLayout.pen": "Pen",
+	"settings.inputLayout.touch": "Finger",
+	"settings.inputLayout.mouse": "Mouse and keyboard",
 } as const;
 
 export type MessageKey = keyof typeof en;
