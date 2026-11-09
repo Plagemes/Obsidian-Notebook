@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### pdfsuggest
+- **PDF search with suggested terms (#418).** Under the search box of a PDF a row of chips offers terms to search: the entries of the PDF's outline that the notebook shows, the titles in this notebook (box titles, bookmarks, marker labels) and the words you type most (text boxes, sticky notes, checklist labels; English and Italian stop-words left out). Typing narrows the row (prefix, word start, inside, one typo; accents and case ignored); a tap puts the term in the box and searches it. One scrolling line, up to 14 chips (8 on a phone), long-press explanations in English and Italian.
+- **Cheap and private.** The list is bounded (about 240 terms), built when the device is idle, kept per open notebook and rebuilt only when its sources changed; typing only filters it. It reads the open notebook only, writes nothing and changes no format. Handwriting has no text, so it is not a source.
+- **Code.** Pure `src/pdf/search-suggest.ts` (tests `tests/pdf-search-suggest.test.ts`), the chips in `src/view/pdf-search-panel.ts`, glue in `src/view/pdf-reading.ts`; harness scenario `doc=pdfsuggest`.
+
 ## 0.26.0 — 2026-11-09
 
 Eight features: opacity for ink, pictures and areas, smooth and straighten strokes, tidy up handwriting lines, redaction before export, pen width that follows zoom, a context palette in the colour picker, a dynamic gallery block and a related handwritten pages panel. The notebook format moves to version 24 (opacity): the migration from version 23 is automatic, and Notebook 0.25 and older open a v24 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).

@@ -17,6 +17,8 @@ import { PageTextCache, runSearch, type SearchHit } from "../pdf/text-index";
 import { boxesOnPage, type PageTextContent, type TextMeasure } from "../pdf/text-items";
 import { hitBoxes, normalizeQuery } from "../pdf/text-search";
 import { snapHighlight } from "../pdf/text-snap";
+import { filterSuggestions, SuggestCache, type Suggestion, type SuggestInput } from "../pdf/search-suggest";
+import { whenIdle } from "../storage/idle";
 import { SearchPanel } from "./pdf-search-panel";
 import { backgroundAlpha, hasPdfPages, insertHits, revealViewport, searchTargets, snappedStrokes, stepIndex, type Rect } from "./reading-logic";
 import { DIM_MAX, DIM_MIN, DIM_STEP, normaliseDim, type ReadingSettings } from "./reading-settings";
@@ -51,6 +53,8 @@ export interface ReadingHost {
 	editingChanged(): void;
 	/** wave 0.7: resilience (#346): false in safe mode, where PDF text is not read ahead. */
 	prefetchAllowed?(): boolean;
+	/** 0.27 pdfsuggest (#418): what the suggested search terms are made of (this notebook only); read in idle time. */
+	suggestSources?(): SuggestInput;
 }
 
 /** Marks of the hits on the pages. */
@@ -97,6 +101,10 @@ export class PdfReading {
 	private flushTimer: number | null = null;
 	private drawFrame = 0;
 	private destroyed = false;
+	/** 0.27 pdfsuggest (#418): the suggested terms of the open document, built in idle time and rebuilt only when its sources changed. */
+	private readonly suggestCache = new SuggestCache();
+	private pool: readonly Suggestion[] = [];
+	private suggestQueued = false;
 
 	constructor(private readonly host: ReadingHost) {
 		this.cache = new PageTextCache({ pageText: (asset, page) => host.pageText(asset, page) });
@@ -109,6 +117,7 @@ export class PdfReading {
 				if (hit) this.activate(hit, true);
 			},
 			close: () => this.closeSearch(),
+			suggest: (typed, limit) => filterSuggestions(this.pool, typed, limit),
 		}, () => host.isNarrow());
 
 		this.banner = host.body.createDiv({ cls: "notebook-reading-banner notebook-hidden", attr: { role: "status" } });
@@ -204,9 +213,27 @@ export class PdfReading {
 		}
 		this.searchOpen = true;
 		this.panel.open();
+		this.queueSuggestions();
 		// Reopened with the old text: search it again (the hits were dropped when the bar closed).
 		if (this.hits.length === 0 && !this.running && this.panel.query.trim()) this.startSearch(this.panel.query);
 		else this.flush();
+	}
+
+	/** Builds the suggested terms when the browser is idle (never while the pen writes, never per frame). Reads nothing but this notebook. */
+	private queueSuggestions(): void {
+		if (this.suggestQueued || this.destroyed || !this.host.suggestSources) return;
+		this.suggestQueued = true;
+		void whenIdle(0, 1000).then(() => {
+			this.suggestQueued = false;
+			if (this.destroyed || !this.searchOpen) return;
+			try {
+				this.pool = this.suggestCache.get(this.host.suggestSources?.() ?? { outline: [], headings: [], text: [] });
+			} catch (e) {
+				console.error("[notebook] search suggestions", e);
+				this.pool = [];
+			}
+			this.panel.refreshSuggestions();
+		});
 	}
 
 	closeSearch(): void {
@@ -538,6 +565,8 @@ export class PdfReading {
 		this.dimControl.remove();
 		this.host.toolbar.highlighterOptionsEl.empty();
 		this.cache.clear();
+		this.suggestCache.clear();
+		this.pool = [];
 	}
 
 	private applyRenderer(): void {

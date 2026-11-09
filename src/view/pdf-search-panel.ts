@@ -1,6 +1,8 @@
 import { setIcon } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type { SearchHit } from "../pdf/text-index";
+import type { Suggestion } from "../pdf/search-suggest";
+import { attachLongPressHelp, resolveHelp } from "../ui/long-press-help";
 
 /** What the panel shows (the controller builds it; the panel keeps no search state of its own). */
 export interface SearchView {
@@ -26,7 +28,13 @@ export interface SearchPanelActions {
 	step(delta: 1 | -1): void;
 	pick(index: number): void;
 	close(): void;
+	/** 0.27 pdfsuggest (#418): the terms to offer for what is in the box (at most `limit`); none when the pool is not ready. */
+	suggest?(typed: string, limit: number): readonly Suggestion[];
 }
+
+/** Chips shown at most: a wide view, a narrow one (one scrolling row each). */
+const CHIPS_WIDE = 14;
+const CHIPS_NARROW = 8;
 
 /** Wait after the last keystroke before searching, ms. */
 const TYPING_DELAY_MS = 250;
@@ -46,6 +54,9 @@ export class SearchPanel {
 	private readonly prev: HTMLButtonElement;
 	private readonly next: HTMLButtonElement;
 	private readonly listButton: HTMLButtonElement;
+	private readonly chips: HTMLElement;
+	private readonly stopHelp: () => void;
+	private shownChips = "";
 	private timer: number | null = null;
 	private listOpen = true;
 	private lastActive: SearchHit | null = null;
@@ -59,7 +70,10 @@ export class SearchPanel {
 			cls: "notebook-search-input",
 			attr: { type: "search", placeholder: t("reading.search.placeholder"), "aria-label": t("reading.search.placeholder"), spellcheck: "false", autocomplete: "off", enterkeyhint: "search" },
 		});
-		this.input.addEventListener("input", () => this.typed());
+		this.input.addEventListener("input", () => {
+			this.refreshSuggestions();
+			this.typed();
+		});
 		this.input.addEventListener("keydown", (e) => {
 			if (e.key === "Enter") {
 				e.preventDefault();
@@ -78,6 +92,8 @@ export class SearchPanel {
 			this.syncList();
 		});
 		this.button(bar, "x", "reading.search.close", () => this.actions.close());
+		this.chips = this.el.createDiv({ cls: "notebook-search-suggest notebook-hidden", attr: { role: "group", "aria-label": t("reading.search.suggest") } });
+		this.stopHelp = attachLongPressHelp(this.el, (b) => (b.dataset.help ? resolveHelp(b) : null));
 		this.status = this.el.createDiv({ cls: "notebook-search-status notebook-hidden", attr: { role: "status" } });
 		this.list = this.el.createDiv({ cls: "notebook-search-list", attr: { role: "listbox", "aria-label": t("reading.search.list") } });
 		this.syncList();
@@ -112,6 +128,7 @@ export class SearchPanel {
 		this.listOpen = !this.narrow();
 		this.syncList();
 		this.el.removeClass("notebook-hidden");
+		this.refreshSuggestions();
 		this.input.focus();
 		this.input.select();
 	}
@@ -126,7 +143,42 @@ export class SearchPanel {
 
 	destroy(): void {
 		this.flushTimer();
+		this.stopHelp();
 		this.el.remove();
+	}
+
+	/**
+	 * 0.27 pdfsuggest (#418): shows the suggested terms that fit what is in the box (all of them when it is empty) as one row of
+	 * chips. Cheap (filters a small pool), so it runs on each keystroke, when the bar opens and when the pool arrives. Rebuilds
+	 * the row only when the terms changed.
+	 */
+	refreshSuggestions(): void {
+		const list = this.isOpen ? this.actions.suggest?.(this.input.value, this.narrow() ? CHIPS_NARROW : CHIPS_WIDE) ?? [] : [];
+		const key = list.map((s) => `${s.source}:${s.term}`).join("\n");
+		if (key === this.shownChips) return;
+		this.shownChips = key;
+		this.chips.empty();
+		this.chips.toggleClass("notebook-hidden", list.length === 0);
+		for (const s of list) {
+			const chip = this.chips.createEl("button", {
+				cls: `notebook-search-chip is-${s.source}`,
+				text: s.term,
+				attr: { type: "button", "aria-label": s.term, "data-help": "help.searchSuggest", "data-help-hint": `help.searchSuggest.${s.source}` },
+			});
+			chip.addEventListener("click", (e) => {
+				e.preventDefault();
+				this.useSuggestion(s.term);
+			});
+		}
+	}
+
+	/** A chip was tapped: its term goes into the box and is searched at once. */
+	private useSuggestion(term: string): void {
+		this.input.value = term;
+		this.flushTimer();
+		this.input.blur();
+		this.refreshSuggestions();
+		this.actions.query(term);
 	}
 
 	/** Shows the current state of the search. Cheap enough to call a few times a second while results stream in. */

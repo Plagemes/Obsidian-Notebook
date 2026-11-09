@@ -5029,4 +5029,10 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.relatedRefresh": "Rilegge i quaderni e ricalcola le pagine collegate. Il pannello si aggiorna anche da solo quando cambi nota.",
 	"help.relatedCopy": "Copia il link a questa pagina. Per inserire la pagina nella nota come incorporamento, trascina la riga nella nota.",
 	"help.relatedPanel": "Apre il pannello laterale con le pagine scritte a mano collegate alla nota aperta: quelle che rimandano a lei, ne nominano titolo, etichette o titoli di sezione, o sono dello stesso corso.",
+	// 0.27 pdfsuggest (#418): termini di ricerca suggeriti
+	"reading.search.suggest": "Termini di ricerca suggeriti",
+	"help.searchSuggest": "Un termine suggerito. Toccalo per cercarlo nel testo del PDF. Scrivi nel campo per restringere i suggerimenti.",
+	"help.searchSuggest.outline": "Dall'indice del PDF.",
+	"help.searchSuggest.heading": "Da un titolo o un'etichetta di questo quaderno.",
+	"help.searchSuggest.text": "Una parola che usi spesso in questo quaderno.",
 };

@@ -5028,6 +5028,12 @@ export const en = {
 	"help.relatedRefresh": "Read the notebooks again and rank the related pages once more. The panel also updates by itself when you switch notes.",
 	"help.relatedCopy": "Copy a link to this page. To place the page in the note as an embed, drag the row into the note.",
 	"help.relatedPanel": "Open the side panel that lists the handwritten pages related to the open note: pages that link to it, name its title, tags or headings, or belong to the same course.",
+	// 0.27 pdfsuggest (#418): suggested search terms
+	"reading.search.suggest": "Suggested search terms",
+	"help.searchSuggest": "A suggested term. Tap it to search the PDF text for it. Type in the box to narrow the suggestions.",
+	"help.searchSuggest.outline": "From the outline of the PDF.",
+	"help.searchSuggest.heading": "From a title or label in this notebook.",
+	"help.searchSuggest.text": "A word you often use in this notebook.",
 } as const;
 
 export type MessageKey = keyof typeof en;

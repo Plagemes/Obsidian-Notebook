@@ -20372,3 +20372,60 @@ body.notebook-style-obsidian {
 .nb-ui.notebook-related .nb-empty-state {
 	padding: 24px 8px;
 }
+
+/* ===== 0.27 pdfsuggest ===== */
+/* Suggested search terms: one scrolling row of chips under the PDF search box (outline, headings, your own words). */
+.notebook-search .notebook-search-suggest {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--nb-space-2);
+	padding: 2px var(--nb-space-3) var(--nb-space-2);
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+}
+
+.notebook-search .notebook-search-suggest::-webkit-scrollbar {
+	display: none;
+}
+
+.notebook-search .notebook-search-suggest.notebook-hidden {
+	display: none;
+}
+
+.notebook-search button.notebook-search-chip {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
+	max-width: 70vw;
+	height: auto;
+	padding: 2px 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 999px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+}
+
+.notebook-search button.notebook-search-chip.is-outline {
+	border-color: transparent;
+	background: var(--nb-accent-soft);
+}
+
+.notebook-search button.notebook-search-chip.is-text {
+	border-style: dashed;
+}
+
+.notebook-search button.notebook-search-chip:hover,
+.notebook-search button.notebook-search-chip:focus-visible {
+	border-style: solid;
+	border-color: var(--nb-accent);
+}
