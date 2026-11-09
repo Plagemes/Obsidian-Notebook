@@ -82,6 +82,20 @@ export function pageAt(layout: Layout, x: number, y: number, tolerance = 0): num
 }
 
 /**
+ * Review fix (S4): every page whose box the circle of `radius` around the document point touches, in page order. An eraser by the binding
+ * of a spread (or in the gap between two pages of a column) reaches both pages, so it erases on both, not only on the first.
+ */
+export function pagesTouching(layout: Layout, x: number, y: number, radius: number): number[] {
+	const out: number[] = [];
+	layout.boxes.forEach((b, i) => {
+		const dx = x < b.x ? b.x - x : x > b.x + b.width ? x - b.x - b.width : 0;
+		const dy = y < b.y ? b.y - y : y > b.y + b.height ? y - b.y - b.height : 0;
+		if (dx * dx + dy * dy <= radius * radius) out.push(i);
+	});
+	return out;
+}
+
+/**
  * Page whose box is closest to the document point vertically (for "current page"). `x` (optional) decides between
  * pages that are equally near vertically, i.e. the two pages of a spread row: the one nearer sideways wins.
  */

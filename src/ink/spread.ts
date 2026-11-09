@@ -96,6 +96,36 @@ export function mateOf(layout: Layout, index: number): number {
 }
 
 /**
+ * Review fix (S3): what to do about a view that changed size (a resize, a tablet turned over) while the pen may be on the page. The new
+ * layout (a spread coming or going, the re-fit) moves the page boxes and the viewport under the stroke in progress, whose later samples
+ * are mapped with the box they started on, so it waits until the contact is over: "wait" while it is, "now" once it is not, "idle" when
+ * nothing is pending.
+ */
+export function relayoutStep(pending: boolean, busy: boolean): "idle" | "wait" | "now" {
+	if (!pending) return "idle";
+	return busy ? "wait" : "now";
+}
+
+/** How close to the binding (as a fraction of the narrower page's width) the view's centre has to be for the two pages of a pair to count as equally "in view". */
+export const BINDING_ZONE = 0.25;
+
+/**
+ * Review fix (S1): the page the page actions (delete, paper, size, lock, ...) and the page number refer to. `centre` is the page nearest
+ * to the middle of the view, `cx` the document x of that middle, `touched` the page the person last wrote on, tapped or went to (-1:
+ * none). With both pages of a pair in view the middle sits in the binding and which page is nearer is a matter of a point or two, so the
+ * page the person last touched decides, if it is in that pair. Zoomed in on one page (the middle is clearly inside it) that page wins.
+ */
+export function spreadTarget(layout: Layout, cx: number, centre: number, touched: number): number {
+	if (touched < 0 || touched === centre) return centre;
+	const row = rowOf(layout, centre);
+	if (row.length !== 2 || !row.includes(touched)) return centre;
+	const left = layout.boxes[row[0]!]!;
+	const right = layout.boxes[row[1]!]!;
+	const zone = BINDING_ZONE * Math.min(left.width, right.width);
+	return cx >= left.x + left.width - zone && cx <= right.x + zone ? touched : centre;
+}
+
+/**
  * The page "next" and "previous" go to: `delta` rows away, to the first page of that row (a spread turns by pair). In a
  * layout without pairs it is just the page `delta` away. Clamped to the pages that exist.
  */
