@@ -60,7 +60,7 @@ export function createTaperRow(parent: HTMLElement, on: TaperHandlers, cls = "")
 		line.createSpan({ cls: "notebook-taper-end-label", text: label });
 		const slider = line.createEl("input", {
 			cls: "notebook-taper-slider",
-			attr: { type: "range", min: "0", max: String(PERCENT_MAX), step: String(PERCENT_STEP), "aria-label": label },
+			attr: { type: "range", min: "0", max: String(PERCENT_MAX), step: String(PERCENT_STEP), "aria-label": `${t("taper.title")}: ${label}` },
 		});
 		const value = line.createSpan({ cls: "notebook-taper-value", attr: { "aria-hidden": "true" } });
 		return { slider, value };
