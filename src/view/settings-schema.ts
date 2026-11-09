@@ -310,9 +310,12 @@ const INPUT: SettingSpec[] = [
 const PAGES: SettingSpec[] = [
 	{
 		id: "scrollMode", section: "pages", order: 10, name: "settings.scrollMode", desc: "settings.scrollMode.desc",
-		control: { type: "dropdown", options: options([["continuous", "settings.scrollMode.continuous"], ["pages", "settings.scrollMode.pages"]]) },
+		control: { type: "dropdown", options: options([["continuous", "settings.scrollMode.continuous"], ["pages", "settings.scrollMode.pages"], ["spread", "settings.scrollMode.spread"]]) },
 	},
-	{ id: "fastScrollbar", section: "pages", order: 20, name: "settings.fastScrollbar", desc: "settings.fastScrollbar.desc", control: { type: "toggle" }, parent: "scrollMode", visible: (s) => s.scrollMode === "continuous" },
+	{ id: "fastScrollbar", section: "pages", order: 20, name: "settings.fastScrollbar", desc: "settings.fastScrollbar.desc", control: { type: "toggle" }, parent: "scrollMode", visible: (s) => s.scrollMode !== "pages" },
+	// 0.27 spread (#49): where the first page goes, and the automatic spread on a landscape tablet.
+	{ id: "spreadFirstAlone", section: "pages", order: 21, name: "settings.spreadFirstAlone", desc: "settings.spreadFirstAlone.desc", control: { type: "toggle" }, parent: "scrollMode", visible: (s) => s.scrollMode === "spread" || (s.scrollMode === "continuous" && s.spreadAuto), keywords: "book two pages side by side spread libro due pagine affiancate" },
+	{ id: "spreadAuto", section: "pages", order: 22, name: "settings.spreadAuto", desc: "settings.spreadAuto.desc", control: { type: "toggle" }, parent: "scrollMode", visible: (s) => s.scrollMode === "continuous", keywords: "spread landscape tablet two pages automatic doppia pagina orizzontale" },
 	// 0.17 minimap (#173)
 	{
 		id: "minimapMode", section: "pages", order: 25, name: "settings.minimap", desc: "settings.minimap.desc",

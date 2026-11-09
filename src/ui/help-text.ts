@@ -9,6 +9,7 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"nav-back": "help.navBack",
 	"nav-forward": "help.navForward",
 	"toggle-page-mode": "help.pageMode",
+	"toggle-spread": "help.spread",
 	"insert-image": "help.insertImage",
 	stamps: "help.stamps",
 	"board-shot": "help.boardShot",

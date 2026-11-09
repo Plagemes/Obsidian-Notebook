@@ -177,6 +177,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "navadapt", theme, device, lowLatency: false });
 // 0.25 markedview (#419): marked pages only in the page navigator (dev/harness/markedview-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "markedview", theme, device, lowLatency: false });
+// 0.27 spread (#49): two pages side by side on the landscape tablet, one column on the phone (dev/harness/spread-check.ts), dist/shots/design/spread-*.png.
+for (const device of ["tabletLandscape", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "spread", theme, device, lowLatency: false });
 // 0.26 tidy (#238): Tidy up (dev/harness/tidy-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tidy", theme, device, lowLatency: false });
 // 0.23 welcomeback (#420): the welcome-back card (dev/harness/welcomeback-check.ts).
@@ -450,6 +452,7 @@ async function main() {
 				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
 				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
+				else if (s.doc === "spread") report = await cdp.evaluate("window.harness.checkSpread()", 120000); // 0.27 spread
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -688,6 +691,19 @@ async function main() {
 						writeFileSync(join(designDir, `baseline-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`baseline ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.27 spread: the pair with writing on both pages, zoomed on the right page with the minimap, and the page sheet with its toggle.
+			if (s.doc === "spread") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["pair", "zoom", "sheet"]) {
+					try {
+						await cdp.evaluate(`window.harness.spreadShot('${state}').then(() => true)`, 90000);
+						writeFileSync(join(designDir, `spread-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`spread ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

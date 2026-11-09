@@ -75,7 +75,7 @@ export interface UiContext {
 	sidePane: { available: boolean; open: boolean };
 	reading: { annotationsHidden: boolean; dim: boolean; /** 0.14 (392): the highlighter snaps to the text lines of PDF pages. Optional (off when absent). */ snap?: boolean; /** 0.16 (#45): the Select text mode of PDF pages is on. Optional (off when absent). */ selectText?: boolean };
 	toggles: {
-		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
+		ruler: boolean; penOnly: boolean; navigator: boolean; /** One page at a time (wave 0.7). */ pageMode?: boolean; /** 0.27 (#49): two pages side by side are shown now, and whether the view has room for them (absent: yes). */ spread?: boolean; spreadRoom?: boolean; /** Pen gesture mode (wave 0.8). */ penGestures?: boolean;
 		/** wave 0.10 (63): the lasso tool selects with a rectangle instead of a freehand outline. */ selectRectangle?: boolean;
 		/** 0.25 (#99): the highlighter marks rectangles (area highlighter) instead of strokes. */ highlighterArea?: boolean;
 		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
@@ -294,6 +294,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.26 related (#422): the side panel of handwritten pages related to the open Markdown note.
 	{ id: "related-pages", label: "command.relatedPages", icon: "files", group: "navigate", surfaces: ["sheet", "library"], priority: 52, scope: "global", command: true, readOnly: true, keywords: "related linked backlinks note markdown panel sidebar collegate pagine nota pannello" },
 	{ id: "toggle-page-mode", label: "toolbar.pageMode", icon: "book-open", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 46, scope: "view", command: "command.pageMode", readOnly: true, checked: (c) => !!c.toggles.pageMode, keywords: "swipe paged continuous scroll" },
+	// 0.27 spread (#49): two pages side by side. Only offered where the view has room for a spread (a phone keeps one page).
+	{ id: "toggle-spread", label: "toolbar.spread", icon: "columns-2", group: "navigate", surfaces: ["page", "sheet"], priority: 45, scope: "view", command: "command.spread", readOnly: true, when: (c) => c.toggles.spreadRoom !== false, checked: (c) => !!c.toggles.spread, keywords: "two pages book side by side landscape tablet due pagine affiancate libro" },
 	// wave 0.9 (361): find and replace in the text boxes of the notebook (a panel; the results jump to the page).
 	{ id: "find-replace", label: "command.findReplace", icon: "replace", group: "navigate", surfaces: ["sheet"], priority: 48, scope: "view", command: true, readOnly: true, keywords: "search text box substitute change word" },
 

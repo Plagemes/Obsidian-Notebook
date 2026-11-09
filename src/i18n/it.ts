@@ -643,7 +643,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"pageRestore.done": "Pagina ripristinata",
 	// wave 0.6: navigation
 	"settings.scrollMode": "Scorrimento",
-	"settings.scrollMode.desc": "Pagine continue in verticale, o una alla volta con uno scorrimento.",
+	"settings.scrollMode.desc": "Pagine continue, una alla volta, o due pagine affiancate.",
 	"settings.scrollMode.continuous": "Continuo (verticale)",
 	"settings.scrollMode.pages": "Una pagina alla volta",
 	"toolbar.pageMode": "Una pagina alla volta",
@@ -5045,4 +5045,14 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.inputLayout.pen": "Penna",
 	"settings.inputLayout.touch": "Dito",
 	"settings.inputLayout.mouse": "Mouse e tastiera",
+	// 0.27 spread
+	"settings.scrollMode.spread": "Due pagine affiancate",
+	"settings.spreadFirstAlone": "Prima pagina da sola, come un libro",
+	"settings.spreadFirstAlone.desc": "Pagina 1 sola a destra, poi 2-3, 4-5... Spento: le coppie sono 1-2, 3-4...",
+	"settings.spreadAuto": "Due pagine su un tablet in orizzontale",
+	"settings.spreadAuto.desc": "Due pagine affiancate su uno schermo largo in orizzontale. Un telefono ne tiene una.",
+	"toolbar.spread": "Due pagine affiancate",
+	"command.spread": "Attiva o disattiva due pagine affiancate",
+	"spread.noRoom": "Due pagine affiancate richiedono uno schermo largo in orizzontale. È impostato e si vedrà su uno schermo così.",
+	"help.spread": "Mostra le pagine a coppie, come un libro aperto, e scorre coppia per coppia. Serve uno schermo largo in orizzontale; un telefono tiene una pagina. Puoi scrivere su entrambe le pagine.",
 };

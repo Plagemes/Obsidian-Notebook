@@ -4254,3 +4254,35 @@ Implemented, not verified on hardware. No format change. Manual steps (real Obsi
 | Classes `nb-input-*` on the view root; finger layout has larger targets | yes | harness `doc=inputlayout` (synthetic pointer events) | | | real S Pen / finger mix not simulated |
 | Shortcut hints in tooltips (mouse layout, from Obsidian's hotkeys) | yes | formatting: `tests/input-layout.test.ts`; hotkey lookup guarded, not tested in a real Obsidian | | yes | the hotkey registry is not public API |
 | Setting *Adapt layout to input* | yes | `tests/settings-schema.test.ts`, `tests/input-layout.test.ts` | | | |
+
+### 0.27 — spread: two pages side by side (roadmap #49; steps 3140-3159)
+
+Manual steps (real Obsidian; nothing here is verified on Android hardware). Use a notebook of at least six pages on a landscape tablet (a view at least 720 px wide and not taller than wide).
+
+3140. **Turn it on.** Page sheet (tap the page indicator) > *Two pages side by side* (or Settings > Pages > Scrolling > *Two pages side by side*): the pages sit in pairs like an open book. Page 1 is alone on the right; the pairs are 2-3, 4-5... The button shows as on.
+3141. **Both pages at once.** At fit zoom both pages of a pair are fully in view, top aligned, with a narrow gap between them; scrolling goes pair by pair (the fast scrollbar works as in continuous scrolling).
+3142. **Write on both pages.** With the S Pen write on the left page, then on the right one: each stroke belongs to the page it started on. Start a stroke on the left page and finish it over the right one: the right page gets nothing from it (the ink is clipped at the left page's edge).
+3143. **Book layout.** Settings > Pages > *First page alone, like a book* off: the pairs become 1-2, 3-4... An odd last page sits alone on the left of its row. Notebooks with one page just show that page.
+3144. **Mixed sizes.** In a notebook with a portrait and a landscape page (or PDF pages of different sizes) next to each other, the pages line up by their top edge with a gap; the binding stays on the same vertical line in every row.
+3145. **Next and previous.** *Next page* / *Previous page* (page-turner keys, the commands) move by pair. *Go to page* on either page of a pair shows that pair; zoomed in on the left page, going to the right page brings it to the middle of the view.
+3146. **Page panel.** Open the page panel: both pages of the pair in view are highlighted; tapping a thumbnail goes to its pair.
+3147. **Zoom and minimap.** Pinch in on the right page: the minimap (when set to *Automatic* or *Always*) shows the right page and its rectangle; tapping the minimap pans inside that page.
+3148. **Saved view.** Save a view zoomed on the right page, scroll away, recall it: the same part of the right page comes back, centred, at the same zoom. The same after turning the tablet and back.
+3149. **Last position.** Close and reopen the notebook in the spread: it opens on the same pair at the same zoom and scroll position.
+3150. **Presentation and reference.** *Write while presenting* switches to one page at a time for the slide and goes back to the spread when you stop. A reference window keeps showing single pages.
+3151. **Automatic.** Settings > Pages > Scrolling = *Continuous* > *Two pages on a landscape tablet* on: the spread appears by itself in landscape and goes away in portrait, staying on the page you were on. Off (default): nothing changes by itself.
+3152. **Phone.** On a phone (or a portrait tablet) the setting *Two pages side by side* shows one column of pages as in continuous scrolling, and the page sheet does not offer the button. Rotating a tablet to landscape brings the spread back.
+3153. **Turning it off.** The button again (or the setting): back to one column on the same page. With the automatic setting on, the button also switches the automatic setting off.
+3154. **Other tools on a spread.** Lasso, shapes, text boxes, the eraser, the ruler and image drops work on whichever page is under the pen; a lasso that reaches the other page of the pair selects across the two pages exactly as it does across two pages in continuous scrolling. Dropping a file in the gap between the pages goes to the page nearer to it.
+3155. **Looks.** Light and dark theme, English and Italian, the new rows in the Pages section of the settings, the long-press explanation of the button.
+3156. **Nothing written by the mode.** Switching the mode, rotating and scrolling never change the notebook file (no save indicator, no modified time change).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Spread layout: pairs, first page alone or not, odd last page, mixed sizes aligned by top, same binding line (pure) | yes | `tests/spread.test.ts` | | | |
+| Which page a point is on, the page of a row nearer sideways, a stroke keeps the page it started on (pure) | yes | `tests/spread.test.ts` | | | |
+| Scroll to page / next page by pair, position and saved-view restore, minimap, scrollbar bubble and drops on a spread (pure) | yes | `tests/spread.test.ts` | | | |
+| Fallback to one column on a phone or a portrait view; automatic spread in landscape | yes | `tests/spread.test.ts`, harness `doc=spread` | | | |
+| Page sheet button, command, settings (*Two pages side by side*, *First page alone*, *Two pages on a landscape tablet*) | yes | `tests/spread.test.ts`, `tests/settings-schema.test.ts`, `tests/ui-registry.test.ts` | | | |
+| Writing with the pen on both pages of a pair | yes | harness `doc=spread` (synthetic pen events) | | | the S Pen on a real tablet |
+| Page panel highlights both pages of the pair | yes | harness `doc=spread` | | | |

@@ -31,6 +31,8 @@ export interface Layout {
 	height: number;
 	/** wave 0.9: the part of the document width the view fits in continuous mode (the union of the boxes' windows). */
 	window?: Range;
+	/** 0.27 (#49): the page indices of each row of a two-page spread, in reading order. Absent: one page per row. */
+	rows?: ReadonlyArray<readonly number[]>;
 }
 
 /** A window that is at least this much of the page width is not worth a different zoom. */
@@ -79,14 +81,20 @@ export function pageAt(layout: Layout, x: number, y: number, tolerance = 0): num
 		x >= b.x - tolerance && x <= b.x + b.width + tolerance && y >= b.y - tolerance && y <= b.y + b.height + tolerance);
 }
 
-/** Page whose box is closest to the document point vertically (for "current page"). */
-export function nearestPage(layout: Layout, y: number): number {
+/**
+ * Page whose box is closest to the document point vertically (for "current page"). `x` (optional) decides between
+ * pages that are equally near vertically, i.e. the two pages of a spread row: the one nearer sideways wins.
+ */
+export function nearestPage(layout: Layout, y: number, x?: number): number {
 	let best = -1;
 	let bestDist = Infinity;
+	let bestSide = Infinity;
 	layout.boxes.forEach((b, i) => {
 		const d = y < b.y ? b.y - y : y > b.y + b.height ? y - b.y - b.height : 0;
-		if (d < bestDist) {
+		const side = x === undefined ? 0 : x < b.x ? b.x - x : x > b.x + b.width ? x - b.x - b.width : 0;
+		if (d < bestDist || (d === bestDist && side < bestSide)) {
 			bestDist = d;
+			bestSide = side;
 			best = i;
 		}
 	});

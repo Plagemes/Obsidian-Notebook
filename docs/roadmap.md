@@ -152,7 +152,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 
 ### Navigation and view
 48. ~~**P1** Double tap to zoom: toggles fit-to-width and 100 %.~~ — dropped (user decision, 2026-10-29)
-49. **P2** Two-page spread view (landscape tablets).
+49. **P2** 🧪 Two-page spread view (landscape tablets): pages in pairs like an open book (first page alone or not), scrolled pair by pair; writing on both pages; page sheet button, settings and an optional automatic spread in landscape; a phone keeps one column.
 50. **P2** 🧪 Fast scrollbar with a page preview while dragging.
 51. **P2** 🧪 Read-only mode to read without accidental marks.
 52. **P2** Coloured sections inside a notebook (tab dividers, as in OneNote).

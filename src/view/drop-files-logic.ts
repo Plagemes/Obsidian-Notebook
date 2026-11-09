@@ -4,6 +4,7 @@
  */
 import { extensionOf, kindFromNameAndType, MAX_BULK_IMAGE_BYTES, MAX_BULK_PDF_BYTES } from "../library/bulk-import-logic";
 import { nearestPage, pageAt, toPageLocal, type Layout } from "../ink/layout";
+import { isSpreadLayout } from "../ink/spread";
 import { screenToPage, type Viewport } from "../ink/viewport";
 
 /** Most files taken from one drop; the rest are named in the one notice. */
@@ -125,7 +126,7 @@ export function locateDrop(
 	const [dx, dy] = screenToPage(viewport, clientX - stage.left, clientY - stage.top);
 	if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
 	let index = pageAt(layout, dx, dy);
-	if (index < 0) index = nearestPage(layout, dy);
+	if (index < 0) index = nearestPage(layout, dy, isSpreadLayout(layout) ? dx : undefined); // 0.27 (#49): the page of a spread row nearer sideways
 	const box = layout.boxes[index];
 	if (!box) return null;
 	const [x, y] = toPageLocal(box, dx, dy);
