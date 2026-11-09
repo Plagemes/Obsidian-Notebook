@@ -1,6 +1,6 @@
 import { strokeTaper, type Taper } from "../model/taper";
 import { RENDER_INK, type Point, type ShapeDash, type Stroke, type Tool } from "../model/types";
-import { addInkPath, InkBuilder, SvgPathSink, type PathSink } from "./ink-geometry";
+import { addInkPath, InkBuilder, inkPath, SvgPathSink, type PathSink } from "./ink-geometry";
 import { strokeOutline, strokeSvgPath } from "./stroke-shape";
 
 /**
@@ -235,6 +235,16 @@ export function polygonSvgPath(xy: readonly number[]): string {
 }
 
 /**
+ * The taper to build a stroke of `strokeWidth` with when it is drawn `width` wide: the same length in pt as on the page (the values are
+ * lengths in line widths; they may fall under the smallest stored taper, which only matters for what is stored).
+ */
+export function widenedTaper(taper: Taper | undefined, strokeWidth: number, width: number): Taper | undefined {
+	if (!taper || !(strokeWidth > 0) || !(width > 0) || width === strokeWidth) return taper;
+	const k = strokeWidth / width;
+	return { start: taper.start * k, end: taper.end * k };
+}
+
+/**
  * SVG path of a stroke for LOD `level` at `width` (for one-off drawing such as thumbnails, where the width can
  * differ from the stroke's); the exact path when there is nothing to simplify.
  */
@@ -242,10 +252,16 @@ export function lodSvgPath(stroke: Pick<Stroke, "points" | "width" | "tool" | "r
 	// v22: a dashed or dotted shape has nothing to simplify (its runs are short): its exact path.
 	if (stroke.dash !== undefined) return strokeSvgPath({ ...stroke, width });
 	if (stroke.render === RENDER_INK) {
-		// v25: the taper is part of the geometry (its length follows `width`, the width drawn with).
-		const nodes = lodNodes(stroke.points, width, stroke.tool, level, stroke.nib, strokeTaper(stroke));
-		if (!nodes) return strokeSvgPath({ ...stroke, width });
+		// v25: the taper is part of the geometry. Its length is a number of line widths, so a line drawn wider than the stroke (a thumbnail keeps
+		// every line at least a pixel wide) would get a longer taper: the values are scaled back so it keeps the length it has on the page.
+		const taper = widenedTaper(strokeTaper(stroke), stroke.width, width);
+		const nodes = lodNodes(stroke.points, width, stroke.tool, level, stroke.nib, taper);
 		const sink = new SvgPathSink();
+		if (!nodes) {
+			if (!taper) return strokeSvgPath({ ...stroke, width });
+			inkPath(sink, stroke.points, width, stroke.tool, stroke.nib, taper);
+			return sink.d;
+		}
 		addLodNodesPath(sink, nodes);
 		return sink.d;
 	}
