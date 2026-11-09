@@ -9,6 +9,7 @@ import type { Page } from "../model/types";
 import { recordPluginWrite } from "../storage/plugin-written";
 import { modalShell, shellButton, shellNote, shellRow, shellSection, setShellButtonLabel } from "../ui/components/modal-shell";
 import { buildPdfBytes, freePath, type ExportOptions } from "./export";
+import { announceRedaction, withRedaction } from "./export-redact";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { deviceCanShareFiles } from "./share-page";
@@ -87,9 +88,11 @@ export async function runHandIn(host: Pick<HandInHost, "app" | "file" | "pages" 
 			{ name: t("handIn.coverLabel.name"), course: t("handIn.coverLabel.course"), date: t("handIn.coverLabel.date") },
 			{ width: first.width, height: first.height, ...(first.infinite ? { infinite: true } : {}) },
 		);
-		const options = host.options();
+		const base = host.options();
+		// 0.26 (#285): the pages with the redaction boxes applied (the cover is not a notebook page and has none).
+		const { pages: sheets, options } = withRedaction([cover, ...chosen], base);
 		const header = options.header;
-		const { bytes, skipped } = await buildPdfBytes(host.file.basename, [cover, ...chosen], host.media, {
+		const { bytes, skipped } = await buildPdfBytes(host.file.basename, sheets, host.media, {
 			...options,
 			// The cover is not a notebook page: no automatic header on it.
 			...(header ? { header: (p: Page) => (p === cover ? null : header(p)) } : {}),
@@ -99,6 +102,7 @@ export async function runHandIn(host: Pick<HandInHost, "app" | "file" | "pages" 
 		const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 		await host.app.vault.createBinary(path, buffer);
 		showNotice(t("export.done", { path }));
+		announceRedaction(chosen, base);
 		if (skipped > 0) showNotice(t("export.skipped", { n: String(skipped) }), 8000);
 		if (request.share) await offerToShare(path, buffer, host.file.basename);
 		return path;

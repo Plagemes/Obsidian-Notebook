@@ -1,4 +1,5 @@
 import { getStroke, type StrokeOptions } from "perfect-freehand";
+import { opacityOf } from "../model/opacity";
 import { RENDER_INK, type Point, type ShapeDash, type Stroke, type Tool } from "../model/types";
 import { inkPath, SvgPathSink } from "./ink-geometry";
 import { dashRuns } from "./shape-style";
@@ -84,9 +85,13 @@ export function strokeSvgPath(stroke: Pick<Stroke, "width" | "tool" | "render"> 
 	return sink.d;
 }
 
-/** Opacity a committed stroke of `tool` is painted with in the day look (canvas, PNG, thumbnails, SVG and PDF all agree). */
-export function inkAlpha(tool: Tool): number {
-	return tool === "highlighter" ? HIGHLIGHTER_ALPHA : tool === "marker" ? MARKER_ALPHA : 1;
+/**
+ * Opacity a committed stroke of `tool` is painted with in the day look (canvas, PNG, thumbnails, SVG and PDF all agree). `opacity` (format v24,
+ * #358): the stroke's own, which multiplies the pen's alpha; absent or invalid = the look every earlier version drew.
+ */
+export function inkAlpha(tool: Tool, opacity?: number): number {
+	const base = tool === "highlighter" ? HIGHLIGHTER_ALPHA : tool === "marker" ? MARKER_ALPHA : 1;
+	return opacity === undefined ? base : base * opacityOf({ opacity });
 }
 
 /** Blend mode of a committed stroke of `tool` in the day look: only the highlighter multiplies. */

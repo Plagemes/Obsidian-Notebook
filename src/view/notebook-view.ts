@@ -40,6 +40,7 @@ import { commitTrim, isTrimStep, retractCommit, type Committed } from "./commit-
 import { scribbleEraseSteps } from "../ink/scribble";
 import { lineAt, TextLayoutCache, wordAt } from "../ink/words";
 import { InkBuilder } from "../ink/ink-geometry";
+import { effectiveScreenWidth, zoomedWidth } from "../ink/zoom-width";
 import { OneEuroFilter, stabilizationParams } from "../ink/one-euro";
 import { PointerController, type InkSample, type SampleBuffer } from "../ink/pointer-controller";
 import { PressureModel } from "../ink/pressure";
@@ -67,6 +68,7 @@ import {
 } from "../model/history";
 import { pageContentCommand } from "../model/page-content";
 import { checkContent, freezeStroke } from "../model/serialize";
+import { normaliseOpacity } from "../model/opacity";
 import {
 	DEFAULT_META, isLinePen, isNewPen, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
@@ -103,6 +105,11 @@ import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
 import { SharePageModal, type ShareHost } from "./share-page"; // 0.20 (#30)
 import { exportPdf, runExport, type ExportOptions } from "./export";
+import { announceRedactionOff, redactionRefused, withRedaction } from "./export-redact"; // 0.26 redact (#285)
+import { RedactModal } from "./redact-dialog";
+import { loadRedactState, resetRedactStorage, saveRedactState, takeRedactStoreNotice } from "../ui/redact-store";
+import { countBoxes, isArmed, type RedactState } from "../model/redact";
+import { elementKept, headerAfterRedaction, withExcerptChains } from "../ink/redact";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
@@ -219,13 +226,13 @@ import type { PracticeHooks, PracticeProvider, PracticeViewHost } from "./practi
 import { NotebookTabs } from "./notebook-tabs";
 import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
 import { hasBackgrounds, hasPdfPages } from "./reading-logic";
-import { ColourTools, type PageInk } from "./colour-tools";
+import { ColourTools, type PageColourContext, type PageInk } from "./colour-tools";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
 import { pageKindOf } from "../ui/page-kind";
 import { loadNavModes, modeOf, saveNavMode } from "../ui/nav-adapt";
 import { loadMarked, markedOf, saveMarked } from "../ui/nav-marked";
-import { MATCH_TOLERANCE, TOLERANCES } from "../model/colour-meaning";
+import { MATCH_TOLERANCE, matchMeaning, TOLERANCES } from "../model/colour-meaning";
 import { pageKeyAction, shouldTurnPage, takesKey, type KeyScene } from "./page-keys";
 import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { kindTool, strokeNib } from "../ink/pen-kinds";
@@ -785,6 +792,8 @@ export class NotebookView extends FileView {
 			},
 			store: () => this.host.meanings ?? null, docId: () => this.session?.doc?.id ?? null, file: () => this.file, renderer: () => this.renderer,
 			pages: () => { const doc = this.shownDoc(); return doc ? this.renderPagesOf(doc) : []; },
+			// Review fix (P6): the digest by colour writes its pictures and PDF text from the pages with the redaction boxes applied.
+			digestPages: () => { const doc = this.shownDoc(); return doc ? this.redactedPages(this.renderPagesOf(doc)) : null; },
 			media: () => this.media,
 			render: () => {
 				const options = this.exportOptions();
@@ -1068,6 +1077,7 @@ export class NotebookView extends FileView {
 			},
 			notify: (text) => showNotice(text, 2500),
 			inkAt: (x, y) => this.inkAtPoint(x, y),
+			pageContext: () => this.paletteContext(), // 0.26 ctxpalette (#394)
 		});
 		this.lastTool.note(this.tools.tool);
 		this.gestures = new GestureInput(this.stage, {
@@ -1728,6 +1738,7 @@ export class NotebookView extends FileView {
 		this.pressure.mode = settings.pressureMode;
 		if (this.toolbar && this.tools.eraserSize !== settings.eraserSize) this.toolbar.update({ eraserSize: settings.eraserSize });
 		this.pens?.refresh();
+		this.syncZoomHint();
 		this.scrollbar?.update();
 		this.minimap?.update();
 		this.symbols?.sync();
@@ -2463,8 +2474,75 @@ export class NotebookView extends FileView {
 			canPrint: canPrint(),
 			...(initialFormat ? { initialFormat } : {}),
 			pages: () => this.renderPagesOf(doc),
+			// 0.26 (#285): the redaction boxes of this notebook on this device, and the dialog where they are drawn.
+			redact: {
+				state: () => this.redactState(),
+				save: (state) => this.saveRedact(state),
+				edit: (closed) => this.openRedact(Math.min(doc.pages.length - 1, Math.max(0, pageIndex ?? this.currentPageIndex())), closed),
+				doc: doc.id,
+			},
 			run: (request) => void runExport(this.app, file, this.renderPagesOf(doc), request, this.media, this.exportOptions()),
 		}).open();
+	}
+
+	/** 0.26 (#285): what is remembered for this notebook on this device: the redaction boxes and whether exports apply them. */
+	private redactState(): RedactState {
+		return loadRedactState(this.app, this.session?.doc?.id);
+	}
+
+	/**
+	 * Review fix (P4): a set that this device could not store (or read back) is still held for this session and covers every export; the
+	 * reader is told once. Switched-off sets forgotten to make room are told too.
+	 */
+	private saveRedact(state: RedactState): void {
+		const id = this.session?.doc?.id;
+		if (!id) return;
+		const result = saveRedactState(this.app, id, state);
+		if (result.evicted > 0) showNotice(t("redact.evicted", { n: String(result.evicted) }), 8000);
+		if (result.stored) {
+			this.redactSaveWarned = false;
+			return;
+		}
+		if (this.redactSaveWarned) return;
+		this.redactSaveWarned = true;
+		showNotice(t(result.full ? "redact.full" : "redact.saveFailed"), 12000);
+	}
+
+	/** Review fix (P4): the reader has been told that the boxes of this notebook are held for this session only. */
+	private redactSaveWarned = false;
+
+	/** 0.26 (#285): the dialog where boxes are drawn over the parts of the pages that must not leave the notebook (nothing in the notebook changes). */
+	private openRedact(pageIndex: number, closed: () => void): void {
+		const doc = this.session?.doc;
+		if (!doc) return;
+		const options = this.exportOptions();
+		const opened = this.redactState();
+		new RedactModal({
+			app: this.app, media: this.media, options, pageIndex, initial: opened.boxes,
+			pages: () => this.renderPagesOf(doc),
+			// Review fix (R3): boxes drawn again after an unreadable state are applied (the switch was not readable either).
+			commit: (boxes) => {
+				const now = this.redactState();
+				this.saveRedact({ on: now.unreadable === true ? countBoxes(boxes) > 0 : now.on, boxes });
+			},
+			...(opened.unreadable ? { unreadable: true, reset: () => this.resetRedactStorage() } : {}),
+			closed,
+		}).open();
+	}
+
+	/** Review fix (R3): the reader confirmed "Reset redaction storage" in the Redact dialog. */
+	private resetRedactStorage(): void {
+		const ok = resetRedactStorage(this.app);
+		showNotice(t(ok ? "redact.reset.done" : "redact.reset.failed"), 8000);
+	}
+
+	/**
+	 * The page as an export draws it, with the redaction boxes of this notebook applied when they are on (pictures that go into notes use
+	 * it). The excerpts of covered regions of other pages are left out too. Review fix (P4): null, after a notice, when the boxes cannot be
+	 * read: the caller writes nothing.
+	 */
+	private redactedPage(page: Page): Page | null {
+		return this.redactedPages([page])?.[0] ?? null;
 	}
 
 	/** 0.23 (#280): the dialog that exports the written area of the current page, or the selection, as a transparent PNG or SVG. */
@@ -2490,6 +2568,9 @@ export class NotebookView extends FileView {
 		const shown = this.renderPagesOf(doc)[pageIndex];
 		if (!shown) return null;
 		const options = this.exportOptions();
+		// Review fix (P4): boxes that cannot be read refuse the picture (the plan refuses too); switched-off ones give a hint (P10).
+		if (redactionRefused(options)) return null;
+		announceRedactionOff(options);
 		return {
 			scope: scope === "selection" && useSel ? "selection" : "page",
 			host: {
@@ -2570,9 +2651,11 @@ export class NotebookView extends FileView {
 		const page = doc.pages[sel.pageIndex];
 		const shown = this.renderPagesOf(doc)[sel.pageIndex];
 		if (!bounds || !page || !shown) return;
+		const drawn = this.redactedPage(shown);
+		if (!drawn) return;
 		const options = this.exportOptions();
 		void runInsertIntoNote({
-			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media, kind,
+			app: this.app, file, settings: this.host.settings, page: drawn, pageNumber: sel.pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media, kind,
 			exportOptions: options,
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
@@ -2593,14 +2676,18 @@ export class NotebookView extends FileView {
 		if (!bounds || !page || !shown) return;
 		const crop = taskCropRect(bounds, page);
 		const options = this.exportOptions();
-		new MakeTaskModal(this.app, this.host.settings, sel.pageIndex + 1, (request) => void runMakeTask({
-			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop, media: this.media,
-			render: {
-				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
-				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
-			},
-			...(options.prepare ? { prepare: options.prepare } : {}),
-		}, request)).open();
+		new MakeTaskModal(this.app, this.host.settings, sel.pageIndex + 1, (request) => {
+			const drawn = this.redactedPage(shown);
+			if (!drawn) return;
+			void runMakeTask({
+				app: this.app, file, settings: this.host.settings, page: drawn, pageNumber: sel.pageIndex + 1, crop, media: this.media,
+				render: {
+					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				},
+				...(options.prepare ? { prepare: options.prepare } : {}),
+			}, request);
+		}).open();
 	}
 
 	/** 0.19 (#228): the Figures gallery: every picture and figure cut-out of the section, the notebook or some pages (read-only). */
@@ -2626,15 +2713,27 @@ export class NotebookView extends FileView {
 				const page = doc?.pages[index];
 				const shown = doc ? this.renderPagesOf(doc)[index] : undefined;
 				if (!page || !shown) return;
+				const drawn = this.redactedPage(shown);
+				if (!drawn) return;
 				const options = this.exportOptions();
 				void runInsertIntoNote({
-					app: this.app, file, settings: this.host.settings, page: shown, pageNumber: index + 1, media: this.media, kind: "png", exportOptions: options,
+					app: this.app, file, settings: this.host.settings, page: drawn, pageNumber: index + 1, media: this.media, kind: "png", exportOptions: options,
 					crop: taskCropRect({ minX: entry.x, minY: entry.y, maxX: entry.x + entry.width, maxY: entry.y + entry.height }, page),
 					render: {
 						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 						...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
 					},
 				});
+			},
+			copyRefused: (entry) => {
+				const options = this.redactOptions();
+				if (options.redactBlocked) return t("redact.unreadable");
+				if (!options.redact) return null;
+				// Review fix (R1): refused unless the figure is still there on the page as an export draws it (a picture under or near a
+				// box, an excerpt whose source region is covered on any page, at any depth). A page that cannot be found is refused.
+				const doc = this.session?.doc;
+				const shown = doc ? this.renderPagesOf(doc).find((p) => p.id === entry.pageId) : undefined;
+				return shown && elementKept(shown, entry.elementId, options.redact) ? null : t("redact.figureCovered");
 			},
 			openOriginal: (entry) => {
 				const asset = this.shownDoc()?.assets?.[entry.asset];
@@ -2659,14 +2758,18 @@ export class NotebookView extends FileView {
 		if (!bounds || !page || !shown) return;
 		const crop = taskCropRect(bounds, page);
 		const options = this.exportOptions();
-		new LookUpWordModal(this.app, sel.pageIndex + 1, (word) => void runLookUp({
-			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: sel.pageIndex + 1, crop, media: this.media,
-			render: {
-				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
-				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
-			},
-			...(options.prepare ? { prepare: options.prepare } : {}),
-		}, word)).open();
+		new LookUpWordModal(this.app, sel.pageIndex + 1, (word) => {
+			const drawn = this.redactedPage(shown);
+			if (!drawn) return;
+			void runLookUp({
+				app: this.app, file, settings: this.host.settings, page: drawn, pageNumber: sel.pageIndex + 1, crop, media: this.media,
+				render: {
+					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
+					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				},
+				...(options.prepare ? { prepare: options.prepare } : {}),
+			}, word);
+		}).open();
 	}
 
 	/** 0.19 (#213): the read-only sheet of this notebook's "Look up later" entries, each with a jump to its page. */
@@ -2705,9 +2808,12 @@ export class NotebookView extends FileView {
 	openBookIndex(): void {
 		const file = this.file;
 		if (!this.shownDoc() || !file) return;
+		// Review fix (0.26 #285): the index note is written from the pages with the redaction boxes applied (a term marked under a box is
+		// not listed); nothing is offered when the boxes cannot be read.
+		if (!this.redactedPages([])) return;
 		new BookIndexModal({
 			app: this.app, file, docId: this.shownDoc()?.id, prefix: normalizeIndexPrefix(this.host.settings.indexPrefix),
-			pages: () => this.shownDoc()?.pages ?? [], goTo: (index, y) => this.scrollToPage(index, y),
+			pages: () => this.redactedPages(this.shownDoc()?.pages ?? [], true) ?? [], goTo: (index, y) => this.scrollToPage(index, y),
 		}).open();
 	}
 
@@ -2715,9 +2821,11 @@ export class NotebookView extends FileView {
 	openFormulaSheet(): void {
 		const file = this.file;
 		if (!this.shownDoc() || !file) return;
+		// Review fix (P9): an equation under a redaction box is not written into the sheet; nothing is offered when the boxes cannot be read.
+		if (!this.redactedPages([])) return;
 		new FormulaSheetModal({
 			app: this.app, file, docId: this.shownDoc()?.id,
-			pages: () => this.shownDoc()?.pages ?? [], goTo: (index, y) => this.scrollToPage(index, y),
+			pages: () => this.redactedPages(this.shownDoc()?.pages ?? [], true) ?? [], goTo: (index, y) => this.scrollToPage(index, y),
 		}).open();
 	}
 
@@ -2773,7 +2881,11 @@ export class NotebookView extends FileView {
 		const doc = this.session?.doc;
 		const file = this.file;
 		if (!doc || !file) return;
-		const pages = [...this.renderPagesOf(doc)];
+		// 0.26 (#285): the digest's pictures are drawn from the pages with the redaction boxes applied (review fix P5: and the PDF words
+		// a box touches are not quoted, see runHighlightsDigest); nothing is written when the boxes cannot be read.
+		const redacted = this.redactedPages(this.renderPagesOf(doc));
+		if (!redacted) return;
+		const pages = [...redacted];
 		if (digestCounts(pages).regions === 0) {
 			showNotice(t("digest.none"), 6000);
 			return;
@@ -2839,10 +2951,46 @@ export class NotebookView extends FileView {
 			// v9: equations without a cached outline are typeset first; numbers count over the whole notebook.
 			prepare: (pages) => this.math?.prepareExport(pages) ?? Promise.resolve(),
 			...(doc ? { equationNumbers: equationNumbers(doc.pages) } : {}),
-			...(header ? { header } : {}),
+			// Review fix (P11): the header of a page a box covers is left out wherever the page drawn is the redacted copy, including the
+			// pictures that go into notes, which draw it with these options and not through `withRedaction`.
+			...(header ? { header: (page: Page) => headerAfterRedaction(header(page), page) } : {}),
 			// 0.18 (#86): the margin comments as notes in the PDF, when the setting asks for them.
 			...(this.host.settings.commentsInPdf ? { comments: pdfCommentLabels() } : {}),
+			// Review fix (U1): tells the excerpts of this notebook from those of another, also for the boxes of the export dialog.
+			...(doc ? { redactDoc: doc.id } : {}),
+			...this.redactOptions(),
 		};
+	}
+
+	/**
+	 * 0.26 (#285): the redaction part of the export options: the boxes of this notebook when the reader has them switched on (every writer
+	 * applies them to its pages). Review fixes: boxes that cannot be read make every writer refuse (P4); boxes kept switched off give a hint (P10).
+	 */
+	private redactOptions(): Pick<ExportOptions, "redact" | "redactBlocked" | "redactOff"> {
+		const stored = this.redactState();
+		if (stored.unreadable) {
+			// Review fix (R3): the first time in a session, one notice says what happened and what to do (the refusals point there too).
+			// Review fix (T6): it says a copy was kept only when there was something to copy.
+			const problem = takeRedactStoreNotice(this.app);
+			if (problem) showNotice(t(problem === "lost" ? "redact.storeLost" : "redact.storeDamaged"), 15000);
+			return { redactBlocked: true };
+		}
+		// Review fix (R5): the chains of excerpts are found over the whole notebook once, so a writer given one page still knows them.
+		const doc = this.session?.doc;
+		if (isArmed(stored)) return { redact: (doc ? withExcerptChains(doc.pages, stored.boxes, doc.id) : undefined) ?? stored.boxes };
+		const off = countBoxes(stored.boxes);
+		return off > 0 ? { redactOff: off } : {};
+	}
+
+	/**
+	 * The pages with the redaction boxes applied, for the writers that take pages and no export options (formula sheet, book index,
+	 * the colour digest). Null, after a notice, when the boxes cannot be read (nothing may be written then).
+	 */
+	private redactedPages(pages: readonly Page[], quiet = false): readonly Page[] | null {
+		const options = this.redactOptions();
+		if (quiet ? options.redactBlocked === true : redactionRefused(options)) return null;
+		if (!quiet) announceRedactionOff(options);
+		return withRedaction(pages, options).pages;
 	}
 
 	/** v9: equations and graphs of this view (null before the view is open). */
@@ -3054,9 +3202,11 @@ export class NotebookView extends FileView {
 		const page = doc?.pages[pageIndex];
 		const shown = doc ? this.renderPagesOf(doc)[pageIndex] : undefined;
 		if (!doc || !file || !page || !shown) return Promise.resolve(null);
+		const drawn = this.redactedPage(shown);
+		if (!drawn) return Promise.resolve(null);
 		const options = this.exportOptions();
 		return runMakeTask({
-			app: this.app, file, settings: this.host.settings, page: shown, pageNumber: pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media,
+			app: this.app, file, settings: this.host.settings, page: drawn, pageNumber: pageIndex + 1, crop: taskCropRect(bounds, page), media: this.media,
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
@@ -3068,6 +3218,29 @@ export class NotebookView extends FileView {
 	/** Colour picker and eyedroppers of this view (null before the view is open). */
 	get colourTools(): ColourTools | null {
 		return this.colour;
+	}
+
+	/** 0.26 ctxpalette (#394): the page in view and its background for the colour picker's context rows (nothing is rendered for it). */
+	private paletteContext(): PageColourContext | null {
+		const page = this.session?.doc?.pages[this.currentPageIndex()];
+		if (!page) return null;
+		const bg = page.background;
+		const media = this.media;
+		const legend = this.meaningTools?.legend() ?? [];
+		const tolerance = TOLERANCES[this.host.settings.meaningTolerance] ?? MATCH_TOLERANCE;
+		return {
+			usage: page,
+			slideKey: bg ? `${bg.kind}:${bg.asset}:${bg.kind === "pdf" ? bg.page : 0}` : null,
+			slide: () => {
+				if (!bg || !media) return null;
+				if (bg.kind === "image") return media.image(bg.asset);
+				return (media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null;
+			},
+			labelOf: (hex) => {
+				const i = matchMeaning(hex, legend, tolerance);
+				return i >= 0 ? legend[i]?.label : undefined;
+			},
+		};
 	}
 
 	/** The strokes in view of the page under a screen point, with the point in page coordinates (style eyedropper); null off the pages. */
@@ -3602,7 +3775,9 @@ export class NotebookView extends FileView {
 				if (indices.length > 0) await runMovePages(ctx, this.host.settings, indices);
 			},
 			exportPages: async (pages, suffix) => {
-				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media);
+				// 0.26 (#285): no other option is passed here, but the redaction boxes of the notebook still cover what the file would show (and
+				// boxes that cannot be read refuse the file, review fix P4).
+				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media, this.redactOptions());
 			},
 		};
 	}
@@ -4079,6 +4254,8 @@ export class NotebookView extends FileView {
 			strokes: parts.reduce((n, p) => n + p.strokes.length, 0),
 			elements: elements.length,
 			images: elements.filter((e) => e.type === "image").length,
+			// 0.26 (#358): area highlighters take an opacity like ink and pictures.
+			areas: elements.filter((e) => e.type === "area").length,
 			texts: elements.filter((e) => e.type === "text").length,
 			reactions: sel.elements.filter(holdsReaction).length,
 			links: this.penLinks?.linkIn(sel.elements) ? 1 : 0,
@@ -4112,6 +4289,13 @@ export class NotebookView extends FileView {
 	/** 0.25 (#99): switches the highlighter between marking strokes and marking rectangles (area highlighter), and takes the highlighter in hand. */
 	toggleHighlighterArea(): void {
 		if (this.editable()) this.toolbar.update({ tool: "highlighter", highlighterArea: !this.tools.highlighterArea });
+	}
+
+	/** 0.26 (#358): the "Opacity" action: the opacity slider of the selection when there is one, else the one of the pen in hand (its options open). */
+	revealOpacity(): void {
+		if (!this.editable()) return;
+		if (this.selectionActions?.revealOpacity()) return;
+		this.toolbar.revealOpacity();
 	}
 
 	/** The selection's copy, cut, paste, duplicate and white-to-transparent (contextual bar). */
@@ -4739,6 +4923,7 @@ export class NotebookView extends FileView {
 		const before = this.tools;
 		this.tools = state;
 		this.pens?.onToolsChanged(state);
+		this.syncZoomHint();
 		this.radial?.noteTools(state);
 		this.colour?.noteTools(state);
 		this.lastTool.note(state.tool);
@@ -5006,6 +5191,7 @@ export class NotebookView extends FileView {
 		const layout = this.layout;
 		this.viewport = layout ? (this.pageMode?.enabled ? this.pageMode.clamp(v) : clampToPage(v, this.viewSize, layout)) : v;
 		this.renderer?.setViewport(this.viewport, interactive);
+		this.syncZoomHint();
 		this.penLinks?.viewChanged();
 		this.checklist?.viewChanged();
 		this.axes?.viewChanged(interactive);
@@ -5360,14 +5546,17 @@ export class NotebookView extends FileView {
 		const inkTool: Tool = highlighter ? "highlighter" : kindTool(this.tools.penKind);
 		const nib = strokeNib(inkTool, this.tools.nibAngle);
 		const color = highlighter ? this.tools.highlighterColor : this.tools.penColor;
-		const width = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
+		const width = this.inkWidth(highlighter);
+		// 0.26 (#358): the opacity chosen for this pen (absent at full strength, so ordinary ink is stored exactly as before).
+		const opacity = normaliseOpacity(highlighter ? this.tools.highlighterOpacity : this.tools.penOpacity);
+		const own = opacity === undefined ? {} : { opacity };
 		this.ink.reset(inkTool, width, nib);
 		this.ink.add(start[0], start[1], p);
 		this.active = {
 			pageIndex,
 			stroke: this.markers?.invisibleInk && !highlighter
-				? { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), hidden: true }
-				: { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }) },
+				? { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own, hidden: true }
+				: { ...createStroke(color, width, [], inkTool, RENDER_INK), ...(nib === undefined ? {} : { nib }), ...own },
 			wet: true,
 			liveFallback: false,
 			rawX: start[0],
@@ -5384,7 +5573,7 @@ export class NotebookView extends FileView {
 		this.startHold();
 		this.armDwell(sample, eraserButton, !!held, inkTool);
 		// The first point shows as a dot right away.
-		const painted = !!this.renderer?.beginWet(pageIndex, this.ink, inkTool, color) && this.renderer.paintWet();
+		const painted = !!this.renderer?.beginWet(pageIndex, this.ink, inkTool, color, opacity) && this.renderer.paintWet();
 		if (!painted) this.showLiveFallback(this.active);
 		return true;
 	}
@@ -5561,7 +5750,7 @@ export class NotebookView extends FileView {
 		const points = this.ink.toPoints();
 		points.push([active.rawX, active.rawY, active.rawP]);
 		const { tool, color, width } = active.stroke;
-		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, nib: active.stroke.nib, points, predicted: [] });
+		this.renderer.setLive({ pageIndex: active.pageIndex, tool, color, width, nib: active.stroke.nib, ...(active.stroke.opacity === undefined ? {} : { opacity: active.stroke.opacity }), points, predicted: [] });
 	}
 
 	/**
@@ -5885,7 +6074,7 @@ export class NotebookView extends FileView {
 	 * be a rectangle is a stray touch and adds nothing). It goes on top of the page's elements, so it is drawn above the older areas.
 	 */
 	private commitArea(shape: ShapeDrag, page: Page): void {
-		const area = createArea(shape.a, shape.b, page, this.tools.highlighterColor);
+		const area = createArea(shape.a, shape.b, page, this.tools.highlighterColor, this.tools.highlighterOpacity);
 		if (!area) return;
 		if (!this.history.execute(new AddElement(page.id, area, page.elements?.length ?? 0))) return;
 		this.afterHistoryChange();
@@ -5899,10 +6088,30 @@ export class NotebookView extends FileView {
 			this.commitArea(shape, page);
 			return;
 		}
-		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.tools.penWidth, this.shiftDown);
+		const points = shapePoints(this.tools.shapeKind, shape.a, shape.b, this.inkWidth(false), this.shiftDown);
 		if (points.length < 2) return;
-		const stroke = freezeStroke({ ...createStroke(this.tools.penColor, this.tools.penWidth, points, "shape"), ...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine) });
+		const shapeOpacity = normaliseOpacity(this.tools.penOpacity);
+		const stroke = freezeStroke({
+			...createStroke(this.tools.penColor, this.inkWidth(false), points, "shape"),
+			...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine),
+			...(shapeOpacity === undefined ? {} : { opacity: shapeOpacity }),
+		});
 		this.addStrokes(shape.pageIndex, page, [stroke], false);
+	}
+
+	/** 0.26 (#350): the page-unit width a new stroke gets: the chosen width, or (option on) the width that looks the chosen size at this zoom. */
+	private inkWidth(highlighter: boolean): number {
+		const chosen = highlighter ? this.tools.highlighterWidth : this.tools.penWidth;
+		return zoomedWidth(chosen, this.viewport.scale, this.host.settings.penWidthFollowsZoom, highlighter);
+	}
+
+	/** The pen options' width hint: shows the on-screen width and "× zoom" while the option is on. */
+	private syncZoomHint(): void {
+		if (!this.toolbar) return;
+		const on = this.host.settings.penWidthFollowsZoom;
+		const hl = this.tools.tool === "highlighter";
+		const chosen = hl ? this.tools.highlighterWidth : this.tools.penWidth;
+		this.toolbar.setZoomHint(on ? { screen: effectiveScreenWidth(chosen, this.viewport.scale, true, hl), page: this.inkWidth(hl) } : null);
 	}
 
 	private pushLive(): void {
@@ -5910,6 +6119,7 @@ export class NotebookView extends FileView {
 		if (!a) return;
 		this.renderer?.setLive({
 			pageIndex: a.pageIndex, tool: a.stroke.tool, color: a.stroke.color, width: a.stroke.width,
+			...(a.stroke.opacity === undefined ? {} : { opacity: a.stroke.opacity }),
 			points: a.stroke.points, predicted: [],
 		});
 	}
@@ -5920,13 +6130,14 @@ export class NotebookView extends FileView {
 		if (s.area) {
 			// v23 (#99): the rectangle being dragged, with the look it will have (nothing is drawn until the drag is big enough to be one).
 			const page = this.pageAtIndex(s.pageIndex);
-			const area = page ? createArea(s.a, s.b, page, this.tools.highlighterColor) : null;
+			const area = page ? createArea(s.a, s.b, page, this.tools.highlighterColor, this.tools.highlighterOpacity) : null;
 			this.renderer?.setAreaPreview(area ? { pageIndex: s.pageIndex, area } : null);
 			return;
 		}
-		const points = shapePoints(this.tools.shapeKind, s.a, s.b, this.tools.penWidth, this.shiftDown);
+		const points = shapePoints(this.tools.shapeKind, s.a, s.b, this.inkWidth(false), this.shiftDown);
 		this.renderer?.setLive({
-			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.tools.penWidth, points, predicted: [],
+			pageIndex: s.pageIndex, tool: "shape", color: this.tools.penColor, width: this.inkWidth(false), points, predicted: [],
+			...(normaliseOpacity(this.tools.penOpacity) === undefined ? {} : { opacity: normaliseOpacity(this.tools.penOpacity) }),
 			...newShapeStyle(points, this.tools.penColor, this.tools.shapeFill, this.tools.shapeFillColor, this.tools.shapeLine),
 		});
 	}
@@ -6111,7 +6322,7 @@ export class NotebookView extends FileView {
 				if (page) this.selectFromLasso({ pageIndex, points: polygon }, page);
 			},
 			clearSelection: () => this.clearSelection(),
-			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth }),
+			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth, opacity: normaliseOpacity(this.tools.penOpacity) }),
 			execute: (commands) => {
 				this.commitText();
 				for (const c of commands) this.history.execute(c);
@@ -6600,7 +6811,7 @@ export class NotebookView extends FileView {
 			editable: () => this.editable(),
 			doc: () => this.session?.doc ?? null,
 			captureSelection: () => this.captureSelectionClip(),
-			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth }),
+			penStyle: () => ({ color: this.tools.penColor, width: this.tools.penWidth, opacity: normaliseOpacity(this.tools.penOpacity) }),
 			viewTarget: () => this.pasteTarget(),
 			pageAtClient: (x, y) => this.pageAtClient(x, y),
 			execute: (cmd) => {

@@ -229,6 +229,8 @@ const WRITING: SettingSpec[] = [
 		id: "defaultNibAngle", section: "writing", order: 72, name: "settings.defaultNibAngle", desc: "settings.defaultNibAngle.desc", keywords: "nib angle fountain marker calligraphy punta angolo",
 		control: { type: "slider", min: 0, max: 175, step: 5, format: suffix("°") }, parent: "defaultPenKind", visible: (s) => s.defaultPenKind === "fountain" || s.defaultPenKind === "marker",
 	},
+	// 0.26 zoomwidth (#350): pen width relative to zoom
+	{ id: "penWidthFollowsZoom", section: "writing", order: 74, name: "settings.penWidthFollowsZoom", desc: "settings.penWidthFollowsZoom.desc", control: { type: "toggle" }, keywords: "pen width zoom thickness spessore penna ingrandimento" },
 	// 0.25 profiles (#219): Lecture / Study / custom writing profiles (view/writing-profiles.ts); the switcher is on the pen options chip row
 	{ id: "writingProfileOnLecture", section: "writing", order: 73, name: "settings.profileOnLecture", desc: "settings.profileOnLecture.desc", keywords: "profile lecture study fast careful switch pens stabilization paper profilo lezione studio", control: { type: "toggle" } },
 	{ id: "eraseAreaElements", section: "writing", group: ADVANCED, order: 10, name: "settings.eraseAreaElements", desc: "settings.eraseAreaElements.desc", control: { type: "toggle" } },
@@ -495,6 +497,8 @@ const CLIP: SettingSpec[] = [
 		id: "clipImageBackground", section: "integration", order: 44, name: "settings.clipImageBackground", desc: "settings.clipImageBackground.desc", keywords: "copy image clipboard background white transparent copia immagine appunti sfondo bianco trasparente",
 		control: { type: "dropdown", options: options([["white", "settings.clipImageBackground.white"], ["transparent", "settings.clipImageBackground.transparent"]]) },
 	},
+	// 0.26 related (#422)
+	{ id: "relatedCourse", section: "integration", order: 45, name: "settings.relatedCourse", desc: "settings.relatedCourse.desc", control: { type: "toggle" }, keywords: "related pages panel course timetable sidebar collegate pannello corso orario" },
 ];
 
 const INTEGRATION: SettingSpec[] = [

@@ -44,6 +44,8 @@ export function copyStroke(s: Stroke, id: string = s.id, slide?: string | null, 
 	if (s.fill !== undefined) copy.fill = s.fill;
 	if (s.fillTint !== undefined) copy.fillTint = s.fillTint;
 	if (s.dash !== undefined) copy.dash = s.dash;
+	// v24: the opacity.
+	if (s.opacity !== undefined) copy.opacity = s.opacity;
 	return freezeStroke(copy);
 }
 

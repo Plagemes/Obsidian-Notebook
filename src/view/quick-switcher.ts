@@ -25,6 +25,30 @@ export interface QuickNavHost {
 const THUMB_WIDTH = 72;
 const THUMB_CACHE = 80;
 
+/**
+ * Review fix (R7): what a saving refresh writes: the entries a read-only refresh kept and the ones it read now, one per path (the last
+ * read wins), and only those the index in memory still holds as they are (same mtime). An entry of a notebook deleted since, or read
+ * again since, is not written.
+ */
+export function entriesToSave(pending: readonly LibraryEntry[], updated: readonly LibraryEntry[], index: Pick<LibraryIndex, "get">): LibraryEntry[] {
+	const byPath = new Map<string, LibraryEntry>();
+	for (const e of [...pending, ...updated]) byPath.set(e.path, e);
+	return [...byPath.values()].filter((e) => index.get(e.path)?.mtime === e.mtime);
+}
+
+/**
+ * Review fix (R7): the entries merged into the index as it is on disk: an entry older than the one already there (the library view saved a
+ * newer read of the file meanwhile) is left out; a newer thumbnail of the same version of the file is kept.
+ */
+export function mergeIntoIndex(onDisk: Pick<LibraryIndex, "get" | "upsert">, entries: readonly LibraryEntry[]): void {
+	for (const entry of entries) {
+		const have = onDisk.get(entry.path);
+		if (have && have.mtime > entry.mtime) continue;
+		const thumb = have && have.mtime === entry.mtime && have.thumb !== undefined ? { thumb: have.thumb, thumbMtime: have.thumbMtime } : {};
+		onDisk.upsert({ ...entry, ...thumb });
+	}
+}
+
 /** The library index, loaded once from the saved cache and brought up to date a few notebooks at a time. */
 class PageDirectory {
 	index = new LibraryIndex();
@@ -33,12 +57,19 @@ class PageDirectory {
 
 	constructor(private readonly app: App, private readonly host: QuickNavHost) {}
 
-	refresh(progress: (done: number, total: number) => void): Promise<void> {
-		this.running ??= this.run(progress).finally(() => (this.running = null));
+	/** Entries read without being saved (a read-only refresh): the next refresh that may save writes them with its own. */
+	private pending: LibraryEntry[] = [];
+
+	/**
+	 * Brings the index up to date. With `save: false` (the Related pages panel) nothing is written anywhere: what was read stays in memory
+	 * and is saved by the next refresh that saves (the quick switcher), so opening a panel never writes a file.
+	 */
+	refresh(progress: (done: number, total: number) => void, options: { save?: boolean } = {}): Promise<void> {
+		this.running ??= this.run(progress, options.save !== false).finally(() => (this.running = null));
 		return this.running;
 	}
 
-	private async run(progress: (done: number, total: number) => void): Promise<void> {
+	private async run(progress: (done: number, total: number) => void, save: boolean): Promise<void> {
 		if (!this.loaded) {
 			this.loaded = true;
 			try {
@@ -61,7 +92,13 @@ class PageDirectory {
 			progress(++done, todo.length);
 			await new Promise<void>((r) => window.setTimeout(r, 0));
 		}
-		if (updated.length > 0) await this.save(updated);
+		if (!save) {
+			this.pending.push(...updated);
+			return;
+		}
+		const toSave = entriesToSave(this.pending, updated, this.index);
+		this.pending = [];
+		if (toSave.length > 0) await this.save(toSave);
 	}
 
 	/**
@@ -75,12 +112,7 @@ class PageDirectory {
 		try {
 			const onDisk = LibraryIndex.fromJSON(await this.host.loadIndex());
 			if (onDisk.keepsNewerVersion) return;
-			for (const entry of updated) {
-				const have = onDisk.get(entry.path);
-				// The library view may have a newer thumbnail of the same version of the file: keep it.
-				const thumb = have && have.mtime === entry.mtime && have.thumb !== undefined ? { thumb: have.thumb, thumbMtime: have.thumbMtime } : {};
-				onDisk.upsert({ ...entry, ...thumb });
-			}
+			mergeIntoIndex(onDisk, updated);
 			await saveIndex(onDisk.toJSON());
 		} catch (e) {
 			console.error("[notebook] saving the library index failed", e);

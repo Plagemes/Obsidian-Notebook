@@ -195,6 +195,8 @@ export interface BaselineAnalysis {
 	ruled: boolean;
 	/** The words found: their x extent, baseline and number of strokes (for the tests and the harness). */
 	found?: Array<{ minX: number; maxX: number; baseline: number; strokes: number }>;
+	/** 0.26 (tidy): the strokes of every line found (words left to right, lines top to bottom), moved or not: what "Tidy up" moves as a line. */
+	rows?: Stroke[][];
 }
 
 const EMPTY: BaselineAnalysis = { moves: [], words: 0, lines: 0, skipped: 0, size: 0, ruled: false };
@@ -362,7 +364,10 @@ export function analyseBaseline(page: Page, strokes: readonly Stroke[], options:
 		}
 		if (moved) lineCount++;
 	});
-	return { moves, words: units.length, lines: lineCount, skipped, size, ruled: rules !== null, found: units.map((u) => ({ minX: u.minX, maxX: u.maxX, baseline: u.baseline, strokes: u.infos.length })) };
+	return {
+		moves, words: units.length, lines: lineCount, skipped, size, ruled: rules !== null, found: units.map((u) => ({ minX: u.minX, maxX: u.maxX, baseline: u.baseline, strokes: u.infos.length })),
+		rows: lines.map((line) => line.flatMap((u) => u.infos.map((i) => i.stroke))),
+	};
 }
 
 /** Theil–Sen straight line through (cx, baseline) of the words of a line, when the line is clearly sloped (see the file comment); else null. */

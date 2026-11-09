@@ -14,6 +14,7 @@ import { MARKDOWN_DPI, DEFAULT_MARKDOWN_DPI, isMarkdownDpi, type MarkdownDpi } f
 import { backgroundRect } from "../model/margins";
 import type { Page } from "../model/types";
 import { textUnderBands } from "../pdf/region-text";
+import { redactionOf } from "../ink/redact";
 import { boxesOnPage, type PageTextContent, type TextBox, type TextMeasure } from "../pdf/text-items";
 import { backlinksOf } from "../storage/backlinks";
 import { recordPluginWrite } from "../storage/plugin-written";
@@ -170,7 +171,8 @@ export async function runHighlightsDigest(host: DigestHost, request: DigestReque
 				const blob = drawn.blobs[k] ?? null;
 				const image = blob ? await storePicture(app, notePath, digestImageName(stem, pageIndex + 1, k + 1), blob, known) : null;
 				if (blob && !image) skipped++;
-				items.push({ region, pageNumber: pageIndex + 1, image, text: boxes ? textUnderBands(boxes, region.bands, measure) : "" });
+				// 0.26 review fix (P5): no PDF word a redaction box touches is quoted (the page is the redacted copy, which carries its boxes).
+				items.push({ region, pageNumber: pageIndex + 1, image, text: boxes ? textUnderBands(boxes, region.bands, measure, redactionOf(page)) : "" });
 				done++;
 				working.setMessage(t("digest.working", { done: String(done), total: String(regions.length) }));
 			}

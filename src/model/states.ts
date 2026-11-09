@@ -259,6 +259,20 @@ export function liveStateView(page: Page, shown?: ShownStates): Page {
 }
 
 /**
+ * A shallow copy of `page` (what `{ ...page }` gives for a plain page) that also holds what a live view (`liveStateView`) takes from
+ * the page it shows: a spread of a live view copies only its own `strokes` and loses the id, the size, the background and the rest.
+ * Export copies of a page (redaction, clean copy) are made with this. The strokes are the ones the view shows.
+ */
+export function pageCopy(page: Page): Page {
+	const chain: object[] = [];
+	for (let o: object | null = page; o !== null && o !== Object.prototype; o = Object.getPrototypeOf(o) as object | null) chain.unshift(o);
+	const out: Record<string, unknown> = {};
+	const source = page as unknown as Record<string, unknown>;
+	for (const o of chain) for (const key of Object.keys(o)) out[key] = source[key];
+	return out as unknown as Page;
+}
+
+/**
  * The pages as their states show them: `pages` itself when no page has states (the common case costs nothing); a page
  * with states is replaced by its live view (`liveStateView`).
  */

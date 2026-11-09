@@ -244,6 +244,9 @@ class El {
 	}
 	addEventListener(): void {}
 	setCssProps(): void {}
+	// The opacity row of the selection bar (0.26) builds a slider with a value label.
+	setText(): void {}
+	setAttribute(): void {}
 	get childElementCount(): number {
 		return this.children.length;
 	}

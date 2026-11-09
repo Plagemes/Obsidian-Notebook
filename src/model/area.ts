@@ -1,4 +1,5 @@
 import { createId } from "./document";
+import { normaliseOpacity } from "./opacity";
 import type { BBox } from "../ink/hit-test";
 import type { AreaElement, Page, PageElement } from "./types";
 
@@ -50,10 +51,13 @@ export function areaRect(
 
 /** A new area from a drag, or null when the drag is too small. */
 export function createArea(
-	a: readonly [number, number], b: readonly [number, number], page: { width: number; height: number }, color: string,
+	a: readonly [number, number], b: readonly [number, number], page: { width: number; height: number }, color: string, opacity?: number,
 ): AreaElement | null {
 	const r = areaRect(a, b, page);
-	return r ? { id: createId(), type: "area", ...r, color } : null;
+	if (!r) return null;
+	// v24 (#358): the opacity chosen for the highlighter (stored only when it is below full strength).
+	const own = normaliseOpacity(opacity);
+	return { id: createId(), type: "area", ...r, color, ...(own === undefined ? {} : { opacity: own }) };
 }
 
 /** The same area in another colour. */

@@ -111,7 +111,7 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 				ctx.fill(new Path2D(fillPathD(stroke.points)));
 			}
 			ctx.fillStyle = stroke.color;
-			ctx.globalAlpha = inkAlpha(stroke.tool);
+			ctx.globalAlpha = inkAlpha(stroke.tool, stroke.opacity);
 			ctx.globalCompositeOperation = inkBlend(stroke.tool);
 			ctx.fill(path);
 			if (clip) ctx.restore();

@@ -181,7 +181,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 63. **P2** 🧪 Rectangle selection in addition to the lasso.
 64. **P2** 🧪 Select by colour or tool (e.g. all highlighter strokes on this page).
 65. **P2** 🧪 Rotate by 90°, mirror and exact size for the selection.
-66. **P2** Smooth or straighten selected strokes.
+66. **P2** 🧪 Smooth or straighten selected strokes: two actions in the All actions sheet take the jitter out of handwriting or turn almost-straight lines into clean ones, one undo step each.
 67. **P2** Textured pens: graphite pencil and gel.
 68. **P2** 🧪 Style eyedropper: take colour, width and tool from an existing stroke.
 69. **P2** Smart connectors between shapes (diagrams).
@@ -459,7 +459,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
     - Placeholders left during the lecture (#201) are filled by the matching slides.
 236. **P2** Completion walkthrough: a guided tour of the gaps and open questions.
 237. **P2** A classmate's notes side by side with yours for the same lecture (PDF or photos).
-238. **P2** One-step page tidy-up: align, straighten and compact spacing.
+238. **P2** 🧪 One-step page tidy-up: align, straighten and compact spacing. (0.26: *Tidy up* on the selection or the whole page; words onto a baseline, line starts onto a margin, oversized gaps closed; one undo step.)
 239. **P2** 🧪 Clean notes export: the lecture as a PDF without placeholders or markers, ready to share.
 240. **P2** Lecture shared with the study group: at the end, a rule exports the clean notes to a shared (Drive) folder.
 
@@ -528,7 +528,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 284. **P3** Import from other apps (Samsung Notes, Goodnotes, OneNote) where the format allows it (to be researched).
 
 ### Privacy and sharing
-285. **P2** Redaction before export: cover personal data or parts not to share.
+285. **P2** 🧪 Redaction before export: cover personal data or parts not to share. *Redact…* in the export dialog: boxes drawn on a page preview, kept per notebook on the device; ink is cut at a box, text, pictures, equations and notes that touch one are dropped whole, PDF and picture backgrounds are burned in as flat images; applied by PDF, SVG, HTML, PNG, print, Markdown, hand-in, share, written-area and copy-as-image alike (0.26).
 286. **P3** Safe presentation: show only chosen pages; the rest of the notebook stays hidden.
 287. **P2** "What changed": opening a notebook edited on another device shows the differences.
 288. **P3** Duplicate or similar pages: find slides imported twice and duplicated pages.
@@ -651,7 +651,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 
 ### Writing and pen
 349. **P2** Pressure lock: while the pen button is held, the width stays constant (even lines).
-350. **P2** Pen width relative to zoom (option): the same width on screen at any zoom.
+350. **P2** 🧪 Pen width relative to zoom (option): the same width on screen at any zoom.
 351. **P2** Stroke taper settings: tapering at the start and end of a stroke.
 352. **P2** Write big, store small: write margin notes at a comfortable size and they are shrunk into place.
 353. **P2** 🧪 Automatic line break: when writing reaches the right margin, the view jumps to the start of the next line.
@@ -661,7 +661,7 @@ Checked against every earlier item before being added. Priority **P1** next, **P
 
 ### Objects and selection
 357. **P2** 🧪 Layer order: bring to front, send to back.
-358. **P2** Opacity slider for ink, highlighter and images.
+358. **P2** 🧪 Opacity slider for ink, highlighter and images.
 359. **P2** 🧪 Lasso selection across page boundaries.
 360. **P3** Code text box: monospace with syntax colours.
 361. **P2** 🧪 Find and replace in the text boxes of a notebook.
@@ -715,7 +715,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 ### Toolbar and tools
 392. **P1** 🧪 Toolbar by page type: PDF slide → snapping highlighter, PDF search, margins; ruled page → pen and text; grid → ruler and shapes (extends the PDF and image-page contextual bars).
 393. **P1** 🧪 Toolbar that learns per notebook or course: quick slots and favourites ranked by what is used in that notebook (today use counts are per device).
-394. **P2** Context palette: the slide's colours plus the colours already used on the page.
+394. **P2** 🧪 Context palette: the colour picker shows "On this page" (colours already used here, by use) and, on a PDF or picture page, "From the slide" (dominant colours of the background). Waiting for hardware verification.
 395. **P3** Suggested pen width from the paper spacing and the zoom level.
 396. **P3** Likely next tool one tap away, from the sequence of tools you usually use.
 397. **P3** Adaptive radial menu: sectors ordered by frequency of use, plus a wedge of recent actions.
@@ -752,8 +752,8 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 420. **P2** 🧪 Welcome-back banner when reopening: last slide, open questions and gaps. (0.23: a card after a configurable absence with the way back, the open questions and gaps; look-up list and checkboxes not included.)
 
 ### Obsidian
-421. **P2** Dynamic gallery block in notes: pages selected by tag, bookmark or course.
-422. **P2** Related handwritten pages panel for the open Markdown note.
+421. **P2** 🧪 Dynamic gallery block in notes: pages selected by tag, bookmark, course or marker (`notebook-gallery` block and "Insert gallery block").
+422. **P2** 🧪 Related handwritten pages panel for the open Markdown note. (0.26: a right-sidebar panel, command "Related handwritten pages"; ranks pages that link to the note, name its title, aliases, tags or headings, and the first page of the notebooks of its course; thumbnail, notebook, page and reason per row; tap opens, drag places the embed, a button copies the link; read-only.)
 423. ~~**P2** Rich hover preview of page links with actions.~~ — already covered by O5
 424. **P2** 🧪 Command palette ordered by context (commands relevant to the open view first).
 

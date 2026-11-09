@@ -19760,3 +19760,615 @@ body.notebook-style-obsidian {
 .workspace-leaf-content .view-content.notebook-view .notebook-navigator-mark.is-meaning .notebook-navigator-mark-text {
 	max-width: 14em;
 }
+
+/* ===== 0.26 opacity ===== */
+/* Opacity slider (#358): a reset button, the label, the slider and the value in percent. One row for the pen options and for the selection bar. */
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-row {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-3, 10px);
+	padding: 0 4px;
+	min-width: 0;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-row.notebook-hidden {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-reset {
+	flex: 0 0 auto;
+	min-width: 32px;
+	min-height: 32px;
+	color: var(--nb-text-muted);
+	border-radius: var(--nb-radius-pill);
+}
+
+/* In the pen options and the selection bar every button is at least 40 px (44 on a touch screen), like the other buttons there. */
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-row .notebook-opacity-reset {
+	min-width: 40px;
+	min-height: 40px;
+}
+
+@media (pointer: coarse) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-opacity-row .notebook-opacity-reset {
+		min-width: 44px;
+		min-height: 44px;
+	}
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-reset:hover:not(:disabled),
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-reset:focus-visible {
+	color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-label {
+	flex: 0 0 auto;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text-muted);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-slider {
+	flex: 1 1 auto;
+	min-width: 80px;
+	min-height: 32px;
+	accent-color: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-opacity-value {
+	flex: 0 0 auto;
+	min-width: 3.2em;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	font-size: var(--nb-text-m);
+	color: var(--nb-text);
+}
+
+/* In the selection bar the row is a pill of its own, like the shape style row. */
+.workspace-leaf-content .view-content.notebook-view .notebook-selection-styles > .notebook-opacity-row {
+	justify-content: center;
+	max-width: 100%;
+	padding: 4px 12px 4px 6px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface-raised);
+	box-shadow: var(--nb-shadow-2);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-selection-styles > .notebook-opacity-row .notebook-opacity-slider {
+	flex: 0 1 160px;
+	min-width: 96px;
+}
+
+/* ===== 0.26 tidy ===== */
+.nb-ui.notebook-tidy-panel .notebook-tidy-steps {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+
+.nb-ui.notebook-tidy-panel .notebook-tidy-step {
+	display: flex;
+	width: 100%;
+}
+
+.nb-ui.notebook-tidy-panel .notebook-tidy-count {
+	margin-left: auto;
+	padding-left: var(--nb-space-3);
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	text-align: right;
+}
+
+.nb-ui.notebook-tidy-panel .notebook-tidy-keep {
+	display: flex;
+	width: 100%;
+	padding-left: var(--nb-space-5);
+	box-sizing: border-box;
+}
+
+.nb-ui.notebook-tidy-panel .notebook-tidy-keep.is-off {
+	opacity: 0.45;
+}
+
+.nb-ui.notebook-tidy-panel .notebook-tidy-keep-hint {
+	padding-left: var(--nb-space-5);
+	margin-bottom: var(--nb-space-2);
+}
+
+.nb-ui.notebook-tidy-panel .notebook-tidy-summary {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-1);
+	padding: var(--nb-space-3);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-tile);
+}
+
+.nb-ui.notebook-tidy-panel .notebook-tidy-line {
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui.notebook-tidy-panel .notebook-tidy-line.is-quiet {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.notebook-tidy-panel .notebook-tidy-line.is-warn {
+	color: var(--nb-danger);
+}
+
+/* ===== 0.26 redact ===== */
+/* The dialog where boxes are drawn over what must not leave the notebook (view/redact-dialog.ts) and the row that opens it in the export dialog. */
+.nb-ui.notebook-redact-modal .nb-redact-hint { margin-bottom: var(--nb-space-2, 8px); }
+.nb-ui.notebook-redact-modal .nb-redact-bar {
+	display: flex; align-items: center; justify-content: space-between; gap: var(--nb-space-2, 8px); margin-bottom: var(--nb-space-2, 8px);
+}
+.nb-ui.notebook-redact-modal .nb-redact-where { flex: 1 1 auto; min-width: 0; text-align: center; }
+.nb-ui.notebook-redact-modal .nb-redact-page { font-weight: 600; color: var(--nb-text); }
+.nb-ui.notebook-redact-modal .nb-redact-count { font-size: var(--nb-fs-meta); color: var(--nb-text-muted); }
+.nb-ui.notebook-redact-modal .nb-redact-tools { display: flex; flex-wrap: wrap; gap: var(--nb-space-2, 8px); margin-bottom: var(--nb-space-2, 8px); }
+.nb-ui.notebook-redact-modal .nb-redact-tool.is-active { background: var(--nb-accent-bg); border-color: var(--nb-accent); color: var(--nb-accent); }
+.nb-ui.notebook-redact-modal .nb-redact-nav:disabled,
+.nb-ui.notebook-redact-modal .nb-redact-tool:disabled { opacity: 0.4; cursor: default; }
+.nb-ui.notebook-redact-modal .nb-redact-scroll {
+	max-height: min(62vh, 640px); overflow: auto; padding: var(--nb-space-2, 8px);
+	border-radius: var(--nb-radius-tile); background: var(--nb-tile); box-shadow: inset 0 0 0 1px var(--nb-border);
+}
+.nb-ui.notebook-redact-modal .nb-redact-stage {
+	position: relative; margin: 0 auto; background: #fff; border-radius: 2px; box-shadow: 0 0 0 1px var(--nb-border);
+	width: min(100%, calc(58vh * var(--nb-redact-ar, 0.7))); min-width: min(100%, 15rem);
+}
+.nb-ui.notebook-redact-modal .nb-redact-img { display: block; width: 100%; height: auto; user-select: none; pointer-events: none; transition: opacity var(--nb-motion-fast) ease-out; }
+.nb-ui.notebook-redact-modal .nb-redact-stage.is-loading .nb-redact-img { opacity: 0.72; }
+.nb-ui.notebook-redact-modal .nb-redact-layer { position: absolute; inset: 0; cursor: crosshair; touch-action: pan-y pinch-zoom; }
+.nb-ui.notebook-redact-modal .nb-redact-layer.is-finger { touch-action: none; }
+.nb-ui.notebook-redact-modal .nb-redact-box,
+.nb-ui.notebook-redact-modal .nb-redact-band {
+	position: absolute; box-sizing: border-box; pointer-events: none;
+	left: var(--nb-redact-l, 0); top: var(--nb-redact-t, 0); width: var(--nb-redact-w, 0); height: var(--nb-redact-h, 0);
+	border: 1.5px dashed var(--nb-accent);
+}
+.nb-ui.notebook-redact-modal .nb-redact-box { background: rgba(0, 0, 0, 0.28); }
+.nb-ui.notebook-redact-modal .nb-redact-band { background: var(--nb-accent-soft); }
+.nb-ui.notebook-redact-modal .nb-redact-x {
+	position: absolute; top: -13px; right: -13px; width: 28px; height: 28px; min-width: 28px; pointer-events: auto; cursor: pointer;
+}
+.nb-ui.notebook-redact-modal .nb-redact-x svg { width: 14px; height: 14px; }
+.nb-ui .nb-redact-open { white-space: nowrap; }
+
+/* ===== 0.26 zoomwidth ===== */
+.workspace-leaf-content .view-content.notebook-view .notebook-zoom-hint {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin-inline-start: var(--nb-space-2, 8px);
+	font-size: var(--nb-text-s);
+	font-variant-numeric: tabular-nums;
+	color: var(--nb-text-muted, var(--nb-text));
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ===== 0.26 ctxpalette ===== */
+.nb-ui.nb-card .notebook-colour-ctx {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2);
+}
+
+.nb-ui.nb-card .notebook-colour-ctx:empty {
+	display: none;
+}
+
+.nb-ui.nb-card .notebook-colour-ctx-row {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-1);
+	padding-top: var(--nb-space-2);
+	border-top: 1px solid var(--nb-border);
+}
+
+.nb-ui.nb-card .notebook-colour-ctx-title {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+}
+
+.nb-ui.nb-card .notebook-colour-ctx-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.nb-ui.nb-card button.notebook-colour-ctx-chip {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 32px;
+	height: 32px;
+	max-width: 100%;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+	cursor: pointer;
+}
+
+.nb-ui.nb-card button.notebook-colour-ctx-chip.has-label {
+	padding: 0 10px 0 4px;
+	border-color: var(--nb-border);
+	background: var(--nb-surface);
+}
+
+.nb-ui.nb-card button.notebook-colour-ctx-chip:hover {
+	background: var(--nb-hover);
+}
+
+.nb-ui.nb-card button.notebook-colour-ctx-chip:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+.nb-ui.nb-card .notebook-colour-ctx-dot {
+	flex: none;
+	width: 32px;
+	height: 32px;
+	box-sizing: border-box;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: 50%;
+	background-color: var(--c, transparent);
+}
+
+.nb-ui.nb-card .notebook-colour-ctx-chip.has-label .notebook-colour-ctx-dot {
+	width: 22px;
+	height: 22px;
+}
+
+.nb-ui.nb-card .notebook-colour-ctx-label {
+	min-width: 0;
+	max-width: 9em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ===== 0.26 gallery ===== */
+.nb-ui.nb-gallery {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-3);
+	margin: var(--nb-space-2) 0;
+	padding: var(--nb-space-3) var(--nb-space-4);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-panel);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-gallery .nb-gallery-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--nb-space-1) var(--nb-space-3);
+}
+
+.nb-ui.nb-gallery .nb-gallery-title {
+	font-size: var(--nb-fs-row);
+	font-weight: 700;
+}
+
+.nb-ui.nb-gallery .nb-gallery-count,
+.nb-ui.nb-gallery .nb-gallery-query {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-gallery .nb-gallery-query {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-gallery .nb-gallery-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+	gap: var(--nb-space-3);
+}
+
+.nb-ui.nb-gallery .nb-gallery-tile {
+	min-width: 0;
+}
+
+.nb-ui.nb-gallery .nb-gallery-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-2);
+	width: 100%;
+	height: auto;
+	min-height: var(--nb-target, 44px);
+	padding: var(--nb-space-2);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-tile);
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+	transition: border-color var(--nb-motion-fast) var(--nb-ease), background-color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.nb-ui.nb-gallery .nb-gallery-card:hover {
+	border-color: var(--nb-border-strong);
+	background: var(--nb-hover);
+}
+
+.nb-ui.nb-gallery .nb-gallery-card:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui.nb-gallery .nb-gallery-thumb {
+	width: 100%;
+	aspect-ratio: 3 / 4;
+	border-radius: var(--nb-radius-s);
+}
+
+.nb-ui.nb-gallery .nb-gallery-caption {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.nb-ui.nb-gallery .nb-gallery-name {
+	overflow: hidden;
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-gallery .nb-gallery-page {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui.nb-gallery.is-empty {
+	flex-direction: row;
+	align-items: center;
+	border-style: dashed;
+}
+
+.nb-ui.nb-gallery .nb-gallery-empty-icon {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border-radius: var(--nb-radius-icon);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-gallery .nb-gallery-empty {
+	min-width: 0;
+}
+
+.nb-ui.nb-gallery .nb-gallery-empty-title {
+	font-size: var(--nb-fs-row);
+}
+
+.nb-ui.nb-gallery .nb-gallery-empty-detail {
+	overflow: hidden;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-gallery.is-error {
+	border-color: var(--nb-danger);
+}
+
+.nb-ui.nb-gallery .nb-gallery-error {
+	color: var(--nb-danger);
+	font-size: var(--nb-fs-row);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui.nb-gallery-builder .nb-gal-row {
+	align-items: flex-start;
+}
+
+.nb-ui.nb-gallery-builder .nb-gal-row .nb-modal-field {
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+.nb-ui.nb-gallery-builder .nb-gallery-preview {
+	margin: 0;
+	padding: var(--nb-space-3);
+	overflow-x: auto;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-bg);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+}
+
+/* ===== 0.26 related ===== */
+.nb-ui.notebook-related {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 12px 12px 24px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.nb-ui .nb-rel-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.nb-ui .nb-rel-titles {
+	min-width: 0;
+}
+
+.nb-ui .nb-rel-title {
+	margin: 0;
+	font-size: var(--nb-fs-title, 17px);
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.nb-ui .nb-rel-subtitle {
+	margin-top: 2px;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-rel-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nb-ui .nb-rel-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding-right: 6px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+	cursor: grab;
+}
+
+.nb-ui .nb-rel-main {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 12px;
+	min-width: 0;
+	min-height: 64px;
+	margin: 0;
+	padding: 8px 8px 8px 10px;
+	border: 0;
+	border-radius: var(--nb-radius-tile);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.nb-ui .nb-rel-main:hover {
+	background: var(--nb-accent-bg);
+}
+
+.nb-ui .nb-rel-thumb {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 58px;
+	overflow: hidden;
+	border: 1px solid var(--nb-border);
+	border-radius: 6px;
+	background: var(--nb-panel);
+}
+
+.nb-ui .nb-rel-thumb img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	-webkit-user-drag: none;
+}
+
+.nb-ui .nb-rel-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.nb-ui .nb-rel-name {
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-rel-page {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-rel-why {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 6px;
+	margin-top: 2px;
+}
+
+.nb-ui .nb-rel-reason {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-chip);
+	font-weight: 500;
+	line-height: 1.4;
+}
+
+.nb-ui .nb-rel-reason.is-course {
+	background: var(--nb-border);
+	color: var(--nb-text-muted);
+}
+
+.nb-ui .nb-rel-reason-icon {
+	display: inline-flex;
+}
+
+.nb-ui .nb-rel-reason-icon .svg-icon {
+	width: 12px;
+	height: 12px;
+}
+
+.nb-ui .nb-rel-detail {
+	min-width: 0;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	overflow-wrap: anywhere;
+}
+
+.nb-ui .nb-rel-also {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+.nb-ui .nb-rel-copy {
+	flex: 0 0 auto;
+}
+
+.nb-ui.notebook-related .nb-empty-state {
+	padding: 24px 8px;
+}

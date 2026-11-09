@@ -8,9 +8,11 @@ import type { BoxLabel } from "../ink/marker-render";
 import { BitmapCache, MAX_CACHED_BITMAP_BYTES, MAX_CACHED_BITMAPS } from "../ink/bitmap-cache";
 import type { HeaderLayout } from "../ink/page-header";
 import { drawPageRaster } from "../ink/page-raster";
+import { burnPixelRects, burnPlan, type BurnPlan } from "../ink/redact";
 import { elementAssetId } from "../model/excerpts";
 import { renderSize } from "../model/export-markdown";
 import type { Page } from "../model/types";
+import { burnedCanvas, sourceSize } from "./burn";
 import type { NotebookMedia } from "./media";
 
 export interface PageImageOptions {
@@ -32,6 +34,18 @@ export interface PageImage {
 	height: number;
 }
 
+/** `picture` with the boxes of `plan` painted black, as a bitmap of its own (the caller closes it). */
+async function burned(picture: CanvasImageSource, plan: BurnPlan): Promise<ImageBitmap> {
+	const { width, height } = sourceSize(picture);
+	const copy = burnedCanvas(picture, width, height, burnPixelRects(plan.boxes, plan.rect, width, height));
+	try {
+		return await createImageBitmap(copy);
+	} finally {
+		copy.width = 0;
+		copy.height = 0;
+	}
+}
+
 export class PageImageRenderer {
 	/** Decoded pictures by asset (null: it could not be loaded, so it is not tried again); least recently used go first. */
 	private readonly bitmaps = new BitmapCache<ImageBitmap | null>((bmp) => bmp?.close());
@@ -43,9 +57,21 @@ export class PageImageRenderer {
 		const bg = page.background;
 		const media = this.media;
 		if (!bg || !media) return null;
+		// 0.26 (#285): a page with redaction boxes gets its background with the boxes burned in (a copy: the cached picture is not changed).
+		// A background that cannot be burned is left out, never drawn as it is.
+		const burn = burnPlan(page);
 		try {
-			if (bg.kind === "pdf") return await media.pdf.render(bg.asset, bg.page, scale);
-			return await createImageBitmap(new Blob([await media.readAsset(bg.asset)]));
+			if (bg.kind === "pdf") {
+				const picture = await media.pdf.render(bg.asset, bg.page, scale);
+				return burn ? await burned(picture, burn) : picture;
+			}
+			const bitmap = await createImageBitmap(new Blob([await media.readAsset(bg.asset)]));
+			if (!burn) return bitmap;
+			try {
+				return await burned(bitmap, burn);
+			} finally {
+				bitmap.close();
+			}
 		} catch (e) {
 			console.error("[notebook] page image background", e);
 			return null;

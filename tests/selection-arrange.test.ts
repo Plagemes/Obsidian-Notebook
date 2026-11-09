@@ -451,9 +451,9 @@ describe("registry and bar placement (wave 0.10)", () => {
 	const idsOf = (c: UiContext, kind: "all" | "page" = "all") =>
 		buildSheet(c, { kind, usage: {}, now: 0, label: (a) => a.id }).flatMap((s) => s.actions.map((a) => a.id));
 
-	/** The second row of a selection bar with ink: select similar, align, clean up, join, transform, then (0.25) align to baseline, which the 5 slots of a phone bar leave to the sheet. */
+	/** The second row of a selection bar with ink: select similar, align, clean up, join, transform, then (0.25) align to baseline and (0.26) tidy up, which the 5 slots of a phone bar leave to the sheet. */
 	const secondRow = (width: number): string[] => {
-		const full = ["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu", "selection-baseline"];
+		const full = ["selection-similar", "selection-align-menu", "selection-cleanup", "selection-join", "selection-transform-menu", "selection-baseline", "selection-tidy"];
 		return full.slice(0, Math.min(full.length, width < 480 ? 5 : full.length));
 	};
 
@@ -518,6 +518,21 @@ describe("registry and bar placement (wave 0.10)", () => {
 		for (const key of [def.label, String(def.command), "baseline.done", "baseline.doneRuled", "baseline.nothing", "help.alignBaseline"]) {
 			expect(enSrc, key).toContain(`"${key}"`);
 			expect(itSrc, key).toContain(`"${key}"`);
+		}
+	});
+
+	it("offers Smooth and Straighten strokes (0.26) in the sheet for a selection of ink only, not on the bar rows, with command, help and all texts", () => {
+		for (const id of ["selection-smooth", "selection-straighten"]) {
+			expect(idsOf(sel(1)), id).toContain(id);
+			expect(idsOf(sel(0, 2, 0)), id).not.toContain(id);
+			for (const width of [360, 800, 1280]) expect(contextBar(sel(3), width, {}, 0)!.second, `${id} ${width}`).not.toContain(id);
+			const def = ACTIONS.find((a) => a.id === id)!;
+			expect(def.surfaces).toEqual(["sheet"]);
+			const base = id === "selection-smooth" ? "smooth" : "straighten";
+			for (const key of [def.label, String(def.command), `${base}.done`, `${base}.nothing`, `help.${base}`, `histpanel.t.${base}`]) {
+				expect(enSrc, key).toContain(`"${key}"`);
+				expect(itSrc, key).toContain(`"${key}"`);
+			}
 		}
 	});
 

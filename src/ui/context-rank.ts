@@ -2,7 +2,7 @@
 // plugin, so the "All actions" sheet does it: what suits the view in front of the person (a selection, a PDF page, a
 // lecture, the side pane, a presentation, the current tool) comes first, and a short "For this page" section tops the
 // sheet. Pure and deterministic: no 'obsidian' import, unit-tested.
-import { activeContexts, isChecked, isEnabled, isRelevant, type ActionDef, type ToolId, type UiContext } from "./actions";
+import { activeContexts, canOpacity, isChecked, isEnabled, isRelevant, type ActionDef, type ToolId, type UiContext } from "./actions";
 import { usageBoost, type UsageMap } from "./usage";
 
 /** At most this many entries in the "For this page" section. */
@@ -71,6 +71,16 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	if (c.comments?.panel && a.id.startsWith("comment")) boost += 15;
 	// 0.25 (#93): lining the words up fits ink on ruled paper above all (the words go onto the ruled line).
 	if (a.id === "selection-baseline" && hasSelection && c.page?.kind === "ruled") boost += 10;
+	// 0.26 (#358): the opacity fits a selection of ink, pictures or areas best, then the highlighter or a shape in hand (both enough for "For this page");
+	// with the plain pen in hand (always, nearly) it only leans forward in the list, so it does not crowd "For this page".
+	if (a.id === "opacity" && canOpacity(c)) boost += hasSelection ? HERE_MIN_BOOST + 8 : c.tool === "highlighter" || c.tool === "shape" ? HERE_MIN_BOOST : 10;
+	// 0.26 (#238): the tidy-up fits writing: a good many strokes selected, and a ruled page when nothing is (the words go onto the rules).
+	// On grid or plain paper it only leans forward in the page group: an ordinary page with the pen in hand shows no "For this page" section.
+	if (a.id === "selection-tidy" && (c.selection?.strokes ?? 0) >= 12) boost += 8;
+	if (a.id === "page-tidy" && !hasSelection && (c.page?.kind === "ruled" || c.page?.kind === "grid" || c.page?.kind === "plain")) boost += c.page.kind === "ruled" ? 16 : 10;
+	// 0.26 (#66): reshaping handwriting fits a selection of strokes; a long wobbly line (underline, ruler line) on grid or plain paper is likelier meant straight.
+	if (a.id === "selection-smooth" && hasSelection) boost += 4;
+	if (a.id === "selection-straighten" && hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 6;
 	return boost;
 }
 

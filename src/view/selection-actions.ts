@@ -8,9 +8,13 @@ import { captureCrossPageClip, type PagePart } from "../ink/cross-page";
 import { planCleanup, type CleanupPlan } from "../ink/hook-clean";
 import { planJoin, type JoinPlan } from "../ink/stroke-join";
 import { planBaseline, type BaselinePlan } from "../ink/baseline";
+import { analyseTidy, planTidy, type TidyOptions, type TidyPlan } from "../ink/tidy";
+import { loadTidyOptions, TidyModal, type TidySummary } from "./tidy-modal";
+import { planSmooth, SMOOTH_LABEL, STRAIGHTEN_LABEL, type SmoothMode, type SmoothPlan } from "../ink/smooth";
 import { selectableItems } from "../model/groups";
 import type { PageBox } from "../ink/layout";
-import { commonStyle, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
+import { commonOpacity, commonStyle, opacityAbility, planOpacity, planRestyle, restyleAbilities, type StyleGroup } from "../ink/restyle";
+import { createOpacityRow, type OpacityRow } from "./opacity-row";
 import { batchShapeStyle, commonShapeStyle, planShapeStyle, shapeAbilities, type ShapeStyleRequest } from "../ink/shape-restyle";
 import { renderShapeStyle } from "./shape-style-row";
 import { AddAsset, AddElement, AddPage, Batch, ReplaceElement, type Command } from "../model/history";
@@ -88,6 +92,8 @@ const MAX_TRANSPARENT_SIDE = 2048;
 export class SelectionActions {
 	readonly el: HTMLElement;
 	private readonly styleRows: HTMLElement;
+	/** 0.26 (#358): the opacity slider of the current selection (null when the selection has nothing that takes one). */
+	private opacity: OpacityRow | null = null;
 	private busy = false;
 
 	/** `parent`: the contextual bar's extra slot (ui redesign); copy, cut, paste… are actions of the registry there. */
@@ -106,6 +112,7 @@ export class SelectionActions {
 	update(): void {
 		const sel = this.host.selection();
 		this.styleRows.empty();
+		this.opacity = null;
 		if (!sel || this.host.ownedByStates?.(sel)) {
 			this.el.toggleClass("notebook-hidden", true);
 			delete this.el.dataset.kind;
@@ -123,6 +130,8 @@ export class SelectionActions {
 		if (ability.highlighterColor) this.styleRow(sel, "highlighter", true, ability.highlighterWidth);
 		// 0.24 (#37): the fill and the line style of the shapes in the selection.
 		this.shapeRow(all.strokes);
+		// 0.26 (#358): the opacity of the ink, pictures and area highlighters in the selection.
+		this.opacityRow(all.strokes, all.elements);
 		this.el.toggleClass("notebook-hidden", !this.host.editable() || this.styleRows.childElementCount === 0);
 	}
 
@@ -168,6 +177,57 @@ export class SelectionActions {
 			setFillColor: (fillColor) => this.restyleShape({ fillColor }),
 			setLine: (line) => this.restyleShape({ line }),
 		});
+	}
+
+	/** 0.26 (#358): the opacity slider; nothing for a selection without ink, picture or area. A mixed selection shows no value until the slider is moved. */
+	private opacityRow(strokes: readonly Stroke[], elements: readonly PageElement[]): void {
+		if (!opacityAbility(strokes, elements)) return;
+		const row = createOpacityRow(this.styleRows, { commit: (value) => this.applyOpacity(value) }, "notebook-sel-opacity");
+		row.set(commonOpacity(strokes, elements), this.host.editable());
+		this.opacity = row;
+	}
+
+	/** The "Opacity" action: puts the focus on the selection's slider. False when the selection has none. */
+	revealOpacity(): boolean {
+		if (!this.opacity || this.el.hasClass("notebook-hidden")) return false;
+		this.opacity.slider.focus();
+		return true;
+	}
+
+	/**
+	 * Sets the opacity of the selected ink, pictures and area highlighters as ONE undo step (every page of a selection that crossed pages), keeping the
+	 * selection. Groups come whole; a locked element and the elements that take no opacity are left alone; a locked page refuses the step in the history.
+	 */
+	private applyOpacity(opacity: number): void {
+		const sel = this.host.selection();
+		const doc = this.host.doc();
+		if (!sel || !doc || !this.host.editable()) return;
+		const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])];
+		const plans = parts.flatMap((part) => {
+			const page = doc.pages[part.pageIndex];
+			if (!page) return [];
+			// The items as they are on the page now, found by id (an undo or redo since the selection was made replaced the objects).
+			const strokeById = new Map(page.strokes.map((s) => [s.id, s]));
+			const elementById = new Map((page.elements ?? []).map((e) => [e.id, e]));
+			const picked = selectableItems(page, {
+				strokes: part.strokes.flatMap((s) => strokeById.get(s.id) ?? []),
+				elements: part.elements.flatMap((e) => elementById.get(e.id) ?? []),
+			});
+			const plan = planOpacity(page, picked.strokes, picked.elements, opacity);
+			return plan ? [{ part, plan }] : [];
+		});
+		if (plans.length === 0) return;
+		const command = plans.length === 1 ? plans[0]!.plan.command : new Batch("Opacity", plans.map((p) => p.plan.command));
+		if (!this.host.execute(command)) return;
+		const next = (part: PagePart): PagePart => {
+			const found = plans.find((p) => p.part === part);
+			if (!found) return part;
+			const strokes = new Map(found.plan.strokes.map((s) => [s.id, s]));
+			const elements = new Map(found.plan.elements.map((e) => [e.id, e]));
+			return { pageIndex: part.pageIndex, strokes: part.strokes.map((s) => strokes.get(s.id) ?? s), elements: part.elements.map((e) => elements.get(e.id) ?? e) };
+		};
+		const [first, ...rest] = parts.map(next) as [PagePart, ...PagePart[]];
+		this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
 	}
 
 	/** Applies a shape style to the selected shapes as ONE undo step (every page of a selection that crossed pages), keeping the selection. */
@@ -358,6 +418,113 @@ export class SelectionActions {
 		this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
 		const words = plans.reduce((n, p) => n + p.plan.words, 0);
 		showNotice(t(plans.some((p) => p.plan.ruled) ? "baseline.doneRuled" : "baseline.done", { n: String(words) }));
+	}
+
+	// --- tidy up (0.26, #238) ---
+
+	/**
+	 * "Tidy up": a sheet with the three steps (words onto a baseline, line starts onto a margin, oversized gaps closed) and what each
+	 * would change, then ONE undo step (`planTidy`, rigid moves only). Works on the selection, or on the page `pageIndex` (the page in
+	 * view when nothing is selected) as a whole. Locked elements, groups that are not whole, hidden ink and everything that is not
+	 * handwriting stay where they are; a locked page refuses the step. The selection stays on the moved strokes.
+	 */
+	tidy(pageIndex?: number): void {
+		const doc = this.host.doc();
+		if (!doc || !this.host.editable()) return;
+		const sel = this.host.selection();
+		const selected = sel && pageIndex === undefined ? [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])] : [];
+		const wholePage = selected.every((p) => p.strokes.length + p.elements.length === 0);
+		const index = pageIndex ?? this.host.pasteTarget()?.pageIndex ?? 0;
+		const parts: PagePart[] = wholePage ? [{ pageIndex: index, strokes: [...(doc.pages[index]?.strokes ?? [])], elements: [...(doc.pages[index]?.elements ?? [])] }] : selected;
+		const requests = (): Array<{ part: PagePart; page: Page; strokes: Stroke[]; elements: PageElement[] }> => parts.flatMap((part) => {
+			const page = doc.pages[part.pageIndex];
+			if (!page) return [];
+			const onPage = new Set(page.strokes);
+			return [{ part, page, strokes: part.strokes.filter((s) => onPage.has(s)), elements: part.elements.filter((e) => page.elements?.includes(e)) }];
+		});
+		const preview = (options: TidyOptions): TidySummary => {
+			const sums: TidySummary = { words: 0, aligned: 0, tightened: 0, saved: 0, locked: true };
+			for (const r of requests()) {
+				const a = analyseTidy(r.page, { strokes: r.strokes, elements: r.elements }, options);
+				sums.words += a.words;
+				sums.aligned += a.aligned;
+				sums.tightened += a.tightened;
+				sums.saved = Math.max(sums.saved, a.saved);
+				if (!a.locked) sums.locked = false;
+			}
+			return sums;
+		};
+		const count = requests().reduce((n, r) => n + r.strokes.length, 0);
+		new TidyModal(this.host.app, {
+			kind: wholePage ? "page" : "selection", strokes: count, options: loadTidyOptions(this.host.app), preview,
+			onApply: (options) => this.runTidy(doc, requests(), options, !wholePage),
+		}).open();
+	}
+
+	private runTidy(doc: NotebookDocument, requests: Array<{ part: PagePart; page: Page; strokes: Stroke[]; elements: PageElement[] }>, options: TidyOptions, reselect: boolean): void {
+		if (!this.host.stillHere(doc)) return;
+		const plans: Array<{ part: PagePart; plan: TidyPlan }> = [];
+		for (const r of requests) {
+			const plan = planTidy(r.page, { strokes: r.strokes, elements: r.elements }, options);
+			if (plan) plans.push({ part: r.part, plan });
+		}
+		if (plans.length === 0) {
+			showNotice(t("tidy.none"));
+			return;
+		}
+		const cmd = plans.length === 1 ? plans[0]!.plan.command : new Batch("Tidy up page", plans.map((p) => p.plan.command));
+		if (!this.host.execute(cmd)) return;
+		if (reselect) {
+			const next = (part: PagePart): PagePart => {
+				const found = plans.find((p) => p.part === part);
+				return found ? { pageIndex: part.pageIndex, strokes: part.strokes.map((s) => found.plan.changes.get(s) ?? s), elements: part.elements } : part;
+			};
+			const [first, ...rest] = requests.map((r) => next(r.part)) as [PagePart, ...PagePart[]];
+			this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
+		}
+		const sum = (pick: (a: TidyPlan["analysis"]) => number): number => plans.reduce((n, p) => n + pick(p.plan.analysis), 0);
+		showNotice(t("tidy.done", { words: String(sum((a) => a.words)), lines: String(sum((a) => a.aligned)), gaps: String(sum((a) => a.tightened)) }));
+	}
+
+	// --- smooth / straighten handwriting (0.26, #66) ---
+
+	/**
+	 * Smooths the jitter out of the handwriting of the selection, or straightens its almost-straight lines, as ONE undo step; the strokes only
+	 * change their points (`planSmooth`: ends, point count and pressure stay). Groups come whole (`selectableItems`, and only a wholly selected
+	 * group without a locked element is touched), the ink a collapsed note keeps hidden is never touched, and a locked page refuses the step in
+	 * the history, which says so. The page times are not touched. The selection stays on the reshaped strokes.
+	 */
+	reshape(mode: SmoothMode): void {
+		const sel = this.host.selection();
+		const doc = this.host.doc();
+		if (!sel || !doc || !this.host.editable()) return;
+		const parts: PagePart[] = [{ pageIndex: sel.pageIndex, strokes: sel.strokes, elements: sel.elements }, ...(sel.others ?? [])];
+		const plans: Array<{ part: PagePart; plan: SmoothPlan }> = [];
+		for (const part of parts) {
+			const page = doc.pages[part.pageIndex];
+			if (!page) continue;
+			const onPage = new Set(page.strokes);
+			const elements = part.elements.filter((e) => page.elements?.includes(e));
+			const picked = selectableItems(page, { strokes: part.strokes.filter((s) => onPage.has(s)), elements });
+			const plan = planSmooth(page, picked.strokes, picked.elements, mode);
+			if (plan) plans.push({ part, plan });
+		}
+		const base = mode === "smooth" ? "smooth" : "straighten";
+		if (plans.length === 0) {
+			showNotice(t(`${base}.nothing`));
+			return;
+		}
+		const label = mode === "smooth" ? SMOOTH_LABEL : STRAIGHTEN_LABEL;
+		const cmd = plans.length === 1 ? plans[0]!.plan.command : new Batch(label, plans.map((p) => p.plan.command));
+		if (!this.host.execute(cmd)) return;
+		const next = (part: PagePart): PagePart => {
+			const found = plans.find((p) => p.part === part);
+			if (!found) return part;
+			return { pageIndex: part.pageIndex, strokes: part.strokes.map((s) => found.plan.changes.get(s) ?? s), elements: part.elements };
+		};
+		const [first, ...rest] = parts.map(next) as [PagePart, ...PagePart[]];
+		this.host.select(first.pageIndex, first.strokes, first.elements, rest.length > 0 ? rest : undefined);
+		showNotice(t(`${base}.done`, { n: String(plans.reduce((n, p) => n + p.plan.count, 0)) }));
 	}
 
 	// --- copy, cut, duplicate ---

@@ -2,6 +2,8 @@ import { setIcon } from "obsidian";
 import { t } from "../i18n";
 import { hexToHsv, hsvToHex, normaliseHex, type Hsv } from "../ink/colour";
 import { shellCard } from "../ui/components/modal-shell";
+import { attachLongPressHelp, resolveHelp } from "../ui/long-press-help";
+import type { ContextPalette, ContextSwatch } from "../ink/context-palette";
 
 export interface ColourPickerHandlers {
 	/** The colour changed. `commit`: the choice is final (finger lifted, hex entered, recent colour tapped): remember it. */
@@ -30,6 +32,8 @@ export class ColourPicker {
 	private readonly hexInput: HTMLInputElement;
 	private readonly preview: HTMLElement;
 	private readonly recentBox: HTMLElement;
+	private readonly contextBox: HTMLElement;
+	private readonly stopHelp: () => void;
 
 	constructor(parent: HTMLElement, initial: string, recent: readonly string[], private readonly handlers: ColourPickerHandlers) {
 		this.el = parent.createDiv({ cls: "notebook-colour-picker", attr: { role: "dialog", "aria-label": t("colour.picker.title") } });
@@ -99,6 +103,9 @@ export class ColourPicker {
 
 		this.recentBox = this.el.createDiv({ cls: "notebook-colour-recent", attr: { role: "group", "aria-label": t("colour.picker.recent") } });
 		this.setRecent(recent);
+		// 0.26 ctxpalette (#394): the colours of this page and of its slide, below the recent ones (empty until `setContext`).
+		this.contextBox = this.el.createDiv({ cls: "notebook-colour-ctx" });
+		this.stopHelp = attachLongPressHelp(this.el, (b) => (b.dataset.help ? resolveHelp(b) : null));
 		this.setFromHex(initial, false, true);
 	}
 
@@ -131,11 +138,41 @@ export class ColourPicker {
 		}
 	}
 
+	/** 0.26 (#394): shows the "On this page" and "From the slide" rows; a row with no colour is not shown at all. */
+	setContext(palette: ContextPalette): void {
+		this.contextBox.empty();
+		const rows: Array<[string, ContextSwatch[], "help.colourCtxPage" | "help.colourCtxSlide"]> = [
+			[t("colour.ctx.page"), palette.onPage, "help.colourCtxPage"],
+			[t("colour.ctx.slide"), palette.slide, "help.colourCtxSlide"],
+		];
+		for (const [title, swatches, help] of rows) {
+			if (swatches.length === 0) continue;
+			const row = this.contextBox.createDiv({ cls: "notebook-colour-ctx-row", attr: { role: "group", "aria-label": title } });
+			row.createDiv({ cls: "notebook-colour-ctx-title", text: title });
+			const list = row.createDiv({ cls: "notebook-colour-ctx-list" });
+			for (const s of swatches) {
+				const name = s.label ? t("colour.ctx.swatch", { colour: s.label, hex: s.hex }) : s.hex;
+				const b = list.createEl("button", {
+					cls: "notebook-colour-ctx-chip", attr: { type: "button", "aria-label": name, title: name, "data-help": help },
+				});
+				b.toggleClass("has-label", !!s.label);
+				b.createSpan({ cls: "notebook-colour-ctx-dot" }).setCssProps({ "--c": s.hex });
+				if (s.label) b.createSpan({ cls: "notebook-colour-ctx-label", text: s.label });
+				b.addEventListener("click", (e) => {
+					e.preventDefault();
+					// As a tap on a swatch of the toolbar: the pen takes the colour; it is not added to the recent ones (the rows would jump).
+					this.setFromHex(s.hex, false);
+				});
+			}
+		}
+	}
+
 	focus(): void {
 		this.hexInput.focus({ preventScroll: true });
 	}
 
 	destroy(): void {
+		this.stopHelp();
 		this.el.remove();
 	}
 

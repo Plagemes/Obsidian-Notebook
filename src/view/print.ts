@@ -7,6 +7,7 @@ import { t } from "../i18n";
 import { MAX_PRINT_PAGES, planPrint } from "../model/export-pages";
 import type { Page } from "../model/types";
 import type { ExportOptions } from "./export";
+import { announceRedaction, redactionRefused, withRedaction } from "./export-redact";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { PageImageRenderer } from "./page-images";
@@ -28,7 +29,10 @@ let printing = false;
  * Builds the print container for `pages` (0-based indices of `all`), prints it and removes it. Returns true when the print
  * dialog was opened. The container is removed when the dialog closes (`afterprint`), and anyway when `print()` returns.
  */
-export async function printPages(all: readonly Page[], indices: readonly number[], media: NotebookMedia | null, options: ExportOptions = {}): Promise<boolean> {
+export async function printPages(everyPage: readonly Page[], indices: readonly number[], media: NotebookMedia | null, base: ExportOptions = {}): Promise<boolean> {
+	if (redactionRefused(base)) return false; // review fix (P4)
+	// 0.26 (#285): the pages with the redaction boxes applied; what is printed is what the boxes leave.
+	const { pages: all, options } = withRedaction(everyPage, base);
 	if (!canPrint()) {
 		showNotice(t("export.print.unavailable"), 8000);
 		return false;
@@ -82,6 +86,7 @@ export async function printPages(all: readonly Page[], indices: readonly number[
 		renderer.close();
 		working.hide();
 		if (skipped > 0) showNotice(t("export.skipped", { n: String(skipped) }), 8000);
+		announceRedaction(chosen.map((i) => everyPage[i]!), base);
 		doc.body.addClass("notebook-printing");
 		// print() blocks until the dialog is closed on a desktop; if it returns earlier the container must stay until
 		// `afterprint`, with a long timer as the last resort so it can never stay in the page.

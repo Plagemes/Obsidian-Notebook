@@ -60,6 +60,16 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"history-panel": "help.historyPanel",
 	// 0.25
 	"selection-baseline": "help.alignBaseline",
+	// 0.26 opacity (#358)
+	"opacity": "help.opacity",
+	// 0.26 tidy
+	"selection-tidy": "help.tidy",
+	"page-tidy": "help.tidy",
+	// 0.26 smooth (#66)
+	"selection-smooth": "help.smooth",
+	"selection-straighten": "help.straighten",
+	// 0.26 related (#422)
+	"related-pages": "help.relatedPanel",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

@@ -14,13 +14,14 @@ import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
 import { PAPER_COLORS, paperPattern, type PaperLineKind } from "./paper";
 import { inkPath, type PathSink } from "./ink-geometry";
 import { BOX_COLORS, badgeColor, badgeFace, badgeIsSquare, boxLabelWidth, checkPoints, defaultBoxLabel, glyphSize, starPoints, type BoxLabel } from "./marker-render";
-import { HIGHLIGHTER_ALPHA, MARKER_ALPHA, strokeOutline } from "./stroke-shape";
+import { HIGHLIGHTER_ALPHA, inkAlpha, MARKER_ALPHA, strokeOutline } from "./stroke-shape";
+import { opacityOf } from "../model/opacity";
 import { layerFlags, type ExportLayers, type LayerFlags } from "./export-layers";
 import { HEADER_COLOR_DAY, type HeaderLayout } from "./page-header";
 import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "../pdf/helvetica";
 import { LINK_COLOR, lineRuns, linksInCodePoints, shownText } from "./link-text";
 import { tileLabel, type SplitPlan } from "./export-tiles";
-import { dashRuns, FILL_TINT_ALPHA, isFilled } from "./shape-style";
+import { dashRuns, fillAlpha, FILL_TINT_ALPHA, isFilled } from "./shape-style";
 
 /**
  * An image placed on a page, in page coordinates (pt, origin top-left, y down). `jpeg` is a
@@ -37,6 +38,8 @@ export interface PdfPlacedImage {
 	width: number;
 	height: number;
 	rotation?: number;
+	/** Format v24 (#358): how strongly the picture is drawn (an image element's opacity; absent = opaque). */
+	opacity?: number;
 	/**
 	 * "background" draws under the paper pattern (a rasterised PDF page); "element" (default) draws
 	 * above it, in the order returned.
@@ -184,6 +187,8 @@ function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void,
 		if (res.tint) states.push(`/GS4 << /Type /ExtGState /ca ${FILL_TINT_ALPHA} >>`);
 		// v9: shaded areas of graphs.
 		if (res.area) states.push(`/GS2 << /Type /ExtGState /ca ${GRAPH_STYLE.areaAlpha} >>`);
+		// Format v24 (#358): one state per distinct opacity an item of the page has (stroke, shape fill, area, picture).
+		for (const [dict, name] of res.states ?? []) states.push(`/${name} ${dict}`);
 		if (states.length > 0) parts.push(`/ExtGState << ${states.join(" ")} >>`);
 		if (res.xobjects.size > 0) {
 			parts.push(`/XObject << ${[...res.xobjects].map(([name, n]) => `/${name} ${n} 0 R`).join(" ")} >>`);
@@ -361,6 +366,34 @@ interface PageResources {
 	tint?: boolean;
 	/** v9: a graph shades an area (ExtGState GS2). */
 	area?: boolean;
+	/** Format v24 (#358): the graphics states of items with an opacity: the dictionary, and the name it is registered under. */
+	states?: Map<string, string>;
+}
+
+/** Format v24 (#358): the name of the graphics state with constant alpha `ca` (multiplied over the page when `multiply`), registered on the page. */
+function alphaState(res: PageResources, ca: number, multiply: boolean): string {
+	const states = (res.states ??= new Map<string, string>());
+	const dict = `<< /Type /ExtGState /ca ${Math.round(ca * 10000) / 10000}${multiply ? " /BM /Multiply" : ""} >>`;
+	let name = states.get(dict);
+	if (name === undefined) {
+		name = `GO${states.size + 1}`;
+		states.set(dict, name);
+	}
+	return name;
+}
+
+/** The graphics state a stroke is painted under (its pen's translucency times its opacity), or null when it is painted opaque. Marks the page's fixed states used. */
+function inkState(stroke: Pick<Stroke, "tool" | "opacity">, res: PageResources): string | null {
+	if (stroke.opacity !== undefined && opacityOf(stroke) < 1) return alphaState(res, inkAlpha(stroke.tool, stroke.opacity), stroke.tool === "highlighter");
+	if (stroke.tool === "highlighter") {
+		res.highlighter = true;
+		return "GS1";
+	}
+	if (stroke.tool === "marker") {
+		res.marker = true;
+		return "GS3";
+	}
+	return null;
 }
 
 interface ElementOptions {
@@ -389,7 +422,8 @@ function pageContent(
 		const n = imageObj(img);
 		const name = `Im${n}`;
 		res.xobjects.set(name, n);
-		ops.push(imageOps(img, name));
+		// Format v24 (#358): a picture with an opacity is painted under its own constant alpha.
+		ops.push(imageOps(img, name, img.opacity !== undefined && opacityOf(img) < 1 ? alphaState(res, opacityOf(img), false) : undefined));
 	};
 	if (layers.background) for (const img of images) if (img.layer === "background") draw(img);
 	if (layers.background && withPaper) ops.push(...paperOps(page));
@@ -418,8 +452,9 @@ function pageContent(
 	// v23 area highlighter: after the sticky notes, before the equations, with the look of the highlighter (GS1: its opacity, multiplied).
 	for (const el of page.elements ?? []) {
 		if (el.type !== "area") continue;
-		res.highlighter = true;
-		ops.push(`q\n/GS1 gs\n${rgb(el.color)} rg\n${num(el.x)} ${num(el.y)} ${num(el.width)} ${num(el.height)} re f\nQ`);
+		// Format v24 (#358): an opacity of the area multiplies the highlighter's look (GS1 stays the state of an area without one).
+		const gs = el.opacity !== undefined && opacityOf(el) < 1 ? alphaState(res, inkAlpha("highlighter", el.opacity), true) : ((res.highlighter = true), "GS1");
+		ops.push(`q\n/${gs} gs\n${rgb(el.color)} rg\n${num(el.x)} ${num(el.y)} ${num(el.width)} ${num(el.height)} re f\nQ`);
 	}
 	const noteInk = hiddenStickyInk(page.elements);
 	for (const el of page.elements ?? []) {
@@ -437,11 +472,8 @@ function pageContent(
 	const clips = graphClips(page.elements);
 	for (const stroke of page.strokes) {
 		if ((stroke.hidden && !v8.hidden) || noteInk?.has(stroke.id)) continue;
-		const op = strokeOps(stroke);
+		const op = strokeOps(stroke, res);
 		if (op) {
-			if (stroke.tool === "highlighter") res.highlighter = true;
-			if (stroke.tool === "marker") res.marker = true;
-			if (stroke.fillTint && isFilled(stroke)) res.tint = true;
 			// v9: ink bound to a graph is clipped to its frame, as on screen.
 			const clip = strokeClip(stroke, clips);
 			ops.push(clip ? `q ${num(clip.x)} ${num(clip.y)} ${num(clip.width)} ${num(clip.height)} re W n\n${op}\nQ` : op);
@@ -717,14 +749,16 @@ function boxOps(b: BoxElement, label: string): string {
  * stream is in y-down page coordinates, where a PDF image (unit square, y up) would come out
  * upside down, so the matrix flips it with a negative height.
  */
-function imageOps(img: PdfPlacedImage, name: string): string {
+function imageOps(img: PdfPlacedImage, name: string, gs?: string): string {
 	const { x, y, width: w, height: h } = img;
 	const rot = img.rotation ?? 0;
-	if (!rot) return `q ${num(w)} 0 0 ${num(-h)} ${num(x)} ${num(y + h)} cm /${name} Do Q`;
+	// Format v24 (#358): `gs` is the graphics state that makes the picture translucent.
+	const state = gs ? ` /${gs} gs` : "";
+	if (!rot) return `q${state} ${num(w)} 0 0 ${num(-h)} ${num(x)} ${num(y + h)} cm /${name} Do Q`;
 	const cos = Math.cos(rot), sin = Math.sin(rot);
 	const cx = x + w / 2, cy = y + h / 2;
 	return [
-		"q",
+		`q${state}`,
 		`1 0 0 1 ${num(cx)} ${num(cy)} cm`,
 		`${fix(cos, 6)} ${fix(sin, 6)} ${fix(-sin, 6)} ${fix(cos, 6)} 0 0 cm`,
 		`${num(w)} 0 0 ${num(-h)} ${num(-w / 2)} ${num(h / 2)} cm`,
@@ -835,29 +869,33 @@ class PdfPathSink implements PathSink {
 }
 
 /** The PDF operators of a stroke: the fill of a closed shape (v22, #37), then its line (a dashed or dotted line is its runs, each an outline). */
-function strokeOps(stroke: Stroke): string {
+function strokeOps(stroke: Stroke, res: PageResources): string {
 	const line = stroke.dash !== undefined && stroke.tool === "shape"
-		? dashRuns(stroke.points, stroke.dash, stroke.width).map((run) => lineOps({ ...stroke, points: run, dash: undefined })).filter((op) => op !== "").join("\n")
-		: lineOps(stroke);
+		? dashRuns(stroke.points, stroke.dash, stroke.width).map((run) => lineOps({ ...stroke, points: run, dash: undefined }, res)).filter((op) => op !== "").join("\n")
+		: lineOps(stroke, res);
 	if (!line || !isFilled(stroke)) return line;
 	const poly = polyOps(stroke.points.map((p): [number, number] => [p[0], p[1]]));
-	const fill = stroke.fillTint ? `q\n/GS4 gs\n${rgb(stroke.fill!)} rg\n${poly} f\nQ` : `${rgb(stroke.fill!)} rg\n${poly} f`;
+	// Format v24 (#358): the opacity of the stroke scales its fill too, as on screen.
+	const own = stroke.opacity !== undefined && opacityOf(stroke) < 1;
+	let fill: string;
+	if (own) fill = `q\n/${alphaState(res, fillAlpha(stroke), false)} gs\n${rgb(stroke.fill!)} rg\n${poly} f\nQ`;
+	else if (stroke.fillTint) {
+		res.tint = true;
+		fill = `q\n/GS4 gs\n${rgb(stroke.fill!)} rg\n${poly} f\nQ`;
+	} else fill = `${rgb(stroke.fill!)} rg\n${poly} f`;
 	return `${fill}\n${line}`;
 }
 
-function lineOps(stroke: Stroke): string {
+function lineOps(stroke: Stroke, res: PageResources): string {
 	if (stroke.render === RENDER_INK) {
 		const sink = new PdfPathSink();
 		inkPath(sink, stroke.points, stroke.width, stroke.tool, stroke.nib);
 		if (sink.parts.length === 0) return "";
 		const body = `${rgb(stroke.color)} rg
 ${sink.parts.join(" ")} f`;
-		if (stroke.tool === "marker") return `q
-/GS3 gs
-${body}
-Q`;
-		return stroke.tool === "highlighter" ? `q
-/GS1 gs
+		const gs = inkState(stroke, res);
+		return gs ? `q
+/${gs} gs
 ${body}
 Q` : body;
 	}
@@ -882,7 +920,9 @@ Q` : body;
 	}
 	parts.push("h f");
 	const body = `${rgb(stroke.color)} rg\n${parts.join(" ")}`;
-	return stroke.tool === "highlighter" ? `q\n/GS1 gs\n${body}\nQ` : body;
+	// The old geometry (render 1) belongs to the pen, the highlighter and the shape, never to the marker: the same states as above.
+	const gs = inkState(stroke, res);
+	return gs ? `q\n/${gs} gs\n${body}\nQ` : body;
 }
 
 /** v17 checkbox: its outline and, when ticked, its tick, stroked in the checkbox's colour (the shapes are the canvas's, ink/checkbox-render.ts). */

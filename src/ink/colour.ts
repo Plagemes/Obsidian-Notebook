@@ -1,6 +1,7 @@
 // Free colour picker and style eyedropper logic (roadmap 7 and 68). Pure: no DOM, no 'obsidian'.
 // Colours are "#rrggbb" strings everywhere (the document format and the settings store nothing else).
 import { isNewPen, NIB_DEFAULT, type Stroke } from "../model/types";
+import { opacityOf } from "../model/opacity";
 import type { PenKind } from "./pen-kinds";
 import { pointSegmentDistance } from "./hit-test";
 import { inkReach } from "./ink-geometry";
@@ -153,19 +154,21 @@ export function pickStrokeAt(strokes: readonly Stroke[], x: number, y: number, t
 
 /** What taking a stroke's style changes in the toolbar. A shape stroke is taken as a pen stroke (its kind is not stored). */
 export type StrokeStyle =
-	| { tool: "pen"; penColor: string; penWidth: number; /** 0.22 (#35): taking a stroke of a new pen selects that pen and its nib angle. */ penKind?: PenKind; nibAngle?: number }
-	| { tool: "highlighter"; highlighterColor: string; highlighterWidth: number };
+	| { tool: "pen"; penColor: string; penWidth: number; /** 0.22 (#35): taking a stroke of a new pen selects that pen and its nib angle. */ penKind?: PenKind; nibAngle?: number; /** 0.26 (#358): and its opacity (1 = full). */ penOpacity: number }
+	| { tool: "highlighter"; highlighterColor: string; highlighterWidth: number; highlighterOpacity: number };
 
 const MIN_WIDTH = 0.1;
 const MAX_WIDTH = 80;
 
-export function styleOfStroke(stroke: Pick<Stroke, "tool" | "color" | "width"> & { nib?: number }): StrokeStyle {
+export function styleOfStroke(stroke: Pick<Stroke, "tool" | "color" | "width" | "opacity"> & { nib?: number }): StrokeStyle {
 	const colour = normaliseHex(stroke.color) ?? "#1e1e1e";
 	const width = Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Number.isFinite(stroke.width) ? stroke.width : 1)) * 100) / 100;
-	if (stroke.tool === "highlighter") return { tool: "highlighter", highlighterColor: colour, highlighterWidth: width };
-	if (isNewPen(stroke.tool)) return { tool: "pen", penColor: colour, penWidth: width, penKind: stroke.tool as PenKind, nibAngle: stroke.nib ?? NIB_DEFAULT };
+	// 0.26 (#358): the eyedropper takes the opacity too (a stroke without one is at full strength).
+	const opacity = opacityOf(stroke);
+	if (stroke.tool === "highlighter") return { tool: "highlighter", highlighterColor: colour, highlighterWidth: width, highlighterOpacity: opacity };
+	if (isNewPen(stroke.tool)) return { tool: "pen", penColor: colour, penWidth: width, penKind: stroke.tool as PenKind, nibAngle: stroke.nib ?? NIB_DEFAULT, penOpacity: opacity };
 	// Review fix (D3): a ballpoint or shape stroke selects the ballpoint (and the default nib), so the eyedropper never keeps another pen.
-	return { tool: "pen", penColor: colour, penWidth: width, penKind: "pen", nibAngle: NIB_DEFAULT };
+	return { tool: "pen", penColor: colour, penWidth: width, penKind: "pen", nibAngle: NIB_DEFAULT, penOpacity: opacity };
 }
 
 /** Which toolbar colour a tool edits: the eraser's own when it is limited to one colour, the highlighter's, else the pen's. */

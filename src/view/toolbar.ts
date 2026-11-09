@@ -11,6 +11,7 @@ import { attachQuickTabGesture } from "./quick-tabs";
 import { kindHasNib, NIB_STEP, normaliseNib, PEN_KINDS, type PenKind } from "../ink/pen-kinds";
 import type { FillMode, LineStyle } from "../ink/shape-restyle";
 import { renderShapeStyle } from "./shape-style-row";
+import { createOpacityRow, type OpacityRow } from "./opacity-row";
 
 export type ToolName = "pen" | "highlighter" | "eraser" | "lasso" | "shape" | "text" | "space";
 export type EraserMode = "stroke" | "segment" | "area";
@@ -54,6 +55,9 @@ export interface ToolbarState {
 	shapeLine: LineStyle;
 	/** 0.25 (#99): the highlighter marks a rectangle (an area highlighter) instead of a stroke. */
 	highlighterArea: boolean;
+	/** 0.26 (#358): how strongly new ink writes, 0.05 to 1 (1 = the pen's own look). The pen's value also serves the shapes and the pen kinds; the highlighter's serves the area highlighter. */
+	penOpacity: number;
+	highlighterOpacity: number;
 }
 
 export const DEFAULT_TOOLS: ToolbarState = {
@@ -76,6 +80,8 @@ export const DEFAULT_TOOLS: ToolbarState = {
 	shapeFillColor: null,
 	shapeLine: "solid",
 	highlighterArea: false,
+	penOpacity: 1,
+	highlighterOpacity: 1,
 };
 
 export interface ToolbarActions {
@@ -163,6 +169,8 @@ export class Toolbar {
 	private readonly optionsEl: HTMLElement;
 	private readonly colorGroup: HTMLElement;
 	private readonly widthGroup: HTMLElement;
+	private zoomHintEl: HTMLElement | null = null;
+	private zoomHint: { screen: number; page: number } | null = null;
 	private readonly eraserGroup: HTMLElement;
 	private readonly eraserButtons = new Map<EraserMode, HTMLButtonElement>();
 	private readonly filterGroup: HTMLElement;
@@ -184,6 +192,8 @@ export class Toolbar {
 	private readonly nibSlider: HTMLInputElement;
 	private readonly nibValue: HTMLElement;
 	private readonly nibPreview: HTMLElement;
+	/** 0.26 (#358): the opacity of new ink (pen, shapes, highlighter, area highlighter). */
+	private readonly opacityRow: OpacityRow;
 	private readonly chipButton: HTMLButtonElement;
 	private readonly readOnlyButton: HTMLButtonElement;
 	private readonly chipDot: HTMLElement;
@@ -338,6 +348,10 @@ export class Toolbar {
 		this.nibSlider.addEventListener("change", () => this.set({ nibAngle: normaliseNib(Number(this.nibSlider.value)) }));
 		this.colorGroup = this.row(this.optionsEl);
 		this.widthGroup = this.row(this.optionsEl);
+		// 0.26 (#358): how strongly new ink writes. Applies to the strokes written from now on; what is written already is changed from the selection.
+		this.opacityRow = createOpacityRow(this.optionsEl, {
+			commit: (opacity) => this.set(this.state.tool === "highlighter" ? { highlighterOpacity: opacity } : { penOpacity: opacity }),
+		}, "notebook-pen-opacity");
 		this.sizeGroup = this.row(this.optionsEl);
 		this.highlighterOptionsEl = this.row(this.optionsEl);
 
@@ -452,6 +466,19 @@ export class Toolbar {
 	/** Applies a state change from code (favourite pens, hotkeys) and notifies the view. */
 	update(patch: Partial<ToolbarState>): void {
 		this.set(patch);
+	}
+
+	/**
+	 * 0.26 (#358): opens the options of the tool in hand and puts the focus on the opacity slider (the "Opacity" action). False when the tool in hand has
+	 * no opacity (nothing opens) or the notebook cannot be edited.
+	 */
+	revealOpacity(): boolean {
+		const s = this.state;
+		if (!this.editable || !(s.tool === "pen" || s.tool === "highlighter" || s.tool === "shape")) return false;
+		if (this.popover !== "options") this.togglePopover("options");
+		if (this.popover !== "options") return false;
+		this.opacityRow.slider.focus();
+		return true;
 	}
 
 	/** 0.11.2: shows (or hides) that the next pen stroke erases, armed by the pen button or the pen key. */
@@ -612,6 +639,9 @@ export class Toolbar {
 		// 0.25 (#99): an area highlighter has no stroke width and does not snap to text lines: those rows go while the highlighter is in Area mode.
 		const areaMode = s.tool === "highlighter" && s.highlighterArea;
 		this.widthGroup.toggleClass("notebook-hidden", !inking || areaMode);
+		// 0.26 (#358): the opacity of new ink: every inking tool has it (the shape tool and the pen kinds share the pen's, the area highlighter the highlighter's).
+		this.opacityRow.el.toggleClass("notebook-hidden", !inking);
+		this.opacityRow.set(s.tool === "highlighter" ? s.highlighterOpacity : s.penOpacity, this.editable);
 		this.sizeGroup.toggleClass("notebook-hidden", s.tool !== "text");
 		this.highlighterModeGroup.toggleClass("notebook-hidden", s.tool !== "highlighter");
 		for (const [area, b] of this.highlighterModeButtons) {
@@ -663,6 +693,9 @@ export class Toolbar {
 				b.disabled = !this.editable;
 				b.createSpan({ cls: `notebook-width-dot notebook-width-${highlighter ? "h" : "p"}${i}` });
 			});
+			// 0.26 zoomwidth (#350): with "Pen width follows zoom" on, the on-screen width and a "× zoom" hint.
+			this.zoomHintEl = this.widthGroup.createSpan({ cls: "notebook-zoom-hint notebook-hidden" });
+			this.paintZoomHint();
 		}
 
 		if (s.tool === "text") {
@@ -674,6 +707,24 @@ export class Toolbar {
 				b.createSpan({ cls: `notebook-text-size-glyph notebook-text-size-${i}`, text: "A" });
 			});
 		}
+	}
+
+	/** 0.26 zoomwidth (#350): `null` hides the hint (option off); otherwise the effective on-screen width and the stored page width. */
+	setZoomHint(hint: { screen: number; page: number } | null): void {
+		const same = hint === this.zoomHint || (hint && this.zoomHint && hint.screen === this.zoomHint.screen && hint.page === this.zoomHint.page);
+		this.zoomHint = hint;
+		if (!same) this.paintZoomHint();
+	}
+
+	private paintZoomHint(): void {
+		const el = this.zoomHintEl;
+		const h = this.zoomHint;
+		if (!el) return;
+		el.toggleClass("notebook-hidden", !h);
+		if (!h) return;
+		const n = (v: number) => String(Math.round(v * 10) / 10);
+		el.setText(t("tool.widthZoom.hint", { px: n(h.screen), page: n(h.page) }));
+		el.setAttribute("aria-label", t("tool.widthZoom.aria", { px: n(h.screen), page: n(h.page) }));
 	}
 
 	/** The angle in the nib row: the number and the little bar that leans like the nib. */

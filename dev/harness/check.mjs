@@ -125,6 +125,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tagsuggest", theme, device, lowLatency: false });
 // 0.24 handin (#334): the Hand in dialog and its cover (dev/harness/handin-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "handin", theme, device, lowLatency: false });
+// 0.26 redact (#285): redaction before export, the Redact dialog and its row in the export dialog (dev/harness/redact-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "redact", theme, device, lowLatency: false });
 // 0.20 share (#30): Share page… dialog and both branches of the share (dev/harness/share-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "share", theme, device, lowLatency: false });
 // Quick tabs (0.18, #227): the strip with pinned pages, Back, a gone page, another notebook; tablet and phone, light and dark.
@@ -165,6 +167,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "savedviews", theme, device, lowLatency: false });
 // 0.25 histpanel (#84): the action history panel (dev/harness/histpanel-check.ts), tablet and phone, light and dark (dist/shots/histpanel-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "histpanel", theme, device, lowLatency: false });
+// 0.26 related (#422): the Related pages panel (dev/harness/related-check.ts), tablet and phone, light and dark (dist/shots/related-*.png, related-empty-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "related", theme, device, lowLatency: false });
 // 0.22 pagerefs (#179): the chip and list of pages that link here (dev/harness/pagerefs-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "pagerefs", theme, device, lowLatency: false });
 // 0.22 review fix: every floating pill at once, no overlap (dev/harness/pillstack-check.ts), tablet and phone, light and dark (dist/shots/pillstack-*.png).
@@ -173,12 +177,16 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "navadapt", theme, device, lowLatency: false });
 // 0.25 markedview (#419): marked pages only in the page navigator (dev/harness/markedview-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "markedview", theme, device, lowLatency: false });
+// 0.26 tidy (#238): Tidy up (dev/harness/tidy-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tidy", theme, device, lowLatency: false });
 // 0.23 welcomeback (#420): the welcome-back card (dev/harness/welcomeback-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "welcomeback", theme, device, lowLatency: false });
 // 0.24 iconhelp (#429): the long-press explanation bubble (dev/harness/iconhelp-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "iconhelp", theme, device, lowLatency: false });
 // 0.25 toolfade (#399): the bars fade while the pen writes (dev/harness/toolfade-check.ts), dist/shots/design/toolfade-*.png.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "toolfade", theme, device, lowLatency: false });
+// 0.26 zoomwidth (#350): pen width follows zoom (dev/harness/zoomwidth-check.ts), dist/shots/design/zoomwidth-*.png.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "zoomwidth", theme, device, lowLatency: false });
 // 0.22 lecthead (#210): the lecture header (dev/harness/lecthead-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "lecthead", theme, device, lowLatency: false });
 // 0.23 dimcheck (#293): the units hint of the equation editor (dev/harness/dimcheck-check.ts).
@@ -193,6 +201,12 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "shapefill", theme, device, lowLatency: false });
 // 0.25 areahl (#99): the area highlighter on a PDF page (dev/harness/areahl-check.ts), tablet and phone, light and dark (dist/shots/areahl-*.png).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "areahl", theme, device, lowLatency: false });
+// 0.26 opacity (#358): the opacity of ink, pictures and areas (dev/harness/opacity-check.ts), tablet and phone, light and dark (dist/shots/opacity-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "opacity", theme, device, lowLatency: false });
+// 0.26 smooth (#66): Smooth and Straighten strokes (dev/harness/smooth-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "smooth", theme, device, lowLatency: false });
+// 0.26 ctxpalette (#394): the colour picker's context rows on a PDF page and a written page (dev/harness/ctxpalette-check.ts), tablet and phone, light and dark (dist/shots/ctxpalette-*.png, ctxpalettew-*.png).
+for (const doc of ["ctxpalette", "ctxpalettew"]) for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc, theme, device, lowLatency: false });
 // 0.25 baseline (#93): Align to baseline (dev/harness/baseline-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "baseline", theme, device, lowLatency: false });
 // 0.25 papersuggest (#409): suggested paper in the "+" strip (dev/harness/papersuggest-check.ts).
@@ -282,6 +296,8 @@ for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"])
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "qr", theme, device, lowLatency: false });
 // 0.19 templates: the notebook-new card of a note (dev/harness/tplnote-check.ts), tablet and phone, dark and light (dist/shots/tplnote-*.png).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "tplnote", theme, device, lowLatency: false });
+// 0.26 gallery: the notebook-gallery block of a note (dev/harness/gallery-check.ts), tablet and phone, dark and light (dist/shots/gallery-*.png).
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "gallery", theme, device, lowLatency: false });
 // 0.20 vdiff: the visual version diff dialog (dev/harness/vdiff-check.ts), tablet and phone, dark and light (dist/shots/vdiff-*.png).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "vdiff", theme, device, lowLatency: false });
 // 0.19 snapshot: the version-history list with the lecture-snapshots filter (dev/harness/snapshot-check.ts).
@@ -413,6 +429,8 @@ async function main() {
 				else if (s.doc === "hookclean") report = await cdp.evaluate("window.harness.checkHookclean()", 90000); // 0.23 hookclean
 				else if (s.doc === "shapefill") report = await cdp.evaluate("window.harness.checkShapefill()", 90000); // 0.24 shapefill
 				else if (s.doc === "areahl") report = await cdp.evaluate("window.harness.checkAreahl()", 90000); // 0.25 areahl
+				else if (s.doc === "opacity") report = await cdp.evaluate("window.harness.checkOpacity()", 90000); // 0.26 opacity
+				else if (s.doc === "ctxpalette" || s.doc === "ctxpalettew") report = await cdp.evaluate("window.harness.checkCtxpalette()", 90000); // 0.26 ctxpalette
 				else if (s.doc === "papersuggest") report = await cdp.evaluate("window.harness.checkPapersuggest()", 90000); // 0.25 papersuggest
 				else if (s.doc === "strokejoin") report = await cdp.evaluate("window.harness.checkStrokejoin()", 90000); // 0.24 strokejoin
 				else if (s.doc === "profiles") report = await cdp.evaluate("window.harness.checkProfiles()", 90000); // 0.25 profiles
@@ -420,9 +438,12 @@ async function main() {
 				else if (s.doc === "welcomeback") report = await cdp.evaluate("window.harness.checkWelcomeback()", 90000); // 0.23 welcomeback
 				else if (s.doc === "iconhelp") report = await cdp.evaluate("window.harness.checkIconhelp()", 90000); // 0.24 iconhelp
 				else if (s.doc === "toolfade") report = await cdp.evaluate("window.harness.checkToolfade()", 120000); // 0.25 toolfade
+				else if (s.doc === "zoomwidth") report = await cdp.evaluate("window.harness.checkZoomwidth()", 120000); // 0.26 zoomwidth
 				else if (s.doc === "navadapt") report = await cdp.evaluate("window.harness.checkNavadapt()", 90000); // 0.24 navadapt
+				else if (s.doc === "smooth") report = await cdp.evaluate("window.harness.checkSmooth()", 90000); // 0.26 smooth
 				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
 				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
+				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
 				else if (s.doc === "inbox") report = await cdp.evaluate("window.harness.checkInbox()", 60000);
 
@@ -440,11 +461,13 @@ async function main() {
 				else if (s.doc === "clipimage") report = await cdp.evaluate("window.harness.checkClipImage()", 60000); // 0.25 clipimage
 				else if (s.doc === "tagsuggest") report = await cdp.evaluate("window.harness.checkTagSuggest()", 60000); // 0.24 tagsuggest
 				else if (s.doc === "handin") report = await cdp.evaluate("window.harness.checkHandIn()", 60000); // 0.24 handin
+				else if (s.doc === "redact") report = await cdp.evaluate("window.harness.checkRedact()", 90000); // 0.26 redact
 				else if (s.doc === "ghostlines") report = await cdp.evaluate("window.harness.checkGhostlines()", 60000);
 				else if (s.doc === "pagetime") report = await cdp.evaluate("window.harness.checkPagetime()", 60000);
 				else if (s.doc === "pens") report = await cdp.evaluate("window.harness.checkPens()", 90000);
 				else if (s.doc === "savedviews") report = await cdp.evaluate("window.harness.checkSavedviews()", 90000); // 0.23 savedviews
 				else if (s.doc === "histpanel") report = await cdp.evaluate("window.harness.checkHistpanel()", 90000); // 0.25 histpanel
+				else if (s.doc === "related") report = await cdp.evaluate("window.harness.checkRelated()", 60000); // 0.26 related
 				else if (s.doc === "share") report = await cdp.evaluate("window.harness.checkShare()", 180000); // 0.20 share
 				// 0.18 mentions: its own check.
 				else if (s.doc === "mentions") report = await cdp.evaluate("window.harness.checkMentions()", 60000);
@@ -452,7 +475,7 @@ async function main() {
 				else if (s.doc === "synccore") report = await cdp.evaluate("window.harness.checkSynccore()", 60000); // 0.22 synccore
 				else if (s.doc === "syncprov") report = await cdp.evaluate("window.harness.checkSyncprov()", 60000); // 0.22 syncprov
 				else
-				report = await cdp.evaluate(s.doc === "dropfiles" ? "window.harness.checkDropFiles()" : s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "task" ? "window.harness.checkTask()" : s.doc === "lookup" ? "window.harness.checkLookUp()" : s.doc === "formulasheet" ? "window.harness.checkFormulaSheet()" : s.doc === "bookindex" ? "window.harness.checkBookIndex()" :s.doc === "annotate" ? "window.harness.checkAnnotate()" : s.doc === "tplnote" ? "window.harness.checkTplNote()" :s.doc === "qr" ? "window.harness.checkQr()" : s.doc === "snapshot" ? "window.harness.checkSnapshot()" : s.doc === "vdiff" ? "window.harness.checkVdiff()" :s.doc === "backups" ? "window.harness.checkBackups()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "figures" ? "window.harness.checkFigures()" :s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "colours" ? "window.harness.checkColours()" : s.doc === "coloursedit" ? "window.harness.checkColours(true)" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "signstamp" ? "window.harness.checkSignstamp()" : s.doc === "refwindow" ? "window.harness.checkRefwindow()" : s.doc === "quicktabs" ? "window.harness.checkQuicktabs()" : s.doc === "bookmarks" ? "window.harness.checkBookmarks()" : s.doc === "sticky" ? "window.harness.checkSticky()" : s.doc === "comments" ? "window.harness.checkComments()" : s.doc === "checklists" ? "window.harness.checkChecklists()" : s.doc === "axes" ? "window.harness.checkAxes()" : s.doc === "chembal" ? "window.harness.checkChembal()" : s.doc === "groups" ? "window.harness.checkGroups()" : s.doc === "minimap" ? "window.harness.checkMinimap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "planner" ? "window.harness.checkPlanner()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "dropfiles" ? "window.harness.checkDropFiles()" : s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "task" ? "window.harness.checkTask()" : s.doc === "lookup" ? "window.harness.checkLookUp()" : s.doc === "formulasheet" ? "window.harness.checkFormulaSheet()" : s.doc === "bookindex" ? "window.harness.checkBookIndex()" :s.doc === "annotate" ? "window.harness.checkAnnotate()" : s.doc === "tplnote" ? "window.harness.checkTplNote()" : s.doc === "gallery" ? "window.harness.checkGallery()" :s.doc === "qr" ? "window.harness.checkQr()" : s.doc === "snapshot" ? "window.harness.checkSnapshot()" : s.doc === "vdiff" ? "window.harness.checkVdiff()" :s.doc === "backups" ? "window.harness.checkBackups()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "figures" ? "window.harness.checkFigures()" :s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "colours" ? "window.harness.checkColours()" : s.doc === "coloursedit" ? "window.harness.checkColours(true)" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "signstamp" ? "window.harness.checkSignstamp()" : s.doc === "refwindow" ? "window.harness.checkRefwindow()" : s.doc === "quicktabs" ? "window.harness.checkQuicktabs()" : s.doc === "bookmarks" ? "window.harness.checkBookmarks()" : s.doc === "sticky" ? "window.harness.checkSticky()" : s.doc === "comments" ? "window.harness.checkComments()" : s.doc === "checklists" ? "window.harness.checkChecklists()" : s.doc === "axes" ? "window.harness.checkAxes()" : s.doc === "chembal" ? "window.harness.checkChembal()" : s.doc === "groups" ? "window.harness.checkGroups()" : s.doc === "minimap" ? "window.harness.checkMinimap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "planner" ? "window.harness.checkPlanner()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -566,6 +589,20 @@ async function main() {
 					await cdp.evaluate("window.harness.closeHandIn()");
 				}
 			}
+			// 0.26 redact: a screenshot of the export dialog's row, of the editor over a plain page and over a scanned one.
+			if (s.doc === "redact") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of await cdp.evaluate("window.harness.redactStates")) {
+					try {
+						await cdp.evaluate(`window.harness.redactShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `redact-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`redact ${state} screenshot: ${e.message}`);
+					}
+					await cdp.evaluate("window.harness.closeRedact()");
+				}
+			}
 			// 0.21 signstamp: a screenshot of each state (dialog, pad, dialog with the signature, signature placed).
 			if (s.doc === "signstamp") {
 				const designDir = join(shots, "design");
@@ -622,6 +659,19 @@ async function main() {
 					await cdp.evaluate("window.harness.closeLinkback()");
 				}
 			}
+			// 0.26 smooth: screenshots of shaky handwriting (selected), smoothed and straightened.
+			if (s.doc === "smooth") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["before", "smooth", "straighten"]) {
+					try {
+						await cdp.evaluate(`window.harness.smoothShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `smooth-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`smooth ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
 			// 0.25 baseline: screenshots of crooked words (selected), aligned, and aligned on ruled paper.
 			if (s.doc === "baseline") {
 				const designDir = join(shots, "design");
@@ -632,6 +682,19 @@ async function main() {
 						writeFileSync(join(designDir, `baseline-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`baseline ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.26 tidy: screenshots of the crooked page, the sheet open over it, and the page tidied.
+			if (s.doc === "tidy") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["before", "sheet", "after"]) {
+					try {
+						await cdp.evaluate(`window.harness.tidyShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `tidy-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`tidy ${state} screenshot: ${e.message}`);
 					}
 				}
 			}
@@ -666,6 +729,19 @@ async function main() {
 					writeFileSync(join(designDir, `welcomeback-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 				} catch (e) {
 					problems.push(`welcomeback screenshot: ${e.message}`);
+				}
+			}
+			// 0.26 zoomwidth: the pen options at two zooms, option off and on.
+			if (s.doc === "zoomwidth") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const [zoom, on] of [[1, false], [4, false], [1, true], [4, true]]) {
+					try {
+						await cdp.evaluate(`window.harness.zoomwidthShot(${zoom}, ${on}).then(() => true)`, 60000);
+						writeFileSync(join(designDir, `zoomwidth-${on ? "on" : "off"}-${zoom}x-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`zoomwidth ${zoom}x ${on} screenshot: ${e.message}`);
+					}
 				}
 			}
 			// 0.25 toolfade: screenshots of the faded and the restored bars.
@@ -763,6 +839,17 @@ async function main() {
 						writeFileSync(join(designDir, `zettel-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`zettel ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.26 related: the nothing-related and no-note states of the panel.
+			if (s.doc === "related") {
+				for (const state of ["empty", "none"]) {
+					try {
+						await cdp.evaluate(`window.harness.relatedShot('${state}').then(() => true)`);
+						writeFileSync(join(shots, `related-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`related ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

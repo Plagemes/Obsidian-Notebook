@@ -15,7 +15,7 @@ import { inkAlpha, inkBlend, MARKER_ALPHA, strokeSvgPath } from "../src/ink/stro
 import { rotateAbout, scaleAbout, translate } from "../src/ink/transform";
 import { createPage, createStroke } from "../src/model/document";
 import { serializeChecked } from "../src/model/serialize";
-import { RENDER_INK, type Point, type Stroke, type Tool } from "../src/model/types";
+import { CURRENT_VERSION, RENDER_INK, type Point, type Stroke, type Tool } from "../src/model/types";
 import { sleep } from "./node-env";
 
 const NEW_PENS: Tool[] = ["fountain", "brush", "marker"];
@@ -347,7 +347,7 @@ describe("new pens: the same look in every export", () => {
 	it("every tool is accepted by the writer's strict check with the geometry it needs", () => {
 		const page = createPage();
 		page.strokes.push(...ALL_TOOLS.map((tool, i) => ({ ...createStroke("#000000", 2, handwriting(30, i + 1), tool, RENDER_INK), id: `s${i}` })));
-		const doc = { format: "obsidian-notebook", version: 23, id: "d", createdAt: "2026-11-01T00:00:00.000Z", modifiedAt: "2026-11-01T00:00:00.000Z", pages: [page], meta: { tags: [], favorite: false, cover: "#3b82f6", bookmarks: [] }, assets: {} } as const;
+		const doc = { format: "obsidian-notebook", version: CURRENT_VERSION, id: "d", createdAt: "2026-11-01T00:00:00.000Z", modifiedAt: "2026-11-01T00:00:00.000Z", pages: [page], meta: { tags: [], favorite: false, cover: "#3b82f6", bookmarks: [] }, assets: {} } as const;
 		expect(serializeChecked(doc as never, true).ok).toBe(true);
 	});
 

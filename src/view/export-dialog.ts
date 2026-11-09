@@ -3,8 +3,11 @@
 // range for every format. "Export as Markdown…" (382) chooses the vault folder and the resolution of the page images.
 // Both only collect choices: the files are written by view/export.ts, view/export-png.ts, view/print.ts and
 // view/export-markdown.ts.
-import { Modal, Setting, type App } from "obsidian";
+import { Modal, Setting, type App, type ToggleComponent } from "obsidian";
 import { t, type MessageKey } from "../i18n";
+import { redactPage, redactionOf, withExcerptChains } from "../ink/redact";
+import { boxesOf, countBoxes, countPages, type Redactions, type RedactState } from "../model/redact";
+import { attachLongPressHelp, resolveHelp } from "../ui/long-press-help";
 import { EXPORT_LAYERS, type ExportFormat, type ExportLayers, type ExportScope } from "../ink/export-layers";
 import { DEFAULT_SPLIT, planSplit, SPLIT_MARGINS, SPLIT_OVERLAPS, SPLIT_PAPERS, type SplitPlan, type SplitSettings } from "../ink/export-tiles";
 import { renderThumbnail } from "../library/thumbnail";
@@ -32,6 +35,17 @@ export interface ExportDialogHost {
 	initialFormat?: ExportFormat;
 	/** 0.18 (#178): the pages as they are exported; with them the dialog offers "Split into sheets" for infinite pages and previews the cuts. */
 	pages?: () => readonly Page[];
+	/**
+	 * 0.26 (#285): the redaction boxes kept for this notebook on this device (absent: the dialog has no Redact row). `edit` opens the
+	 * dialog where boxes are drawn and calls back when it has closed.
+	 */
+	redact?: {
+		state(): RedactState;
+		save(state: RedactState): void;
+		edit(closed: () => void): void;
+		/** Review fix (U1): the notebook's document id (tells its own excerpts from those of another notebook in the preview). */
+		doc?: string;
+	};
 	run(request: ExportRequest): void;
 }
 
@@ -57,6 +71,14 @@ export class ExportModal extends Modal {
 	private cleanOn = last.clean;
 	private cleanOpenStickies = last.cleanOpenStickies;
 	private cleanStickiesSetting: Setting | null = null;
+	// 0.26 (#285): redaction boxes.
+	private redactOn = false;
+	private redactSetting: Setting | null = null;
+	private redactApply: Setting | null = null;
+	private redactToggle: ToggleComponent | null = null;
+	private redactNote: HTMLElement | null = null;
+	private redactScope: HTMLElement | null = null;
+	private stopHelp: (() => void) | null = null;
 	private layersDesc: HTMLElement | null = null;
 	private fileDesc: HTMLElement | null = null;
 	private problem: HTMLElement | null = null;
@@ -136,6 +158,7 @@ export class ExportModal extends Modal {
 			this.cleanOpenStickies = v;
 		}));
 		this.cleanStickiesSetting.settingEl.toggle(this.cleanOn);
+		if (this.host.redact) this.buildRedact(contentEl, this.host.redact);
 		this.folderSetting = new Setting(contentEl).setName(t("export.markdown.folder")).setDesc(t("export.markdown.folder.desc"));
 		this.folderSetting.addText((tx) => {
 			tx.setValue(this.folder).onChange((v) => {
@@ -159,7 +182,85 @@ export class ExportModal extends Modal {
 		this.problem.addClass("notebook-export-problem");
 		shellButton(shell.foot, "secondary", t("export.dialog.cancel"), () => this.close());
 		this.submitButton = shellButton(shell.foot, "primary", t("export.dialog.export"), () => this.submit());
+		this.stopHelp = attachLongPressHelp(this.modalEl, (b) => (b.dataset.help ? resolveHelp(b) : null)); // 0.26 redact: the long-press explanation of its button
 		this.refresh();
+	}
+
+	// --- 0.26 (#285): redaction before export ---
+
+	private buildRedact(parent: HTMLElement, redact: NonNullable<ExportDialogHost["redact"]>): void {
+		const state = redact.state();
+		this.redactOn = state.on && countBoxes(state.boxes) > 0;
+		this.redactSetting = new Setting(parent).setName(t("redact.row"));
+		this.redactSetting.addButton((b) => {
+			b.setButtonText(t("redact.button")).onClick(() => redact.edit(() => this.afterRedactEdit()));
+			b.buttonEl.dataset.help = "help.redact.open";
+			b.buttonEl.setAttribute("aria-label", t("redact.button"));
+			b.buttonEl.addClass("nb-redact-open");
+		});
+		this.redactApply = new Setting(parent).setName(t("redact.apply"));
+		this.redactApply.addToggle((tg) => {
+			this.redactToggle = tg;
+			tg.setValue(this.redactOn).onChange((v) => {
+				this.redactOn = v;
+				redact.save({ on: v, boxes: redact.state().boxes });
+				this.refreshRedact();
+				this.refreshSplit();
+			});
+		});
+		this.redactNote = shellNote(parent, "");
+		this.redactNote.addClass("notebook-export-note");
+		// Review fix: one line that says which outputs the boxes do not cover (docs/architecture.md keeps the same list).
+		this.redactScope = shellNote(parent, t("redact.notCovered"));
+		this.redactScope.addClass("notebook-export-note");
+		this.refreshRedact();
+	}
+
+	/** The row says what is set, and the switch and the sentence about it show only when there are boxes. */
+	private refreshRedact(): void {
+		const redact = this.host.redact;
+		if (!redact || !this.redactSetting) return;
+		const state = redact.state();
+		const boxes = state.boxes;
+		const n = countBoxes(boxes);
+		const p = countPages(boxes);
+		const summary = n === 0 ? "" : n === 1 ? t("redact.sum.one") : p === 1 ? t("redact.sum.onePage", { boxes: String(n) }) : t("redact.sum.many", { boxes: String(n), pages: String(p) });
+		this.redactSetting.setDesc(summary ? `${t("redact.row.desc")} ${summary}` : t("redact.row.desc"));
+		this.redactApply?.settingEl.toggle(n > 0);
+		// Review fix (P4): boxes that cannot be read are said so: every export is refused until they are set again.
+		this.redactNote?.toggle(n > 0 || state.unreadable === true);
+		this.redactNote?.setText(state.unreadable === true ? t("redact.unreadable.dialog") : n === 0 ? "" : t(this.redactOn ? "redact.note.on" : "redact.note.off"));
+		this.redactScope?.toggle(n > 0 && this.redactOn);
+	}
+
+	private afterRedactEdit(): void {
+		const redact = this.host.redact;
+		if (!redact) return;
+		const state = redact.state();
+		// Having been to the boxes means wanting them: they are applied when there are any, and not when they were all cleared.
+		this.redactOn = countBoxes(state.boxes) > 0;
+		if (this.redactOn !== state.on) redact.save({ on: this.redactOn, boxes: state.boxes });
+		this.redactToggle?.setValue(this.redactOn);
+		this.refreshRedact();
+		this.refreshSplit();
+	}
+
+	/** The boxes this export applies: those kept for the notebook when the switch is on, else none. */
+	private activeRedactions(): Redactions | undefined {
+		const redact = this.host.redact;
+		if (!redact || !this.redactOn) return undefined;
+		const boxes = redact.state().boxes;
+		return countBoxes(boxes) > 0 ? boxes : undefined;
+	}
+
+	/** Page `index` as the split preview draws it: with the boxes applied when the redaction is on. */
+	private pageAt(index: number): Page | undefined {
+		const page = this.host.pages?.()[index];
+		const boxes = this.activeRedactions();
+		if (!page || !boxes) return page;
+		// Review fix (R5): excerpt chains over the whole notebook, like the export.
+		const set = withExcerptChains(this.host.pages?.() ?? [page], boxes, this.host.redact?.doc) ?? boxes;
+		return redactPage(page, boxesOf(set, page.id), set);
 	}
 
 	/** Shows the choices the format and the scope need, and the sentence that says what will happen. */
@@ -217,10 +318,12 @@ export class ExportModal extends Modal {
 		last.clean = this.cleanOn;
 		last.cleanOpenStickies = this.cleanOpenStickies;
 		const split = this.splitActive();
+		const redact = this.activeRedactions();
 		this.close();
 		this.host.run({
 			format: this.format, scope: this.exportScope, pageIndex: this.host.pageIndex, layers: this.layers,
 			...(range ? { range } : {}),
+			...(redact ? { redact } : {}),
 			...(this.format === "png" ? { folder: this.folder, scale: this.scale } : {}),
 			...(split ? { split: { ...this.split } } : {}),
 			...(this.cleanOn ? { clean: { openStickies: this.cleanOpenStickies } } : {}),
@@ -308,7 +411,7 @@ export class ExportModal extends Modal {
 	private drawPreview(): void {
 		const wrap = this.splitPreview;
 		const index = this.infinitePages()[0];
-		const page = index === undefined ? undefined : this.host.pages?.()[index];
+		const page = index === undefined ? undefined : this.pageAt(index);
 		if (!wrap || !page || index === undefined) return;
 		wrap.empty();
 		const plan = planSplit(page, this.split);
@@ -344,7 +447,7 @@ export class ExportModal extends Modal {
 	/** The page's picture under the cuts, drawn once for a page and region and kept while the dialog is open. */
 	private previewPicture(page: Page, plan: SplitPlan): string {
 		const { region } = plan;
-		const key = `${page.id}:${page.strokes.length}:${Math.round(region.x)}:${Math.round(region.y)}:${Math.round(region.width)}:${Math.round(region.height)}`;
+		const key = `${page.id}:${page.strokes.length}:${redactionOf(page).length}:${Math.round(region.x)}:${Math.round(region.y)}:${Math.round(region.width)}:${Math.round(region.height)}`;
 		const have = this.previewPictures.get(key);
 		if (have !== undefined) return have;
 		let url = "";
@@ -369,6 +472,8 @@ export class ExportModal extends Modal {
 	onClose(): void {
 		window.clearTimeout(this.previewTimer);
 		this.previewPictures.clear();
+		this.stopHelp?.();
+		this.stopHelp = null;
 		this.contentEl.empty();
 	}
 }

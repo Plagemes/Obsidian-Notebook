@@ -44,7 +44,7 @@ export interface UiContext {
 	open: boolean;
 	tool: ToolId;
 	selection: {
-		strokes: number; elements: number; images: number; /** 1 when a selected text box holds a [[link]] */ links?: number;
+		strokes: number; elements: number; images: number; /** 0.26 (#358): selected area highlighters (optional, 0 when absent). */ areas?: number; /** 1 when a selected text box holds a [[link]] */ links?: number;
 		/** v9: selected equations and graphs (optional, 0 when absent). */ equations?: number; graphs?: number;
 		/** v10: selected anchored excerpts (optional, 0 when absent). */ excerpts?: number;
 		/** 0.14 (402): selected text boxes (optional, 0 when absent). */ texts?: number;
@@ -149,6 +149,9 @@ const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.
 /** wave 0.10: how many things are selected (strokes and elements), and whether the selection holds ink. */
 const itemCount = (c: UiContext) => (c.selection?.strokes ?? 0) + (c.selection?.elements ?? 0);
 const lassoOrSelection = (c: UiContext) => c.tool === "lasso" || itemCount(c) > 0;
+/** 0.26 (#358): something to give an opacity to: the selection holds ink, a picture or an area, or the tool in hand writes (pen, highlighter, shape). */
+export const canOpacity = (c: UiContext): boolean =>
+	((c.selection?.strokes ?? 0) + (c.selection?.images ?? 0) + (c.selection?.areas ?? 0)) > 0 || c.tool === "pen" || c.tool === "highlighter" || c.tool === "shape";
 const hasInk = (c: UiContext) => (c.selection?.strokes ?? 0) > 0;
 /** wave 0.10 (363): another notebook is open to go to. */
 const otherNotebooks = (c: UiContext) => (c.openNotebooks ?? 0) > 1;
@@ -249,6 +252,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-join", label: "joinstrokes.action", icon: "merge", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 58, scope: "view", command: "command.joinStrokes", when: (c) => (c.selection?.strokes ?? 0) >= 2, keywords: "join merge broken split dropout gap line connect unisci spezzato tratto interruzione" },
 	// 0.25 (#93): crooked handwritten words are moved straight up or down onto a common baseline (or the ruled line), in one undo step.
 	{ id: "selection-baseline", label: "baseline.action", icon: "baseline", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 57, scope: "view", command: "command.alignBaseline", when: (c) => (c.selection?.strokes ?? 0) >= 2, keywords: "baseline align straighten level line words crooked handwriting writing ruled allinea linea base parole storte scrittura rigo" },
+	// 0.26 (#238): one-step tidy-up of the selection (words onto a baseline, line starts onto a margin, oversized gaps closed): a sheet with the choices and what will change, then one undo step.
+	{ id: "selection-tidy", label: "tidy.action", icon: "align-left", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], second: true, priority: 56, scope: "view", when: (c) => (c.selection?.strokes ?? 0) >= 3, keywords: "tidy up clean straighten align margin gap space spacing handwriting page riordina allinea raddrizza margine spazio scrittura" },
+	// 0.26 (#66): smooth the jitter out of selected handwriting / straighten almost-straight lines, each one undo step. In the sheet (and the command palette) only: the bar's rows are full.
+	{ id: "selection-smooth", label: "smooth.action", icon: "waves", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 56, scope: "view", command: "command.smooth", when: hasInk, keywords: "smooth jitter wobble shaky tremor handwriting soften levigare leviga tremolio mano tremante liscia" },
+	{ id: "selection-straighten", label: "straighten.action", icon: "ruler", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 56, scope: "view", command: "command.straighten", when: hasInk, keywords: "straighten straight line underline ruler clean raddrizza dritta linea sottolinea righello pulita" },
 	// 0.15 states (#241): the selected ink becomes a part of the drawing, which the states of the page move together (view/states-tools.ts).
 	{ id: "selection-part", label: "states.makePart", icon: "group", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.makePart", when: hasInk, keywords: "states part group figure physics stati parte gruppo" },
 	{ id: "select-same-colour", label: "select.sameColour", icon: "palette", group: "selection", surfaces: ["sheet"], priority: 48, scope: "view", command: "command.selectSameColour", when: hasInk, keywords: "similar color all" },
@@ -283,6 +291,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "nav-forward", label: "nav.forward", icon: "arrow-right", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 63, scope: "view", command: "command.navForward", readOnly: true, when: hasNav, enabled: (c) => !!c.nav?.forward, keywords: "next history visited avanti" },
 	{ id: "bookmarks-open", label: "gbm.open", icon: "bookmark", group: "navigate", surfaces: ["page", "sheet", "library"], priority: 54, scope: "global", command: true, readOnly: true, keywords: "bookmarks list pages notebooks segnalibri elenco pagine" },
 	{ id: "go-to-page", label: "command.goToPage", icon: "file-search", group: "navigate", surfaces: ["sheet", "library"], priority: 55, scope: "global", command: true, readOnly: true, keywords: "switcher find notebook" },
+	// 0.26 related (#422): the side panel of handwritten pages related to the open Markdown note.
+	{ id: "related-pages", label: "command.relatedPages", icon: "files", group: "navigate", surfaces: ["sheet", "library"], priority: 52, scope: "global", command: true, readOnly: true, keywords: "related linked backlinks note markdown panel sidebar collegate pagine nota pannello" },
 	{ id: "toggle-page-mode", label: "toolbar.pageMode", icon: "book-open", group: "navigate", surfaces: ["quick", "page", "sheet"], priority: 46, scope: "view", command: "command.pageMode", readOnly: true, checked: (c) => !!c.toggles.pageMode, keywords: "swipe paged continuous scroll" },
 	// wave 0.9 (361): find and replace in the text boxes of the notebook (a panel; the results jump to the page).
 	{ id: "find-replace", label: "command.findReplace", icon: "replace", group: "navigate", surfaces: ["sheet"], priority: 48, scope: "view", command: true, readOnly: true, keywords: "search text box substitute change word" },
@@ -347,6 +357,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-lock", label: "page.lock", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 48, scope: "view", when: (c) => !c.page?.locked, keywords: "lock finish protect freeze read only blocca proteggi" },
 	{ id: "page-unlock", label: "page.unlock", icon: "lock-open", group: "page", surfaces: ["page", "sheet"], priority: 49, scope: "view", when: (c) => !!c.page?.locked, keywords: "unlock edit sblocca" },
 	{ id: "page-lock-toggle", label: "command.lockPage", icon: "lock", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true },
+	// 0.26 (#238): the same tidy-up for the whole page (the selection, when there is one, in the palette).
+	{ id: "page-tidy", label: "tidy.pageAction", icon: "align-left", group: "page", surfaces: ["page", "sheet"], priority: 44, scope: "view", command: "command.tidyPage", enabled: pageOpen, keywords: "tidy up clean straighten align margin gap space spacing handwriting selection riordina allinea raddrizza margine spazio scrittura" },
 	// 0.20 (#39): the elements locked on the page (a background picture that must not move): listed, shown and unlocked from here.
 	{ id: "locked-elements", label: "groups.lockedElements", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: "groups.command.lockedElements", when: (c) => (c.page?.lockedElements ?? 0) > 0, keywords: "locked lock fixed background element unlock bloccati sblocca sfondo" },
 	// 0.18 (#227): quick tabs. Pinning does not edit the notebook (the pins are in _meta), so it works on a read-only or locked page too.
@@ -376,6 +388,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "toggle-snap-highlighter", label: "reading.snap", icon: "text-cursor", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 41, scope: "view", command: "command.snapHighlighter", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.reading.snap, keywords: "highlighter snap text lines evidenziatore testo righe" },
 	// 0.25 (#99): the highlighter marks a rectangle (an area highlighter, drawn under the ink): ideal on scanned PDFs. The "highlighter-" prefix ranks it first while the highlighter is in hand; on a PDF page the reading group ranks it too.
 	{ id: "highlighter-area", label: "highlighter.areaAction", icon: "highlighter", group: "reading", surfaces: ["sheet"], priority: 41, scope: "view", command: "command.highlighterArea", checked: (c) => !!c.toggles.highlighterArea, keywords: "highlighter area rectangle scan pdf block evidenziatore area rettangolo blocco scansione" },
+	// 0.26 (#358): the opacity of ink, pictures and areas: opens the slider of the selection, or the one in the options of the pen in hand. Ranked first with a selection of ink, pictures or areas and while the pen, the highlighter or a shape is in hand (context-rank.ts).
+	{ id: "opacity", label: "opacity.action", icon: "droplet", group: "tool", surfaces: ["sheet"], priority: 42, scope: "view", command: "command.opacity", when: canOpacity, keywords: "opacity transparency translucent fade alpha ink picture image area highlighter opacita trasparenza sfumare inchiostro immagine" },
 	{ id: "pdf-select-text", label: "pdfText.selectText", icon: "text-cursor-input", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 72, scope: "view", command: "command.pdfSelectText", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.reading.selectText, keywords: "select copy text quote pdf seleziona copia testo citazione" },
 	{ id: "pdf-search-next", label: "command.pdfSearchNext", icon: "chevron-down", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
 	{ id: "pdf-search-previous", label: "command.pdfSearchPrev", icon: "chevron-up", group: "reading", surfaces: ["palette"], priority: 10, scope: "view", command: true, readOnly: true },
@@ -536,6 +550,7 @@ export const ACTIONS: readonly ActionDef[] = [
 
 	// --- registered by other modules (listed so that every command has a documented place).
 	external("insert-embed", "command.embedInsert", "picture-in-picture", "integration", "integration/index.ts"),
+	external("insert-gallery", "command.galleryInsert", "layout-grid", "integration", "integration/gallery.ts"),
 	external("restore-version", "command.restore", "history", "integration", "integration/index.ts"),
 	// wave 0.8 (388): lists the old #pN links of the notes, then rewrites the ones the user accepts.
 	external("update-page-links", "command.updateLinks", "link-2", "integration", "integration/index.ts", ["notebook", "palette"]),

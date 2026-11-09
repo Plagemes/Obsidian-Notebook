@@ -66,6 +66,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	 * is composited as an opaque layer. Ink is painted in the input handler either way.
 	 */
 	lowLatencyInk: boolean;
+	/** 0.26 (#350): new strokes look the chosen width on screen at any zoom (stored width = chosen / zoom). Off = the width is in page units. */
+	penWidthFollowsZoom: boolean;
 	/** 0–10: strength of the adaptive position filter (one-euro.ts); 0 turns it off. */
 	stabilization: number;
 	/** Touch contacts larger than this (CSS px) are ignored as palms; 0 = off. */
@@ -252,6 +254,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	toolFadeSeconds: number;
 	/** The first finger touch on a faded bar only brings it back (the button is not pressed). */
 	toolFadeFirstTouch: boolean;
+	/** 0.26 (#422): the Related pages panel also lists the first page of the notebooks of the note's course. */
+	relatedCourse: boolean;
 	/** Quick actions the person pinned to the toolbar, in order (at most 3): the ranking never moves them. */
 	pinnedQuick: string[];
 	/** Keyboard arrows, PageUp / PageDown, space and Bluetooth clickers turn pages (372). */
@@ -337,6 +341,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	pressureMode: "auto",
 	inkPrediction: false,
 	lowLatencyInk: false,
+	penWidthFollowsZoom: false,
 	stabilization: 2,
 	palmContactPx: 0,
 	perfOverlay: false,
@@ -429,6 +434,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	toolFade: DEFAULT_TOOL_FADE_MODE,
 	toolFadeSeconds: DEFAULT_TOOL_FADE_SECONDS,
 	toolFadeFirstTouch: true,
+	relatedCourse: true, // 0.26 related
 	pinnedQuick: [],
 	pageTurnerKeys: true,
 	notebookTabs: false,
@@ -505,6 +511,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (d.pressureMode === "auto" || d.pressureMode === "simulated") s.pressureMode = d.pressureMode;
 	if (typeof d.inkPrediction === "boolean") s.inkPrediction = d.inkPrediction;
 	if (typeof d.lowLatencyInk === "boolean") s.lowLatencyInk = d.lowLatencyInk;
+	if (typeof d.penWidthFollowsZoom === "boolean") s.penWidthFollowsZoom = d.penWidthFollowsZoom;
 	if (typeof d.stabilization === "number" && d.stabilization >= 0 && d.stabilization <= 10) s.stabilization = d.stabilization;
 	if (typeof d.palmContactPx === "number" && d.palmContactPx >= 0 && d.palmContactPx <= 200) s.palmContactPx = d.palmContactPx;
 	if (typeof d.perfOverlay === "boolean") s.perfOverlay = d.perfOverlay;
@@ -601,6 +608,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (isToolFadeMode(d.toolFade)) s.toolFade = d.toolFade;
 	s.toolFadeSeconds = cleanFadeSeconds(d.toolFadeSeconds);
 	if (typeof d.toolFadeFirstTouch === "boolean") s.toolFadeFirstTouch = d.toolFadeFirstTouch;
+	if (typeof d.relatedCourse === "boolean") s.relatedCourse = d.relatedCourse; // 0.26 related
 	s.pinnedQuick = normalisePinned(d.pinnedQuick);
 	if (typeof d.pageTurnerKeys === "boolean") s.pageTurnerKeys = d.pageTurnerKeys;
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;

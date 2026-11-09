@@ -45,8 +45,25 @@ function mergeIntervals(list: Array<[number, number]>): Array<[number, number]> 
 	return out;
 }
 
+/** A rectangle in page coordinates (pt) whose text must never be quoted (a redaction box). */
+export interface TextExclusion {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+/**
+ * Whether the word [a, b] of `box` may lie under an exclusion. The place of a word inside a run is measured, not known exactly, so it is
+ * widened by the run's height on each side: a word near the edge of a box is left out rather than quoted.
+ */
+function excluded(box: TextBox, a: number, b: number, exclude: readonly TextExclusion[]): boolean {
+	const slack = box.height;
+	return exclude.some((r) => a - slack < r.x + r.width && r.x < b + slack && box.y < r.y + r.height && r.y < box.y + box.height);
+}
+
 /** The words of one run that the x-intervals cover, joined by single spaces ("" when none). */
-function wordsCovered(box: TextBox, spans: ReadonlyArray<[number, number]>, measure?: TextMeasure): string {
+function wordsCovered(box: TextBox, spans: ReadonlyArray<[number, number]>, measure: TextMeasure | undefined, exclude: readonly TextExclusion[]): string {
 	const re = /\S+/gu;
 	const out: string[] = [];
 	let m: RegExpExecArray | null;
@@ -56,13 +73,16 @@ function wordsCovered(box: TextBox, spans: ReadonlyArray<[number, number]>, meas
 		const width = Math.max(1e-6, b - a);
 		let covered = 0;
 		for (const [s0, s1] of spans) covered += Math.max(0, Math.min(b, s1) - Math.max(a, s0));
-		if (covered / width >= WORD_COVERAGE) out.push(m[0]);
+		if (covered / width >= WORD_COVERAGE && !excluded(box, a, b, exclude)) out.push(m[0]);
 	}
 	return out.join(" ");
 }
 
-/** The text of the runs under `bands`; "" when there is none. */
-export function textUnderBands(boxes: readonly TextBox[], bands: readonly TextBand[], measure?: TextMeasure): string {
+/**
+ * The text of the runs under `bands`; "" when there is none. 0.26 review fix (#285, P5): a word that any rectangle of `exclude` (the
+ * redaction boxes of the page) touches, even in part, is never quoted, however much of it the bands cover.
+ */
+export function textUnderBands(boxes: readonly TextBox[], bands: readonly TextBand[], measure?: TextMeasure, exclude: readonly TextExclusion[] = []): string {
 	if (bands.length === 0) return "";
 	const pieces: Piece[] = [];
 	for (const box of boxes) {
@@ -76,7 +96,7 @@ export function textUnderBands(boxes: readonly TextBox[], bands: readonly TextBa
 			if (b > a) spans.push([a, b]);
 		}
 		if (spans.length === 0) continue;
-		const text = wordsCovered(box, mergeIntervals(spans), measure);
+		const text = wordsCovered(box, mergeIntervals(spans), measure, exclude);
 		if (text) pieces.push({ text, x0: box.x, x1: box.x + box.width, cy: box.y + box.height / 2, h: box.height });
 	}
 	// Lines top to bottom, runs of a line left to right.

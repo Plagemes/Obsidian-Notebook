@@ -18,6 +18,7 @@ import { recordPluginWrite } from "../storage/plugin-written";
 import { modalShell, shellButton, shellNote } from "../ui/components/modal-shell";
 import { buildPdfBytes, freePath, type ExportOptions } from "./export";
 import { prepareExportFolder, siblingFolder } from "./export-markdown";
+import { announceRedaction, withRedaction } from "./export-redact";
 import type { NotebookMedia } from "./media";
 import { showNotice } from "./notice";
 import { PageImageRenderer } from "./page-images";
@@ -163,10 +164,13 @@ async function prepareFiles(host: ShareHost, choice: ShareChoice, plan: Extract<
 	// 0.19 (#239): a clean copy draws filtered copies of the pages; the document is untouched.
 	const clean = choice.clean ? {} : null;
 	const all = host.pages();
-	const pages = clean ? cleanPagesForExport(all, clean) : all;
-	const options: ExportOptions = { ...host.options(), layers: "both" };
-	if (clean && resolveCleanOptions(clean).comments) delete options.comments;
+	const cleaned = clean ? cleanPagesForExport(all, clean) : all;
+	const base: ExportOptions = { ...host.options(), layers: "both" };
+	if (clean && resolveCleanOptions(clean).comments) delete base.comments;
+	// 0.26 (#285): the pages with the redaction boxes applied; the PDF, the page images and the crop of a selection all draw the copies.
+	const { pages, options } = withRedaction(cleaned, base);
 	const chosen = plan.pages.map((i) => pages[i]).filter((p): p is Page => p !== undefined);
+	if (chosen.length > 0) announceRedaction(plan.pages.map((i) => cleaned[i]).filter((p): p is Page => p !== undefined), base);
 	const names = shareFileNames(host.file.basename, plan.format, plan.scope, plan.pages);
 	if (chosen.length === 0) throw new Error("no page");
 	if (plan.format === "pdf") {

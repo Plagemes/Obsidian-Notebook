@@ -95,6 +95,13 @@ describe("built-in stamps", () => {
 			expect(serializeStamp(clip).ok).toBe(true);
 		}
 	});
+
+	it("take the pen's opacity like the shape tool's ink, and have no key at full strength", () => {
+		for (const kind of BUILTIN_STAMPS) {
+			expect(builtinStamp(kind, "#dc2626", 3.2, undefined, 0.4).strokes[0]!.opacity).toBe(0.4);
+			expect("opacity" in builtinStamp(kind, "#dc2626", 3.2).strokes[0]!).toBe(false);
+		}
+	});
 });
 
 describe("placing a stamp", () => {

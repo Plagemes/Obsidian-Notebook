@@ -202,6 +202,7 @@ Legend: ✅ yes · ❌ no · — not applicable. The **Verified on hardware** co
 | Format v6: page margins, v5→v6 migration, newer file read-only | ✅ | ✅ migration, validation, round trip, future version | | | |
 | Format v7: bookmark details, page tags, reading position, new paper kinds; v6→v7 migration (drops v7 keys found in a v6 file, rejects v7 papers in a pre-v7 file); newer file read-only | ✅ | ✅ migration, validation, deterministic round trip, future version, incremental save check | | | |
 | v7 fields kept by duplicate page, page restore (tags united), conflicted-copy merge (union rules, coverage), repair (line scan and salvage), library metadata patch, companion note | ✅ | ✅ model-v7 tests | | | |
+| A stroke or element with no colour is refused by the writer with a clear message, repaired in memory before a save, and the save then goes through | ✅ | ✅ save-missing-colour tests (writer, repair, session) | | | |
 | Generated outline (#407, combines #15, #102, #46): bookmarks, PDF slide changes, large handwriting as headings (found by letter size, shown as a picture of the ink, no OCR) and markers in one nested list ordered by page and position, tap to jump, one switch per source in Settings → Pages → Outline, per-page cache, no format change | ✅ | ✅ `tests/outline-builder.test.ts` (heading detection, levels, nesting, ordering, sources, cache, settings); ✅ harness `outline-*` (rows by source, pictures, nesting, tap to jump, filter, switches; tablet and phone, dark and light); ❌ handwriting from a real S Pen (the thresholds are tuned on synthetic writing) | | ✅ | the 1.7× size threshold and the "starts a block" gap are heuristics: a title written right under the previous line, or only slightly larger, is not listed; a large single stroke is treated as a drawing (steps 600-613) |
 | Notebook map (#408, extends #223): grid of page thumbnails for the whole notebook with a badge per state (open question, gap, homework with due date, key point, unfinished practice, nearly empty), filter chips with counts, tap to go to the page, lecture starts marked, per-page-revision cache, thumbnails from the page panel's cache; no format change | ✅ | ✅ `tests/notebook-map.test.ts` (states, resolved items, nearly empty, practice, counts, filter, lecture range, cache reuse, page moves); ✅ harness `nbmap-*` (cards, counts, filters, tap to go; tablet and phone, dark and light); ❌ on a real device | | ✅ | unfinished practice is a heuristic (a practice copy with nothing written), not the attempt timer (steps 770-780) |
 | Outline (#15, #85): bookmarks with title, colour and category ("important", "to review", custom) in the page panel, category filter, tap to jump, add / edit / delete, one undo step each | ✅ | ✅ bookmark helpers, SetMeta undo; ✅ harness (outline, editor, undo/redo); ❌ unit (DOM only) | | | |
@@ -348,7 +349,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 6560 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 6891 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -3980,3 +3981,217 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Pure marked-page logic (kinds, reasons, counts) | yes | `tests/nav-marked.test.ts` | | | markers resolved (done) still count as marked |
 | Per-notebook choice in bounded device-local storage (corrupt falls back to all pages) | yes | `tests/nav-marked.test.ts`; harness `doc=markedview` | | | |
 | Marked-only list with badges, sub-filters by kind, empty message, long-press help | yes | harness `doc=markedview` | | | |
+
+### 0.26 — opacity: opacity of ink, pictures and areas, document format 24 (roadmap #358; steps 2780-2799)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real S Pen). Use a notebook with a PDF or scanned page, a picture, and some handwriting.
+
+2780. **Pen slider.** Pick the pen and tap it again: the options have an *Opacity* row (a small drop button, the slider, the value) at 100 %. Move the slider to about 40 % and lift: the value shows 40 %. Write a line: it is a lighter grey of the same colour (the page shows through); a line written before is unchanged. Each pen (ballpoint, fountain pen, brush, marker) and each shape does the same; the number is remembered while you change colour or width. Long-press the little button: the explanation appears (English and Italian); tapping it puts the pen back to 100 %.
+2781. **While writing.** Write a long stroke that crosses itself with the opacity at 40 %: while the pen is down and after you lift, the stroke has the same strength (a crossing does not darken itself twice, and nothing flashes darker for a moment when the stroke settles). With the marker the 85 % look is kept, scaled.
+2782. **Highlighter.** Pick the highlighter: its slider is its own (100 % is the usual translucent yellow). Lower it to 50 % and highlight a printed line: lighter than before, text still readable; two strokes overlapping each other darken as highlighter always did. In the night look the highlighter is fainter in the same proportion.
+2783. **Area highlighter.** With the highlighter in *Area* mode drag a rectangle with the slider at 50 %: the area is lighter than one drawn at 100 %; the live rectangle while you drag already has the final look.
+2784. **Selection.** Select some ink (lasso): the selection bar has the *Opacity* row. Move it: every selected stroke changes, one *Undo* puts them all back, *Redo* again. Different values in the selection show a dash instead of a number until you move the slider. The button puts the selection back to 100 %. Select a picture alone: the bar appears with the slider (a picture had no bar before). Select a text box together with ink: the text box is not changed.
+2785. **Pictures.** Insert a picture, select it and lower its opacity to 30 %: it fades over the page (or over a PDF below it, or over another picture). A rotated picture fades the same. Copy and paste it, move it to another page, duplicate: the copy has the same opacity.
+2786. **Areas.** Select an area highlighter and change its opacity; recolour it afterwards: the opacity stays.
+2787. **Groups and locks.** Select one member of a group: the whole group changes. A locked area or picture is not changed by the slider (unlock it first). On a locked page the slider is refused with the lock notice.
+2788. **Pen sets and favourites.** Save the pen at 40 % as a favourite (long press a slot, or the radial menu) and in a pen set: choosing it later brings back the colour, width and the 40 %. The star of the favourite shows as active only while the opacity matches. The style eyedropper on a faint stroke takes its opacity too.
+2789. **Action.** All-actions sheet: *Opacity* is near the top with the highlighter in hand, or with ink, a picture or an area selected; choosing it opens the slider (the selection bar's when something is selected, else the pen's options) with the focus on it.
+2790. **Exports.** Export a page with faint ink, a faint picture and a faint area as PNG, SVG, PDF, interactive HTML, the written area or selection as a transparent picture, copy as image, and a hand-in PDF: they show the same strengths as on screen; the highlighter stays multiplied (page text below still readable) in SVG and PDF.
+2791. **Thumbnails.** The Library card and the page navigator show faint ink as faint; after changing an opacity the thumbnail follows.
+2792. **Other tools.** Join broken strokes does not join two strokes of different opacity; the history panel names the step *Opacity changed* (*Opacità cambiata*); the version diff shows a stroke whose opacity changed as changed.
+2793. **Save and reopen.** Close and reopen the notebook: all opacities are as they were. A notebook that never used the slider is saved without any opacity (open the file in a text editor and search for "opacity"). Open a notebook written by 0.25: it looks identical and is saved as format 24. A copy of the plugin older than this version opens a notebook saved by this one read-only (it never rewrites it).
+2794. **Merge and sync.** Change the opacity of a stroke on one device and open the notebook on another that also has changes: after the merge the notebook has the stroke with its opacity once (a stroke whose opacity differs from the other copy's is kept as a different stroke).
+2795. **Looks.** Italian (*Opacità*), light and dark theme, phone and tablet width: the row fits in the pen options and in the selection bar, nothing is clipped, the slider is easy to drag with a finger.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v24: optional `opacity` (0.05 to 1) on strokes of any pen, images and areas; migration v23 → v24 (identity plus version; a stray key is dropped), lenient read (out of range clamped, not a number dropped, each counted), strict write, staged loading of large v23 files, repair, merge key, copies, schema `docs/schema/notebook-v24.schema.json` | yes | `tests/model-v24.test.ts`, `tests/format-schema.test.ts` | | | |
+| Opacity slider in the pen options (pen and its kinds, shapes) and the highlighter options (strokes and areas), separate values; new strokes and areas store it only below 100 % | yes | state, favourites, area creation: `tests/model-v24.test.ts`; harness `doc=opacity` | | | the slider was not dragged with a finger on a device |
+| Opacity in favourite pens and pen sets (like the width), the radial menu's active mark, the style eyedropper | yes | `tests/model-v24.test.ts` | | | |
+| Selection restyle: opacity of the selected ink, pictures and areas as ONE undo step (groups whole, locked elements and text skipped, locked page refused, titled in the history panel in both languages) | yes | `tests/model-v24.test.ts`; harness `doc=opacity` | | | |
+| The look is the product with the pen's own translucency in every path: static canvas, live stroke, wet ink (inline opacity on the wet canvas, hidden when the static layer has the stroke), night look, PNG raster, area export, copy as image, hand-in, SVG, PDF (one graphics state per alpha, multiplied for the highlighter), HTML, thumbnails | yes | alphas, SVG, PDF and raster: `tests/model-v24.test.ts`; canvas, wet ink and night look: harness `doc=opacity` screenshots | | | the wet canvas of a translucent stroke and the canvas, PDF and night look were not compared pixel by pixel on a device |
+| Golden render hashes unchanged (an absent opacity draws exactly as before) | yes | `tests/pens-golden.test.ts` | | | |
+| Action *Opacity* (all-actions sheet, context rank with a selection of ink, pictures or areas and with the highlighter or a shape in hand, long-press explanations in English and Italian) | yes | `tests/model-v24.test.ts`, `tests/long-press-help.test.ts`; harness `doc=opacity` | | | |
+
+### 0.26 — tidy: one-step page tidy-up (roadmap #238; steps 2820-2839)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real hand). Use a notebook page with several lines of your own handwriting written a little crooked, with different left margins and a few big gaps; then a ruled page. Keep a page with a picture, a text box and an underlined heading for the "leaves alone" steps.
+
+2820. **From the page menu.** Open the page menu (page indicator or a thumbnail's menu) and choose *Tidy up page*. A small sheet opens: three rows with a checkbox each, a count on the right of each, *Keep paragraph breaks* under the last, and a *What will change* tile. Long-press the entry: the explanation appears (English and Italian).
+2821. **Preview, then cancel.** Switch the rows on and off: the counts and the tile follow. Tap *Cancel* (or the close button): the page is exactly as before and nothing is in the history panel.
+2822. **Tidy up.** Tap *Tidy up*: crooked words in a line sit on one baseline, the starts of the lines share one margin (an indent stays an indent), and a large hole between two paragraphs shrinks to about one blank line. A notice says how many words, line starts and gaps changed. The strokes only moved: same shape, size and pressure.
+2823. **One undo.** Undo once: everything is back. Redo does it all again. The history panel shows one step, *Page tidied up*.
+2824. **Second run.** Run *Tidy up page* again: the tile says *Nothing to tidy up with these choices* and the button is disabled.
+2825. **On a selection.** Select a few lines with the lasso: the second row of the bar (tablet width) has *Tidy up*; on a phone it is in the All actions sheet. The sheet says how many strokes are selected; only they move, and they stay selected afterwards.
+2826. **Keep paragraph breaks.** With it on, a gap of one blank line is kept and a bigger gap shrinks to one blank line. Off: every gap closes to the usual line spacing. Lines never touch or overlap.
+2827. **Ruled paper.** On ruled paper the words go onto the rules, lines move by whole rules only, and the margin is the paper's margin line when your writing was next to it.
+2828. **Leaves alone.** On a page with a picture, a text box, a shape, a highlighter stroke, a locked element, an underline under a line of text and a collapsed sticky note with ink: none of those move. A line that has an underline, a drawing or an object in its way stays where it is; the lines around it still tidy.
+2829. **Locked page.** Lock the page: the sheet says *This page is locked* and *Tidy up* is disabled.
+2830. **Remembered.** Switch a row off, close the sheet, open it again (and after restarting Obsidian): the choice is still there on this device.
+2831. **Nothing selected.** With nothing selected, the command *Tidy up the selection or the page* (palette) opens the sheet for the page in view; with a selection it opens it for the selection.
+2832. **Looks.** Light and dark theme, phone and tablet width, Italian (*Riordina*, *Riordina la pagina*).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Tidy-up engine: words onto a baseline (existing engine), line starts onto a common margin (paper margin on ruled paper), oversized gaps closed with paragraph breaks kept, whole rules on ruled paper, rigid moves only, one undo step, no page-time change, no format change | yes | `tests/tidy.test.ts`: two paragraphs, crooked lines, big gaps, ruled paper, a locked box in the way, groups, hidden ink, areas, second run, one undo, page times, locked page | | yes | thresholds tuned on synthetic writing only |
+| Sheet with the three steps, counts, summary, remembered choices, cancellable; selection bar (second row from tablet width) and sheet entry, page menu entry, command, long-press help, context ranking, history title | yes | `tests/tidy.test.ts` (registry, texts, ranking), `tests/selection-arrange.test.ts`; harness `doc=tidy` | | yes | not tried on Android; a line cut in two by the line finder is joined back by position only |
+
+### 0.26 — smooth: smooth and straighten selected strokes (roadmap #66; steps 2800-2819)
+
+Manual steps (real Obsidian; nothing here is verified on Android). Use your own shaky handwriting: a few words, a wobbly underline drawn freehand, an L or a check mark, a loop, and a highlighter stroke.
+
+2800. **Where.** Select the handwriting with the lasso, open the All actions sheet (Selection): *Smooth strokes* and *Straighten strokes* are there (and in the command palette: *Smooth the handwriting of the selection*, *Straighten the almost-straight lines of the selection*). With only text, pictures or an area highlight selected they are not offered.
+2801. **Smooth.** Run *Smooth strokes*: the tremor of the lines is gone, but the letters keep their shape, no line moves visibly away from where it was, the two ends of every stroke stay put, and a notice counts the strokes. The selection stays on the smoothed strokes.
+2802. **Corners.** The foot of an L, the tip of a check mark and the corner of a printed letter stay sharp (they are not rounded off).
+2803. **Pressure.** Strokes written with a pen that reports pressure keep their thick and thin parts exactly where they were.
+2804. **Twice.** Run Smooth again on the same strokes: it changes them only a little more, never the shape; when nothing is left to smooth the notice says so.
+2805. **Straighten.** Select a wobbly underline and a hand-drawn ruler line and run *Straighten strokes*: each becomes a clean straight line between its two ends. A curve, a loop, a zig-zag, a letter and a very short mark are left exactly as they were. The notice counts the straightened strokes.
+2806. **Twice (straighten).** Run it again: nothing changes and the notice says so.
+2807. **Left alone.** The highlighter, shapes (line, rectangle, ellipse), the marker, invisible ink, text boxes, pictures and area highlights are never changed, even when selected together with handwriting.
+2808. **Groups and locks.** Group two strokes and select only one: nothing happens to them. Select the whole group: both are reshaped. A group that holds a locked element is left alone.
+2809. **Sticky note.** Collapse a sticky note that holds ink: its hidden ink is not reshaped.
+2810. **Undo and redo.** One undo puts every stroke back exactly (the history panel names the step *Strokes smoothed* or *Strokes straightened*); one redo does it again.
+2811. **Several pages.** Select strokes on two pages (a lasso across a page boundary) and run it: both pages are reshaped, in one undo step.
+2812. **Locked page.** Lock the page and try again: it refuses and says so.
+2813. **Page time.** The page time in the navigator does not change after reshaping (the ink was edited, not written).
+2814. **Saving.** Close and reopen the notebook: the reshaped strokes are as they were left.
+2815. **Help.** Long-press each action in the sheet: the explanation appears and nothing happens until you tap again. Italian: all texts, the notice and the history title are translated.
+2816. **Ranking.** With strokes selected the two actions come near the top of the sheet's *For this page*; on grid or plain paper Straighten is a little higher.
+2817. **Looks.** Light and dark theme, phone and tablet width, Italian: the sheet rows look like their neighbours.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Smooth strokes (#66): Taubin smoothing of line-pen strokes, ends, point count and pressure kept, sharp corners held, bounded move per point, one undo step | yes | `tests/smooth.test.ts` (shape kept, ends fixed, corners, bounded re-runs, tools skipped); harness `doc=smooth` | | | the strength is fixed (no slider); tuned on synthetic jitter only, not on a real S Pen |
+| Straighten strokes (#66): almost-straight strokes (bend under 7% of the chord, length under 1.12x the chord, no doubling back) become a line between their ends; idempotent | yes | `tests/smooth.test.ts`; harness `doc=smooth` | | | the thresholds are a guess; a very gentle curve may count as a line |
+| Selection rules: whole groups only, locked elements, pinned sticky ink, hidden ink, graph-bound ink, shapes, highlighter and marker skipped; locked page refuses; page times untouched | yes | `tests/smooth.test.ts`; harness `doc=smooth` | | | |
+| Sheet and command entries, long-press help, context ranking, history title (English and Italian) | yes | `tests/selection-arrange.test.ts` | | | the selection bar rows are full, so both actions are in the sheet and the command palette only |
+
+### 0.26 — redact: redaction before export (roadmap #285; steps 2840-2859 and 2980-2988)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a stylus). Use a notebook with a typed name and an account number on a page, handwriting over them, a sticky note, an equation and a picture; and one page on a scanned or PDF background with printed text. For the files, open them in another app (PDF reader, browser) and also search their text for the covered words.
+
+2840. **Open.** Notebook menu, *Export…*: a row *Cover parts of the page* with a *Redact…* button. Long-press the button: the explanation appears (English and Italian). The *Apply the boxes* switch is not there while there are no boxes.
+2841. **Draw.** Tap *Redact…*: a picture of the current page. Drag with the pen (or the mouse) over the typed name: a dashed outline, then the picture is drawn again and the name is gone under a black box. Drag over the handwriting too.
+2842. **Finger.** With *Draw with finger* on, a finger draws a box; switch it off (long-press shows what it does): a finger scrolls the page and draws nothing. On a tall (infinite) page it starts off.
+2843. **Edit.** The cross on a box removes it (the covered content comes back in the picture); *Undo last box*, *Clear page* and *Clear all* work; the arrows move between pages and the counts follow. A tap draws nothing.
+2844. **Back in the dialog.** *Done*: the row says how many boxes on how many pages and the switch *Apply the boxes* is on, with a note about what happens to content and backgrounds.
+2845. **PDF.** Export a PDF. Open it: black boxes where you drew; nothing of the covered words can be selected, searched or found by copying all the text; ink is cut at the box edges; the note, equation and picture under a box are gone, not just hidden. Delete the black box in an editor if you can: there is nothing under it.
+2846. **Scanned or PDF page.** Export a page that has a PDF or scanned background: the page is one flat picture with the box burned in. The text of that page can no longer be selected (the trade-off); outside the boxes the page looks as before.
+2847. **Other formats.** SVG (open it in a text editor and search for the covered words), interactive HTML, PNG images, *Background only* (the box is in the picture although no ink is drawn), *Ink only* (a transparent picture with the box), a page range, a clean copy, *Split into sheets* on an infinite page: none shows or contains what was covered. Print preview shows the boxes.
+2848. **Switch off.** Turn *Apply the boxes* off and export: everything is there, and the boxes are still kept for next time. Turn it on again.
+2849. **Other exports.** With the switch on: *Hand in…*, *Share page…*, *Export as Markdown* (the text of covered text boxes and the bookmark title of a covered page are not in the note), *Export written area / selection*, *Copy as image* and a quick page export from the page menu each cover the boxes and say so in a notice. Inserting a selection into a note or making a task from one shows the covered page too.
+2850. **Selection.** Select a handwritten word that is partly under a box and *Copy as image*: only the part outside the box is in the picture; a box elsewhere on the page does not widen the picture.
+2851. **Per device.** Close and reopen the notebook, restart Obsidian: the boxes and the switch are still there on this device; open the same notebook on another device: no boxes there. Open another notebook: none.
+2852. **The notebook.** Nothing in the notebook changes: no undo step, no change in the file, the page looks the same on screen; the boxes appear only in the Redact preview and in exports.
+2853. **Comments and header.** A margin comment anchored on a box is not in the PDF notes strip; a comment away from the box is. With a page header turned on for exports, a box over the header leaves the header out of that page.
+2854. **Limits.** Draw more than 60 boxes on one page: a notice says so. A very large set does not slow the export dialog.
+2855. **Not covered.** With boxes on, the dialog shows a line listing what is not covered (PDF annotations digest, Extract pages, the automatic PDF copy, backups, the companion note, Zettel cards, page embeds, PDF text you copy yourself, excerpts of other notebooks, the file title). *Export PDF annotations* and *Extract pages* ignore the boxes: this is by design and documented.
+2856. **Long press.** In the Redact dialog long-press each of the arrows, the four buttons and a box's cross: each shows a bubble in the language of the interface.
+2857. **Looks.** Light and dark theme, phone and tablet width: the dialog fits, the page fits the screen without sideways scrolling, the buttons wrap.
+2858. **Italian.** Switch to Italian: all texts are translated.
+2859. **Pen button.** While the Redact dialog is open the S Pen side button does nothing special on the preview (the dialog is not a notebook page).
+2980. **Review fixes: wide text.** Type a line of capitals, then one of CJK or emoji, in a text box and put a box over its start only: the whole text box is gone from the PDF and the SVG.
+2981. **Review fixes: excerpt.** Make an excerpt of a region of page 1 onto page 3, then cover that region on page 1 only: page 3 exported alone (SVG, written area) has no excerpt picture; the Redact preview of page 3 shows it gone too.
+2982. **Review fixes: unreadable boxes.** In the developer console, `app.saveLocalStorage("notebook-redactions", "garbage")`, then reopen Obsidian and export: every path (Export… PDF, quick exports, Copy as image, Insert into note, book index, formula sheet, digests) refuses with a notice and writes nothing, and one notice per session says the stored boxes could not be read; another notebook is refused too. The dialog says the boxes cannot be restored; Escape leaves the notebook refused; drawing a box and *Done* saves exactly that box and exports work for that notebook only (also after a restart). *Reset redaction storage* asks for a confirmation, then every notebook exports without boxes. Also try `app.saveLocalStorage("notebook-redactions", {version: 2, notebooks: {}})`: the same refusal.
+2983. **Review fixes: switched off.** With boxes kept but the switch off, a quick page export says once that the boxes are off; an export from the dialog does not.
+2984. **Review fixes: digests and indexes.** With a box over a highlighted PDF word (an IBAN), the Highlights digest and the colour-meaning digest do not quote that word; the book index and the formula sheet leave out what is covered; the figures list's *Copy image* refuses a covered figure, a picture just beside a box, and an excerpt (also an excerpt of an excerpt) of a covered region of another page. A long capitals or CJK page header with a box over its end only is left out of the exported page.
+2985. **Review fixes: API.** From the console, `app.plugins.plugins["notebook"].api.exportPdf(path)` with the switch on writes a PDF with the boxes; with damaged storage it fails with `export-failed`.
+2986. **Review fixes: excerpts of this notebook.** Make an excerpt of a region of page 1 onto page 3, then move the ink of that region elsewhere on page 1 and box it there (the box does not touch the excerpt's region): every export of page 3 (PDF, SVG, PNG, written area) leaves the excerpt out, and the figures list's *Copy* refuses it. Remove every box: the excerpt is exported again. The switch's note in the export dialog says excerpts of this notebook are left out while it has a box; the not-covered list names *Copy as excerpt* into another notebook.
+2987. **Review fixes: selection picture.** Type a long line of capitals or CJK in a narrow text box, box only its last line, select the text box with the lasso and use *Export written area* › *Selection*: the text is not in the picture.
+2988. **Review fixes: storage.** With `app.saveLocalStorage("notebook-redactions", {"<id>": {on: true, at: 1, boxes: {"<page id>": [{x: 1}]}}})` (a box this version cannot read) that notebook's exports are refused and one notice says a copy was kept; `app.loadLocalStorage("notebook-redactions-unreadable").copies` lists it. In the Redact dialog of an unreadable notebook draw a box, undo it and press Escape: exports stay refused (nothing saved). With a readable notebook, draw a box, undo, Escape: the stored boxes are as before.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Boxes per page (draw, undo, remove, clear), lenient bounded model, per-notebook device-local storage (fails closed: damaged reads as unreadable and refuses exports, session copy in memory, read-back check, switched-on never evicted, hashed odd ids; an unreadable or foreign store is kept aside, never overwritten silently, refuses every notebook until Done or Reset), switch to apply | yes | `tests/redact.test.ts`, `tests/redact-store.test.ts`, `tests/redact-review.test.ts`; harness `doc=redact` (the real dialog and its row) | | | the reset button and its confirmation only through manual step 2982 |
+| Ink cut at a box with the pen's reach; whole elements dropped (text, picture, equation, graph, box, note, marker, checkbox, excerpt); area highlighter cut round the box; comments, header, tags and states; ink bound to a dropped graph; hidden note ink | yes | `tests/redact.test.ts` (every rule, idempotence, original untouched) | | | text of a half-covered text box goes whole (documented) |
+| A SECRET marker must not be in any byte of the PDF (text, note, equation, box title, comment, scanned background), SVG, interactive HTML, hand-in PDF, area picture and Markdown | yes | `tests/redact-export.test.ts` (each with a control that does contain the marker without redaction) | | | |
+| PDF / picture background burned in (PDF, SVG, HTML, PNG, print, Markdown, share, area), also in a background-only export; the cached page is not changed | yes | burn plan and fake media in `tests/redact-export.test.ts`; pixels (PNG renderer, JPEG, area PNG) in harness `doc=redact` | | | pages with a PDF background lose their text layer (trade-off) |
+| Where it applies: export dialog (switch decides), hand-in, share, Markdown, area / copy as image, quick page exports, pictures put into notes, highlights and colour-meaning digests (no PDF word a box touches), book index, formula sheet, figures' Copy image, API `exportPdf` | yes | `tests/redact-export.test.ts`, `tests/redact-review.test.ts` (each fix with a SECRET marker and its own control); harness `doc=redact` | | | not covered: PDF annotation digest, extract pages, auto PDF copy, backups, companion note, Zettel cards, page embeds, hand-copied PDF text, file title |
+| Review fixes: pessimistic text measure (capitals, CJK, emoji; every character bounded, unknown ones widest), covered-source excerpts at any depth, state views and clean copy keep the boxes, pen reach by real nib width, checkbox label, header measured like text, redacted header for note pictures, figures' Copy only for kept elements, off hint | yes | `tests/redact.test.ts` (review fixes block), `tests/redact-review.test.ts`, `tests/redact-review2.test.ts` | | | view wiring (notices, refusals per path) only through harness and manual steps 2980-2985 |
+| Review fixes, round 3: excerpts of this notebook left out while it has any box (also in Figures › Copy), selection picture boxes by redaction bounds, wider per-character bounds (DejaVu Sans symbols), Redact dialog never saves a net-unchanged set on Escape (nothing while unreadable), store: a set that loses boxes is unreadable, one bounded copy per distinct unreadable value, a failed first save does not refuse every notebook | yes | `tests/redact-review3.test.ts`, `tests/redact-store.test.ts` (T5, T6, T9 blocks) | | | manual steps 2986-2988; over-redaction of same-notebook excerpts is the documented trade-off |
+| Long-press help (English and Italian) on every new control; Italian texts | yes | harness `doc=redact`; i18n parity tests | | | |
+
+### 0.26 — zoomwidth: pen width follows zoom (roadmap #350; steps 2920-2939)
+
+Implemented, not verified on hardware. No format change: strokes keep plain page-unit widths. Manual steps (real Obsidian on an Android tablet, S Pen):
+
+2920. **Default.** *Settings > Writing > Pen width follows zoom* is off on a fresh install. Zoom in a lot and write: the line looks thicker than at fit width (as before).
+2921. **On.** Turn it on, zoom in about 4x and write with the pen at width 3: the line looks like a width 3 line at fit width (about 3 px on screen); zoom out to fit and the same stroke is now much thinner on the page. Write again at the new zoom: it looks the same as before.
+2922. **Live equals saved.** While writing, the live ink is as thick as the finished stroke: nothing jumps when the pen lifts.
+2923. **Hint.** Open the pen options with it on: next to the widths a line reads "N px on screen · M on page × zoom"; pinch to zoom and the numbers follow. With it off the line is hidden.
+2924. **Extremes.** At the lowest zoom the line does not become a blob; at the highest zoom it does not vanish (stored width is clamped to 0.1 to 48 page units).
+2925. **Pens.** Fountain pen, brush and marker follow the same rule; the nib angle and pressure response are unchanged.
+2926. **Shapes and highlighter.** Line, arrow and shapes, and the stroke highlighter, follow the rule. The area highlighter (a rectangle) and the eraser sizes are unchanged.
+2927. **Old ink.** Turning the option on or off never changes strokes already written; undo, redo, export and another device show them as saved.
+2928. **Looks.** Light and dark, tablet and phone: the hint fits in the pen options without moving the width buttons. Italian texts.
+2929. **Content that takes the pen's style.** Stamps, graphs and axes drawn from the pen, ink of objects (boxes, markers, equations) and the text style use the plain chosen width, not the zoomed one: with the option on and the view zoomed in 4x, insert a stamp or a graph and its lines are the chosen width on the page (as with the option off). Only strokes written with the pen, the shapes and the highlighter follow the zoom.
+2930. **With opacity.** The *Opacity* row of the pen options (0.26, #358) stays next to the width row and the hint; a stroke written with both stores the width divided by the zoom and the chosen opacity.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pen width follows zoom (setting, off by default; stored width = chosen / zoom, clamped) | yes | `tests/zoom-width.test.ts`; harness `doc=zoomwidth` | | | |
+| Pen options hint (on-screen width, "× zoom") | yes | harness `doc=zoomwidth` | | | |
+| Content inserted from the pen style (stamps, graphs, object ink, text style) keeps the plain chosen width | yes | by construction (`penStyle` / `style` read `penWidth`); step 2929 | | | |
+| Opacity row and the zoom hint together in the pen options | yes | harness `doc=zoomwidth` | | | |
+| Cross-feature rules of the wave (opacity kept by smooth, tidy, join, redaction; palette ignores it) | yes | `tests/wave026-integration.test.ts` | | | |
+
+### 0.26 — ctxpalette: context palette in the colour picker (roadmap #394; steps 2900-2919)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+2900. **Page row.** On a written page with ink in several colours, open the colour picker (colour row, last button). Under *Recent colours* an *On this page* row shows the colours used here, the most used first.
+2901. **Elements count.** Add a text box, a marker and an area highlight in new colours and reopen the picker: they appear in the row; a sticky note's paper colour does not.
+2902. **No repeats.** Pick a custom colour so it is in the recent colours: it is no longer in *On this page*. Two slightly different reds on the page show as one.
+2903. **Slide row.** On a PDF page with colour in it, *From the slide* shows its main colours (not the paper white). Move to another page and reopen: its own colours show. Reopening on the same page is instant.
+2904. **Written page.** On a page with no PDF or picture, there is no *From the slide* row; a page with no ink has no *On this page* row.
+2905. **Tap.** Tap a swatch: the pen (or the highlighter, as for the toolbar swatches) takes that colour; the recent colours do not change.
+2906. **Meanings.** With a colour meaning defined (Settings, colours with meaning), the swatch of that colour is a pill showing its label.
+2907. **Help.** Long-press a swatch with a finger: an explanation of its row appears (English and Italian).
+2908. **Not in the way.** Writing with the pen while the picker is open stays smooth; a large PDF page does not stall when the picker opens.
+2909. **Looks.** Light and dark theme, phone and tablet width, Italian (*In questa pagina*, *Dalla slide*).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure usage ranking, ΔE dedupe, dominant colours (median cut + k-means), cache | yes | `tests/context-palette.test.ts` | | | |
+| *On this page* and *From the slide* rows in the colour picker, meaning labels, long-press help, no format change | yes | harness `doc=ctxpalette` (PDF page) and `doc=ctxpalettew` (written page) | | | the rows follow the page the picker was opened on (not a page turned to later) |
+
+### 0.26 — gallery: dynamic gallery block in notes (roadmap #421; steps 2860-2879)
+2860. **Insert.** In a Markdown note run "Insert gallery block": pick a page tag, a course (only offered when the timetable has classes), a marker, bookmarked, how many and the order. The preview shows the block; Insert puts it at the cursor on its own lines.
+2861. **Reading view.** The block shows a grid of page thumbnails, each with the notebook name and page number. On a tablet several columns, on a phone two.
+2862. **Live Preview.** Move the cursor out of the block: the same grid; move it into the block: the plain lines, editable.
+2863. **Tap.** Tap a thumbnail: the notebook opens at that page (a page picked by bookmark or marker still opens the right page after pages moved).
+2864. **Conditions.** Try `tag: #x`, `bookmarked` (notebook bookmarks and global bookmarks), `course: <name>` (a course of the timetable), `notebook: <path or name or folder>` (one notebook: its pages in order), `marked: question|homework` (any marker of those kinds, also resolved ones), `limit: 6`, `sort: title`. Several conditions must all hold.
+2865. **Refresh.** With the note open, add a tag to a page in a notebook: within about a second after you stop writing the grid shows it.
+2866. **Empty and errors.** A query with no match shows a quiet "No pages match" card; a misspelled key or value shows one readable red line naming it.
+2867. **Writes nothing.** Reading view and Live Preview never change the note or any notebook file.
+2868. **Looks.** Light and dark theme, phone and tablet width, Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Query parsing, page selection, marker conditions (pure) | yes | `tests/gallery-query.test.ts` | | | |
+| Gallery block grid, tap to open, empty and error states, refresh | yes | harness `doc=gallery` | | | |
+| Thumbnails through the shared page thumbnail cache | yes | harness `doc=gallery` | | | |
+| Command "Insert gallery block" with builder | yes | harness `doc=gallery` | | | |
+
+### 0.26 — related: related handwritten pages panel (roadmap #422; steps 2880-2899)
+
+Manual steps (real Obsidian; nothing here is verified on Android).
+
+2880. **Open.** Run the command *Related handwritten pages* (command palette or All actions): a panel opens in the right sidebar. With no Markdown note open it says "No note open".
+2881. **Links.** In a notebook text box write `[[Some note]]` (a note that exists), save, then open that note: the page appears first with the chip *Links here*.
+2882. **Title, alias, tag, heading.** Write the note's title, one of its aliases (frontmatter `aliases`) or one of its headings in a text box; give a page a tag that the note has (or a parent or child of it). Each page appears with the chip *Title*, *Alias*, *Tag* or *Heading* and the matched text beside it; a page with several reasons shows `+n` and ranks higher.
+2883. **Course.** In the timetable link a course to a folder of notebooks and put the note in that folder (or give it the course name as a tag, title or alias): the first page of those notebooks appears last with *Same course* (turn it off in Settings, Integration, *Related pages: same course*).
+2884. **Open.** Tap a row: the notebook opens on that page. Open a second note: the panel updates by itself a moment later.
+2885. **Link and embed.** Tap the link button of a row: the link of that page is copied (paste it in the note). Drag a row into the note: the page's embed is inserted at the drop point.
+2886. **Thumbnails.** Every row shows the page; scrolling a long list stays smooth on the tablet (thumbnails are drawn one at a time).
+2887. **Empty and refresh.** A note nothing relates to shows "Nothing related yet". The refresh button reads the notebooks again; long-press it and the link button: the explanations appear (English and Italian).
+2888. **Read-only.** Nothing in the vault changes while the panel is open (no file is written; the library index may be refreshed as the page switcher does).
+2889. **Looks.** Light and dark theme, phone and tablet width, Italian; the panel in the left sidebar and as a tab.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure ranking (links, title, alias, tag, heading, course; caps; ties) | yes | `tests/related-pages.test.ts` | | | |
+| Side panel (thumbnail, notebook, page, reason, open, copy link, empty states, debounced update) | yes | harness `doc=related` | | | |
+| Drag a row into the note (embed text) | yes | harness `doc=related` (drag data only) | | | drop into the editor not tested in a real Obsidian |
+| Setting *Related pages: same course* | yes | `tests/settings-schema.test.ts` | | | |
+| The panel's read-only refresh writes nothing; what it read is saved by the next page-switcher refresh, one entry per path, never over a newer index entry nor for a notebook deleted since | yes | `tests/page-directory-save.test.ts` | | | |

@@ -2,6 +2,9 @@ import { t } from "../i18n";
 import {
 	canvasPixelAt, colourPatch, currentColour, normaliseHex, pickStrokeAt, rememberColour, rgbToHex, styleOfStroke,
 } from "../ink/colour";
+import {
+	buildContextPalette, DominantCache, dominantColours, sampleSize, usedColours, type Raster, type UsageSource,
+} from "../ink/context-palette";
 import type { Stroke } from "../model/types";
 import { ColourPicker } from "./colour-picker";
 import type { ToolbarState } from "./toolbar";
@@ -14,6 +17,18 @@ export interface PageInk {
 	y: number;
 	/** CSS px per pt, to turn the finger tolerance into pt. */
 	scale: number;
+}
+
+/** 0.26 (#394): what the picker's "On this page" and "From the slide" rows are made from, for the page in view. */
+export interface PageColourContext {
+	/** The strokes and elements of the page. */
+	usage: UsageSource;
+	/** Names the background (asset and page) for the cache; null when the page has none. */
+	slideKey: string | null;
+	/** The background as it is drawn now, or null while it is not ready (no render is started for this). */
+	slide(): CanvasImageSource | null;
+	/** The label a colour has in the colour meanings legend, if any. */
+	labelOf(hex: string): string | undefined;
 }
 
 export interface ColourToolsHost {
@@ -29,6 +44,8 @@ export interface ColourToolsHost {
 	notify(text: string): void;
 	/** The visible strokes of the page under a screen point, or null when there is no page there. */
 	inkAt(clientX: number, clientY: number): PageInk | null;
+	/** 0.26 (#394): the page in view for the context rows; absent or null: the picker has no such rows. */
+	pageContext?(): PageColourContext | null;
 }
 
 export type EyedropperMode = "colour" | "style";
@@ -44,6 +61,9 @@ const TAP_TOLERANCE_PX = 10;
  */
 export class ColourTools {
 	private picker: ColourPicker | null = null;
+	/** 0.26 (#394): dominant colours of the backgrounds seen, per page. */
+	private readonly slideCache = new DominantCache();
+	private sampleTimer = 0;
 	private mode: EyedropperMode | null = null;
 	private toolAtArm = "";
 	private contact: { id: number; x: number; y: number } | null = null;
@@ -78,11 +98,61 @@ export class ColourTools {
 		});
 		this.picker = picker;
 		picker.focus();
+		this.refreshContext();
 	}
 
 	closePicker(): void {
+		window.clearTimeout(this.sampleTimer);
 		this.picker?.destroy();
 		this.picker = null;
+	}
+
+	/**
+	 * The context rows (#394). The page's own colours are counted at once (a pass over its strokes); the dominant colours of the
+	 * background come from a small sample taken in a timer after the picker is shown and are kept per page, so opening the picker
+	 * again on that page costs nothing. A background that is not drawn yet simply gives no row; nothing here touches the input.
+	 */
+	private refreshContext(): void {
+		const picker = this.picker;
+		const ctx = this.host.pageContext?.();
+		if (!picker || !ctx) return;
+		const used = usedColours(ctx.usage);
+		const build = (slide: readonly { hex: string; share: number }[]): void =>
+			picker.setContext(buildContextPalette({ used, slide, recent: this.host.recent(), labelOf: (hex) => ctx.labelOf(hex) }));
+		const key = ctx.slideKey;
+		const cached = key ? this.slideCache.get(key) : undefined;
+		build(cached ?? []);
+		if (!key || cached) return;
+		window.clearTimeout(this.sampleTimer);
+		this.sampleTimer = window.setTimeout(() => {
+			if (this.picker !== picker) return;
+			const src = ctx.slide();
+			const raster = src ? this.rasterOf(src) : null;
+			if (!raster) return;
+			const dominant = dominantColours(raster);
+			this.slideCache.set(key, dominant);
+			build(dominant);
+		}, 80);
+	}
+
+	/** A small RGBA copy of a background, or null when it is not ready or the browser refuses to read it. */
+	private rasterOf(src: CanvasImageSource): Raster | null {
+		try {
+			const s = src as { naturalWidth?: number; naturalHeight?: number; width?: unknown; height?: unknown };
+			const w = s.naturalWidth || Number(s.width), h = s.naturalHeight || Number(s.height);
+			if (!(w > 0) || !(h > 0)) return null;
+			const size = sampleSize(w, h);
+			const out = createEl("canvas");
+			out.width = size.width;
+			out.height = size.height;
+			const g = out.getContext("2d", { willReadFrequently: true });
+			if (!g) return null;
+			g.drawImage(src, 0, 0, size.width, size.height);
+			const d = g.getImageData(0, 0, size.width, size.height);
+			return { width: d.width, height: d.height, data: d.data };
+		} catch {
+			return null;
+		}
 	}
 
 	/** Sets the colour of the tool in use; `remember` also keeps it in the recent custom colours. */
@@ -95,6 +165,7 @@ export class ColourTools {
 			const list = rememberColour(this.host.recent(), colour);
 			this.host.setRecent(list);
 			this.picker?.setRecent(list);
+			this.refreshContext(); // a colour that is now recent leaves the context rows
 		}
 	}
 

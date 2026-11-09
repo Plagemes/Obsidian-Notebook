@@ -82,6 +82,9 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Clean up strokes": ["histpanel.t.cleanUp", "sparkles"],
 	"Join broken strokes": ["histpanel.t.join", "link"],
 	"Align to baseline": ["histpanel.t.baseline", "baseline"],
+	"Tidy up page": ["histpanel.t.tidy", "align-left"],
+	"Smooth strokes": ["histpanel.t.smooth", "sparkles"],
+	"Straighten strokes": ["histpanel.t.straighten", "minus"],
 	"Make axes": ["histpanel.t.axes", "activity"],
 	"Convert equation to ink": ["histpanel.t.eqInk", "pencil"],
 	"Balance reaction": ["histpanel.t.balance", "flask-conical"],
@@ -92,6 +95,7 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	// selection
 	"Restyle selection": ["histpanel.t.restyle", "palette"],
 	"Shape style": ["histpanel.t.shapeRestyled", "shapes"],
+	"Opacity": ["histpanel.t.opacity", "droplet"],
 	"Transform selection": ["histpanel.t.transform", "move"],
 	"Move selection": ["histpanel.t.transform", "move"],
 	"Delete selection": ["histpanel.t.deleteSelection", "trash-2"],

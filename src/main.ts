@@ -22,6 +22,8 @@ import { PenTestModal, penSignalInfo } from "./view/pen-test-modal";
 import { NotebookLibraryHost } from "./library/host";
 import { SharedInbox } from "./library/shared-inbox";
 import { registerIntegration } from "./integration";
+import { registerGalleryBlock } from "./integration/gallery";
+import type { GalleryService } from "./integration/gallery-service";
 import { annotatePdfFlow, registerAnnotatePdf, type AnnotatePdfHost } from "./library/annotate-pdf";
 import { registerHoverPreview } from "./view/hover-preview";
 import { registerReferenceMenu } from "./view/ref-window-open";
@@ -51,6 +53,8 @@ import type { InboxService } from "./zettel/inbox-service";
 import { registerTextbookRefs } from "./view/textbook-ref-ui";
 import { PracticeService } from "./view/practice";
 import { openPageSwitcher, QuickNavService } from "./view/quick-switcher";
+import { RELATED_VIEW_TYPE, RelatedView } from "./view/related-view";
+import { createRelatedSource, openRelatedPanel } from "./view/related-source";
 import { openRecentPages, RecentPagesService } from "./view/recent-pages";
 import { SyncSafetyService } from "./view/sync-safety";
 import type { NavController } from "./view/nav-controller";
@@ -279,6 +283,9 @@ export default class NotebookPlugin extends Plugin {
 				readNotebook: (file) => this.host.readNotebook(file),
 				thumbnailBackground: (doc, page, width) => this.host.thumbnailBackground(doc, page, width),
 			}, this.recentPages);
+			// 0.26 related (#422): the side panel of handwritten pages related to the open Markdown note (read-only).
+			const related = createRelatedSource(this.app, { quickNav: () => quickNav, timetable: () => this.timetable?.data() ?? null, includeCourse: () => this.settings.relatedCourse });
+			this.registerView(RELATED_VIEW_TYPE, (leaf) => new RelatedView(leaf, related));
 		});
 
 		// ui redesign: every command of the plugin comes from the action registry (ui/actions.ts); ids are unchanged.
@@ -299,6 +306,7 @@ export default class NotebookPlugin extends Plugin {
 			"timetable": () => void this.timetable.edit(),
 			"open-class": () => this.timetable.openNow(),
 			"pen-button-test": () => new PenTestModal(this.app, penSignalInfo(this)).open(),
+			"related-pages": () => void openRelatedPanel(this.app),
 			"go-to-page": () => {
 				if (quickNav) openPageSwitcher(quickNav);
 			},
@@ -350,6 +358,15 @@ export default class NotebookPlugin extends Plugin {
 		this.step("timetable", () => {
 			this.timetable = new TimetableService(this, (file) => this.host.openNotebook(file));
 			this.timetable.start();
+		});
+
+		// 0.26 (#421): the `notebook-gallery` block and its builder.
+		this.step("gallery", () => {
+			this.gallery = registerGalleryBlock(this, {
+				root: () => this.settings.folder, loadIndex: () => this.host.loadIndex(), readNotebook: (file) => this.host.readNotebook(file),
+				background: (doc, page, width) => this.host.thumbnailBackground(doc, page, width), timetable: () => this.timetable?.data(),
+				bookmarks: () => this.bookmarks?.list() ?? [], onBookmarksChange: (fn) => this.bookmarks.onChange(fn),
+			});
 		});
 
 		// 0.19 (#221): lecture log lines that waited for a daily note are written once it exists.
@@ -435,6 +452,7 @@ export default class NotebookPlugin extends Plugin {
 		stop("sync safety", () => this.syncSafety?.dispose());
 		stop("lecture log", () => this.lectureLog?.dispose());
 		stop("timetable", () => this.timetable?.stop());
+		stop("gallery", () => this.gallery?.dispose());
 		stop("library", () => this.host?.dispose());
 		stop("appearance", () => activeDocument.body.removeClass("notebook-style-obsidian"));
 	}
@@ -553,6 +571,8 @@ export default class NotebookPlugin extends Plugin {
 	}
 
 	private rememberTimer: number | null = null;
+	/** 0.26 (#421): the data behind the gallery blocks. */
+	private gallery: GalleryService | null = null;
 
 	private writeLocation(): void {
 		if (this.rememberTimer !== null) window.clearTimeout(this.rememberTimer);

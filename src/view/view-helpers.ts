@@ -64,19 +64,19 @@ export function pageSignature(page: Page): string {
 	const parts: Array<string | number> = [page.width, page.height, page.paper.kind, page.paper.spacing, page.strokes.length];
 	const n = page.strokes.length;
 	const stride = Math.max(1, Math.floor(n / 16));
-	const sample = (s: Stroke) => parts.push(s.id, s.points.length, s.points[0]?.[0] ?? 0, s.points[0]?.[1] ?? 0, s.width);
+	const sample = (s: Stroke) => parts.push(s.id, s.points.length, s.points[0]?.[0] ?? 0, s.points[0]?.[1] ?? 0, s.width, s.opacity ?? 1);
 	for (let i = 0; i < n; i += stride) sample(page.strokes[i]!);
 	if (n > 0 && (n - 1) % stride !== 0) sample(page.strokes[n - 1]!);
 	for (const el of page.elements ?? []) {
 		if (el.type === "text") parts.push(el.id, el.x, el.y, el.width, el.text, el.fontSize, el.color);
-		else if (el.type === "image") parts.push(el.id, el.x, el.y, el.width, el.height, el.rotation, el.asset);
+		else if (el.type === "image") parts.push(el.id, el.x, el.y, el.width, el.height, el.rotation, el.asset, el.opacity ?? 1);
 		else if (el.type === "box") parts.push(el.id, el.x, el.y, el.width, el.height, el.kind);
 		else if (el.type === "equation") parts.push(el.id, el.x, el.y, el.width, el.height, el.latex, el.fontSize, el.color, el.inline ? 1 : 0, el.numbered ? 1 : 0, el.outline?.length ?? 0);
 		else if (el.type === "graph") parts.push(el.id, stableStringify(el));
 		else if (el.type === "excerpt") parts.push(el.id, el.x, el.y, el.width, el.height, el.asset ?? "", stableStringify(el.source));
 		else if (el.type === "sticky") parts.push(el.id, el.x, el.y, el.width, el.height, el.color, el.fontSize, el.text ?? "", el.collapsed ? 1 : 0, el.ink?.length ?? 0);
 		else if (el.type === "checkbox") parts.push(el.id, el.x, el.y, el.size, el.color, el.checked ? 1 : 0);
-		else if (el.type === "area") parts.push(el.id, el.x, el.y, el.width, el.height, el.color);
+		else if (el.type === "area") parts.push(el.id, el.x, el.y, el.width, el.height, el.color, el.opacity ?? 1);
 		else parts.push(el.id, el.x, el.y, el.kind, el.done ? 1 : 0);
 	}
 	const bg = page.background;

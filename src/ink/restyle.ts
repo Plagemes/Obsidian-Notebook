@@ -1,5 +1,7 @@
 import { Batch, ReplaceElement, ReplaceStroke, type Command } from "../model/history";
-import { freezeStroke } from "../model/serialize";
+import { freezeElement, freezeStroke } from "../model/serialize";
+import { UpdateItems, type PageItem } from "../model/groups";
+import { normaliseOpacity, opacityOf, withOpacity } from "../model/opacity";
 import type { AreaElement, Page, PageElement, Stroke, TextElement } from "../model/types";
 
 /**
@@ -115,4 +117,77 @@ export function planRestyle(
 	}
 	if (commands.length === 0) return null;
 	return { command: new Batch("Restyle selection", commands), strokes: newStrokes, elements: newElements };
+}
+
+// --- opacity (format v24, roadmap #358) ---
+
+/**
+ * Whether `item` takes an opacity: any stroke (every pen), a picture and an area highlighter; a locked element never (it is not restyled).
+ * Text, equations, graphs and the other elements have none.
+ */
+export function takesOpacity(item: Stroke | PageElement): boolean {
+	if (!("type" in item)) return true;
+	return (item.type === "image" || item.type === "area") && item.locked !== true;
+}
+
+/** Whether a selection holds anything the opacity slider changes. */
+export function opacityAbility(strokes: readonly Stroke[], elements: readonly PageElement[]): boolean {
+	return strokes.length > 0 || elements.some(takesOpacity);
+}
+
+/** The opacity every item of the selection has (1 for one without), or null when they differ or there is nothing to change. */
+export function commonOpacity(strokes: readonly Stroke[], elements: readonly PageElement[]): number | null {
+	const values = new Set<number>();
+	for (const s of strokes) values.add(opacityOf(s));
+	for (const e of elements) if (takesOpacity(e)) values.add(opacityOf(e as { opacity?: number }));
+	return values.size === 1 ? [...values][0]! : null;
+}
+
+/** `item` with the opacity `opacity` (the same object when nothing changes; 1 or less than 5 % are normalised, see `normaliseOpacity`). */
+function opaqueItem<T extends PageItem>(item: T, opacity: number | undefined): T {
+	if (!takesOpacity(item)) return item;
+	const next = withOpacity(item as { opacity?: number }, opacity) as T;
+	if (next === item) return item;
+	return ("type" in next ? freezeElement(next) : freezeStroke(next)) as T;
+}
+
+export interface OpacityPlan {
+	command: Command;
+	/** The selection after the change: every stroke and element given, replaced by its copy where it changed. */
+	strokes: Stroke[];
+	elements: PageElement[];
+}
+
+/**
+ * The command that sets the opacity of the strokes, pictures and areas of `page` among the given items, as ONE undo step (`UpdateItems`: it finds the items
+ * by id, implements `remap`, and History refuses it on a locked page). `opacity` 1 puts the item back to full strength (the key is removed, so the
+ * notebook is what earlier versions wrote). Null when nothing would change. Items no longer on the page are skipped; groups come whole from the caller
+ * (`selectableItems`).
+ */
+export function planOpacity(page: Page, strokes: readonly Stroke[], elements: readonly PageElement[], opacity: number): OpacityPlan | null {
+	const target = normaliseOpacity(opacity);
+	const onPage = new Set<string>([...page.strokes.map((s) => s.id), ...(page.elements ?? []).map((e) => e.id)]);
+	const next = new Map<string, PageItem>();
+	const before = new Map<string, PageItem>();
+	const plan = <T extends PageItem>(item: T): T => {
+		if (!onPage.has(item.id)) return item;
+		const changed = opaqueItem(item, target);
+		if (changed !== item) {
+			next.set(item.id, changed);
+			before.set(item.id, item);
+		}
+		return changed;
+	};
+	const newStrokes = strokes.map(plan);
+	const newElements = elements.map(plan);
+	if (next.size === 0) return null;
+	// A pure function of the CURRENT item: the planned copy when the item is still the planned one (so the selection keeps pointing at the object
+	// in the page), otherwise the item as it is now with the opacity set (a non-history upkeep replaced it since: its change is kept, never reverted).
+	const change = (item: PageItem): PageItem => {
+		const planned = next.get(item.id);
+		if (!planned) return item;
+		return item === before.get(item.id) ? planned : opaqueItem(item, target);
+	};
+	const command = new UpdateItems(page.id, new Set(next.keys()), change, "Opacity");
+	return { command, strokes: newStrokes, elements: newElements };
 }

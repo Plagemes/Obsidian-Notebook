@@ -380,8 +380,8 @@ export class PenRadial {
 			const label = `${t("pens.slot", { n: String(i + 1) })}: ${t(favouriteToolKey(fav))} ${fav.color}, ${fav.width}`;
 			const b = this.item(layer, `fav:${i}`, label, ...this.at(angles[i]!, 96), 44, "is-round is-fav");
 			const active = s.tool === fav.tool && (fav.tool === "pen"
-				? s.penColor.toLowerCase() === fav.color && s.penWidth === fav.width && (fav.kind ?? "pen") === (s.penKind ?? "pen")
-				: s.highlighterColor.toLowerCase() === fav.color && s.highlighterWidth === fav.width);
+				? s.penColor.toLowerCase() === fav.color && s.penWidth === fav.width && (fav.kind ?? "pen") === (s.penKind ?? "pen") && (fav.opacity ?? 1) === (s.penOpacity ?? 1)
+				: s.highlighterColor.toLowerCase() === fav.color && s.highlighterWidth === fav.width && (fav.opacity ?? 1) === (s.highlighterOpacity ?? 1));
 			b.toggleClass("is-active", active && !this.saveMode);
 			b.toggleClass("is-target", this.saveMode);
 			const d = fav.tool === "highlighter" ? 14 : Math.round(Math.min(20, 6 + Math.sqrt(fav.width) * 3.5));

@@ -2,8 +2,20 @@
  * Pure helpers of the PDF reading tools (search results, reveal, which pages are searched). No 'obsidian' or DOM import.
  */
 import type { Size, Viewport } from "../ink/viewport";
-import type { Page } from "../model/types";
+import { createStroke } from "../model/document";
+import { freezeStroke } from "../model/serialize";
+import { RENDER_INK, type Page, type Stroke } from "../model/types";
 import type { SearchHit, SearchTarget } from "../pdf/text-index";
+import { bandPoints, bandWidth, type Band } from "../pdf/text-snap";
+
+/**
+ * 0.26 (#358, Y1): the highlighter strokes that replace a hand-drawn `stroke` when *Snap to text lines* is on: one straight stroke per band,
+ * in the colour of the original and with its opacity (absent at full strength, so a notebook that never uses it is unchanged).
+ */
+export function snappedStrokes(stroke: Pick<Stroke, "color" | "opacity">, bands: readonly Band[]): Stroke[] {
+	const own = stroke.opacity === undefined ? {} : { opacity: stroke.opacity };
+	return bands.map((band) => freezeStroke({ ...createStroke(stroke.color, bandWidth(band), bandPoints(band), "highlighter", RENDER_INK), ...own }));
+}
 
 /** Opacity of a PDF or image background: 1 normally, lighter when dimmed (the page behind it is white). */
 export function backgroundAlpha(dimmed: boolean, strength: number): number {

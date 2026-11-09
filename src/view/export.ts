@@ -10,6 +10,9 @@ import type { HeaderLayout } from "../ink/page-header";
 import { DEFAULT_PNG_SCALE } from "../model/export-pages";
 import { cleanPagesForExport, resolveCleanOptions, type CleanExportOptions } from "../model/clean-export";
 import { backgroundRect } from "../model/margins";
+import { burnKey, burnPlan, withExcerptChains } from "../ink/redact";
+import { countBoxes, type Redactions } from "../model/redact";
+import { announceRedaction, withRedaction } from "./export-redact";
 import { recordPluginWrite } from "../storage/plugin-written";
 import type { Page } from "../model/types";
 import { exportPngPages } from "./export-png";
@@ -63,9 +66,12 @@ export async function collectPageImages(media: NotebookMedia | null, pages: read
 		const list: PdfPlacedImage[] = [];
 		const bg = flags.background ? page.background : undefined;
 		if (bg) {
+			// 0.26 (#285): the boxes of a redacted page are burned into its background picture, which is then the only picture of it in the file.
+			const burn = burnPlan(page);
+			const burnTag = burn ? `:burn:${burnKey(burn.boxes)}` : "";
 			const jpeg = bg.kind === "pdf"
-				? await load(`pdf:${bg.asset}:${bg.page}`, () => media.pdfPageJpeg(bg.asset, bg.page, PDF_DPI))
-				: await load(`img:${bg.asset}`, () => media.imageJpeg(bg.asset));
+				? await load(`pdf:${bg.asset}:${bg.page}${burnTag}`, () => media.pdfPageJpeg(bg.asset, bg.page, PDF_DPI, burn ?? undefined))
+				: await load(`img:${bg.asset}${burnTag}`, () => media.imageJpeg(bg.asset, burn ?? undefined));
 			if (jpeg) list.push({ ...jpeg, ...backgroundRect(page), layer: "background" });
 			else out.skipped++;
 		}
@@ -81,7 +87,7 @@ export async function collectPageImages(media: NotebookMedia | null, pages: read
 			}
 			if (el.type !== "image") continue;
 			const jpeg = await load(`img:${el.asset}`, () => media.imageJpeg(el.asset));
-			if (jpeg) list.push({ ...jpeg, x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation, layer: "element" });
+			if (jpeg) list.push({ ...jpeg, x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation, ...(el.opacity !== undefined ? { opacity: el.opacity } : {}), layer: "element" });
 			else out.skipped++;
 		}
 		if (list.length > 0) out.images.set(page, list);
@@ -117,6 +123,23 @@ export interface ExportOptions {
 	comments?: PdfCommentLabels;
 	/** 0.18 (#178): split the infinite pages into sheets of paper (PDF and PNG); the other pages are exported as they are. */
 	split?: SplitSettings;
+	/**
+	 * 0.26 (#285): the redaction boxes by page id. Every writer that puts pages into a file or a picture applies them first (`withRedaction`):
+	 * what lies under a box is left out of the file, the box is drawn solid black. Absent: nothing is covered.
+	 */
+	redact?: Redactions;
+	/**
+	 * Review fix (P4): the notebook's redaction boxes could not be read on this device (and none are held in memory). Every writer then
+	 * refuses to write (`withRedaction` throws), whatever the boxes would have covered: it is never known that nothing was covered.
+	 */
+	redactBlocked?: true;
+	/** Review fix (P10): how many boxes the notebook keeps switched off; non-dialog exports say once that they are off. */
+	redactOff?: number;
+	/**
+	 * Review fix (U1): the document id of the notebook, so the boxes the export dialog hands over tell the excerpts of this notebook (left
+	 * out while it has a box) from those of another (`withExcerptChains`). Absent: every excerpt is left out while there is a box.
+	 */
+	redactDoc?: string;
 }
 
 /**
@@ -142,15 +165,17 @@ export async function buildPdfBytes(
 
 /** Writes a PDF of `pages` next to the notebook; `suffix` distinguishes single-page exports. */
 export async function exportPdf(
-	app: App, notebook: TFile, pages: readonly Page[], suffix = "", media: NotebookMedia | null = null, options: ExportOptions = {},
+	app: App, notebook: TFile, allPages: readonly Page[], suffix = "", media: NotebookMedia | null = null, base: ExportOptions = {},
 ): Promise<void> {
 	const working = showNotice(t("export.working"), 0);
 	try {
+		const { pages, options } = withRedaction(allPages, base); // 0.26 (#285)
 		const { bytes, skipped } = await buildPdfBytes(notebook.basename, pages, media, options);
 		const path = freePath(app, notebook, suffix, "pdf");
 		recordPluginWrite(app, [path]); // before the write: the inbox must not offer the file the plugin is creating
 		await app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
 		showNotice(t("export.done", { path }));
+		announceRedaction(allPages, base);
 		reportSkipped(skipped);
 	} catch (e) {
 		showNotice(t("export.failed", { error: (e as Error).message }));
@@ -160,12 +185,16 @@ export async function exportPdf(
 }
 
 /** SVG of one page: the text, the images it needs and the path it is written to. */
-async function buildSvg(app: App, notebook: TFile, page: Page, suffix: string, media: NotebookMedia | null, options: ExportOptions): Promise<{ path: string; skipped: number }> {
+async function buildSvg(app: App, notebook: TFile, source: Page, suffix: string, media: NotebookMedia | null, base: ExportOptions): Promise<{ path: string; skipped: number }> {
+	const redacted = withRedaction([source], base); // 0.26 (#285)
+	const page = redacted.pages[0]!;
+	const options = redacted.options;
 	const { images, skipped } = await collectPageImages(media, [page], options.layers);
 	await options.prepare?.([page]);
 	const svgImages = (p: Page): SvgPlacedImage[] => (images.get(p) ?? []).map((img) => ({
 		href: jpegDataUrl(img.jpeg), x: img.x, y: img.y, width: img.width, height: img.height,
 		...(img.rotation !== undefined ? { rotation: img.rotation } : {}),
+		...(img.opacity !== undefined ? { opacity: img.opacity } : {}),
 		...(img.layer !== undefined ? { layer: img.layer } : {}),
 	}));
 	const path = freePath(app, notebook, suffix, "svg");
@@ -183,6 +212,7 @@ export async function exportSvg(app: App, notebook: TFile, page: Page, suffix: s
 	try {
 		const { path, skipped } = await buildSvg(app, notebook, page, suffix, media, options);
 		showNotice(t("export.done", { path }));
+		announceRedaction([page], options);
 		reportSkipped(skipped);
 	} catch (e) {
 		showNotice(t("export.failed", { error: (e as Error).message }));
@@ -207,9 +237,10 @@ const breathe = (): Promise<void> => new Promise((resolve) => window.setTimeout(
  * one of the SVG export, a viewer in a few lines of script, no network). Pictures are embedded up to a size cap; the rest are left out
  * with a notice. The file is built one page at a time (the interface breathes between pages) and never replaces an existing file.
  */
-export async function exportHtml(app: App, notebook: TFile, pages: readonly Page[], indices: readonly number[], suffix: string, media: NotebookMedia | null, options: ExportOptions = {}): Promise<void> {
+export async function exportHtml(app: App, notebook: TFile, allPages: readonly Page[], indices: readonly number[], suffix: string, media: NotebookMedia | null, base: ExportOptions = {}): Promise<void> {
 	const working = showNotice(t("export.working"), 0);
 	try {
+		const { pages, options } = withRedaction(allPages, base); // 0.26 (#285): the SVG of each page, its links and its pictures are those of the redacted page
 		const budget = new ImageBudget();
 		const labels = htmlLabels();
 		const parts: string[] = [htmlHead({ title: notebook.basename, labels, lang: activeDocument.documentElement.lang || "en" })];
@@ -226,6 +257,7 @@ export async function exportHtml(app: App, notebook: TFile, pages: readonly Page
 				return [{
 					href, x: img.x, y: img.y, width: img.width, height: img.height,
 					...(img.rotation !== undefined ? { rotation: img.rotation } : {}),
+					...(img.opacity !== undefined ? { opacity: img.opacity } : {}),
 					...(img.layer !== undefined ? { layer: img.layer } : {}),
 				}];
 			});
@@ -245,6 +277,7 @@ export async function exportHtml(app: App, notebook: TFile, pages: readonly Page
 		recordPluginWrite(app, [path]); // before the write: the inbox must not offer the file the plugin is creating
 		await app.vault.create(path, parts.join(""));
 		showNotice(t("export.done", { path }));
+		announceRedaction(allPages, base);
 		reportSkipped(skipped);
 		if (budget.omitted > 0) showNotice(t("export.html.imagesOmitted", { n: String(budget.omitted) }), 8000);
 	} catch (e) {
@@ -270,6 +303,11 @@ export interface ExportRequest {
 	split?: SplitSettings;
 	/** 0.19 (#239), every format: a clean copy, without the study and working layers (absent: the export as it always was). */
 	clean?: CleanExportOptions;
+	/**
+	 * 0.26 (#285), every format: the redaction boxes of this export (the dialog's choice: absent means none, whatever the notebook remembers).
+	 * What lies under them is left out of the files, not painted over.
+	 */
+	redact?: Redactions;
 }
 
 /**
@@ -285,6 +323,14 @@ export async function runExport(app: App, notebook: TFile, allPages: readonly Pa
 	const splits = (request.format === "pdf" || request.format === "png") && request.split;
 	const base: ExportOptions = { ...options };
 	if (clean && resolveCleanOptions(clean).comments) delete base.comments;
+	// 0.26 (#285): the dialog decides what is covered; each writer applies it to the pages it is given (`withRedaction`).
+	// Its choice is the one the reader saw: no hint about switched-off boxes; boxes it holds are readable (in memory at least).
+	delete base.redactOff;
+	if (request.redact && countBoxes(request.redact) > 0) {
+		// Review fix (R5): excerpt chains over every page of the notebook, also when only a range is exported.
+		base.redact = withExcerptChains(allPages, request.redact, options.redactDoc) ?? request.redact;
+		delete base.redactBlocked;
+	} else delete base.redact;
 	const opts: ExportOptions = { ...base, layers: request.layers, ...(splits ? { split: request.split! } : {}) };
 	if (jobs.length === 0) return;
 	if (request.format === "png") {
@@ -322,6 +368,7 @@ export async function runExport(app: App, notebook: TFile, allPages: readonly Pa
 			working.setMessage(t("export.progress", { done: String(written), total: String(jobs.length) }));
 		}
 		showNotice(t("export.doneMany", { n: String(written), path: last }));
+		announceRedaction(jobs.map((j) => pages[j.pages[0]!]!), opts);
 		reportSkipped(skipped);
 	} catch (e) {
 		showNotice(t("export.failedMany", { done: String(written), error: (e as Error).message }), 8000);

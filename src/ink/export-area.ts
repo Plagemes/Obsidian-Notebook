@@ -69,8 +69,13 @@ export interface AreaPlan {
 }
 
 /** What one export draws; null when there is nothing written (the caller refuses with a notice). */
-export function planArea(page: Page, selection: { strokes: readonly Stroke[]; elements: readonly PageElement[] } | null, hiddenInk = false, measure: MeasureText = estimateMeasure): AreaPlan | null {
-	const drawn = selection ? selectionPage(page, selection.strokes, selection.elements) : page;
+export function planArea(
+	page: Page, selection: { strokes: readonly Stroke[]; elements: readonly PageElement[] } | null, hiddenInk = false, measure: MeasureText = estimateMeasure,
+	/** 0.26 (#285): turns the page to draw (the whole page, or the selection cut out of it) into the page an export shows, e.g. with redaction boxes applied; the area is measured on that. */
+	prepare?: (drawn: Page) => Page,
+): AreaPlan | null {
+	const cut = selection ? selectionPage(page, selection.strokes, selection.elements) : page;
+	const drawn = prepare ? prepare(cut) : cut;
 	const bounds = areaBounds(drawn, hiddenInk, measure);
 	return bounds ? { page: drawn, rect: areaRect(bounds) } : null;
 }

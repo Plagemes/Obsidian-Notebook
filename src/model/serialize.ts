@@ -10,6 +10,7 @@ import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement,
 import { isStoredViewName, normalizeViewName, validRegion } from "./views";
 import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE, CHECKBOX_PATH_MAX, cleanCheckboxLabel, isOurBlockId } from "./checklist";
 import { AREA_MAX_SIDE, AREA_MIN_SIDE } from "./area";
+import { isOpacity, normaliseOpacity, OPACITY_MAX, OPACITY_MIN } from "./opacity";
 import { commentLine, normalizeComments, readComments } from "./comments-format";
 import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
 import { normalizePageTags } from "./page-tags";
@@ -45,9 +46,47 @@ export type ParseResult =
 	| { ok: true; doc: NotebookDocument; migratedFrom: number | null; dropped?: number }
 	| { ok: false; reason: ParseFailure; message: string; version?: number };
 
-const j = JSON.stringify;
-
 class ValidationError extends Error {}
+
+/**
+ * `JSON.stringify` for the hand-built lines of the writer. `JSON.stringify(undefined)` is `undefined`, which a template literal
+ * would write as the bare word `undefined` (not JSON): a missing value is refused here, before any text is built, so the save is
+ * stopped with a clear message instead of producing text that cannot be read back.
+ */
+function j(v: unknown): string {
+	const text = JSON.stringify(v);
+	if (text === undefined) {
+		if (lenientWrite) return "null";
+		fail("value", "a required field is missing (undefined)");
+	}
+	return text;
+}
+
+/** The colour of a stroke or element as JSON text; a colour that is not even a string is refused with the owner named. */
+function jc(owner: { id: string; type?: string; color: unknown }): string {
+	if (typeof owner.color !== "string") {
+		if (lenientWrite) return "null";
+		fail(`${owner.type ?? "stroke"} ${String(owner.id)}.color`, "expected a #rrggbb colour (it is missing)");
+	}
+	return JSON.stringify(owner.color);
+}
+
+/** Review fix (U2): set only while `serializeLenient` runs (the writer is synchronous). */
+let lenientWrite = false;
+
+/**
+ * Review fix (U2): the text of `doc` for a BACKUP only, never for the notebook file: a missing required value is written as `null`
+ * instead of stopping the writer, so the line that holds it is invalid (the repair's line scan leaves it out) and every other line is
+ * kept. No cache is filled (`serialize` fills none).
+ */
+export function serializeLenient(doc: NotebookDocument): string {
+	lenientWrite = true;
+	try {
+		return serialize(doc);
+	} finally {
+		lenientWrite = false;
+	}
+}
 
 /**
  * Lenient read of optional v7 details: invalid ones are counted here and left out instead of failing the
@@ -70,7 +109,9 @@ function strokeLine(s: Stroke): string {
 	const nib = s.nib !== undefined ? `,"nib":${j(s.nib)}` : "";
 	// v22: `fill`, `fillTint` (only with a fill) and `dash`, each only when set, after `nib`.
 	const fill = (s.fill !== undefined ? `,"fill":${j(s.fill)}` : "") + (s.fillTint !== undefined ? `,"fillTint":${j(s.fillTint)}` : "") + (s.dash !== undefined ? `,"dash":${j(s.dash)}` : "");
-	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${j(s.color)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide}${group}${nib}${fill},"points":${j(s.points)}}`;
+	// v24: `opacity` only when set, after the shape style.
+	const opacity = s.opacity !== undefined ? `,"opacity":${j(s.opacity)}` : "";
+	return `\t\t\t\t{"id":${j(s.id)},"tool":${j(s.tool)},"color":${jc(s)},"width":${j(s.width)},"render":${j(s.render)}${hidden}${slide}${group}${nib}${fill}${opacity},"points":${j(s.points)}}`;
 }
 
 /**
@@ -181,7 +222,7 @@ function boxLine(e: BoxElement): string {
 
 /** v9 equation: frame, source, size and colour, then the optional style flags and the cached outline. */
 function equationLine(e: EquationElement): string {
-	let out = `{"id":${j(e.id)},"type":"equation","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"latex":${j(e.latex)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}`;
+	let out = `{"id":${j(e.id)},"type":"equation","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"latex":${j(e.latex)},"fontSize":${j(e.fontSize)},"color":${jc(e)}`;
 	if (e.inline !== undefined) out += `,"inline":${j(e.inline)}`;
 	if (e.numbered !== undefined) out += `,"numbered":${j(e.numbered)}`;
 	if (e.outline !== undefined) out += `,"outline":${j(e.outline)}`;
@@ -250,7 +291,7 @@ function excerptLine(e: ExcerptElement): string {
  * strokes it keeps hidden, in that order (one line).
  */
 function stickyLine(e: StickyElement): string {
-	let line = `				{"id":${j(e.id)},"type":"sticky","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${j(e.color)},"fontSize":${j(e.fontSize)}`;
+	let line = `				{"id":${j(e.id)},"type":"sticky","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${jc(e)},"fontSize":${j(e.fontSize)}`;
 	if (e.text !== undefined && e.text !== "") line += `,"text":${j(e.text)}`;
 	if (e.collapsed === true) {
 		line += `,"collapsed":true`;
@@ -264,7 +305,7 @@ function stickyLine(e: StickyElement): string {
  * change of the link (`taskAt`), the typed label and the task link, in that order (one line).
  */
 function checkboxLine(e: CheckboxElement): string {
-	let line = `				{"id":${j(e.id)},"type":"checkbox","x":${j(e.x)},"y":${j(e.y)},"size":${j(e.size)},"color":${j(e.color)}`;
+	let line = `				{"id":${j(e.id)},"type":"checkbox","x":${j(e.x)},"y":${j(e.y)},"size":${j(e.size)},"color":${jc(e)}`;
 	if (e.checked === true) line += `,"checked":true`;
 	if (e.at !== undefined) line += `,"at":${j(e.at)}`;
 	if (e.taskAt !== undefined) line += `,"taskAt":${j(e.taskAt)}`;
@@ -275,7 +316,9 @@ function checkboxLine(e: CheckboxElement): string {
 
 /** v23 area highlighter: the rectangle, then the colour (one line). */
 function areaLine(e: AreaElement): string {
-	return `				{"id":${j(e.id)},"type":"area","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${j(e.color)}}`;
+	// v24: `opacity` only when set, after the colour.
+	const opacity = e.opacity !== undefined ? `,"opacity":${j(e.opacity)}` : "";
+	return `				{"id":${j(e.id)},"type":"area","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${jc(e)}${opacity}}`;
 }
 
 function elementLine(e: PageElement): string {
@@ -284,10 +327,12 @@ function elementLine(e: PageElement): string {
 
 function typedElementLine(e: PageElement): string {
 	if (e.type === "text") {
-		return `\t\t\t\t{"id":${j(e.id)},"type":"text","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"text":${j(e.text)},"fontSize":${j(e.fontSize)},"color":${j(e.color)}}`;
+		return `\t\t\t\t{"id":${j(e.id)},"type":"text","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"text":${j(e.text)},"fontSize":${j(e.fontSize)},"color":${jc(e)}}`;
 	}
 	if (e.type === "image") {
-		return `\t\t\t\t{"id":${j(e.id)},"type":"image","asset":${j(e.asset)},"x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"rotation":${j(e.rotation)}}`;
+		// v24: `opacity` only when set, after the rotation.
+		const opacity = e.opacity !== undefined ? `,"opacity":${j(e.opacity)}` : "";
+		return `\t\t\t\t{"id":${j(e.id)},"type":"image","asset":${j(e.asset)},"x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"rotation":${j(e.rotation)}${opacity}}`;
 	}
 	if (e.type === "marker") return markerLine(e);
 	if (e.type === "box") return boxLine(e);
@@ -488,7 +533,7 @@ function readPoint(v: unknown, path: string): Point {
  */
 type SlideIds = ReadonlySet<string> | "any" | "ignore";
 
-function readStroke(v: unknown, path: string, drop: Dropped | null = null, slides: SlideIds = "any", groups = true, pens = true, shapeStyle = true): Stroke {
+function readStroke(v: unknown, path: string, drop: Dropped | null = null, slides: SlideIds = "any", groups = true, pens = true, shapeStyle = true, withOpacity = true): Stroke {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	// v20: a tool name this version does not know is a detail of the stroke when reading leniently (the stroke is read as a "pen" and
@@ -576,7 +621,26 @@ function readStroke(v: unknown, path: string, drop: Dropped | null = null, slide
 			if (dash !== undefined) stroke.dash = dash;
 		}
 	}
+	// v24 (#358): the opacity (a file of an older format has none of ours: an odd key is ignored, as the migration drops it).
+	if (withOpacity) {
+		const opacity = readOpacity(v, path, drop);
+		if (opacity !== undefined) stroke.opacity = opacity;
+	}
 	return stroke;
+}
+
+/**
+ * v24 (#358): the optional `opacity` of a stroke, an image or an area. Details: read leniently a number outside [OPACITY_MIN, OPACITY_MAX] is
+ * clamped to it and a value that is not a number is dropped, each counted (the item is drawn as strongly as the file asked at most, or in full);
+ * strictly either fails, so a malformed one is never written.
+ */
+function readOpacity(v: RawObject, path: string, drop: Dropped | null): number | undefined {
+	if (v.opacity === undefined) return undefined;
+	if (isOpacity(v.opacity)) return v.opacity;
+	if (!drop) fail(`${path}.opacity`, `expected a number from ${OPACITY_MIN} to ${OPACITY_MAX}`);
+	drop.count++;
+	// Above 1 clamps to full strength, which is no key at all (the app never writes an opacity of 1; an exact 1 in a file stays valid and is read as it is).
+	return normaliseOpacity(v.opacity);
 }
 
 /**
@@ -852,12 +916,12 @@ function readMargins(v: unknown, path: string, width: number, height: number): P
 	return { left, right, bottom };
 }
 
-function readElement(v: unknown, path: string, assets: Assets, drop: Dropped | null = null, groups = true): PageElement {
-	const el = readTypedElement(v, path, assets, drop);
+function readElement(v: unknown, path: string, assets: Assets, drop: Dropped | null = null, groups = true, withOpacity = true): PageElement {
+	const el = readTypedElement(v, path, assets, drop, withOpacity);
 	return isObject(v) ? readFlags(v, el, path, drop, groups) : el;
 }
 
-function readTypedElement(v: unknown, path: string, assets: Assets, drop: Dropped | null): PageElement {
+function readTypedElement(v: unknown, path: string, assets: Assets, drop: Dropped | null, withOpacity = true): PageElement {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	if (v.type === "text") {
@@ -881,6 +945,9 @@ function readTypedElement(v: unknown, path: string, assets: Assets, drop: Droppe
 			width: positive(v.width, `${path}.width`), height: positive(v.height, `${path}.height`),
 			rotation: finite(v.rotation, `${path}.rotation`),
 		};
+		// v24 (#358): how strongly the picture is drawn (a file of an older format has none of ours).
+		const opacity = withOpacity ? readOpacity(v, path, drop) : undefined;
+		if (opacity !== undefined) el.opacity = opacity;
 		return el;
 	}
 	if (v.type === "marker") return readMarker(v, id, path, drop);
@@ -890,7 +957,7 @@ function readTypedElement(v: unknown, path: string, assets: Assets, drop: Droppe
 	if (v.type === "excerpt") return readExcerpt(v, id, path, assets, drop);
 	if (v.type === "sticky") return readSticky(v, id, path, drop);
 	if (v.type === "checkbox") return readCheckbox(v, id, path, drop);
-	if (v.type === "area") return readArea(v, id, path);
+	if (v.type === "area") return readArea(v, id, path, drop, withOpacity);
 	return fail(`${path}.type`, "unknown element type");
 }
 
@@ -1136,12 +1203,16 @@ function readCheckbox(v: RawObject, id: string, path: string, drop: Dropped | nu
  * v23 area highlighter. The rectangle (each side within AREA_MIN_SIDE..AREA_MAX_SIDE) and the colour are required: an area with an invalid one
  * is not drawn at all, so it fails as a whole (the caller drops and counts it when reading leniently, see ELEMENT_TYPES_V23).
  */
-function readArea(v: RawObject, id: string, path: string): AreaElement {
+function readArea(v: RawObject, id: string, path: string, drop: Dropped | null = null, withOpacity = true): AreaElement {
 	const width = positive(v.width, `${path}.width`);
 	const height = positive(v.height, `${path}.height`);
 	if (width < AREA_MIN_SIDE || width > AREA_MAX_SIDE) fail(`${path}.width`, `expected ${AREA_MIN_SIDE} to ${AREA_MAX_SIDE} pt`);
 	if (height < AREA_MIN_SIDE || height > AREA_MAX_SIDE) fail(`${path}.height`, `expected ${AREA_MIN_SIDE} to ${AREA_MAX_SIDE} pt`);
-	return { id, type: "area", x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`), width, height, color: colour(v.color, `${path}.color`) };
+	const el: AreaElement = { id, type: "area", x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`), width, height, color: colour(v.color, `${path}.color`) };
+	// v24 (#358): the opacity is a detail of the area (read leniently it is clamped or dropped and counted; the area stays).
+	const opacity = withOpacity ? readOpacity(v, path, drop) : undefined;
+	if (opacity !== undefined) el.opacity = opacity;
+	return el;
 }
 
 function readViewport(v: unknown, path: string): GraphViewport {
@@ -1477,7 +1548,7 @@ function dissolveSmallGroups(page: Page, path: string, drop: Dropped | null): vo
 	});
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true, withTimes = true, withPens = true, withShapeStyle = true): Page {
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true, withTimes = true, withPens = true, withShapeStyle = true, withOpacity = true): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -1489,7 +1560,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 	if (spacing < MIN_PAPER_SPACING) fail(`${path}.paper.spacing`, `must be at least ${MIN_PAPER_SPACING} pt`);
 	if (!Array.isArray(v.strokes)) fail(`${path}.strokes`, "expected an array");
 	const strokes = v.strokes.map((s, i) => {
-		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop, slides, withGroups, withPens, withShapeStyle);
+		const stroke = readStroke(s, `${path}.strokes[${i}]`, drop, slides, withGroups, withPens, withShapeStyle, withOpacity);
 		if (ids.has(stroke.id)) fail(`${path}.strokes[${i}].id`, "duplicate id");
 		ids.add(stroke.id);
 		freezeStroke(stroke);
@@ -1516,7 +1587,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 			// reading leniently.
 			const v8 = isObject(e) && typeof e.type === "string"
 				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type) || ELEMENT_TYPES_V15.includes(e.type) || ELEMENT_TYPES_V17.includes(e.type) || ELEMENT_TYPES_V23.includes(e.type));
-			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop, withGroups)) : readElement(e, at, assets, drop, withGroups);
+			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop, withGroups, withOpacity)) : readElement(e, at, assets, drop, withGroups, withOpacity);
 			if (!el) return;
 			if (ids.has(el.id)) fail(`${at}.id`, "duplicate id");
 			ids.add(el.id);
@@ -1805,7 +1876,7 @@ export class StagedParse {
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18, this.from >= 19, this.from >= 20, this.from >= 22);
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18, this.from >= 19, this.from >= 20, this.from >= 22, this.from >= 24);
 	}
 
 	get pending(): number {
@@ -1873,7 +1944,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v20 → v21 only drops a stray `views` key (applied by `StagedParse.create`), so large v20 files are staged too.
 	// v21 → v22 only drops the strokes' `fill`, `fillTint` and `dash` keys (ignored page by page), so large v21 files are staged too.
 	// v22 → v23 is the identity apart from the version (the area element is new and nothing is dropped), so large v22 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22) return StagedParse.create(pre.raw, first, pre.version);
+	// v23 → v24 only drops the `opacity` keys of strokes, images and areas (ignored page by page), so large v23 files are staged too.
+	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22 || pre.version === 23) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }

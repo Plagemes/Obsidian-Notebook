@@ -179,6 +179,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"selection-cleanup": (v) => v.selectionTools?.cleanUp(),
 	"selection-join": (v) => v.selectionTools?.joinBroken(),
 	"selection-baseline": (v) => v.selectionTools?.alignBaseline(),
+	// 0.26 (#238): tidy up the selection, or the page (the page in view, or the one the page sheet was opened from)
+	"selection-tidy": (v) => v.selectionTools?.tidy(),
+	"page-tidy": (v, arg) => v.selectionTools?.tidy(arg.page),
+	"selection-smooth": (v) => v.selectionTools?.reshape("smooth"),
+	"selection-straighten": (v) => v.selectionTools?.reshape("straighten"),
 	// 0.15 (241): drawings with states
 	"selection-part": (v) => v.stateTools?.makePartFromSelection(),
 	"states-toggle": (v) => v.stateTools?.toggle(),
@@ -327,6 +332,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"toggle-annotations": (v) => v.readingTools?.toggleAnnotations(),
 	"toggle-snap-highlighter": (v) => v.readingTools?.toggleSnap(),
 	"highlighter-area": (v) => v.toggleHighlighterArea(),
+	"opacity": (v) => v.revealOpacity(),
 	"pdf-select-text": (v) => { if (!v.presenting) v.pdfTextTools?.toggle(); },
 	"toggle-dim-background": (v) => v.readingTools?.toggleDim(),
 	"pdf-margins": onPage((v, p) => {

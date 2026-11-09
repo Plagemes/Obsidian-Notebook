@@ -1,5 +1,6 @@
 import type { AreaElement, ExcerptElement, Page, PageElement, Point, ShapeDash, Stroke, TextElement, Tool } from "../model/types";
 import { isNewPen, MM, RENDER_FREEHAND, RENDER_INK } from "../model/types";
+import { opacityOf } from "../model/opacity";
 import { backgroundRect } from "../model/margins";
 import { transformElement } from "./elements";
 import { drawBox, drawMarker, type BoxLabel } from "./marker-render";
@@ -146,6 +147,8 @@ export function drawElement(
 	try {
 		ctx.translate(el.x + el.width / 2, el.y + el.height / 2);
 		if (el.rotation) ctx.rotate(el.rotation);
+		// v24 (#358): a picture with an opacity is drawn that strongly (the placeholder too).
+		if (el.opacity !== undefined) ctx.globalAlpha *= opacityOf(el);
 		if (img) ctx.drawImage(img, -el.width / 2, -el.height / 2, el.width, el.height);
 		else {
 			ctx.fillStyle = PLACEHOLDER;
@@ -167,6 +170,8 @@ export interface LiveStroke {
 	fill?: string;
 	fillTint?: true;
 	dash?: ShapeDash;
+	/** Format v24 (#358): the opacity of the stroke being written (multiplies the pen's alpha; absent = 1). */
+	opacity?: number;
 	points: readonly Point[];
 	predicted: readonly Point[];
 }
@@ -615,7 +620,7 @@ export class Renderer {
 	 * Returns false when the stroke cannot be shown as wet ink (no page, or wet ink failed earlier):
 	 * the caller then shows it on the live layer (setLive).
 	 */
-	beginWet(pageIndex: number, g: InkBuilder, tool: Tool, color: string): boolean {
+	beginWet(pageIndex: number, g: InkBuilder, tool: Tool, color: string, opacity?: number): boolean {
 		if (this.wetFailed) return false;
 		const t = this.pageTransform(pageIndex);
 		if (!t) return false;
@@ -631,6 +636,7 @@ export class Renderer {
 				this.wetRelease.splice(i, 1);
 			}
 			wet.begin(g, tool, this.inkColor(tool, color), t);
+			this.setWetOpacity(wet, tool, opacity);
 			this.wet = wet;
 			this.wetPage = pageIndex;
 			return true;
@@ -638,6 +644,22 @@ export class Renderer {
 			this.failWet(e);
 			return false;
 		}
+	}
+
+	/**
+	 * Format v24 (#358): the stroke about to be written shows through its wet canvas with its opacity. The pen's wet canvas holds opaque ink and has
+	 * no translucency of its own; the highlighter's and the marker's get theirs from CSS (35 % multiplied, 85 %), so a stroke with an opacity
+	 * overrides it with the product, keeping the blend mode (overlaps within one stroke still never darken twice). Without an opacity the inline
+	 * value is removed and the stylesheet decides, exactly as before.
+	 */
+	private setWetOpacity(wet: WetInk, tool: Tool, opacity: number | undefined): void {
+		const canvas = wet.canvas;
+		if (opacity === undefined || opacityOf({ opacity }) >= 1) {
+			canvas.style.removeProperty("opacity");
+			return;
+		}
+		const base = tool === "highlighter" ? (this.night ? NIGHT_HIGHLIGHTER_ALPHA : HIGHLIGHTER_ALPHA) : tool === "marker" ? MARKER_ALPHA : 1;
+		canvas.setCssProps({ opacity: String(Math.round(base * opacityOf({ opacity }) * 1000) / 1000) });
 	}
 
 	/** The wet stroke in progress (to set its tip points), or null. */
@@ -721,8 +743,16 @@ export class Renderer {
 			wet.clear();
 			return;
 		}
+		// Format v24 (#358): a translucent pen stroke shown twice for the two frames of the delay would darken for a moment (the opaque ink did not
+		// show): its canvas is hidden as soon as the static layer has the stroke (both change in the same frame), and cleared later as before.
+		if (staticHasIt) this.hideTranslucentWet(wet);
 		this.wetRelease.push({ wet, frames: sync ? 0 : 1 });
 		this.schedule();
+	}
+
+	/** Hides a wet canvas that holds a stroke with an opacity (its inline opacity is set); an opaque pen canvas is left to the delayed clear. */
+	private hideTranslucentWet(wet: WetInk): void {
+		if (wet.canvas.style.getPropertyValue("opacity") !== "") wet.canvas.setCssProps({ opacity: "0" });
 	}
 
 	private highlighterWet(): WetInk {
@@ -927,6 +957,8 @@ export class Renderer {
 		if (this.wetRelease.length === 0) return;
 		for (let i = this.wetRelease.length - 1; i >= 0; i--) {
 			const r = this.wetRelease[i]!;
+			// The static layer has been redrawn by now: a translucent stroke must not show twice.
+			if (!this.staticDirty && r.wet !== this.wet) this.hideTranslucentWet(r.wet);
 			if (r.frames-- > 0) continue;
 			if (r.wet !== this.wet) r.wet.clear();
 			this.wetRelease.splice(i, 1);
@@ -1324,8 +1356,8 @@ export class Renderer {
 			this.beginPage(ctx, boxes[live.pageIndex]!);
 			const points = live.predicted.length ? [...live.points, ...live.predicted] : live.points;
 			// v22 (#37): the fill of the closed shape being dragged lies under its line (a dashed line is drawn as its runs).
-			if (live.fill !== undefined && isFilled({ tool: live.tool, fill: live.fill, points })) this.fillShape(ctx, live.fill, live.fillTint === true, points);
-			this.setInk(ctx, live.tool, live.color);
+			if (live.fill !== undefined && isFilled({ tool: live.tool, fill: live.fill, points })) this.fillShape(ctx, live.fill, live.fillTint === true, points, undefined, live.opacity);
+			this.setInk(ctx, live.tool, live.color, live.opacity);
 			if (live.dash !== undefined && live.tool === "shape") {
 				ctx.fill(new Path2D(strokeSvgPath({ points, width: live.width, tool: live.tool, render: RENDER_FREEHAND, dash: live.dash })));
 			} else if (isNewPen(live.tool)) {
@@ -1519,18 +1551,20 @@ export class Renderer {
 		return [(box.x + x) * scale + offsetX, (box.y + y) * scale + offsetY];
 	}
 
-	private setInk(ctx: CanvasRenderingContext2D, tool: Tool, color: string): void {
+	/** `opacity` (format v24, #358): the stroke's own, which multiplies the pen's alpha in every look (absent = 1). */
+	private setInk(ctx: CanvasRenderingContext2D, tool: Tool, color: string, opacity?: number): void {
 		ctx.fillStyle = this.inkColor(tool, color);
+		const own = opacity === undefined ? 1 : opacityOf({ opacity });
 		if (tool === "highlighter") {
 			// Night mode: "multiply" would vanish on the dark paper, "screen" lights it.
-			ctx.globalAlpha = (this.night ? NIGHT_HIGHLIGHTER_ALPHA : HIGHLIGHTER_ALPHA) * (this.dimNow ? DIM_ALPHA : 1);
+			ctx.globalAlpha = (this.night ? NIGHT_HIGHLIGHTER_ALPHA : HIGHLIGHTER_ALPHA) * (this.dimNow ? DIM_ALPHA : 1) * own;
 			ctx.globalCompositeOperation = this.night ? "screen" : "multiply";
 		} else if (tool === "marker") {
 			// Format v20: 85% opaque in stroke order, in the day and the night (the ink colour is already the night one).
-			ctx.globalAlpha = MARKER_ALPHA * (this.dimNow ? DIM_ALPHA : 1);
+			ctx.globalAlpha = MARKER_ALPHA * (this.dimNow ? DIM_ALPHA : 1) * own;
 			ctx.globalCompositeOperation = "source-over";
 		} else {
-			ctx.globalAlpha = this.dimNow ? DIM_ALPHA : 1;
+			ctx.globalAlpha = (this.dimNow ? DIM_ALPHA : 1) * own;
 			ctx.globalCompositeOperation = "source-over";
 		}
 	}
@@ -1539,8 +1573,8 @@ export class Renderer {
 	private fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, lod = 0): void {
 		const path = (lod > 0 ? this.lodPath(stroke, lod) : null) ?? this.exactPath(stroke);
 		// v22 (#37): the fill of a closed shape lies under its line.
-		if (isFilled(stroke)) this.fillShape(ctx, stroke.fill!, stroke.fillTint === true, stroke.points, stroke);
-		this.setInk(ctx, stroke.tool, stroke.color);
+		if (isFilled(stroke)) this.fillShape(ctx, stroke.fill!, stroke.fillTint === true, stroke.points, stroke, stroke.opacity);
+		this.setInk(ctx, stroke.tool, stroke.color, stroke.opacity);
 		ctx.fill(path);
 		if (stroke.tool === "highlighter" || stroke.tool === "marker") this.setInk(ctx, "pen", stroke.color);
 	}
@@ -1549,14 +1583,14 @@ export class Renderer {
 	 * v22 (#37): paints the inside of a closed shape (the polygon through `points`) with `colour`, solid or as the translucent tint. The colour goes through
 	 * the same night mapping as the ink, and the dimming of the colours-with-meaning view applies. `cached`: a committed stroke, whose polygon is remembered.
 	 */
-	private fillShape(ctx: CanvasRenderingContext2D, colour: string, tint: boolean, points: readonly Point[], cached?: Stroke): void {
+	private fillShape(ctx: CanvasRenderingContext2D, colour: string, tint: boolean, points: readonly Point[], cached?: Stroke, opacity?: number): void {
 		let path = cached ? this.fillPaths.get(cached) : undefined;
 		if (!path) {
 			path = new Path2D(fillPathD(points));
 			if (cached) this.fillPaths.set(cached, path);
 		}
 		ctx.fillStyle = this.inkColor("shape", colour);
-		ctx.globalAlpha = fillAlpha({ fillTint: tint ? true : undefined }) * (this.dimNow ? DIM_ALPHA : 1);
+		ctx.globalAlpha = fillAlpha({ fillTint: tint ? true : undefined, opacity }) * (this.dimNow ? DIM_ALPHA : 1);
 		ctx.globalCompositeOperation = "source-over";
 		ctx.fill(path);
 	}
