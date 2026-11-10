@@ -5071,3 +5071,38 @@ A marker is a ring with its number (a shape stroke and a text box, one group); t
 | Screens (before / after, tablet and phone, light and dark) | yes | harness `doc=flowchart` | | | |
 | Elbow (right-angle) connectors, swimlanes, boxes in more than one grid cell, triangles | no | | | | arrows are straight; a box nested in a box of similar size is refused |
 | Reading the text of a label | no | | | | the plugin has no handwriting recognition; labels are moved, not read |
+
+### 0.30 — timeline: dated events on an axis (roadmap #148; steps 3600-3619)
+
+*Timeline* in the All actions sheet (insert group) opens a dialog; the result is ordinary shape strokes and text boxes of one group, and *Edit timeline* (selection) reads it back from its text. Implemented, not verified on hardware. No format change. Needs a notebook page.
+
+3600. **Offered.** Open a page: All actions > *Timeline* is in the insert group. Select the timeline made below: *Edit timeline* appears (and under *For this page*); with nothing or other ink selected it is not there.
+3601. **Dialog.** Tap *Timeline*: a title field, a box for the events with an example in grey, eight colour dots, three sizes (Compact, Standard, Full width), a small picture and a line of help about the dates. *Insert timeline* is disabled and a line says to start with a date. Type `753 BC: Rome founded`, `44 BC: Caesar killed`, `5th century: Fall of Rome`, `1492: Columbus`, `1914-1918: Great War`: the picture grows one dot per line, "Events read: 5". Add a line with no date: it says which line is left out and why. Every control works; the picture is not a control.
+3602. **Insert.** Choose a colour and size, *Insert timeline*. The timeline appears at the centre of the view, inside the page: an axis with an arrow, round ticks (BC years say BC), a dot for each event and a label (the date on its first line, the text under it) to the right of a thin pole, above or below the axis. It is selected. One undo removes it whole; redo brings it back. The history panel reads "Timeline inserted" (Italian "Linea del tempo inserita").
+3603. **Spacing.** Events 100 years apart are twice as far apart as events 50 years apart. Add `1969` and `1970` next to each other: the dots are close and their labels stack in bands, none touching another and no pole running through a label.
+3604. **Long gap.** Type `3000 BC`, `1900`, `1914`, `1945`: the first gap is drawn as a dashed piece with a "//" break and "4900 years" under it; the three close events are no longer squeezed together. The dialog says a long gap is shortened. With three events 100 years apart there is no break.
+3605. **Dates.** Try `44 a.C.`, `-44`, `BC 44`, `V secolo a.C.`, `XV secolo`, `1960s`, `490-479 BC`, `14 July 1789`, `14/07/1789`, `c. 1500`: each is placed where it belongs (a century at its middle). `0`, `13/13/1492` and plain words are listed as not understood. 25 or more lines: only 24 are drawn and the dialog says so.
+3606. **Edit.** Select the timeline, *Edit timeline*: the dialog opens with the title, the colour and the events as lines (`44 BC: Caesar killed`). Add `1066: Hastings` and press *Update timeline*: it is redrawn in the same place (the axis starts where it started) with one more event. One undo brings the previous timeline back exactly; redo redraws it. *Edit timeline* again with nothing changed: "The timeline already shows these events."
+3607. **Edited label.** Edit a label's text on the page (select the text box, change `1492` into `1500`). Select the whole timeline and *Edit timeline*: the dialog shows `1500: …`; updating moves its dot.
+3608. **Colour, title, size.** In the edit dialog pick another colour, clear the title, choose Full width: the timeline is redrawn with the new colour, without the title and wider (moved sideways only as far as the page needs).
+3609. **Refusals.** Lock a text box of the timeline: *Edit timeline* says a part is locked. Resize the whole timeline with the selection handles, then *Edit timeline*: it says the text was resized and cannot be read back; nothing changes. Choose so many events that the timeline is taller than the page: the dialog says it does not fit and *Insert* is disabled. On a page with a redaction box over the place, inserting is refused with a notice and nothing is drawn.
+3610. **Locked page / read-only.** Lock the page or switch to read-only: *Timeline* and *Edit timeline* are disabled and nothing changes.
+3611. **Group behaviour.** Move the timeline, change its colour with the selection bar, copy and paste it: the copy is a picture (*Edit timeline* is not offered for it, because its link was dropped); the original still edits. Move it to another page.
+3612. **Exports.** Export the page as PDF, PNG and SVG and print or share it: the timeline is drawn with its axis, dots and texts. With redaction on, a box over it hides it in the exports.
+3613. **Per-page undo.** With *Undo on this page only* on, undo of the insert or an edit acts on that page only.
+3614. **Phone, light, dark, Italian.** The dialog fits a phone, reads in light and dark and with *Follow Obsidian theme* (its picture sits on a light paper). All texts are in Italian with the plugin in Italian, BC reads "a.C." and the gap "N anni". Long-press *Timeline* / *Edit timeline* in the sheet: the help bubble explains each.
+3615. **Real device.** On the tablet with the S Pen: the dots and colour buttons are easy to hit, inserting is instant, the text of the labels is a similar size to written text, and the typed lines are comfortable with the on-screen keyboard.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Date reading: years, BC / AD spellings, centuries (Arabic and Roman), decades, ranges, calendar dates, no year 0 | yes | `tests/timeline.test.ts` | | | |
+| Event lines: longest date at the start, separators, limits, problems, round trip through a label box | yes | `tests/timeline.test.ts` | | | |
+| Proportional spacing, compressed long gap with its true length, ticks on proportional parts (BC labels) | yes | `tests/timeline.test.ts` | | | |
+| Labels never overlap, no pole crosses a label, everything inside the block, deterministic | yes | `tests/timeline.test.ts` | | | |
+| Timeline as shape strokes + text boxes of one group, valid document, one undo step, page-local for per-page undo | yes | `tests/timeline.test.ts`, harness `doc=timeline` | | | |
+| Refuses to leave the page or touch a redaction box (or unreadable boxes) | yes | `tests/timeline.test.ts` | | | |
+| Edit timeline: reads title, events and colour back, same place and z-order, one undo step, "same", refusals (gone, locked, states, unreadable, edge, redacted) | yes | `tests/timeline.test.ts`, harness `doc=timeline` | | | |
+| Dialog (title, events, colour, size, live picture, what was read), actions, help, ranking, commands, en + it | yes | `tests/timeline-actions.test.ts`, harness `doc=timeline` | | | |
+| Dates with a time of day, several calendars, years before the present ("65 million years ago") | no | | | | not in this wave: dates are read as years, centuries, decades, ranges and calendar days |
+| Vertical timeline, spans drawn as bars, images on events | no | | | | not in this wave |
+| The timeline updating by itself | no | | | | explicit *Edit timeline* only (it is plain content) |

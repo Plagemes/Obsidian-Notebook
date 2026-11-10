@@ -243,6 +243,8 @@ import { chartOfSelection, tableInSelection } from "../ink/chart";
 import { ChartTools } from "./chart-tools";
 import { FigureMarkerTools } from "./figure-marker-tools"; // 0.30 figmarkers
 import { FlowchartTools } from "./flowchart-tools";
+import { TimelineTools } from "./timeline-tools"; // 0.30 timeline
+import { timelineOfSelection } from "../ink/timeline"; // 0.30 timeline
 import { ChemTools, holdsReaction } from "./chem-tools";
 import { CalculatorTools } from "./calculator";
 import { GroupTools, type GroupHost } from "./group-tools";
@@ -591,6 +593,8 @@ export class NotebookView extends FileView {
 	private figureMarkers: FigureMarkerTools | null = null;
 	/** 0.30 (#245): "Tidy flowchart" on a selection of hand-drawn boxes and arrows. */
 	private flowchart: FlowchartTools | null = null;
+	/** 0.30 (#148): timelines from dated events (insert one, edit it from its text). */
+	private timelines: TimelineTools | null = null;
 	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
 	private chem: ChemTools | null = null;
 	/** 0.29 (#182): the advanced calculator (null before the view is open). */
@@ -966,6 +970,7 @@ export class NotebookView extends FileView {
 		this.charts = new ChartTools(this.tableHost());
 		this.figureMarkers = new FigureMarkerTools({ ...this.tableHost(), textSize: () => this.tools.textSize });
 		this.flowchart = new FlowchartTools(this.tableHost());
+		this.timelines = new TimelineTools(this.tableHost());
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
 		this.calculator = new CalculatorTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
@@ -1456,6 +1461,7 @@ export class NotebookView extends FileView {
 		this.charts = null;
 		this.figureMarkers = null;
 		this.flowchart = null;
+		this.timelines = null;
 		this.chem = null;
 		this.calculator = null;
 		this.checklist = null;
@@ -3792,6 +3798,11 @@ export class NotebookView extends FileView {
 		return this.flowchart;
 	}
 
+	/** 0.30 (#148): timelines from dated events of this view (null before the view is open). */
+	get timelineTools(): TimelineTools | null {
+		return this.timelines;
+	}
+
 	/** 0.22 (#206): instant axes of this view (null before the view is open). */
 	get axesTools(): AxesTools | null {
 		return this.axes;
@@ -5213,6 +5224,8 @@ export class NotebookView extends FileView {
 			chart: parts.length === 1 && !!parts[0] && chartOfSelection(parts[0].strokes, parts[0].elements) !== null,
 			// 0.30 (#247): numbered markers on a figure: what the selection is for (a picture, drawn items, or markers and a legend) and whether a renumber would change anything.
 			markers: parts.length === 1 && parts[0] ? this.figureMarkers?.state(parts[0]) ?? null : null,
+			// 0.30 (#148): the selection is exactly one timeline (Edit timeline shows then).
+			timeline: parts.length === 1 && !!parts[0] && timelineOfSelection(parts[0].strokes, parts[0].elements) !== null,
 			// 0.28 (#403): the chips the shape of the selection suggests (one page, ink only; empty when the setting is off).
 			suggest: this.suggestionsFor(sel),
 		};

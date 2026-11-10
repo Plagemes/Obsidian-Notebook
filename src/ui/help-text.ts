@@ -124,6 +124,9 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	// 0.30 figmarkers (#247)
 	"figure-marker-add": "help.fm.add",
 	"figure-markers-renumber": "help.fm.renumber",
+	// 0.30 timeline (#148)
+	"insert-timeline": "help.timeline.insert",
+	"timeline-edit": "help.timeline.edit",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

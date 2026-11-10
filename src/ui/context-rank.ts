@@ -114,6 +114,10 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	if (a.id === "figure-marker-add") boost += isOneFigure(c) ? HERE_MIN_BOOST + 1 : c.selection?.markers?.kind === "set" ? 6 : c.selection?.markers?.kind === "region" ? 3 : 0;
 	if (a.id === "figure-markers-renumber" && c.selection?.markers?.kind === "set") boost += c.selection.markers.stale ? HERE_MIN_BOOST + 7 : 2;
 	if (a.id === "insert-table" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 4;
+	// 0.30 timeline (#148): "Edit timeline" fits a selected timeline above all (enough for "For this page"; it only shows then); inserting one leans
+	// forward a little on grid and plain paper, like a table, but never reaches "For this page" on its own.
+	if (a.id === "timeline-edit" && c.selection?.timeline === true) boost += HERE_MIN_BOOST + 5;
+	if (a.id === "insert-timeline" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 3;
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
 	// 0.29 (#182): the calculator fits where numbers are being worked on: a selected text box, equation or graph (the expression to work out,
 	// or the formula to check) and the text tool in hand (enough for "For this page" when a text or an equation is selected); otherwise it

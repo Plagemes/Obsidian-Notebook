@@ -264,6 +264,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"figure-markers-renumber": (v) => v.figMarkerTools?.renumber(),
 	"table-stats": (v) => v.tableTools?.showStats(),
 	"table-compute": (v) => v.tableTools?.compute(),
+	// 0.30 timeline (#148)
+	"insert-timeline": (v) => void v.timelineTools?.insert(),
+	"timeline-edit": (v) => void v.timelineTools?.edit(),
 	"checkbox-toggle": (v) => v.checklistTools?.toggleSelected(),
 	"checkbox-select-label": (v) => v.checklistTools?.selectWithLabel(),
 	"checkbox-label": (v) => v.checklistTools?.editLabel(),

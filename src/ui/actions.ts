@@ -57,6 +57,7 @@ export interface UiContext {
 		/** 0.29 (#244): the selection holds one hand-drawn table a chart can be made from, other items allowed (optional, false when absent). */ chartable?: boolean;
 		/** 0.29 (#244): the selection is exactly one chart made from a table (optional, false when absent). */ chart?: boolean;
 		/** 0.30 (#247): what the selection is for numbered markers on a figure ("figure": one picture; "region": ink or other drawn items; "set": markers or a legend, `stale` when a renumber would change something); optional, none when absent. */ markers?: { kind: "figure" | "region" | "set"; stale: boolean } | null;
+		/** 0.30 timeline (#148): the selection is exactly one timeline (optional, false when absent). */ timeline?: boolean;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -352,6 +353,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "table-stats", label: "table.stats", icon: "sigma", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 45, scope: "view", command: "table.command.stats", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table statistics mean average median deviation regression slope min max count numbers column tabella statistiche media mediana deviazione standard regressione colonna" },
 	// 0.30 tablecalc (#147): works out the formulas typed in the cells of a selected table.
 	{ id: "table-compute", label: "tablecalc.action", icon: "calculator", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 44, scope: "view", command: "tablecalc.command", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table compute calculate formula formulas sum average percent spreadsheet cell tabella calcola formula formule somma media percentuale foglio cella" },
+	// 0.30 timeline (#148): a timeline from typed dated events, and the same timeline edited from its text.
+	{ id: "insert-timeline", label: "timeline.insert", icon: "move-horizontal", group: "insert", surfaces: ["sheet"], priority: 54, scope: "view", command: "timeline.command.insert", enabled: pageOpen, keywords: "timeline time line history dates events years century chronology linea del tempo cronologia storia date eventi anni secolo" },
+	{ id: "timeline-edit", label: "timeline.edit", icon: "pencil-ruler", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 50, scope: "view", command: "timeline.command.edit", when: (c) => c.selection?.timeline === true, enabled: pageOpen, keywords: "timeline edit change events dates linea del tempo modifica cambia eventi date" },
 	{ id: "checkbox-toggle", label: "checklist.toggle", icon: "square-check", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 93, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) > 0, enabled: pageOpen, keywords: "checkbox tick untick casella spunta" },
 	{ id: "checkbox-select-label", label: "checklist.selectLabel", icon: "text-select", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, keywords: "checkbox label text select casella testo seleziona" },
 	{ id: "checkbox-label", label: "checklist.editLabel", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 89, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, enabled: pageOpen, keywords: "checkbox label name casella etichetta nome" },

@@ -197,6 +197,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "chartreg", theme, device, lowLatency: false });
 // 0.30 figmarkers (#247): numbered markers on a figure with a legend (dev/harness/figmarkers-check.ts), tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "figmarkers", theme, device, lowLatency: false });
+// 0.30 timeline (#148): the timeline dialog and a timeline on the page (dev/harness/timeline-check.ts), dist/shots/design/timeline-*.png.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "timeline", theme, device, lowLatency: false });
 // 0.29 stats (#295): the table statistics card (dev/harness/stats-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "stats", theme, device, lowLatency: false });
 // 0.30 tablecalc (#147): Compute table, formulas before and after (dev/harness/tablecalc-check.ts).
@@ -521,6 +523,7 @@ async function main() {
 				else if (s.doc === "flowchart") report = await cdp.evaluate("window.harness.checkFlowchart()", 120000); // 0.30 flowchart
 				else if (s.doc === "stats") report = await cdp.evaluate("window.harness.checkStats()", 120000); // 0.29 stats
 				else if (s.doc === "tablecalc") report = await cdp.evaluate("window.harness.checkTablecalc()", 120000); // 0.30 tablecalc
+				else if (s.doc === "timeline") report = await cdp.evaluate("window.harness.checkTimeline()", 120000); // 0.30 timeline
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
 				else if (s.doc === "spread") report = await cdp.evaluate("window.harness.checkSpread()", 120000); // 0.27 spread
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
@@ -897,6 +900,19 @@ async function main() {
 						writeFileSync(join(designDir, `chartreg-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`chartreg ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.30 timeline: screenshots of the dialog (new and edit) and of a timeline on the page.
+			if (s.doc === "timeline") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["dialog", "edit", "timeline"]) {
+					try {
+						await cdp.evaluate(`window.harness.timelineShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `timeline-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`timeline ${state} screenshot: ${e.message}`);
 					}
 				}
 			}
