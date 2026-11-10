@@ -51,6 +51,7 @@ export interface UiContext {
 		/** 0.23 (#294): selected text boxes and equations that hold a typed chemical reaction (optional, 0 when absent). */ reactions?: number;
 		/** 0.17 (#20): selected sticky notes, and how many of them are collapsed (optional, 0 when absent). */ stickies?: number; stickiesCollapsed?: number;
 		/** 0.19 (#103): selected checkboxes, and how many of them are linked to a task (optional, 0 when absent). */ checkboxes?: number; checkboxesLinked?: number;
+		/** 0.28 (#403): action ids the geometry of the selection suggests (chips at the front of the selection bar; optional, none when absent). */ suggest?: readonly string[];
 		/** 0.20 (#39): the selected items can be made one group (two or more, not already exactly one group), and how many of them are in a group now (optional, false and 0 when absent). */ canGroup?: boolean; grouped?: number;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
@@ -600,6 +601,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-copy-page", label: "movePage.copy", icon: "copy", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 42, scope: "view", command: true, when: hasSelection, keywords: "copy duplicate page another copia pagina selezione" },
 	// 0.17 (#57): the selection becomes a task in a note (the daily note, a tasks note or a chosen one), linked back to the page.
 	{ id: "selection-make-task", label: "task.action", icon: "list-checks", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 41, scope: "view", command: true, when: hasSelection, keywords: "task todo checkbox daily note attivita compito" },
+	// 0.28 geosuggest (#403): an area highlighter behind the selection (the chip a row of words offers; always in the sheet and the command palette).
+	{ id: "selection-highlight", label: "geosuggest.highlight", icon: "highlighter", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.2, scope: "view", command: "command.selectionHighlight", when: hasSelection, enabled: pageOpen, keywords: "highlight area rectangle behind selection words evidenzia area rettangolo selezione" },
 	// 0.19 (#213): the circled word goes to the "Look up later" list, with its picture; the sheet lists this notebook's entries.
 	{ id: "selection-look-up", label: "lookup.action", icon: "book-search", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 39, scope: "view", command: true, when: hasSelection, keywords: "look up later word dictionary list circle cerca dopo parola elenco" },
 	{ id: "look-up-list", label: "lookup.sheet.menu", icon: "book-search", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 23, scope: "view", command: "command.lookUpList", readOnly: true, keywords: "look up later list words dictionary cerca dopo elenco parole" },

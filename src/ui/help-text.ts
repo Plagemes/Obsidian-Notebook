@@ -73,6 +73,10 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	// 0.26 smooth (#66)
 	"selection-smooth": "help.smooth",
 	"selection-straighten": "help.straighten",
+	// 0.28 geosuggest (#403)
+	"selection-highlight": "help.geoHighlight",
+	"selection-insert-note": "help.geoNote",
+	"link-selection": "help.geoLink",
 	// 0.26 related (#422)
 	"related-pages": "help.relatedPanel",
 };

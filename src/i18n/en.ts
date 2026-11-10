@@ -5187,6 +5187,15 @@ export const en = {
 	"help.searchSuggest.outline": "From the outline of the PDF.",
 	"help.searchSuggest.heading": "From a title or label in this notebook.",
 	"help.searchSuggest.text": "A word you often use in this notebook.",
+	// 0.28 geosuggest (#403): actions suggested by the geometry of the selection
+	"geosuggest.highlight": "Highlight",
+	"command.selectionHighlight": "Highlight the selection (area highlighter behind it)",
+	"geosuggest.chips": "Suggested actions",
+	"help.geoHighlight": "Put a translucent highlighter rectangle behind the selected writing, in the colour of your highlighter.",
+	"help.geoNote": "Put the selection into a Markdown note as a picture with a link back to this page.",
+	"help.geoLink": "Link the selection to a note, so a tap on it with the pen opens that note.",
+	"settings.suggestSelection": "Suggest actions from the selection",
+	"settings.suggestSelection.desc": "Chips for a row of words, an arrow between two groups or a loop. Rules only, no AI.",
 } as const;
 
 export type MessageKey = keyof typeof en;

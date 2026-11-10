@@ -5188,4 +5188,13 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.searchSuggest.outline": "Dall'indice del PDF.",
 	"help.searchSuggest.heading": "Da un titolo o un'etichetta di questo quaderno.",
 	"help.searchSuggest.text": "Una parola che usi spesso in questo quaderno.",
+	// 0.28 geosuggest (#403): azioni suggerite dalla geometria della selezione
+	"geosuggest.highlight": "Evidenzia",
+	"command.selectionHighlight": "Evidenzia la selezione (evidenziatore ad area dietro)",
+	"geosuggest.chips": "Azioni suggerite",
+	"help.geoHighlight": "Mette un rettangolo evidenziatore traslucido dietro la scrittura selezionata, del colore del tuo evidenziatore.",
+	"help.geoNote": "Mette la selezione in una nota Markdown come immagine, con un collegamento a questa pagina.",
+	"help.geoLink": "Collega la selezione a una nota: toccandola con la penna si apre quella nota.",
+	"settings.suggestSelection": "Suggerisci azioni dalla selezione",
+	"settings.suggestSelection.desc": "Chip per una riga di parole, una freccia tra due gruppi o un cerchio. Solo regole, no IA.",
 };
