@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### livelecture
+- **Live lecture bar (#132).** While a lecture runs, a small floating bar under the lecture chip shows the elapsed time and two quick buttons: *New page* (after the current page) and *Important moment*, which bookmarks the current page with a time stamp such as "★ 12:34" (several moments on a page are joined). The end-of-lecture panel lists the moments with their pages; tapping one jumps there. The bar folds to the timer, fades with the toolbar while writing, works in the two-page spread and can be switched off in *Settings > Study*. No format change: the stamps live in the page bookmark title.
+
 ## 0.27.0 — 2026-11-09
 
 Eight features: stroke taper for the pens, two pages side by side, headings when zoomed out, macros, a layout that follows the input device, workspace presets, suggested search terms for PDFs and tasks due on planner pages. The notebook format moves to version 25 (taper): the migration from version 24 is automatic, and Notebook 0.26 and older open a v25 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).

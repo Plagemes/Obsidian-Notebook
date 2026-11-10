@@ -23,6 +23,7 @@ import {
 	lectureMemoryOf, normaliseLectureMemory, rememberLecture, type LectureMemoryKind,
 } from "../timetable/lecture-memory";
 import { isoDay } from "../timetable/schedule";
+import { lectureStart } from "../timetable/live-lecture";
 import {
 	stepLectureMode, type ActiveLecture, type LectureClass, type LectureModeSetting, type ModeStep,
 } from "../timetable/lecture-mode";
@@ -97,6 +98,8 @@ export interface LectureModeHost {
 export class LectureModeController {
 	private active: ActiveLecture | null = null;
 	private activeClass: LectureClass | null = null;
+	/** 0.28 livelecture: when the running lecture began (ms), for the live bar timer; null while the mode is off. */
+	private began: number | null = null;
 	private asking: LectureClass | null = null;
 	/** Occurrences turned down or left by the user (today, in this view and, from local storage, in earlier openings). */
 	private readonly declined = new Set<string>();
@@ -125,6 +128,11 @@ export class LectureModeController {
 	/** Lecture mode is on in this view. */
 	get on(): boolean {
 		return this.active !== null;
+	}
+
+	/** When the running lecture began (ms since epoch): the class start once it started, else the moment the mode went on. Null when off. */
+	get startedAt(): number | null {
+		return this.began;
 	}
 
 	/** Course of the lecture in progress, or null. */
@@ -265,6 +273,7 @@ export class LectureModeController {
 	private enter(cls: LectureClass | null, manual: boolean): void {
 		this.active = { key: cls?.key ?? null, endsAt: cls?.endsAt ?? null, manual };
 		this.activeClass = cls;
+		this.began = lectureStart(cls?.startsAt ?? null, this.now().getTime());
 		this.hideBanner();
 		this.showChip();
 		this.host.parent().addClass("nb-lecture-mode");
@@ -277,6 +286,7 @@ export class LectureModeController {
 		if (this.active?.key) this.remember("declined", this.active.key);
 		this.active = null;
 		this.activeClass = null;
+		this.began = null;
 		this.hideChip();
 		this.host.parent().removeClass("nb-lecture-mode");
 		this.host.changed();
@@ -374,6 +384,7 @@ export class LectureModeController {
 		const wasOn = this.active !== null;
 		this.active = null;
 		this.activeClass = null;
+		this.began = null;
 		this.asking = null;
 		this.wroteIn = null;
 		this.slotClass = null;

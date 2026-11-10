@@ -147,6 +147,7 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	refWindowSnap: boolean;
 	/** 0.21 slideback (#225): a pill "Back to slide N" while scrolled away from where you last wrote during a lecture. */
 	slideBack: boolean;
+	liveBar: boolean; // 0.28 livelecture
 	/** 0.22 pagerefs (#179): a chip on a page that other pages link to. */
 	pageRefs: boolean;
 	/** 0.25 papersuggest (#409): the "+" strip highlights the paper the history and the course suggest, with the reason. */
@@ -406,6 +407,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	lectureLogHeading: "## Lectures",
 	refWindowSnap: true, // 0.20 refwindow
 	slideBack: true, // 0.21 slideback
+	liveBar: true, // 0.28 livelecture
 	pageRefs: true, // 0.22 pagerefs
 	paperSuggest: true, // 0.25 papersuggest
 	welcomeBack: true, // 0.23 welcomeback
@@ -586,6 +588,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.lectureLogHeading === "string") s.lectureLogHeading = d.lectureLogHeading.trim().slice(0, 80); // normalised where it is used (an empty one means the default)
 	if (typeof d.refWindowSnap === "boolean") s.refWindowSnap = d.refWindowSnap; // 0.20 refwindow
 	if (typeof d.slideBack === "boolean") s.slideBack = d.slideBack; // 0.21 slideback
+	if (typeof d.liveBar === "boolean") s.liveBar = d.liveBar; // 0.28 livelecture
 	if (typeof d.pageRefs === "boolean") s.pageRefs = d.pageRefs; // 0.22 pagerefs
 	if (typeof d.paperSuggest === "boolean") s.paperSuggest = d.paperSuggest; // 0.25 papersuggest
 	if (typeof d.welcomeBack === "boolean") s.welcomeBack = d.welcomeBack; // 0.23 welcomeback

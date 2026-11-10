@@ -5187,6 +5187,21 @@ export const en = {
 	"help.searchSuggest.outline": "From the outline of the PDF.",
 	"help.searchSuggest.heading": "From a title or label in this notebook.",
 	"help.searchSuggest.text": "A word you often use in this notebook.",
+	// 0.28 livelecture
+	"settings.liveBar": "Live lecture bar",
+	"settings.liveBar.desc": "While a lecture runs, a small bar shows the elapsed time with quick buttons: new page and important moment.",
+	"liveBar.label": "Live lecture",
+	"liveBar.newPage": "New page",
+	"liveBar.mark": "Important moment",
+	"liveBar.fold": "Fold the bar",
+	"liveBar.unfold": "Show the buttons",
+	"liveBar.marked": "Marked {label} on page {n}",
+	"liveBar.readOnly": "This notebook is read-only: nothing was marked.",
+	"help.liveNewPage": "Adds a page right after the one you are on, with the same paper.",
+	"help.liveMark": "Marks this page as an important moment, stamped with the lecture time. It becomes a bookmark you can find in the end-of-lecture panel.",
+	"help.liveFold": "Folds the bar down to the timer, or opens it again.",
+	"markers.panel.moments": "Important moments",
+	"markers.panel.moment": "{label} · page {n}",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -582,6 +582,8 @@ const STUDY: SettingSpec[] = [
 	{ id: "workspaceOnLecture", section: "study", group: "timetable", order: 30.5, name: "settings.workspaceOnLecture", desc: "settings.workspaceOnLecture.desc", control: { type: "toggle" }, keywords: "workspace preset lecture slides outline panels class area di lavoro lezione pannelli diapositive" },
 	// 0.21 slideback (#225): the pill back to where you last wrote during a lecture.
 	{ id: "slideBack", section: "study", group: "timetable", order: 31, name: "settings.slideBack", desc: "settings.slideBack.desc", control: { type: "toggle" }, keywords: "lecture slide back return current page lezione diapositiva torna" },
+	// 0.28 livelecture (#132): the live bar with the timer and the quick buttons.
+	{ id: "liveBar", section: "study", group: "timetable", order: 31.5, name: "settings.liveBar", desc: "settings.liveBar.desc", control: { type: "toggle" }, keywords: "lecture live bar timer elapsed new page important moment bookmark lezione timer barra momento importante" },
 	// 0.23 welcomeback (#420): the card with the way back, open questions and gaps when a notebook is reopened after a while.
 	{ id: "welcomeBack", section: "study", group: "timetable", order: 33, name: "settings.welcomeBack", desc: "settings.welcomeBack.desc", control: { type: "toggle" }, keywords: "welcome back reopen resume where i left questions gaps bentornato riprendi domande lacune" },
 	{ id: "welcomeBackHours", section: "study", group: "timetable", order: 34, name: "settings.welcomeBackHours", desc: "settings.welcomeBackHours.desc", control: { type: "slider", min: WELCOME_HOURS_MIN, max: WELCOME_HOURS_MAX, step: 1, format: suffix("h") }, parent: "welcomeBack", visible: (s) => s.welcomeBack },

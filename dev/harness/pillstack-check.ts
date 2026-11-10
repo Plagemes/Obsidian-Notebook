@@ -55,6 +55,7 @@ const PIECES: Array<[string, string]> = [
 	["colour-filter pill", ".nb-meaning-pill"],
 	["lecture-header chip", ".notebook-lecture-header-offer"],
 	["lecture-mode chip", ".notebook-lecture-chip"],
+	["live lecture bar", ".notebook-live-bar"],
 	["contextual bar", ".notebook-context-bar:not(.notebook-hidden)"],
 	["welcome-back card", ".notebook-welcome-back"],
 	["tasks chip", ".notebook-plantasks"],
