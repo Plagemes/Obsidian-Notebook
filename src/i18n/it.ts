@@ -5207,6 +5207,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"linehandle.refused.edge": "La riga finirebbe fuori dalla pagina.",
 	"linehandle.refused.pageLocked": "Questa pagina è bloccata.",
 	"linehandle.refused.readOnly": "Questo quaderno è in sola lettura.",
+	"linehandle.refused.background": "La scrittura su una pagina PDF o immagine resta su ciò che annota: le sue righe non si possono riordinare.",
+	"linehandle.cancelled": "La pagina è cambiata: lo spostamento è stato annullato.",
 	"histpanel.t.moveLine": "Riga spostata",
 	"help.reorderLines": "Mostra una piccola maniglia accanto a ogni riga scritta a mano. Trascina una maniglia per spostare l'intera riga tra le altre; le righe in mezzo si spostano per fare spazio e la spaziatura resta. I pulsanti su e giù fanno lo stesso di un posto alla volta. Un solo passo di annullamento per spostamento.",
 	"help.lineHandle": "Trascina su o giù per spostare l'intera riga (con l'evidenziatore, i riquadri e le note che ci stanno sopra) in un altro posto tra le righe.",

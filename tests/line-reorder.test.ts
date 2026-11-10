@@ -5,7 +5,7 @@ import { ACTIONS, baseContext } from "../src/ui/actions";
 import { contextBoost, forThisPage } from "../src/ui/context-rank";
 import { buildSheet } from "../src/ui/layout";
 import { describe, expect, it } from "vitest";
-import { analyseLines, dropIndex, lineMoveCommand, LINE_RULES, planLineMove, planLineStep, type LineModel } from "../src/ink/line-reorder";
+import { analyseLines, dropIndex, lineMoveCommand, LINE_RULES, mergeBands, pageSignature, planLineMove, planLineStep, type LineModel, type ReorderLine } from "../src/ink/line-reorder";
 import { strokeBounds } from "../src/ink/hit-test";
 import { createArea } from "../src/model/area";
 import { createDocument, createPage, createStroke, quantizePoint } from "../src/model/document";
@@ -429,7 +429,7 @@ describe("reorder lines in the action registry", () => {
 		const keys = [
 			"linehandle.action", "command.reorderLines", "linehandle.hint", "linehandle.done", "linehandle.up", "linehandle.down", "linehandle.handle", "linehandle.none",
 			"linehandle.moved", "linehandle.refused.locked", "linehandle.refused.busy", "linehandle.refused.group", "linehandle.refused.conflict", "linehandle.refused.crowded",
-			"linehandle.refused.edge", "linehandle.refused.pageLocked", "linehandle.refused.readOnly", "histpanel.t.moveLine", "help.reorderLines", "help.lineHandle",
+			"linehandle.refused.edge", "linehandle.refused.pageLocked", "linehandle.refused.readOnly", "linehandle.refused.background", "linehandle.cancelled", "histpanel.t.moveLine", "help.reorderLines", "help.lineHandle",
 			"help.lineUp", "help.lineDown", "help.lineDone",
 		];
 		for (const key of keys) {

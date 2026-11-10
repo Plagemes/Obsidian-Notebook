@@ -3,10 +3,10 @@ import { t } from "../i18n";
 import type { MessageKey } from "../i18n/en";
 import type { MeasureText } from "../ink/elements";
 import type { PageBox } from "../ink/layout";
-import { analyseLines, dropIndex, lineMoveCommand, planLineMove, type LineModel, type LineMoveResult, type LineRefusal } from "../ink/line-reorder";
+import { analyseLines, dropIndex, lineMoveCommand, pageSignature, planLineMove, type LineModel, type LineMoveResult, type LineRefusal } from "../ink/line-reorder";
 import type { Viewport } from "../ink/viewport";
 import type { Command } from "../model/history";
-import type { NotebookDocument } from "../model/types";
+import type { NotebookDocument, Page } from "../model/types";
 import { attachLongPressHelp } from "../ui/long-press-help";
 
 /**
@@ -16,6 +16,10 @@ import { attachLongPressHelp } from "../ui/long-press-help";
  * markers): they let every pointer event through except their own, which they keep from the pen input below. While a handle is
  * dragged only outlines move (the ink is untouched until the drop); the drop is ONE undo step through the view's history, which also
  * refuses it on a locked page. Nothing is written to the notebook by turning the mode on or off.
+ *
+ * A drag belongs to the page and to the state of the page it began on: if the page changed meanwhile (undo, a sync, a reload, a
+ * comment, a lock) the drag is cancelled with a notice, and a drop is made from the model the drag began with, on that page, before
+ * anything is redrawn. The plan of a drag is made once per animation frame, and only the handles in view are touched.
  */
 export interface LineHandleHost {
 	/** The page area: the bar floats over it. */
@@ -23,7 +27,7 @@ export interface LineHandleHost {
 	doc(): NotebookDocument | null;
 	/** The document can be edited now (not read-only, not loading). */
 	editable(): boolean;
-	/** Runs a command as one undo step (false when it was refused). */
+	/** Runs a command as one undo step (false when it was refused; the view says why itself). */
 	execute(cmd: Command): boolean;
 	geometry(): { stage: HTMLElement; viewport: Viewport; boxes: readonly PageBox[] } | null;
 	/** Registers a function called after every viewport, layout or history change; returns the function that removes it. */
@@ -40,6 +44,7 @@ export interface LineHandleHost {
 export function refusalText(reason: LineRefusal): string {
 	switch (reason) {
 		case "page-locked": return t("linehandle.refused.pageLocked");
+		case "background": return t("linehandle.refused.background");
 		case "locked": return t("linehandle.refused.locked");
 		case "busy": return t("linehandle.refused.busy");
 		case "group": return t("linehandle.refused.group");
@@ -57,20 +62,31 @@ const TAP_SLOP = 5;
 const HANDLE_W = 32;
 const HANDLE_MIN_H = 32;
 const HANDLE_MAX_H = 48;
+/** Lines this many px beyond the stage are not touched (they are hidden once). */
+const CULL_MARGIN = 160;
 
 interface Mark {
 	band: HTMLElement;
 	handle: HTMLButtonElement;
+	/** What was last written to it (nothing is written again when it is the same). */
+	key: string;
+	hidden: boolean;
 }
 
 interface Drag {
 	id: number;
 	from: number;
+	/** The page the drag began on, and what the page was like then: a drop is made only on the same page in the same state. */
+	pageId: string;
+	signature: string;
+	model: LineModel;
 	startY: number;
 	moved: boolean;
 	/** The move the pointer is at now. */
 	result: LineMoveResult | null;
 }
+
+const px = (n: number): string => `${Math.round(n * 10) / 10}px`;
 
 export class LineHandleTools {
 	private readonly root: HTMLElement;
@@ -86,9 +102,13 @@ export class LineHandleTools {
 	private on = false;
 	private model: LineModel | null = null;
 	private signature = "";
+	private pageId = "";
 	private pageIndex = -1;
 	private chosen = -1;
 	private drag: Drag | null = null;
+	private lastClientY: number | null = null;
+	private frame = 0;
+	private keyOff: (() => void) | null = null;
 
 	constructor(private readonly host: LineHandleHost) {
 		this.root = createDiv({ cls: "nb-ui nb-lh-layer notebook-hidden" });
@@ -113,6 +133,7 @@ export class LineHandleTools {
 
 	destroy(): void {
 		this.off();
+		this.cancelFrame();
 		for (const stop of this.stopHelp) stop();
 		this.stopKeys();
 		this.root.remove();
@@ -141,15 +162,20 @@ export class LineHandleTools {
 		this.startKeys();
 		this.draw();
 		this.host.refreshUi();
-		const page = this.currentModel();
-		if (!page || page.lines.length === 0) this.host.notify(t("linehandle.none"));
+		const model = this.currentModel();
+		if (!model || model.lines.length === 0) this.host.notify(t("linehandle.none"));
 	}
 
 	stop(): void {
 		if (!this.on) return;
 		this.on = false;
 		this.drag = null;
+		this.lastClientY = null;
+		this.cancelFrame();
 		this.chosen = -1;
+		this.model = null;
+		this.signature = "";
+		this.pageId = "";
 		this.stopKeys();
 		this.draw();
 		this.host.refreshUi();
@@ -157,41 +183,67 @@ export class LineHandleTools {
 
 	// --- the model ----------------------------------------------------------------------------------------------------
 
-	private stamp(o: object): number {
+	private stamp = (o: object): number => {
 		let n = this.stamps.get(o);
 		if (n === undefined) {
 			n = this.nextStamp++;
 			this.stamps.set(o, n);
 		}
 		return n;
+	};
+
+	/** The page `id` of the open document, with its index. */
+	private pageById(id: string): { page: Page; index: number } | null {
+		const pages = this.host.doc()?.pages;
+		const index = pages ? pages.findIndex((p) => p.id === id) : -1;
+		return pages && index >= 0 ? { page: pages[index]!, index } : null;
 	}
 
-	/** The lines of the page in view; analysed again only when the page changed (strokes and elements are replaced, never edited in place). */
+	/** The page the lines are for: the one a drag began on while there is a drag, else the one in view. */
+	private target(): { page: Page; index: number } | null {
+		if (this.drag) return this.pageById(this.drag.pageId);
+		const index = this.host.currentPage();
+		const page = this.host.doc()?.pages[index];
+		return page ? { page, index } : null;
+	}
+
+	/** The lines of the page; analysed again only when the page changed. A drag whose page changed is cancelled. */
 	private currentModel(): LineModel | null {
-		const doc = this.host.doc();
-		const index = this.drag ? this.pageIndex : this.host.currentPage();
-		const page = doc?.pages[index];
-		if (!doc || !page) {
+		const found = this.target();
+		if (!found) {
+			if (this.drag) this.lose();
 			this.model = null;
 			return null;
 		}
-		let sig = `${page.id}|${page.locked === true ? 1 : 0}|${page.strokes.length}|${page.elements?.length ?? 0}`;
-		let acc = 0;
-		for (const s of page.strokes) acc = (acc * 31 + this.stamp(s)) | 0;
-		for (const e of page.elements ?? []) acc = (acc * 31 + this.stamp(e)) | 0;
-		sig += `|${acc}`;
-		if (sig !== this.signature || index !== this.pageIndex || !this.model) {
-			if (index !== this.pageIndex) this.chosen = -1;
-			this.pageIndex = index;
+		const { page, index } = found;
+		const sig = pageSignature(page, this.stamp);
+		if (sig !== this.signature || page.id !== this.pageId || !this.model) {
+			if (page.id !== this.pageId) this.chosen = -1;
+			this.pageId = page.id;
 			this.signature = sig;
 			this.model = analyseLines(page, this.host.measure);
 		}
+		this.pageIndex = index;
+		if (this.drag && sig !== this.drag.signature) this.lose();
 		return this.model;
+	}
+
+	/** The drag is over without a drop (the page changed under it): nothing was written. */
+	private lose(): void {
+		this.drag = null;
+		this.lastClientY = null;
+		this.cancelFrame();
+		this.host.notify(t("linehandle.cancelled"));
+	}
+
+	private cancelFrame(): void {
+		if (this.frame) window.cancelAnimationFrame(this.frame);
+		this.frame = 0;
 	}
 
 	// --- drawing the handles ------------------------------------------------------------------------------------------
 
-	/** Places every handle and outline. Cheap: elements are reused, only style variables change. */
+	/** Places the handles and outlines in view. Cheap: elements are reused, only what changed is written, lines out of view are hidden once. */
 	draw(): void {
 		const geometry = this.host.geometry();
 		if (!this.on || !geometry) {
@@ -214,41 +266,61 @@ export class LineHandleTools {
 		const stageH = geometry.stage.clientHeight;
 		const left = offsetX + box.x * scale;
 		const top = offsetY + box.y * scale;
-		const result = this.drag?.result ?? null;
+		const drag = this.drag;
+		const result = drag?.result ?? null;
 		const shifts = result && result.ok ? result.shifts : null;
+		const refusedAll = model.locked ? "page-locked" : model.background ? "background" : null;
 		while (this.marks.length > model.lines.length) {
 			const m = this.marks.pop()!;
 			m.band.remove();
 			m.handle.remove();
 		}
 		model.lines.forEach((line, i) => {
-			const m = this.marks[i] ?? this.makeMark(i);
-			const blocked = model.locked || line.blocked !== null;
 			const y = top + line.box.minY * scale;
 			const h = (line.box.maxY - line.box.minY) * scale;
+			const visible = y + h >= -CULL_MARGIN && y <= stageH + CULL_MARGIN;
+			const existing = this.marks[i];
+			if (!visible) {
+				if (existing && !existing.hidden) {
+					existing.hidden = true;
+					existing.key = "";
+					existing.band.toggleClass("notebook-hidden", true);
+					existing.handle.toggleClass("notebook-hidden", true);
+				}
+				return;
+			}
+			const m = existing ?? this.makeMark(i);
+			const reason = refusedAll ?? line.blocked;
+			const dragging = drag?.from === i && drag.moved;
+			let dy = 0;
+			if (drag?.moved) dy = dragging ? this.dragDy() : (shifts?.[i] ?? 0) * scale;
+			const refused = dragging && result !== null && !result.ok && result.reason !== "same";
 			const x = left + line.box.minX * scale;
 			const w = (line.box.maxX - line.box.minX) * scale;
-			const visible = y + h >= 0 && y <= stageH;
-			const dragging = this.drag?.from === i && this.drag.moved;
-			let dy = 0;
-			if (this.drag?.moved) dy = dragging ? this.dragDy() : (shifts?.[i] ?? 0) * scale;
 			const hh = Math.min(HANDLE_MAX_H, Math.max(HANDLE_MIN_H, h));
 			// The handle sits in the left margin of the page (the page's left edge when the line starts far in), never outside the stage.
 			const hx = Math.max(2, Math.min(left + 4, x - HANDLE_W - 6));
-			m.band.setCssProps({ "--nb-lh-x": `${x - 4}px`, "--nb-lh-y": `${y - 3}px`, "--nb-lh-w": `${w + 8}px`, "--nb-lh-h": `${h + 6}px`, "--nb-lh-dy": `${dy}px` });
-			m.handle.setCssProps({ "--nb-lh-x": `${hx}px`, "--nb-lh-y": `${y + h / 2 - hh / 2}px`, "--nb-lh-hh": `${hh}px`, "--nb-lh-dy": `${dy}px` });
+			const flags = `${this.chosen === i ? "c" : ""}${reason ? "b" : ""}${dragging ? "d" : ""}${refused ? "r" : ""}${!dragging && dy !== 0 ? "s" : ""}`;
+			const label = t("linehandle.handle", { n: String(i + 1), total: String(model.lines.length) });
+			const full = reason ? `${label}. ${refusalText(reason)}` : label;
+			const key = [px(x), px(y), px(w), px(h), px(hx), px(hh), px(dy), flags, full].join("|");
+			if (key === m.key && !m.hidden) return;
+			m.key = key;
+			if (m.hidden) {
+				m.hidden = false;
+				m.band.toggleClass("notebook-hidden", false);
+				m.handle.toggleClass("notebook-hidden", false);
+			}
+			m.band.setCssProps({ "--nb-lh-x": px(x - 4), "--nb-lh-y": px(y - 3), "--nb-lh-w": px(w + 8), "--nb-lh-h": px(h + 6), "--nb-lh-dy": px(dy) });
+			m.handle.setCssProps({ "--nb-lh-x": px(hx), "--nb-lh-y": px(y + h / 2 - hh / 2), "--nb-lh-hh": px(hh), "--nb-lh-dy": px(dy) });
 			for (const el of [m.band, m.handle]) {
-				el.toggleClass("notebook-hidden", !visible);
 				el.toggleClass("is-chosen", this.chosen === i);
-				el.toggleClass("is-blocked", blocked);
+				el.toggleClass("is-blocked", !!reason);
 				el.toggleClass("is-dragging", dragging);
-				el.toggleClass("is-refused", dragging && result !== null && !result.ok && result.reason !== "same");
+				el.toggleClass("is-refused", refused);
 				el.toggleClass("is-shifting", !dragging && dy !== 0);
 			}
 			m.handle.setAttribute("aria-pressed", String(this.chosen === i));
-			const label = t("linehandle.handle", { n: String(i + 1), total: String(model.lines.length) });
-			const reason = blocked ? refusalText(model.locked ? "page-locked" : line.blocked!) : "";
-			const full = reason ? `${label}. ${reason}` : label;
 			if (m.handle.getAttribute("aria-label") !== full) {
 				m.handle.setAttribute("aria-label", full);
 				m.handle.setAttribute("title", full);
@@ -269,8 +341,8 @@ export class LineHandleTools {
 		const { scale, offsetX, offsetY } = viewport;
 		const dy = result.shifts[drag.from] ?? 0;
 		this.slot.setCssProps({
-			"--nb-lh-x": `${offsetX + (box.x + line.box.minX) * scale - 4}px`, "--nb-lh-y": `${offsetY + (box.y + line.box.minY + dy) * scale - 3}px`,
-			"--nb-lh-w": `${(line.box.maxX - line.box.minX) * scale + 8}px`, "--nb-lh-h": `${(line.box.maxY - line.box.minY) * scale + 6}px`,
+			"--nb-lh-x": px(offsetX + (box.x + line.box.minX) * scale - 4), "--nb-lh-y": px(offsetY + (box.y + line.box.minY + dy) * scale - 3),
+			"--nb-lh-w": px((line.box.maxX - line.box.minX) * scale + 8), "--nb-lh-h": px((line.box.maxY - line.box.minY) * scale + 6),
 		});
 		this.slot.toggleClass("notebook-hidden", false);
 	}
@@ -280,8 +352,6 @@ export class LineHandleTools {
 		const drag = this.drag;
 		return !drag || this.lastClientY === null ? 0 : this.lastClientY - drag.startY;
 	}
-
-	private lastClientY: number | null = null;
 
 	private makeMark(i: number): Mark {
 		const band = this.root.createDiv({ cls: "nb-lh-band" });
@@ -305,7 +375,7 @@ export class LineHandleTools {
 				this.choose(i);
 			}
 		});
-		const m = { band, handle };
+		const m: Mark = { band, handle, key: "", hidden: false };
 		this.marks[i] = m;
 		return m;
 	}
@@ -325,12 +395,11 @@ export class LineHandleTools {
 	// --- choosing and moving ------------------------------------------------------------------------------------------
 
 	private choose(i: number): void {
-		const model = this.model;
+		const model = this.currentModel();
 		if (!model) return;
 		this.chosen = this.chosen === i ? -1 : i;
 		if (this.chosen >= 0) {
-			const line = model.lines[i];
-			const reason = model.locked ? "page-locked" : line?.blocked;
+			const reason = model.locked ? "page-locked" : model.background ? "background" : model.lines[i]?.blocked;
 			if (reason) this.host.notify(refusalText(reason));
 		}
 		this.draw();
@@ -349,11 +418,10 @@ export class LineHandleTools {
 		this.apply(model, this.chosen, this.chosen + by);
 	}
 
-	/** Runs the move of line `from` to place `to`; says why when it is refused. */
+	/** Runs the move of line `from` to place `to` of `model` on the page the model is of; says why when it is refused. */
 	private apply(model: LineModel, from: number, to: number): boolean {
-		const doc = this.host.doc();
-		const page = doc?.pages[this.pageIndex];
-		if (!page) return false;
+		const found = this.pageById(model.pageId);
+		if (!found) return false;
 		if (!this.host.editable()) {
 			this.host.notify(t("linehandle.refused.readOnly"));
 			return false;
@@ -363,14 +431,10 @@ export class LineHandleTools {
 			if (result.reason !== "same" && result.reason !== "range") this.host.notify(refusalText(result.reason));
 			return false;
 		}
-		const plan = lineMoveCommand(page, model, result, this.host.measure);
+		const plan = lineMoveCommand(found.page, model, result, this.host.measure);
 		if (!plan) return false;
-		const done = this.host.execute(plan.command);
-		if (!done) {
-			// The history refused it (a locked page, a change the writer would reject): the document is as it was.
-			this.host.notify(refusalText("page-locked") || t("linehandle.refused.pageLocked"));
-			return false;
-		}
+		// Refused by the history (a locked page, a change the writer would reject): the view says why itself, the document is as it was.
+		if (!this.host.execute(plan.command)) return false;
 		this.chosen = to;
 		this.signature = "";
 		this.draw();
@@ -385,7 +449,7 @@ export class LineHandleTools {
 		const model = this.currentModel();
 		if (!model) return;
 		e.preventDefault();
-		this.drag = { id: e.pointerId, from: i, startY: e.clientY, moved: false, result: null };
+		this.drag = { id: e.pointerId, from: i, pageId: model.pageId, signature: this.signature, model, startY: e.clientY, moved: false, result: null };
 		this.lastClientY = e.clientY;
 		try {
 			handle.setPointerCapture(e.pointerId);
@@ -394,22 +458,32 @@ export class LineHandleTools {
 		}
 	}
 
+	/** The move a contact at `clientY` stands for. */
+	private resultAt(drag: Drag, clientY: number): LineMoveResult | null {
+		const geometry = this.host.geometry();
+		const line = drag.model.lines[drag.from];
+		if (!geometry || !line) return null;
+		const mid = (line.box.minY + line.box.maxY) / 2 + (clientY - drag.startY) / geometry.viewport.scale;
+		return planLineMove(drag.model, drag.from, dropIndex(drag.model, drag.from, mid));
+	}
+
 	private move(e: PointerEvent): void {
 		const drag = this.drag;
-		const model = this.model;
-		const geometry = this.host.geometry();
-		if (!drag || e.pointerId !== drag.id || !model || !geometry) return;
+		if (!drag || e.pointerId !== drag.id) return;
 		e.preventDefault();
 		e.stopPropagation();
 		this.lastClientY = e.clientY;
 		if (!drag.moved && Math.abs(e.clientY - drag.startY) < TAP_SLOP) return;
 		drag.moved = true;
-		const scale = geometry.viewport.scale;
-		const line = model.lines[drag.from]!;
-		const mid = (line.box.minY + line.box.maxY) / 2 + (e.clientY - drag.startY) / scale;
-		const to = dropIndex(model, drag.from, mid);
-		drag.result = planLineMove(model, drag.from, to);
-		this.draw();
+		// Pens report far more often than the screen is drawn: the plan and the outlines are made once per frame, from the latest point.
+		if (this.frame) return;
+		this.frame = window.requestAnimationFrame(() => {
+			this.frame = 0;
+			const d = this.drag;
+			if (!d || this.lastClientY === null) return;
+			d.result = this.resultAt(d, this.lastClientY);
+			this.draw();
+		});
 	}
 
 	private end(e: PointerEvent, cancelled: boolean): void {
@@ -417,10 +491,18 @@ export class LineHandleTools {
 		if (!drag || e.pointerId !== drag.id) return;
 		e.preventDefault();
 		e.stopPropagation();
-		const model = this.model;
+		this.cancelFrame();
+		// The drop is made from the model the drag began with, on its page, before anything is redrawn.
+		const found = this.pageById(drag.pageId);
+		const same = !!found && pageSignature(found.page, this.stamp) === drag.signature;
 		this.drag = null;
 		this.lastClientY = null;
-		if (cancelled || !model) {
+		if (cancelled) {
+			this.draw();
+			return;
+		}
+		if (!same) {
+			this.host.notify(t("linehandle.cancelled"));
 			this.draw();
 			return;
 		}
@@ -428,21 +510,22 @@ export class LineHandleTools {
 			this.choose(drag.from);
 			return;
 		}
-		const result = drag.result;
+		const result = this.resultAt(drag, e.clientY);
+		if (result?.ok) {
+			if (!this.apply(drag.model, result.from, result.to)) this.draw();
+			return;
+		}
 		this.draw();
-		if (result?.ok) this.apply(model, result.from, result.to);
-		else if (result && result.reason !== "same") this.host.notify(refusalText(result.reason));
+		if (result && result.reason !== "same") this.host.notify(refusalText(result.reason));
 	}
 
 	// --- the keyboard -------------------------------------------------------------------------------------------------
 
-	private keyOff: (() => void) | null = null;
-
 	private startKeys(): void {
-		const onKey = (e: KeyboardEvent): void => {
-			if (e.key !== "Escape" || !this.on) return;
-			e.preventDefault();
-			e.stopPropagation();
+		const onKey = (ev: KeyboardEvent): void => {
+			if (ev.key !== "Escape" || !this.on) return;
+			ev.preventDefault();
+			ev.stopPropagation();
 			this.stop();
 		};
 		activeDocument.addEventListener("keydown", onKey, true);

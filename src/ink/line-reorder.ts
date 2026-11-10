@@ -7,9 +7,12 @@ import { inkOwnership } from "./selection-transform";
 import { joinPieces, TIDY_RULES, unionBox, type Row } from "./tidy";
 import { estimateMeasure } from "./text-layout";
 import { translate } from "./transform";
+import { isNote, SetPageComments } from "../model/comments";
 import { isLockedElement, UpdateItems, type PageItem } from "../model/groups";
+import { Batch, type Command } from "../model/history";
 import { freezeStroke } from "../model/serialize";
-import { isLinePen, type Page, type PageElement, type Stroke } from "../model/types";
+import { stickyFrame } from "../model/sticky";
+import { isLinePen, type CommentRegion, type Page, type PageComment, type PageCommentNote, type PageElement, type Stroke } from "../model/types";
 
 /**
  * 0.28 (#256): "Line handle" (pure, no 'obsidian'). Whole handwritten lines are dragged to a new place between the other lines.
@@ -17,21 +20,25 @@ import { isLinePen, type Page, type PageElement, type Stroke } from "../model/ty
  * The lines are the ones "Align to baseline" and "Tidy up" already find (`analyseBaseline` rows, pieces side by side joined as in
  * `tidy.ts`), plus: lines whose rows overlap vertically are one line (two columns on the same rows), and a line is the strip of
  * the page between its neighbours: its BAND. A line moves together with
- *  - its line-pen handwriting (`isLinePen`), the invisible ink and the underline-like line-pen strokes fully inside its band, and
+ *  - its line-pen handwriting (`isLinePen`), the invisible ink and the underline-like line-pen strokes fully inside its band,
  *  - every element fully inside its band (an area highlighter behind the line, a text box or a checkbox beside it, a sticky note
- *    with the ink it keeps hidden, a graph with the ink bound to it).
+ *    with the ink it keeps hidden, a graph with the ink bound to it), and
+ *  - the margin comments whose region is fully inside its band (their regions shift in the same undo step).
  * Nothing else moves. A line is REFUSED (it gets a `blocked` reason, and no move that involves it is planned) when
- *  - an element in its band is locked ("locked"), or something that does not move (a highlighter stroke, a shape, an element that
- *    reaches into the neighbour band) is on it ("busy"),
+ *  - an element in its band is locked ("locked"), or something that does not move (a highlighter stroke, a shape, an element or a
+ *    comment region that reaches into the neighbour band, a part of a drawing with states) touches anything that moves with it ("busy"),
  *  - it holds part of a group whose other members are not in the same line ("group": a group moves whole or not at all), or
  *  - an item would have to move with two lines at once ("conflict").
- * A locked page refuses every move. A move is also refused when a moved line would land on something that stays ("crowded") or
- * outside the page ("edge").
+ * A locked page refuses every move, and so does a page with a PDF or picture background (the writing annotates what is printed
+ * there). A move is also refused when anything that moves with a line (its REACH: handwriting, elements, ink bound to them) would
+ * land on something that stays or on another moved line ("crowded"), or when anything that moves (its EXTENT: the reach plus the ink a
+ * collapsed note keeps hidden, the expanded box of a note and the comment regions) would leave the page ("edge").
  *
  * The move of line `from` to place `to` re-lays the lines between the two places one after the other from the upper one, each taking
  * the pitch (its top to the top of the next line) it had: the lines in between shift up or down by the moved line's pitch and the
  * spacing is kept. Everything is a rigid translation in y (points, pressure, width, taper, id and layer untouched), ONE undo step
- * (`UpdateItems`, which remaps), and the page times are not touched: the ink is moved, not written now. The document format does not change.
+ * (`UpdateItems`, plus `SetPageComments` when comments move; both remap or have nothing to remap), and the page times are not
+ * touched: the ink is moved, not written now. The document format does not change.
  */
 
 export const LINE_RULES = {
@@ -47,6 +54,8 @@ export const LINE_RULES = {
 	endPad: 0.6,
 	/** A backdrop is at least this many times the area of the line it lies behind. */
 	backdropFactor: 4,
+	/** A landed line is compared with the staying lines this many places beyond the two ends of the move. */
+	neighbours: 2,
 } as const;
 
 /** Why a line cannot move. */
@@ -55,8 +64,12 @@ export type LineBlock = "locked" | "busy" | "group" | "conflict";
 export interface ReorderLine {
 	/** Position in reading order, top to bottom. */
 	index: number;
-	/** The box of its handwriting (page coordinates). */
+	/** The box of its handwriting (page coordinates): the lines are laid out by it. */
 	box: BBox;
+	/** The box of everything visible that moves with the line (handwriting, elements, ink bound to them): what must not land on anything. */
+	reach: BBox;
+	/** `reach` plus what is not drawn now (ink a collapsed note keeps hidden, invisible ink, the expanded box of a note, comment regions): what must stay on the page. */
+	extent: BBox;
 	/** The strip of the page it owns: a moved element must be fully inside it. */
 	band: { top: number; bottom: number };
 	/** Its top to the top of the next line (the last one: its height plus the usual gap), pt: how much room the line takes. */
@@ -64,6 +77,8 @@ export interface ReorderLine {
 	/** Everything that moves with it. */
 	strokes: Stroke[];
 	elements: PageElement[];
+	/** The ids of the margin comments whose region moves with it. */
+	comments: string[];
 	blocked: LineBlock | null;
 }
 
@@ -77,14 +92,21 @@ export interface LineModel {
 	lines: ReorderLine[];
 	/** The page is locked: no move is made. */
 	locked: boolean;
+	/** The page has a PDF or picture background: the writing annotates it and stays on it. */
+	background: boolean;
 	/** The size of the writing (pt), 0 when there is none. */
 	size: number;
 	/** Page height when the page does not grow, else 0. */
 	limit: number;
+	/** What stays put wherever a line goes: strokes and elements that are in no line, by their top. */
 	obstacles: Obstacle[];
+	/** `obstacleReach[k]`: the largest bottom among `obstacles[0..k]` (it lets a search stop early). */
+	obstacleReach: number[];
 }
 
-const EMPTY_MODEL = (page: Page): LineModel => ({ pageId: page.id, lines: [], locked: page.locked === true, size: 0, limit: 0, obstacles: [] });
+const EMPTY_MODEL = (page: Page): LineModel => ({
+	pageId: page.id, lines: [], locked: page.locked === true, background: page.background !== undefined, size: 0, limit: 0, obstacles: [], obstacleReach: [],
+});
 
 const overlapY = (a: BBox, b: BBox): number => Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY);
 const overlapArea = (a: BBox, b: BBox): number => Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX)) * Math.max(0, overlapY(a, b));
@@ -95,6 +117,9 @@ const area = (b: BBox): number => Math.max(0, b.maxX - b.minX) * Math.max(0, b.m
 /** Something that lies behind the whole line and is much bigger than it (a page picture, a locked background): the line may leave it. */
 const backdrop = (outer: BBox, line: BBox): boolean => contains(outer, line, 1) && area(outer) >= LINE_RULES.backdropFactor * area(line);
 
+const shiftBox = (b: BBox, dy: number): BBox => (dy === 0 ? b : { ...b, minY: b.minY + dy, maxY: b.maxY + dy });
+const regionBox = (r: CommentRegion): BBox => ({ minX: r.x, minY: r.y, maxX: r.x + r.width, maxY: r.y + r.height });
+
 function median(values: readonly number[]): number {
 	if (values.length === 0) return 0;
 	const s = [...values].sort((a, b) => a - b);
@@ -102,25 +127,54 @@ function median(values: readonly number[]): number {
 	return s.length % 2 === 1 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 }
 
-/** Rows that share most of their vertical extent are one line (two columns, or a line cut in pieces far apart). */
-function mergeBands(rows: Row[]): Row[] {
-	const out = [...rows].sort((a, b) => a.box.minY - b.box.minY);
-	const pairAt = (): [number, number] | null => {
-		for (let i = 0; i < out.length; i++) {
-			for (let j = i + 1; j < out.length; j++) {
-				const a = out[i]!.box, b = out[j]!.box;
-				const h = Math.min(a.maxY - a.minY, b.maxY - b.minY);
-				if (h > 0 && overlapY(a, b) >= LINE_RULES.mergeOverlap * h) return [i, j];
+function union(boxes: readonly BBox[]): BBox {
+	let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+	for (const b of boxes) {
+		if (b.minX < minX) minX = b.minX;
+		if (b.minY < minY) minY = b.minY;
+		if (b.maxX > maxX) maxX = b.maxX;
+		if (b.maxY > maxY) maxY = b.maxY;
+	}
+	return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Rows that share most of their vertical extent are one line (two columns, or a line cut in pieces far apart). One sort and one sweep
+ * against the running union of the line being built: O(n log n), however many rows a long page has.
+ */
+export function mergeBands(rows: readonly Row[]): Row[] {
+	const sorted = [...rows].sort((a, b) => a.box.minY - b.box.minY);
+	const out: Row[] = [];
+	for (const r of sorted) {
+		const last = out[out.length - 1];
+		if (last) {
+			const h = Math.min(last.box.maxY - last.box.minY, r.box.maxY - r.box.minY);
+			if (h > 0 && overlapY(last.box, r.box) >= LINE_RULES.mergeOverlap * h) {
+				for (const s of r.strokes) last.strokes.push(s);
+				last.box = unionBox([last.box, r.box]);
+				continue;
 			}
 		}
-		return null;
-	};
-	for (let pair = pairAt(); pair; pair = pairAt()) {
-		const [i, j] = pair;
-		out[i] = { strokes: [...out[i]!.strokes, ...out[j]!.strokes], box: unionBox([out[i]!.box, out[j]!.box]) };
-		out.splice(j, 1);
+		out.push({ strokes: [...r.strokes], box: r.box });
 	}
-	return out.sort((a, b) => a.box.minY - b.box.minY);
+	return out;
+}
+
+/** The first obstacle that touches `box` and is not `ignored`, or null. Looks only at the obstacles that can reach `box` vertically. */
+function firstObstacle(model: Pick<LineModel, "obstacles" | "obstacleReach">, box: BBox, ignored: (o: Obstacle) => boolean): Obstacle | null {
+	const list = model.obstacles;
+	// The obstacles are sorted by their top: those from `end` on start below the box.
+	let lo = 0, hi = list.length;
+	while (lo < hi) {
+		const mid = (lo + hi) >> 1;
+		if (list[mid]!.box.minY < box.maxY) lo = mid + 1;
+		else hi = mid;
+	}
+	for (let k = lo - 1; k >= 0 && model.obstacleReach[k]! > box.minY; k--) {
+		const o = list[k]!;
+		if (overlapArea(box, o.box) > LINE_RULES.touchArea && !ignored(o)) return o;
+	}
+	return null;
 }
 
 /** The lines of `page` and what moves with each (see the file comment). Pure analysis; nothing is changed. */
@@ -161,9 +215,9 @@ export function analyseLines(page: Page, measure: MeasureText = estimateMeasure)
 	const gaps = rows.slice(1).map((r, i) => r.box.minY - rows[i]!.box.maxY).filter((g) => g > 0);
 	const usual = gaps.length > 0 ? median(gaps) : 0.5 * size;
 	const lines: ReorderLine[] = rows.map((r, i) => ({
-		index: i, box: r.box, band: bands[i]!,
+		index: i, box: r.box, reach: r.box, extent: r.box, band: bands[i]!,
 		pitch: rows[i + 1] ? rows[i + 1]!.box.minY - r.box.minY : r.box.maxY - r.box.minY + usual,
-		strokes: [...r.strokes], elements: [], blocked: null,
+		strokes: [...r.strokes], elements: [], comments: [], blocked: null,
 	}));
 	const owner = new Map<Stroke | PageElement, number>();
 	const conflicted = new Set<number>();
@@ -183,8 +237,10 @@ export function analyseLines(page: Page, measure: MeasureText = estimateMeasure)
 		if (at >= 0) { lines[at]!.strokes.push(s); claim(s, at); }
 	}
 	// Elements fully inside a band; a locked one refuses the line.
+	const elementBox = new Map<PageElement, BBox>();
 	for (const e of elements) {
 		const box = elementBounds(e, measure);
+		elementBox.set(e, box);
 		const at = inBand(box);
 		if (at < 0) continue;
 		if (isLockedElement(e)) {
@@ -202,6 +258,45 @@ export function analyseLines(page: Page, measure: MeasureText = estimateMeasure)
 		for (const s of inkOwnership(page, [], l.elements, measure, false).followers) if (!have.has(s)) { l.strokes.push(s); have.add(s); }
 		for (const s of l.strokes) claim(s, l.index);
 	}
+	// Margin comments: a region fully inside a band moves with its line; one that touches the writing of a line without being inside its band refuses it.
+	const commentBusy = new Set<number>();
+	const commentBoxes = new Map<number, BBox[]>();
+	for (const c of page.comments ?? []) {
+		if (!isNote(c)) continue;
+		const box = regionBox(c.region);
+		const at = inBand(box);
+		if (at >= 0) {
+			lines[at]!.comments.push(c.id);
+			const list = commentBoxes.get(at);
+			if (list) list.push(box);
+			else commentBoxes.set(at, [box]);
+			continue;
+		}
+		for (const l of lines) if (overlapArea(l.box, box) > LINE_RULES.touchArea) commentBusy.add(l.index);
+	}
+	// Parts of a drawing with states pivot about a point and are posed by a state: a line that holds one of their items is refused.
+	const stateItems = new Set<string>();
+	for (const part of page.states?.parts ?? []) for (const id of part.items) stateItems.add(id);
+
+	// How far each line reaches: what is visible and moves with it, and what is not drawn now but must stay on the page.
+	for (const l of lines) {
+		const seen: BBox[] = [l.box];
+		const all: BBox[] = [l.box];
+		for (const s of l.strokes) {
+			const b = strokeBounds(s);
+			all.push(b);
+			if (!pinned.has(s) && s.hidden !== true) seen.push(b);
+		}
+		for (const e of l.elements) {
+			const b = elementBox.get(e)!;
+			seen.push(b);
+			all.push(b);
+			if (e.type === "sticky") all.push(stickyFrame(e));
+		}
+		for (const b of commentBoxes.get(l.index) ?? []) all.push(b);
+		l.reach = union(seen);
+		l.extent = union(all);
+	}
 
 	// Groups move whole or not at all: every member of a group that has a member in a line must be in that line.
 	const groupSize = new Map<string, number>();
@@ -213,24 +308,46 @@ export function analyseLines(page: Page, measure: MeasureText = estimateMeasure)
 		for (const [g, n] of here) if (groupSize.get(g) !== n) l.blocked = "group";
 	}
 
-	// What stays: every stroke and element that is in no line. A line with something on it (that is not a backdrop) is busy.
+	// What stays: every stroke and element that is in no line (the ink a collapsed note keeps hidden is not there to be touched). A line
+	// whose reach has something on it (that is not a backdrop) is busy.
 	const obstacles: Obstacle[] = [];
-	for (const s of page.strokes) if (!owner.has(s) && s.points.length > 0) obstacles.push({ box: strokeBounds(s), locked: false });
-	for (const e of elements) if (!owner.has(e)) obstacles.push({ box: elementBounds(e, measure), locked: isLockedElement(e) });
+	for (const s of page.strokes) if (!owner.has(s) && !pinned.has(s) && s.points.length > 0) obstacles.push({ box: strokeBounds(s), locked: false });
+	for (const e of elements) if (!owner.has(e)) obstacles.push({ box: elementBox.get(e)!, locked: isLockedElement(e) });
+	obstacles.sort((a, b) => a.box.minY - b.box.minY);
+	const obstacleReach: number[] = [];
+	let reach = -Infinity;
+	for (const o of obstacles) obstacleReach.push((reach = Math.max(reach, o.box.maxY)));
+	const model: LineModel = {
+		pageId: page.id, lines, locked: page.locked === true, background: page.background !== undefined, size,
+		limit: page.infinite === true ? 0 : page.height, obstacles, obstacleReach,
+	};
 	for (const l of lines) {
 		if (l.blocked === null && lockedIn.has(l.index)) l.blocked = "locked";
 		if (l.blocked !== null) continue;
-		for (const o of obstacles) {
-			if (overlapArea(l.box, o.box) <= LINE_RULES.touchArea || backdrop(o.box, l.box)) continue;
-			l.blocked = o.locked ? "locked" : "busy";
-			break;
-		}
-		if (l.blocked === null && conflicted.has(l.index)) l.blocked = "conflict";
+		const o = firstObstacle(model, l.reach, (x) => backdrop(x.box, l.reach));
+		if (o) l.blocked = o.locked ? "locked" : "busy";
+		else if (commentBusy.has(l.index) || l.strokes.some((s) => stateItems.has(s.id)) || l.elements.some((e) => stateItems.has(e.id))) l.blocked = "busy";
+		else if (conflicted.has(l.index)) l.blocked = "conflict";
 	}
-	return { pageId: page.id, lines, locked: page.locked === true, size, limit: page.infinite === true ? 0 : page.height, obstacles };
+	return model;
 }
 
-export type LineRefusal = "same" | "range" | "page-locked" | LineBlock | "crowded" | "edge";
+/**
+ * A cheap fingerprint of what the lines of a page depend on: its size, paper edge, background, lock and the identity of every stroke
+ * and element (they are replaced on every edit, never changed in place; `stamp` numbers an object), of the comments and of the states.
+ */
+export function pageSignature(page: Page, stamp: (o: object) => number): string {
+	let acc = 0;
+	for (const s of page.strokes) acc = (acc * 31 + stamp(s)) | 0;
+	for (const e of page.elements ?? []) acc = (acc * 31 + stamp(e)) | 0;
+	const m = page.margins;
+	return [
+		page.id, page.locked === true ? 1 : 0, page.width, page.height, page.infinite === true ? 1 : 0, page.background?.kind ?? "", m ? `${m.left},${m.right},${m.bottom}` : "",
+		page.strokes.length, page.elements?.length ?? 0, page.comments ? stamp(page.comments) : 0, page.states ? stamp(page.states) : 0, acc,
+	].join("|");
+}
+
+export type LineRefusal = "same" | "range" | "page-locked" | "background" | LineBlock | "crowded" | "edge";
 
 export interface LineMove {
 	from: number;
@@ -254,6 +371,7 @@ export function planLineMove(model: LineModel, from: number, to: number): LineMo
 	if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= n || to >= n) return { ok: false, reason: "range" };
 	if (from === to) return { ok: false, reason: "same" };
 	if (model.locked) return { ok: false, reason: "page-locked" };
+	if (model.background) return { ok: false, reason: "background" };
 	const lo = Math.min(from, to), hi = Math.max(from, to);
 	for (let i = lo; i <= hi; i++) {
 		const b = model.lines[i]!.blocked;
@@ -271,19 +389,23 @@ export function planLineMove(model: LineModel, from: number, to: number): LineMo
 		top += line.pitch;
 	}
 	for (let i = lo; i <= hi; i++) if (Math.abs(shifts[i]!) < LINE_RULES.minMove) shifts[i] = 0;
-	const landed = (i: number): BBox => {
-		const b = model.lines[i]!.box, d = shifts[i]!;
-		return { ...b, minY: b.minY + d, maxY: b.maxY + d };
-	};
+	const reachAt = (i: number): BBox => shiftBox(model.lines[i]!.reach, shifts[i]!);
 	for (let i = lo; i <= hi; i++) {
-		const box = landed(i);
-		if (box.minY < 0 || (model.limit > 0 && box.maxY > model.limit)) return { ok: false, reason: "edge" };
-		for (const o of model.obstacles) if (overlapArea(box, o.box) > LINE_RULES.touchArea && !backdrop(o.box, box)) return { ok: false, reason: "crowded" };
-		// The lines that stay: no more overlap with them than before.
-		for (let k = 0; k < n; k++) {
+		const line = model.lines[i]!;
+		const extent = shiftBox(line.extent, shifts[i]!);
+		if (extent.minY < 0 || (model.limit > 0 && extent.maxY > model.limit)) return { ok: false, reason: "edge" };
+		const box = reachAt(i);
+		if (firstObstacle(model, box, (o) => backdrop(o.box, box))) return { ok: false, reason: "crowded" };
+		// The lines that stay, next to the two ends of the move: no more overlap with them than before.
+		for (let k = Math.max(0, lo - LINE_RULES.neighbours); k <= Math.min(n - 1, hi + LINE_RULES.neighbours); k++) {
 			if (k >= lo && k <= hi) continue;
-			if (overlapArea(box, model.lines[k]!.box) > overlapArea(model.lines[i]!.box, model.lines[k]!.box) + 0.01) return { ok: false, reason: "crowded" };
+			if (overlapArea(box, model.lines[k]!.reach) > overlapArea(line.reach, model.lines[k]!.reach) + 0.01) return { ok: false, reason: "crowded" };
 		}
+	}
+	// The moved lines among themselves: lines that are next to each other now are not over each other more than they were.
+	for (let k = 1; k < order.length; k++) {
+		const a = order[k - 1]!, b = order[k]!;
+		if (overlapArea(reachAt(a), reachAt(b)) > overlapArea(model.lines[a]!.reach, model.lines[b]!.reach) + 0.01) return { ok: false, reason: "crowded" };
 	}
 	return { ok: true, from, to, shifts };
 }
@@ -294,24 +416,38 @@ export function planLineStep(model: LineModel, from: number, step: -1 | 1): Line
 }
 
 export interface LineMovePlan {
-	command: UpdateItems;
+	/** The step: `UpdateItems`, with `SetPageComments` in a `Batch` when comments move too. */
+	command: Command;
 	/** Strokes and elements that move, and how far (by id). */
 	moved: ReadonlyMap<string, number>;
 	strokes: number;
 	elements: number;
+	/** Margin comments whose region moved. */
+	comments: number;
 }
 
-/** The step that makes `move`: ONE undo (`UpdateItems`, rigid translations in y). Null when nothing moves. */
+/**
+ * The step that makes `move`: ONE undo (rigid translations in y). Null when nothing moves, and when none of what would move is on
+ * `page` (a plan made for another page, or for a page that changed since): it never makes an empty step.
+ */
 export function lineMoveCommand(page: Page, model: LineModel, move: LineMove, measure: MeasureText = estimateMeasure): LineMovePlan | null {
+	if (model.pageId !== page.id) return null;
 	const strokeDy = new Map<string, number>();
 	const elementDy = new Map<string, number>();
+	const commentDy = new Map<string, number>();
 	for (const l of model.lines) {
 		const dy = move.shifts[l.index] ?? 0;
 		if (Math.abs(dy) < LINE_RULES.minMove) continue;
 		for (const s of l.strokes) strokeDy.set(s.id, dy);
 		for (const e of l.elements) elementDy.set(e.id, dy);
+		for (const c of l.comments) commentDy.set(c, dy);
 	}
-	if (strokeDy.size + elementDy.size === 0) return null;
+	// Only what is on the page now counts: a plan that finds none of its items there is not a step.
+	const onPage = new Set<string>();
+	for (const s of page.strokes) if (strokeDy.has(s.id)) onPage.add(s.id);
+	for (const e of page.elements ?? []) if (elementDy.has(e.id)) onPage.add(e.id);
+	const commentsHere = (page.comments ?? []).filter((c): c is PageCommentNote => isNote(c) && commentDy.has(c.id));
+	if (onPage.size === 0 && commentsHere.length === 0) return null;
 	const ids = new Set<string>([...strokeDy.keys(), ...elementDy.keys()]);
 	const change = (item: PageItem): PageItem => {
 		if ("type" in item) {
@@ -322,5 +458,14 @@ export function lineMoveCommand(page: Page, model: LineModel, move: LineMove, me
 		return dy === undefined ? item : freezeStroke(transformStroke(item, translate(0, dy)));
 	};
 	const moved = new Map<string, number>([...strokeDy, ...elementDy]);
-	return { command: new UpdateItems(page.id, ids, change, "Move line"), moved, strokes: strokeDy.size, elements: elementDy.size };
+	const items = new UpdateItems(page.id, ids, change, "Move line");
+	let command: Command = items;
+	if (commentsHere.length > 0) {
+		const list = (page.comments ?? []).map((c): PageComment => {
+			const dy = isNote(c) ? commentDy.get(c.id) : undefined;
+			return dy === undefined || !isNote(c) ? c : { ...c, region: { ...c.region, y: Math.round((c.region.y + dy) * 100) / 100 } };
+		});
+		command = new Batch("Move line", [items, new SetPageComments(page.id, page.comments, list, "Move line")]);
+	}
+	return { command, moved, strokes: strokeDy.size, elements: elementDy.size, comments: commentsHere.length };
 }

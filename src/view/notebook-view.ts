@@ -1695,6 +1695,8 @@ export class NotebookView extends FileView {
 		// 0.20 (#107): a reference that shows this very notebook reads its open document: it goes with it.
 		if (this.refWindow?.file === file) this.refWindow.close();
 		this.lectureMode?.closing();
+		// 0.28 (#256): the "Reorder lines" mode belongs to the notebook being edited.
+		this.lineHandles?.stop();
 		await this.closeSession();
 		const pending = this.snapshotAfterClose;
 		this.snapshotAfterClose = null;

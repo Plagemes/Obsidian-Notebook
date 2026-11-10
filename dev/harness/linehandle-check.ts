@@ -198,6 +198,27 @@ export async function checkLinehandle(api: LinehandleCheckApi): Promise<{ ok: bo
 	v.setPageLocked(page(), false);
 	await frames(3);
 
+	// --- the page changes under a drag: the move is cancelled, no empty step ---
+	const snapshot = [...page().strokes];
+	const grabbed = handles()[0]!;
+	const c0 = centre(grabbed);
+	fire(grabbed, "pointerdown", c0.x, c0.y);
+	for (let i = 1; i <= 4; i++) {
+		fire(grabbed, "pointermove", c0.x, c0.y + 30 * i);
+		await frames(1);
+	}
+	await frames(2);
+	const noticesBefore = api.notices.length;
+	v.applyCommand(new Batch("Draw", [new AddStroke(page().id, make(line([400, 700], [450, 702])), page().strokes.length)]));
+	await frames(3);
+	fire(grabbed, "pointerup", c0.x, c0.y + 200);
+	await frames(3);
+	add("a page that changes during a drag cancels the move: only the new stroke is there, and a notice says so", page().strokes.length === snapshot.length + 1 && snapshot.every((st) => page().strokes.includes(st)) && api.notices.slice(noticesBefore).some((m) => /cancel|annull/i.test(m)), api.notices.slice(noticesBefore).join(" | "));
+	add("no handle is left dragging", handles().every((h) => !h.classList.contains("is-dragging")));
+	v.undo();
+	await frames(3);
+	add("one undo takes back the new stroke (the cancelled drag left no step of its own)", page().strokes.length === snapshot.length && snapshot.every((st, i) => st === page().strokes[i]));
+
 	// --- leaving ---
 	document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
 	await frames(3);

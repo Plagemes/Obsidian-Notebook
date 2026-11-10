@@ -5206,6 +5206,8 @@ export const en = {
 	"linehandle.refused.edge": "The line would end up outside the page.",
 	"linehandle.refused.pageLocked": "This page is locked.",
 	"linehandle.refused.readOnly": "This notebook is read-only.",
+	"linehandle.refused.background": "Writing on a PDF or picture page stays on what it annotates, so its lines cannot be reordered.",
+	"linehandle.cancelled": "The page changed, so the move was cancelled.",
 	"histpanel.t.moveLine": "Line moved",
 	"help.reorderLines": "Shows a small handle beside each handwritten line. Drag a handle to move the whole line between the others; the lines in between shift to make room and the spacing is kept. The up and down buttons do the same one place at a time. One undo step per move.",
 	"help.lineHandle": "Drag up or down to move this whole line (with the highlighter, boxes and notes that sit on it) to another place between the lines.",
