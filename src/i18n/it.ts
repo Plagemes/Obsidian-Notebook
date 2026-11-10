@@ -5390,7 +5390,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"tape.action.draw": "Nastro di studio",
 	"tape.action.revealAll": "Rivela tutti i nastri di studio",
 	"tape.action.hideAll": "Nascondi tutti i nastri di studio",
-	"tape.help.draw": "Trascina sopra risposte, formule o parole per coprirle con un nastro opaco. Tocca un nastro per sbirciare, toccalo di nuovo per coprire.",
+	"tape.help.draw": "Trascina sopra risposte, formule o parole per coprirle con un nastro opaco. Tocca un nastro per sbirciare, toccalo di nuovo per coprire. I nastri di studio coprono il contenuto solo alla vista: il testo sotto si può ancora trovare nei file esportati. Usa Oscura per togliere contenuti dalle esportazioni.",
 	"tape.help.revealAll": "Scopre tutti i nastri di studio del quaderno (solo su questo schermo: tornano coperti quando lo riapri).",
 	"tape.help.hideAll": "Copre di nuovo tutti i nastri di studio del quaderno.",
 	"tape.mode.on": "Nastro di studio attivo: trascina sopra ciò che vuoi nascondere. Tocca un nastro per rivelarlo.",
@@ -5763,4 +5763,6 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.cardTemplates": "Modelli di scheda",
 	"settings.cardTemplates.desc": "Concetto, domanda, citazione e definizione, più modelli tuoi, per le nuove schede.",
 	"redactundo.unreadable": "{step} non eseguito: i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi nessun passo che sposta la scrittura può essere verificato. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto); il passo resta nella cronologia.",
+	"tape.erase.kept": "L'inchiostro sotto un nastro di studio coperto resta. Tocca il nastro per rivelarlo, poi cancella.",
+	"tape.export.note": "I nastri di studio coprono il contenuto solo alla vista: il testo sotto si può ancora trovare nei file esportati. Usa Oscura per togliere contenuti dalle esportazioni.",
 };

@@ -71,18 +71,26 @@ function hits(el: PageElement, x: number, y: number, tolerance: number, measure:
 /**
  * Topmost element (the last one in the array is drawn on top) under (x, y), with `tolerance` pt around it. v18: a locked element
  * is not there to be hit (`hitLockedElement` finds it); with `locked` true only locked ones are looked at.
+ * v27: a study tape that hides what is under it is drawn above everything else, so a tap on one finds it first. A tape `revealed` on this
+ * screen (review fix T9) leaves what is under it visible: it is found only when nothing else is there.
  */
 export function hitElement(
 	elements: readonly PageElement[], x: number, y: number, tolerance: number, measure: MeasureText = estimateMeasure, locked = false,
+	revealed?: (tapeId: string) => boolean,
 ): PageElement | null {
-	// v27: study tapes are drawn above everything else, so a tap on one finds it first.
+	const open = (el: PageElement) => el.type === "tape" && revealed?.(el.id) === true;
+	const can = (el: PageElement) => (el.locked === true) === locked && hits(el, x, y, tolerance, measure);
 	for (let i = elements.length - 1; i >= 0; i--) {
 		const el = elements[i]!;
-		if (el.type === "tape" && (el.locked === true) === locked && hits(el, x, y, tolerance, measure)) return el;
+		if (el.type === "tape" && !open(el) && can(el)) return el;
 	}
 	for (let i = elements.length - 1; i >= 0; i--) {
 		const el = elements[i]!;
-		if ((el.locked === true) === locked && hits(el, x, y, tolerance, measure)) return el;
+		if (el.type !== "tape" && can(el)) return el;
+	}
+	for (let i = elements.length - 1; i >= 0; i--) {
+		const el = elements[i]!;
+		if (open(el) && can(el)) return el;
 	}
 	return null;
 }

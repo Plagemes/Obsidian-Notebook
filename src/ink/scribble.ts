@@ -285,10 +285,14 @@ export function scribbleEraseSteps(
 	page: Pick<Page, "id" | "strokes"> & Partial<Pick<Page, "elements">>, stroke: Stroke, durationMs: number,
 	boundsOf: (s: Stroke) => BBox = strokeBounds, options: Partial<ScribbleOptions> = {}, includeHidden = false,
 	skip: ReadonlySet<string> | null = null,
+	spare?: (s: Stroke) => boolean,
 ): { keep: AddStroke; erase: Batch } | null {
 	const scribble = detectScribble(stroke.points, durationMs, options);
 	if (!scribble) return null;
-	const victims = scribbleVictims(scribble, erasableStrokes(page, skip), stroke.width, boundsOf, includeHidden);
+	// v27 (review fix T1): `spare` strokes are never victims (the ink a hidden study tape covers, even in part).
+	const erasable = erasableStrokes(page, skip);
+	const pool = spare ? erasable.filter((s) => !spare(s)) : erasable;
+	const victims = scribbleVictims(scribble, pool, stroke.width, boundsOf, includeHidden);
 	if (victims.length === 0) return null;
 	const after = [...page.strokes, stroke];
 	const erase = removeStrokes(page.id, after, [...victims, stroke], "Scribble erase");

@@ -7,6 +7,7 @@ import { choosePicturePath, NotebookLru, PICTURE_MARK, pictureCacheable, rewrite
 import { markPictureBytes, pictureIntact, readPngText } from "../model/png-text";
 import { embedWithWidth } from "../model/selection-task";
 import type { NotebookDocument } from "../model/types";
+import { tapesOf } from "../model/tape";
 import { t } from "../i18n";
 import { whenIdle } from "../storage/idle";
 import { ensureFolder } from "../storage/vault-io";
@@ -85,7 +86,10 @@ export class CompanionHeadings {
 			const strokes = page.strokes.filter((s) => ids.has(s.id) && !s.hidden);
 			if (strokes.length === 0) return null;
 			const r = pick.heading.rect;
-			const key = `${pageFingerprint({ width: page.width, height: page.height, strokes })}|${r.x},${r.y},${r.width},${r.height}`;
+			// 0.29 (#10): the picture draws the study tapes over the heading too, so they are part of its key (nothing is added without one).
+			const tapes = tapesOf(page).filter((tp) => tp.x < r.x + r.width && tp.x + tp.width > r.x && tp.y < r.y + r.height && tp.y + tp.height > r.y);
+			const tapeKey = tapes.map((tp) => `|t${tp.x},${tp.y},${tp.width},${tp.height},${tp.color}`).join("");
+			const key = `${pageFingerprint({ width: page.width, height: page.height, strokes })}|${r.x},${r.y},${r.width},${r.height}${tapeKey}`;
 			const wanted = normalizePath(`${folder}/${headingPictureName(pick)}`);
 			const known = this.made.get(wanted);
 			let target = known && known.key === key ? app.vault.getFileByPath(known.path) : null;

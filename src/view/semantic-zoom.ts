@@ -8,6 +8,7 @@ import { fitWidth, type Size, type Viewport } from "../ink/viewport";
 import type { OutlineItem } from "../model/outline-builder";
 import { buildSemanticSources } from "../model/semantic-sources";
 import type { Asset, Page, Stroke } from "../model/types";
+import { tapesOf } from "../model/tape";
 
 export interface SemanticZoomHost {
 	/** The element the layer lives in (the stage: the labels are positioned over the pages). */
@@ -462,7 +463,8 @@ function drawHeading(page: Page, strokes: Stroke[], src: SemanticSource, heightP
 		canvas.height = Math.max(1, Math.min(2048, Math.round(src.height * scale)));
 		const ctx = canvas.getContext("2d");
 		if (!ctx) return null;
-		const sheet: Page = { id: page.id, width: page.width, height: page.height, paper: { kind: "blank", spacing: page.paper.spacing }, strokes, elements: [] };
+		// 0.29 (#10, review fix T6): the page's study tapes go over the heading, covering what they cover on the page.
+		const sheet: Page = { id: page.id, width: page.width, height: page.height, paper: { kind: "blank", spacing: page.paper.spacing }, strokes, elements: tapesOf(page) };
 		drawPageRaster(ctx, sheet, canvas.width / Math.max(1, src.width), { background: null, images: new Map(), region: { x: src.x, y: src.y, width: src.width, height: src.height } });
 		return canvas.toDataURL("image/png");
 	} catch (e) {

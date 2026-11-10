@@ -30,6 +30,7 @@ interface TapeView {
 	tapeTools: { drawing: boolean; reveal: { isRevealed(id: string): boolean; hideAll(): boolean }; hideAll(): void } | null;
 	viewport: { scale: number; offsetX: number; offsetY: number };
 	layout: { boxes: Array<{ x: number; y: number }> };
+	selection: { strokes: Stroke[]; elements: unknown[] } | null;
 	undo(): void;
 	redo(): void;
 }
@@ -159,6 +160,25 @@ export async function checkStudytape(api: StudytapeCheckApi): Promise<{ ok: bool
 	const back = parse(text);
 	add("the writer and the reader keep the tapes, and never the reveal state", back.ok && tapesOf(back.doc.pages[v.currentPage()]!).length === 2 && !text.includes("revealed") && /"type":"tape"/.test(text));
 	v.runAction("tapes-hide-all");
+	await api.frames(2);
+
+	// --- review fixes T1 / T2: the eraser keeps covered ink, the lasso takes it ---
+	const inBox = (s: Stroke) => s.points.every(([x, y]) => x >= 244 && x <= 390 && y >= 242 && y <= 280);
+	const covered = page().strokes.filter(inBox).length;
+	const before = page().strokes.length;
+	api.setTool("eraser");
+	await api.frames(2);
+	await drag([[225, 262], [410, 263]]);
+	await sleep(150);
+	add("the eraser rubbed across a hidden tape erases nothing under it, and says why", page().strokes.length === before && api.notices.some((n) => /reveal/i.test(n)), `${before - page().strokes.length} erased`);
+	api.setTool("lasso");
+	await api.frames(2);
+	await drag([[232, 232], [402, 232], [402, 292], [232, 292], [232, 232]]);
+	await sleep(150);
+	const sel = v.selection;
+	const picked = sel?.strokes.filter(inBox).length ?? 0;
+	add("a lasso around a hidden tape selects the tape and the covered answer with it", covered > 0 && picked === covered && (sel?.elements.includes(second) ?? false), `${picked}/${covered} covered strokes`);
+	api.setTool("pen");
 	await api.frames(2);
 	return { ok: results.every((r) => r.ok), results, errors: api.errors, notices: api.notices, env: { tapes: tapes().map((t) => [t.x, t.y, t.width, t.height, t.color]) } };
 }
