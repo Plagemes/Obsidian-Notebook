@@ -4,6 +4,7 @@ import { resolveLanguage, t } from "../i18n";
 import { resolveWeekStart } from "../model/calendar";
 import { createDocument, createId } from "../model/document";
 import { backgroundRect } from "../model/margins";
+import { viewOf } from "../model/pdf-view";
 import { parse, serializeChecked } from "../model/serialize";
 import { DEFAULT_META, PAGE_SIZES, PAPER_SPACING, type Asset, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
 import { CreateDialog, type ChosenTemplate, type CreateTab, type FolderSpec } from "../view/create-dialog";
@@ -776,7 +777,7 @@ export class NotebookLibraryHost implements LibraryHost {
 		this.remember(doc);
 		try {
 			if (bg.kind === "pdf") {
-				const canvas = await this.pdf.render(bg.asset, bg.page, width / page.width);
+				const canvas = await this.pdf.render(bg.asset, bg.page, width / page.width, viewOf(bg));
 				return (ctx, p) => {
 					const r = backgroundRect(p);
 					ctx.drawImage(canvas, r.x, r.y, r.width, r.height);

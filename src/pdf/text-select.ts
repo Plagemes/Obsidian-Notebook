@@ -6,6 +6,8 @@
  * boxes to highlight. Points are first moved from the notebook page into the PDF's own viewport (scale 1, pt, origin
  * top-left), where the runs are.
  */
+import { invert } from "../ink/transform";
+import { isIdentityView, mapRect, sourceToPage, type PdfView } from "../model/pdf-view";
 import { prefixShare, type PageTextContent, type TextBox, type TextMeasure } from "./text-items";
 import { hitBoxes, type PageText, type TextHit } from "./text-search";
 
@@ -25,14 +27,20 @@ export interface RectLike {
  * A point of the notebook page moved into the PDF viewport. `rect` is where the PDF is drawn on the page (its
  * background box, see model/margins.ts) and `content` the natural size of the PDF page.
  */
-export function pageToPdf(p: Point, rect: RectLike, content: { width: number; height: number }): Point {
+export function pageToPdf(p: Point, rect: RectLike, content: { width: number; height: number }, view?: PdfView): Point {
+	if (!isIdentityView(view)) {
+		// 0.28 (#76): through the turn and crop of the page's background back to the PDF page.
+		const [a, b, c, d, e, f] = invert(sourceToPage(view, content, rect));
+		return { x: a * p.x + c * p.y + e, y: b * p.x + d * p.y + f };
+	}
 	const sx = rect.width > 0 ? content.width / rect.width : 1;
 	const sy = rect.height > 0 ? content.height / rect.height : 1;
 	return { x: (p.x - rect.x) * sx, y: (p.y - rect.y) * sy };
 }
 
 /** A box of the PDF viewport moved onto the notebook page (the inverse of `pageToPdf`). */
-export function pdfRectToPage(r: RectLike, rect: RectLike, content: { width: number; height: number }): RectLike {
+export function pdfRectToPage(r: RectLike, rect: RectLike, content: { width: number; height: number }, view?: PdfView): RectLike {
+	if (!isIdentityView(view)) return mapRect(sourceToPage(view, content, rect), r);
 	const sx = content.width > 0 ? rect.width / content.width : 1;
 	const sy = content.height > 0 ? rect.height / content.height : 1;
 	return { x: rect.x + r.x * sx, y: rect.y + r.y * sy, width: r.width * sx, height: r.height * sy };

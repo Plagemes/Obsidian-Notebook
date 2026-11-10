@@ -1,7 +1,7 @@
-// docs/schema/notebook-v25.schema.json against what the serializer really writes (roadmap #167).
+// docs/schema/notebook-v26.schema.json against what the serializer really writes (roadmap #167).
 // The schema is a published contract for other tools: a document the plugin writes must always satisfy it, and a document that
 // breaks one of the writer's rules must not. The validator is a small dependency-free one (tests/json-schema-lite.ts).
-import schemaText from "../docs/schema/notebook-v25.schema.json?raw";
+import schemaText from "../docs/schema/notebook-v26.schema.json?raw";
 import guide from "../docs/format.md?raw";
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
@@ -131,7 +131,8 @@ function fullDocument(): NotebookDocument {
 	// Page 2: a PDF page with margins, locked, landscape, every other paper kind.
 	const page2: Page = {
 		id: "p-pdf", width: 841.89, height: 595.28, paper: { kind: "blank", spacing: 14.17 },
-		background: { kind: "pdf", asset: hex, page: 3 }, margins: { left: 20, right: 0, bottom: 10 }, locked: true,
+		// v26: this PDF page is turned a quarter turn and cropped.
+		background: { kind: "pdf", asset: hex, page: 3, rotate: 90, crop: { x: 20.5, y: 30, width: 400, height: 300.25 } }, margins: { left: 20, right: 0, bottom: 10 }, locked: true,
 		infinite: true, strokes: [],
 	};
 	const page3: Page = {
@@ -266,6 +267,16 @@ describe("notebook-v25.schema.json: invalid documents are refused", () => {
 	bad("margin negative", set(["pages", 1, "margins", "left"], -1));
 	bad("pdf background without a page number", del(["pages", 1, "background", "page"]));
 	bad("background of an unknown kind", set(["pages", 1, "background"], { kind: "video", asset: "ab" }));
+	// v26: the turn and the crop of a PDF page.
+	bad("rotate 0", set(["pages", 1, "background", "rotate"], 0));
+	bad("rotate 45", set(["pages", 1, "background", "rotate"], 45));
+	bad("rotate 360", set(["pages", 1, "background", "rotate"], 360));
+	bad("rotate as a string", set(["pages", 1, "background", "rotate"], "90"));
+	bad("crop without a side", del(["pages", 1, "background", "crop", "height"]));
+	bad("crop x negative", set(["pages", 1, "background", "crop", "x"], -1));
+	bad("crop too thin", set(["pages", 1, "background", "crop", "width"], 4));
+	bad("crop beyond the limit", set(["pages", 1, "background", "crop", "height"], 14401));
+	bad("crop as an array", set(["pages", 1, "background", "crop"], [0, 0, 100, 100]));
 	bad("too many page tags", set(["pages", 0, "tags"], Array.from({ length: 51 }, (_, i) => `t${i}`)));
 	// Strokes.
 	bad("stroke with unknown tool", set(["pages", 0, "strokes", 0, "tool"], "quill"));
@@ -403,7 +414,7 @@ describe("docs/format.md", () => {
 	});
 
 	it("names the schema file and the version it describes", () => {
-		expect(guide).toContain("schema/notebook-v25.schema.json");
+		expect(guide).toContain("schema/notebook-v26.schema.json");
 		expect(guide).toContain(`version ${CURRENT_VERSION}`);
 	});
 });

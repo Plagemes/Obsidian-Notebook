@@ -8,6 +8,7 @@ import { Component, loadPdfJs, MarkdownRenderer, Platform, type App, type TFile 
 import { drawElement, drawTextElement } from "../ink/renderer";
 import { renderThumbnail, thumbnailSize } from "../library/thumbnail";
 import { backgroundRect } from "../model/margins";
+import { viewOf } from "../model/pdf-view";
 import { parse } from "../model/serialize";
 import type { NotebookDocument, Page } from "../model/types";
 import { assetIdFromHash, sha256Hex } from "../pdf/hash";
@@ -110,7 +111,7 @@ async function openNotebook(deps: SourceDeps, file: TFile): Promise<RefSource> {
 	const drawMedia = (ctx: CanvasRenderingContext2D, page: Page): void => {
 		const bg = page.background;
 		if (bg) {
-			const img = bg.kind === "image" ? media.image(bg.asset) : ((media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null);
+			const img = bg.kind === "image" ? media.image(bg.asset) : ((media.pdf.peek(bg.asset, bg.page, undefined, viewOf(bg))?.canvas as CanvasImageSource | undefined) ?? null);
 			const r = backgroundRect(page);
 			if (img) ctx.drawImage(img, r.x, r.y, r.width, r.height);
 			else {
@@ -142,7 +143,7 @@ async function openNotebook(deps: SourceDeps, file: TFile): Promise<RefSource> {
 			if (!page) throw new RangeError(`page ${index + 1} out of range`);
 			const bg = page.background;
 			// The PDF page is loaded first so the synchronous drawing finds it.
-			if (bg?.kind === "pdf") await media.pdf.render(bg.asset, bg.page, quantize(pixelWidth / page.width)).catch(() => undefined);
+			if (bg?.kind === "pdf") await media.pdf.render(bg.asset, bg.page, quantize(pixelWidth / page.width), viewOf(bg)).catch(() => undefined);
 			const url = renderThumbnail(page, pixelWidth, { mime: "image/jpeg", quality: 0.9, drawBackground: (ctx, p) => drawMedia(ctx, p) });
 			const size = thumbnailSize(page, pixelWidth);
 			const img = parent.createEl("img", { cls: "nb-refwin-img", attr: { src: url, alt: "", draggable: "false", decoding: "async" } });

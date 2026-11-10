@@ -12,6 +12,7 @@ import { t } from "../i18n";
 import type { Layout } from "../ink/layout";
 import { backgroundRect } from "../model/margins";
 import { sourcePageIndex } from "../model/pdf-outline-map";
+import { viewOf, viewSize } from "../model/pdf-view";
 import type { NotebookDocument } from "../model/types";
 import { linkAt, safeExternalUrl, type PdfPageLink, type PdfPageLinks } from "../pdf/pdf-outline";
 import { isTap, pageToPdf } from "../pdf/text-select";
@@ -140,8 +141,11 @@ export class PdfLinks {
 		const found = await this.links(bg.asset, bg.page);
 		if (!found || this.destroyed) return false;
 		const rect = backgroundRect(page);
-		const pt = pageToPdf({ x: local[0], y: local[1] }, rect, found);
-		const tolerance = TOLERANCE_PX / Math.max(0.05, this.host.scale()) * (found.width / Math.max(1, rect.width));
+		const view = viewOf(bg);
+		const pt = pageToPdf({ x: local[0], y: local[1] }, rect, found, view);
+		// The tolerance is in PDF points: the page scale over the view's size (a quarter turn swaps the sides).
+		const across = viewSize(view, found).width;
+		const tolerance = TOLERANCE_PX / Math.max(0.05, this.host.scale()) * (across / Math.max(1, rect.width));
 		const link = linkAt(found.links, pt, tolerance);
 		if (!link) return false;
 		this.follow(doc, bg.asset, link);
@@ -156,7 +160,7 @@ export class PdfLinks {
 		const found = this.peek(bg.asset, bg.page);
 		if (!found) return false;
 		const rect = backgroundRect(page);
-		return linkAt(found.links, pageToPdf({ x: local[0], y: local[1] }, rect, found)) !== null;
+		return linkAt(found.links, pageToPdf({ x: local[0], y: local[1] }, rect, found, viewOf(bg))) !== null;
 	}
 
 	private follow(doc: NotebookDocument, asset: string, link: PdfPageLink): void {

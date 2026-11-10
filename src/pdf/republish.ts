@@ -6,6 +6,7 @@
 import { createPdfPages } from "../model/pages";
 import { AddAsset, Batch, InsertPages, SetPageBackground, SetPageMargins, type Command } from "../model/history";
 import { marginsOf } from "../model/margins";
+import { viewOf, viewSize, withView } from "../model/pdf-view";
 import type { Asset, NotebookDocument, Page } from "../model/types";
 
 /** What identifies a slide: its normalised text, and a small image hash when it has (almost) no text. */
@@ -381,9 +382,13 @@ export function planRepublish(
 			const bg = p.background;
 			if (bg?.kind !== "pdf" || bg.asset !== src.asset || bg.page !== src.page) continue;
 			const mg = marginsOf(p);
-			const width = Math.round((size.width + mg.left + mg.right) * 100) / 100;
-			const height = Math.round((size.height + mg.bottom) * 100) / 100;
-			const background = { kind: "pdf" as const, asset: asset.id, page: m.page };
+			// 0.28 (#76): a slide that was turned or cropped keeps its turn and crop on the new version (its crop is in PDF points of the
+			// page, which the new version is assumed to share), and the page is as large as that view of the new slide.
+			const view = viewOf(bg);
+			const shown = viewSize(view, size);
+			const width = Math.round((shown.width + mg.left + mg.right) * 100) / 100;
+			const height = Math.round((shown.height + mg.bottom) * 100) / 100;
+			const background = withView({ kind: "pdf" as const, asset: asset.id, page: m.page }, view);
 			switched++;
 			if (!p.infinite || p.height <= height) {
 				switches.push(new SetPageBackground(p.id, background, { width, height }));

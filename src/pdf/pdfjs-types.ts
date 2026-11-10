@@ -23,7 +23,13 @@ export interface PdfRenderTask {
 }
 
 export interface PdfPage {
-	getViewport(params: { scale: number }): PdfViewport;
+	/**
+	 * `rotation` (degrees, the WHOLE rotation: pdf.js defaults it to the page's own) and `offsetX` / `offsetY` (device px added to the viewport transform) are
+	 * used for a rotated or cropped page background (0.28, #76); a fake that ignores them draws the page as it is.
+	 */
+	getViewport(params: { scale: number; rotation?: number; offsetX?: number; offsetY?: number }): PdfViewport;
+	/** The page's own rotation in degrees (the /Rotate entry), already part of every default viewport. Present in real pdf.js. */
+	rotate?: number;
 	render(params: { canvasContext: unknown; viewport: PdfViewport }): PdfRenderTask;
 	/** Frees page-level resources (optional, present in real pdf.js). */
 	cleanup?(): unknown;

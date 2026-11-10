@@ -8,6 +8,7 @@ import { t } from "../i18n";
 import { notebookUri } from "../integration/links";
 import { Batch, SetPageMargins, type Command } from "../model/history";
 import { backgroundRect, MAX_MARGIN_RATIO, marginsEqual, marginsOf, normalizeMargins, pagesWithSameBackground } from "../model/margins";
+import { viewOf } from "../model/pdf-view";
 import { MM, type NotebookDocument, type Page, type PageMargins } from "../model/types";
 import { annotationsMarkdown, collectAnnotations, hasPdfAnnotations, pagesNeedingText, uniquePath } from "../pdf/annotations";
 import { assetIdFromHash, sha256Hex } from "../pdf/hash";
@@ -306,7 +307,7 @@ export async function exportPdfAnnotations(host: PdfActionHost): Promise<void> {
 				contents.set(key, content);
 			}
 			const c = await content;
-			texts.set(page, c ? boxesOnPage(c, backgroundRect(page)) : null);
+			texts.set(page, c ? boxesOnPage(c, backgroundRect(page), viewOf(bg)) : null);
 		}
 		const items = collectAnnotations(doc, (p) => texts.get(p) ?? null);
 		const vault = app.vault.getName();

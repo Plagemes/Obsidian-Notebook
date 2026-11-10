@@ -19,6 +19,7 @@ import {
 } from "../model/excerpts";
 import { AddAsset, AddElement, AddPage, Batch, ReplaceElement, type Command } from "../model/history";
 import { boxesOverlap } from "../model/layers";
+import { viewOf } from "../model/pdf-view";
 import type { Asset, ExcerptElement, NotebookDocument, Page, PageElement } from "../model/types";
 import { isNotebookFile } from "../storage/format";
 import { internalClip, writeSystemText } from "./clipboard";
@@ -467,7 +468,7 @@ export class ExcerptTools {
 			let background: CanvasImageSource | null = null;
 			const bg = page.background;
 			try {
-				if (bg?.kind === "pdf") background = await media.pdf.render(bg.asset, bg.page, scale);
+				if (bg?.kind === "pdf") background = await media.pdf.render(bg.asset, bg.page, scale, viewOf(bg));
 				else if (bg?.kind === "image") {
 					const bmp = await createImageBitmap(new Blob([await media.readAsset(bg.asset)]));
 					opened.push(bmp);

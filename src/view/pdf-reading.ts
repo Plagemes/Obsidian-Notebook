@@ -12,6 +12,7 @@ import { visiblePages, type Layout } from "../ink/layout";
 import type { Renderer } from "../ink/renderer";
 import type { Size, Viewport } from "../ink/viewport";
 import { backgroundRect } from "../model/margins";
+import { viewOf } from "../model/pdf-view";
 import type { NotebookDocument, Page, Stroke } from "../model/types";
 import { PageTextCache, runSearch, type SearchHit } from "../pdf/text-index";
 import { boxesOnPage, type PageTextContent, type TextMeasure } from "../pdf/text-items";
@@ -402,10 +403,11 @@ export class PdfReading {
 			return [];
 		}
 		const r = backgroundRect(page);
-		const key = `${r.x}|${r.y}|${r.width}|${r.height}`;
+		const view = viewOf(page.background);
+		const key = `${r.x}|${r.y}|${r.width}|${r.height}|${view?.rotate ?? 0}|${view?.crop ? `${view.crop.x},${view.crop.y},${view.crop.width},${view.crop.height}` : ""}`;
 		const have = this.rects.get(hit);
 		if (have && have.key === key) return have.rects;
-		const onPage = boxesOnPage({ ...cached.content, items: hitBoxes(cached.content, cached.text, hit, this.measure) }, r);
+		const onPage = boxesOnPage({ ...cached.content, items: hitBoxes(cached.content, cached.text, hit, this.measure) }, r, view);
 		// A run's box is its font size high; the letters (with ascenders and descenders) sit lower in it.
 		const rects = onPage.map((b) => ({ x: b.x, y: b.y + b.height * 0.1, width: b.width, height: b.height * 1.15 }));
 		this.rects.set(hit, { key, rects });
@@ -508,7 +510,7 @@ export class PdfReading {
 		if (!this.host.settings().snapHighlighter || stroke.tool !== "highlighter" || bg?.kind !== "pdf") return null;
 		const cached = this.cache.peek(bg.asset, bg.page);
 		if (!cached || cached.content.items.length === 0) return null;
-		const boxes = boxesOnPage(cached.content, backgroundRect(page)).filter((b) => b.str.length > 0);
+		const boxes = boxesOnPage(cached.content, backgroundRect(page), viewOf(bg)).filter((b) => b.str.length > 0);
 		const bands = snapHighlight(stroke.points, boxes, this.measure);
 		if (bands.length === 0) return null;
 		return snappedStrokes(stroke, bands);

@@ -10,6 +10,7 @@ import type { HeaderLayout } from "../ink/page-header";
 import { DEFAULT_PNG_SCALE } from "../model/export-pages";
 import { cleanPagesForExport, resolveCleanOptions, type CleanExportOptions } from "../model/clean-export";
 import { backgroundRect } from "../model/margins";
+import { viewKey, viewOf } from "../model/pdf-view";
 import { burnKey, burnPlan, withExcerptChains } from "../ink/redact";
 import { countBoxes, type Redactions } from "../model/redact";
 import { announceRedaction, withRedaction } from "./export-redact";
@@ -70,7 +71,8 @@ export async function collectPageImages(media: NotebookMedia | null, pages: read
 			const burn = burnPlan(page);
 			const burnTag = burn ? `:burn:${burnKey(burn.boxes)}` : "";
 			const jpeg = bg.kind === "pdf"
-				? await load(`pdf:${bg.asset}:${bg.page}${burnTag}`, () => media.pdfPageJpeg(bg.asset, bg.page, PDF_DPI, burn ?? undefined))
+				// 0.28 (#76): the picture is the part of the PDF page the background shows, turned: the PDF is re-embedded as the page shows it.
+				? await load(`pdf:${bg.asset}:${bg.page}:${viewKey(viewOf(bg))}${burnTag}`, () => media.pdfPageJpeg(bg.asset, bg.page, PDF_DPI, burn ?? undefined, viewOf(bg)))
 				: await load(`img:${bg.asset}${burnTag}`, () => media.imageJpeg(bg.asset, burn ?? undefined));
 			if (jpeg) list.push({ ...jpeg, ...backgroundRect(page), layer: "background" });
 			else out.skipped++;
