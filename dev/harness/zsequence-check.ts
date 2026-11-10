@@ -36,7 +36,8 @@ export async function checkZsequence(api: ZsequenceCheckApi): Promise<{ ok: bool
 	const opened: string[] = [];
 	const made: string[] = [];
 	const q = (sel: string) => Array.from(document.querySelectorAll<HTMLElement>(`.nb-sequence-modal ${sel}`));
-	const titles = () => q(".nb-modal-section-title").map((e) => e.textContent ?? "");
+	const buttonsOf = () => q(".nb-modal-btn").map((el) => ({ el, label: el.querySelector(".nb-modal-btn-label")?.textContent ?? "" }));
+	const titles = () =>q(".nb-modal-section-title").map((e) => e.textContent ?? "");
 
 	let modal = new SequenceModal(app as never, infoOf("1a"), { open: (c) => { opened.push(c.id); }, create: (k) => { made.push(k); } });
 	modal.open();
@@ -46,9 +47,9 @@ export async function checkZsequence(api: ZsequenceCheckApi): Promise<{ ok: bool
 	add("it lists the parent, the next card and both children as rows", rows.length === 4 && rows[0]!.startsWith("1 ") && rows[1]!.startsWith("1b") && rows[2]!.startsWith("1a1") && rows[3]!.startsWith("1a2"), rows.join("|"));
 	add("a card with no previous one says None, without a control", q(".nb-modal-note").some((n) => n.textContent === t("sequence.none")) && q(".nb-seq-section").length === 4);
 	add("every row is a touch target with help and a label", q(".nb-seq-row").every((r) => r.getBoundingClientRect().height >= 44 && !!r.title && !!r.getAttribute("aria-label")));
-	const buttons = q(".nb-modal-btn").map((b) => b.textContent ?? "");
+	const buttons = buttonsOf().map((b) => b.label);
 	add("a dialog opened from a notebook offers follow-up and branch", buttons.includes(t("sequence.newFollowUp")) && buttons.includes(t("sequence.newBranch")) && buttons.includes(t("sequence.close")), buttons.join("|"));
-	add("the buttons carry help", q(".nb-modal-btn").filter((b) => b.textContent !== t("sequence.close")).every((b) => !!b.title));
+	add("the buttons carry help", buttonsOf().filter((b) => b.label !== t("sequence.close")).every((b) => !!b.el.title));
 	const box = document.querySelector<HTMLElement>(".nb-sequence-modal");
 	add("the dialog fits the screen", !!box && box.getBoundingClientRect().left >= -1 && box.getBoundingClientRect().right <= window.innerWidth + 1);
 
@@ -59,14 +60,14 @@ export async function checkZsequence(api: ZsequenceCheckApi): Promise<{ ok: bool
 	modal = new SequenceModal(app as never, infoOf("1a"), { open: (c) => { opened.push(c.id); }, create: (k) => { made.push(k); } });
 	modal.open();
 	await sleep(120);
-	q(".nb-modal-btn").find((b) => b.textContent === t("sequence.newBranch"))?.click();
+	buttonsOf().find((b) => b.label === t("sequence.newBranch"))?.el.click();
 	await sleep(40);
 	add("Branch starts a branch card and closes the dialog", made.join() === "branch" && !document.querySelector(".nb-sequence-modal"), made.join());
 
 	modal = new SequenceModal(app as never, infoOf("2"), { open: (c) => { opened.push(c.id); } });
 	modal.open();
 	await sleep(120);
-	add("opened outside a notebook there are no creation buttons", q(".nb-modal-btn").map((b) => b.textContent).join("|") === t("sequence.close"), q(".nb-modal-btn").map((b) => b.textContent).join("|"));
+	add("opened outside a notebook there are no creation buttons", buttonsOf().map((b) => b.label).join("|") === t("sequence.close"), buttonsOf().map((b) => b.label).join("|"));
 	add("a card with no children says None and its previous card is shown", q(".nb-seq-row").length === 1 && q(".nb-modal-note").length === 3, `${q(".nb-seq-row").length} rows`);
 	modal.close();
 	await sleep(40);

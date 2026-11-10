@@ -34,7 +34,7 @@ export class SequenceModal extends Modal {
 	onOpen(): void {
 		const { card } = this.info;
 		const shell = modalShell(this, {
-			title: t("sequence.title"), subtitle: t("sequence.subtitle", { id: card.id, title: card.title || card.id }), icon: "git-fork", size: "medium", cls: "nb-sequence-modal",
+			title: t("sequence.title"), subtitle: t("sequence.subtitle", { id: card.id, title: card.title || card.id }), icon: "split", size: "medium", cls: "nb-sequence-modal",
 		});
 		const { body, foot } = shell;
 		const one = (title: string, target: CardRecord | null) => {
@@ -60,7 +60,7 @@ export class SequenceModal extends Modal {
 			const branch = shellButton(foot, "secondary", t("sequence.newBranch"), () => {
 				this.close();
 				create("branch");
-			}, { icon: "git-branch" });
+			}, { icon: "split" });
 			branch.title = t("sequence.help.branch");
 		}
 		shellButton(foot, "primary", t("sequence.close"), () => this.close());

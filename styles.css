@@ -22655,3 +22655,18 @@ body.notebook-style-obsidian {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+/* The footer wraps: three buttons in a row where there is room, one under the other on a narrow screen. */
+.nb-ui.nb-sequence-modal .nb-modal-foot {
+	flex-wrap: wrap;
+}
+
+.nb-ui.nb-sequence-modal .nb-modal-foot > .nb-modal-btn {
+	flex: 1 1 160px;
+}
+
+@media (max-width: 600px) {
+	.nb-ui.nb-sequence-modal .nb-modal-foot > .nb-modal-btn {
+		flex: 1 1 100%;
+	}
+}

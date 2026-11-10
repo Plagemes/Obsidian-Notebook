@@ -85,7 +85,7 @@ export function registerZettel(plugin: ZettelHost): ZettelService {
 		menu.addItem((i) => i.setTitle(t("zettel.command.fromPage")).setIcon("id-card").onClick(() => service.cardFromPage(view)));
 		menu.addItem((i) => i.setTitle(t("zettel.command.title")).setIcon("heading").onClick(() => service.setCardTitle(view)));
 		menu.addItem((i) => i.setTitle(t("zettel.command.showCards")).setIcon("layout-list").onClick(() => service.showCards(view)));
-		if (service.sequenceAvailable("card")) menu.addItem((i) => i.setTitle(t("sequence.command.show")).setIcon("git-fork").onClick(() => service.showSequence()));
+		if (service.sequenceAvailable("card")) menu.addItem((i) => i.setTitle(t("sequence.command.show")).setIcon("split").onClick(() => service.showSequence()));
 		menu.addItem((i) => i.setTitle(t(service.isSlipBox(view) ? "zettel.menu.slipBoxOff" : "zettel.menu.slipBoxOn")).setIcon("archive")
 			.onClick(() => service.toggleSlipBox(view)));
 	}));
