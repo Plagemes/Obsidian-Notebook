@@ -2,7 +2,7 @@
  * 0.29 round-3 review of the round-2 fixes (FAIL CLOSED). Z1: a merge (an exempt wrapper with `inner`) that changes a boxed page's left margin
  * is refused like a direct margin change. Z2: every box records the background geometry of its page and an export refuses a page whose
  * background moved, grew, shrank or changed since (page size, orientation, Update PDF, page restore, a synced file); boxes stored before 0.29
- * adopt it. Z3: an infinite PDF page grows by a bottom margin (its Undo is never refused). Z5: objects under a study tape follow it on Insert
+ * adopt it. Z3 (solved differently in round 4, see redact-review-r4.test.ts). Z5: objects under a study tape follow it on Insert
  * space. Z6: a table row insert moves the tapes over the pushed answers.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -10,14 +10,13 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("obsidian", async () => (await import("./fake-vault")).obsidianMock());
 
 import reliabilitySrc from "../src/integration/reliability.ts?raw";
-import { growCommand } from "../src/ink/infinite";
 import { backgroundShifts, redactStepCheck, type StepBoxes } from "../src/ink/redact-step";
 import { analyseSpace } from "../src/ink/space";
 import { detectTable, gridAt, insertRow, normaliseSpec } from "../src/ink/table";
 import { insertTableCommand, planTableEdit } from "../src/ink/table-edit";
 import { strokeTouchesTapes } from "../src/ink/tape-guard";
 import { createDocument, createStroke, quantizePoint } from "../src/model/document";
-import { AddStroke, Batch, History, SetPageBackground, SetPageMargins, SetPageSize } from "../src/model/history";
+import { Batch, History, SetPageBackground, SetPageMargins, SetPageSize } from "../src/model/history";
 import { backgroundRect } from "../src/model/margins";
 import { planMerge } from "../src/model/merge";
 import { exemptFromLocks } from "../src/model/page-lock";
@@ -79,7 +78,8 @@ describe("Z1: a merge that widens the left margin of a boxed page is caught", ()
 	});
 
 	it("the conflict dialog asks the view first and gives its own reason", () => {
-		expect(reliabilitySrc).toContain("this.view.redactRefuses?.(plan.command) === true) throw new Error(t(\"merge.redacted\"))");
+		expect(reliabilitySrc).toContain("this.view.redactRefusal?.(plan.command)");
+		expect(reliabilitySrc).toContain("throw new Error(t(why === \"unreadable\" ? \"merge.redactUnreadable\" : \"merge.redacted\"))");
 	});
 });
 
@@ -186,31 +186,6 @@ describe("Z2: a box records the background geometry and an export refuses a page
 		expect(tagNewBoxes(legacy, legacy, [page]).p1).toEqual([{ ...BOX, geo: backgroundGeometry(page) }]);
 		const old = { ...BOX, geo: "g0,0,1,1|00000000000000" };
 		expect(tagNewBoxes({ p1: [old] }, { p1: [old] }, [page]).p1).toEqual([old]);
-	});
-});
-
-describe("Z3: an infinite PDF page grows by a bottom margin", () => {
-	it("keeps the background box, so writing at the bottom of a boxed infinite scan can be undone", () => {
-		const { doc, page } = scanDoc();
-		page.infinite = true;
-		const { history, boxes, refused } = rig(doc);
-		boxes[page.id] = drawnOn(page)[page.id]!;
-		const geo = backgroundGeometry(page);
-		const grow = growCommand(page, page.height + 400);
-		expect(grow).toBeInstanceOf(SetPageMargins);
-		const s = freezeStroke({ ...line(100, page.height - 20, 300, page.height - 20), id: "low" });
-		expect(history.execute(new Batch("Draw", [new AddStroke(page.id, s, page.strokes.length), grow]))).toBe(true);
-		expect(backgroundGeometry(page)).toBe(geo);
-		expect(page.margins).toEqual({ left: 0, right: 0, bottom: 400 });
-		expect(staleRedactionPages([page], { [page.id]: boxes[page.id]! })).toEqual([]);
-		expect(history.undo()).not.toBeNull();
-		expect(refused).toEqual([]);
-		expect(page.margins).toBeUndefined();
-		expect(history.redo()).not.toBeNull();
-		expect(refused).toEqual([]);
-		// A plain page, or a PDF page that already has margins, grows by its size as before.
-		expect(growCommand({ ...page, background: undefined }, page.height + 400)).toBeInstanceOf(SetPageSize);
-		expect(growCommand({ ...page, margins: { left: 0, right: 40, bottom: 0 } }, page.height + 400)).toBeInstanceOf(SetPageSize);
 	});
 });
 
