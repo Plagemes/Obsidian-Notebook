@@ -89,6 +89,7 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Move line": ["histpanel.t.moveLine", "arrow-up-down"],
 	"Smooth strokes": ["histpanel.t.smooth", "sparkles"],
 	"Straighten strokes": ["histpanel.t.straighten", "minus"],
+	"Tidy flowchart": ["histpanel.t.flowchart", "workflow"],
 	"Make axes": ["histpanel.t.axes", "activity"],
 	"Insert table": ["histpanel.t.tableInsert", "table"],
 	"Edit table": ["histpanel.t.tableEdit", "table"],

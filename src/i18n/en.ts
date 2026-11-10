@@ -5778,6 +5778,19 @@ export const en = {
 	"merge.redactUnreadable": "the redaction boxes stored on this device cannot be read, so a change that moves or stretches the background of a page cannot be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done).",
 	"redactmove.unreadable": "This change was not made: the redaction boxes stored on this device cannot be read, so a change that moves or stretches the background of a page cannot be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done).",
 	"table.noTapeLocked": "Ink this insert would push lies under a locked study tape, which stays where it is: the answer would come out from under it. Unlock the tape first.",
+	// 0.30 flowchart
+	"flowchart.action": "Tidy flowchart",
+	"command.flowchart": "Tidy the hand-drawn flowchart in the selection (line up the boxes, even out the gaps, redraw the arrows)",
+	"help.flowchart": "Line up hand-drawn boxes (rectangles, diamonds, ellipses), even out the gaps between them and draw the arrows again from box to box. The writing inside a box moves with it; the boxes keep their strokes. Select the flowchart first. Undo puts everything back.",
+	"flowchart.done": "Tidied {boxes} boxes, redrew {arrows} arrows.",
+	"flowchart.few": "Select a flowchart with at least two boxes (rectangles, diamonds or ellipses).",
+	"flowchart.nested": "A box sits inside another box of a similar size, so the flowchart was not tidied. Select one level at a time.",
+	"flowchart.ambiguous": "The boxes do not fall into clear rows and columns, so nothing was moved.",
+	"flowchart.none": "This flowchart is already tidy.",
+	"flowchart.redacted": "Nothing was moved: a box or its writing lies under a redaction box, or the redaction boxes cannot be read. Remove the redaction box first (Export… › Redact…).",
+	"flowchart.tape": "Nothing was moved: some of the flowchart lies under a study tape. Remove the tape first.",
+	"flowchart.edge": "Nothing was moved: the tidy layout would not fit on the page.",
+	"histpanel.t.flowchart": "Flowchart tidied",
 } as const;
 
 export type MessageKey = keyof typeof en;

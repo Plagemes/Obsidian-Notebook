@@ -200,6 +200,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"toggle-hide-struck": (v) => v.strikeTools?.toggle(),
 	"selection-smooth": (v) => v.selectionTools?.reshape("smooth"),
 	"selection-straighten": (v) => v.selectionTools?.reshape("straighten"),
+	// 0.30 (#245): tidy the hand-drawn flowchart in the selection
+	"selection-flowchart": (v) => v.flowchartTools?.tidy(),
 	// 0.15 (241): drawings with states
 	"selection-part": (v) => v.stateTools?.makePartFromSelection(),
 	"states-toggle": (v) => v.stateTools?.toggle(),

@@ -94,6 +94,8 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.26 (#66): reshaping handwriting fits a selection of strokes; a long wobbly line (underline, ruler line) on grid or plain paper is likelier meant straight.
 	if (a.id === "selection-smooth" && hasSelection) boost += 4;
 	if (a.id === "selection-straighten" && hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 6;
+	// 0.30 (#245): tidying a flowchart fits a selection of a good many strokes (boxes, arrows and their writing), on any paper without lines to write on.
+	if (a.id === "selection-flowchart" && hasSelection) boost += (c.selection?.strokes ?? 0) >= 6 ? (c.page?.kind === "ruled" ? 3 : 7) : 2;
 	// 0.27 (#170): a macro fits where its first step can start: one that starts on the selection comes first when something is selected (enough for "For this page");
 	// one that starts somewhere it cannot (nothing selected, a locked page) steps back; any other leans forward a little.
 	// 0.28 (#41): the table actions fit a selected table above all (enough for "For this page"); inserting one leans forward a little on grid and plain paper.

@@ -5779,4 +5779,17 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"merge.redactUnreadable": "i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi una modifica che sposta o allunga lo sfondo di una pagina non può essere verificata. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto).",
 	"redactmove.unreadable": "Modifica non eseguita: i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi una modifica che sposta o allunga lo sfondo di una pagina non può essere verificata. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto).",
 	"table.noTapeLocked": "L'inserimento sposterebbe inchiostro che sta sotto un nastro di studio bloccato, che resta dov'è: la risposta uscirebbe da sotto il nastro. Prima sblocca il nastro.",
+	// 0.30 flowchart
+	"flowchart.action": "Riordina diagramma di flusso",
+	"command.flowchart": "Riordina il diagramma di flusso disegnato a mano nella selezione (allinea i riquadri, uniforma gli spazi, ridisegna le frecce)",
+	"help.flowchart": "Allinea i riquadri disegnati a mano (rettangoli, rombi, ellissi), uniforma gli spazi tra loro e ridisegna le frecce da un riquadro all'altro. La scrittura dentro un riquadro si sposta con lui; i riquadri mantengono i loro tratti. Seleziona prima il diagramma. Annulla rimette tutto com'era.",
+	"flowchart.done": "Riordinati {boxes} riquadri, ridisegnate {arrows} frecce.",
+	"flowchart.few": "Seleziona un diagramma con almeno due riquadri (rettangoli, rombi o ellissi).",
+	"flowchart.nested": "Un riquadro sta dentro un altro di dimensioni simili, quindi il diagramma non è stato riordinato. Seleziona un livello alla volta.",
+	"flowchart.ambiguous": "I riquadri non formano righe e colonne chiare, quindi non è stato spostato nulla.",
+	"flowchart.none": "Questo diagramma è già in ordine.",
+	"flowchart.redacted": "Non è stato spostato nulla: un riquadro o la sua scrittura sta sotto un riquadro di oscuramento, oppure i riquadri di oscuramento non si possono leggere. Rimuovi prima il riquadro di oscuramento (Esporta… › Oscura…).",
+	"flowchart.tape": "Non è stato spostato nulla: una parte del diagramma sta sotto un nastro di studio. Rimuovi prima il nastro.",
+	"flowchart.edge": "Non è stato spostato nulla: la disposizione in ordine non starebbe nella pagina.",
+	"histpanel.t.flowchart": "Diagramma riordinato",
 };

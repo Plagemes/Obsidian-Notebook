@@ -239,6 +239,7 @@ import { TableTools, type TableHost } from "./table-tools";
 import { tableOfSelection } from "../ink/table";
 import { chartOfSelection, tableInSelection } from "../ink/chart";
 import { ChartTools } from "./chart-tools";
+import { FlowchartTools } from "./flowchart-tools";
 import { ChemTools, holdsReaction } from "./chem-tools";
 import { CalculatorTools } from "./calculator";
 import { GroupTools, type GroupHost } from "./group-tools";
@@ -583,6 +584,8 @@ export class NotebookView extends FileView {
 	private tables: TableTools | null = null;
 	/** 0.29 (#244): charts from table data (make one from a selected table, update it when the numbers change). */
 	private charts: ChartTools | null = null;
+	/** 0.30 (#245): "Tidy flowchart" on a selection of hand-drawn boxes and arrows. */
+	private flowchart: FlowchartTools | null = null;
 	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
 	private chem: ChemTools | null = null;
 	/** 0.29 (#182): the advanced calculator (null before the view is open). */
@@ -953,6 +956,7 @@ export class NotebookView extends FileView {
 		this.axes = new AxesTools(this.axesHost());
 		this.tables = new TableTools(this.tableHost());
 		this.charts = new ChartTools(this.tableHost());
+		this.flowchart = new FlowchartTools(this.tableHost());
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
 		this.calculator = new CalculatorTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
@@ -1441,6 +1445,7 @@ export class NotebookView extends FileView {
 		this.axes = null;
 		this.tables = null;
 		this.charts = null;
+		this.flowchart = null;
 		this.chem = null;
 		this.calculator = null;
 		this.checklist = null;
@@ -3765,6 +3770,11 @@ export class NotebookView extends FileView {
 	/** 0.29 (#244): charts from table data of this view (null before the view is open). */
 	get chartTools(): ChartTools | null {
 		return this.charts;
+	}
+
+	/** 0.30 (#245): the flowchart tidy-up of this view (null before the view is open). */
+	get flowchartTools(): FlowchartTools | null {
+		return this.flowchart;
 	}
 
 	/** 0.22 (#206): instant axes of this view (null before the view is open). */
