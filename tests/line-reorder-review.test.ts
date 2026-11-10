@@ -208,13 +208,13 @@ describe("line reorder review: the step (L3, L4, L10)", () => {
 		const plan = lineMoveCommand(page, model, move)!;
 		expect(plan.comments).toBe(1);
 		expect(hist.execute(plan.command)).toBe(true);
-		const moved = page.comments![0]! as { region: { y: number } };
-		expect(moved.region.y).toBeCloseTo(originalY + move.shifts[1]!, 1);
-		expect(page.comments![1]).toBe(before[1]);
+		const regionY = (): number => ((page.comments?.[0] ?? { region: { y: NaN } }) as { region: { y: number } }).region.y;
+		expect(regionY()).toBeCloseTo(originalY + move.shifts[1]!, 1);
+		expect(page.comments?.[1]).toBe(before[1]);
 		hist.undo();
 		expect(page.comments).toBe(before);
 		hist.redo();
-		expect((page.comments![0]! as { region: { y: number } }).region.y).toBeGreaterThan(originalY);
+		expect(regionY()).toBeGreaterThan(originalY);
 	});
 
 	it("L4: a comment region that touches a line's writing without being inside its band refuses the line", () => {
