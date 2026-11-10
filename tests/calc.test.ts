@@ -4,6 +4,7 @@ import { DEFAULT_FORMAT, equationLatex, formatNumber, formatValue, normaliseForm
 import { CONSTANTS, lookupConstant } from "../src/math/calc-constants";
 import { parseUnitText, lookupUnit, formatUnit } from "../src/math/calc-units";
 import { restoreSession, saveSession } from "../src/math/calc-state";
+import { unsafeLatexCommand } from "../src/math/layout";
 
 function run(src: string, session = new CalcSession(), o: FormatOptions = DEFAULT_FORMAT): string {
 	const r = evaluate(src, session);
@@ -449,5 +450,18 @@ describe("calculator: LaTeX", () => {
 		expect(latex("pi * 2")).toBe("\\pi\\cdot 2 = 6.28318530718");
 		expect(latex("5 N*m")).toBe("5\\,\\mathrm{N\\cdot m} = 5\\,\\mathrm{N\\cdot m}");
 		expect(latex("1.5e-3 * 2")).toBe("1.5\\times 10^{-3}\\cdot 2 = 0.003");
+	});
+
+	it("never writes a command the equation typesetter refuses", () => {
+		const s = new CalcSession();
+		evaluate("data_x = 3", s);
+		for (const src of ["data_x * 2", "3 km/h to m/s", "inv([1, 2; 3, 4])", "(1 + 2i) * (3 - i)", "mean([1, 2, 3])", "alpha = 2", "5 N*m", "floor(2.5) + abs(-3)", "root(3, 8)", "30 deg + 1 rad", "2 h to min", "solve(x^2 = 4, x)", "hbar", "x_1 = 4"]) {
+			const r = evaluate(src, s);
+			if (!r.ok || r.kind === "defn") continue;
+			const text = equationLatex(r.node, formatValue(r.value, DEFAULT_FORMAT));
+			expect(unsafeLatexCommand(text), src).toBeNull();
+			// Braces balance, so MathJax never sees a half-written formula.
+			expect([...text].filter((c) => c === "{").length, src).toBe([...text].filter((c) => c === "}").length);
+		}
 	});
 });

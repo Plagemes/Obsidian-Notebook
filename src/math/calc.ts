@@ -6,8 +6,8 @@
  * Pure: no 'obsidian', no DOM.
  */
 import {
-	CalcError, ONE, ZERO, at as matAt, cadd, ccos, cdiv, cexp, cln, cmul, cpow, csin, csqrt, cx, determinant, dot, eadd, ediv, emul, eneg, epow, esub, frac, fracToNumber,
-	identity, inverse, isCx, isFrac, isInteger, isVector, isZero, mat, mmap, mmul, mpow, mzip, radd, rcmp, rdiv, rmul, rneg, rpow, rsub, sign, solveLinear, toCx, toNum,
+	CalcError, ONE, ZERO, at as matAt, ccos, cexp, cln, csin, csqrt, cx, determinant, dot, eadd, ediv, emul, eneg, epow, esub, frac,
+	identity, inverse, isCx, isFrac, isInteger, isZero, mat, mmap, mmul, mpow, mzip, radd, rcmp, rdiv, rmul, rneg, rpow, rsub, sign, solveLinear, toCx, toNum,
 	transpose, cross, cabs, carg, collapse, MAX_DIM, MAX_LIST, type Entry, type Mat, type Real,
 } from "./calc-number";
 import { DIMENSIONLESS, dimEqual, isDimensionless, type Dim } from "./dimensions";
@@ -115,8 +115,6 @@ export function inUnit(q: Quantity): { value: Entry; unit: string } {
 	if (off !== undefined) return { value: (toNum(q.v) - off) / info.scale, unit: formatUnit(unit) };
 	return { value: rdiv(q.v, exactScale(info.scale)), unit: formatUnit(unit) };
 }
-
-const withUnit = (q: Quantity, unit: UnitExp | null, dec = q.dec): Quantity => ({ ...q, unit, dec });
 
 /** Display unit of a product or quotient of two quantities. */
 function combineUnits(a: Quantity, b: Quantity, power: 1 | -1, dim: Dim): UnitExp | null {
@@ -285,8 +283,6 @@ function realFn(name: string, f: (x: number) => number, check?: (x: number) => b
 		return fromNumber(f(x));
 	}, { each: true });
 }
-
-const exactIfInt = (x: number): Quantity => (Number.isInteger(x) ? num(frac(BigInt(x))) : fromNumber(x));
 
 function trig(name: string, real_: (x: number) => number, cplx?: (c: ReturnType<typeof cx>) => ReturnType<typeof cx>): void {
 	fn(name, 1, 1, (a, ev) => {
@@ -1027,12 +1023,12 @@ class Evaluator implements Ev {
 		const rows = node.rows.map((r) => r.map((e) => this.eval(e)));
 		// [[1, 2], [3, 4]]: one row made of row vectors stacks them.
 		if (rows.length === 1 && rows[0]!.every((v) => v.t === "m")) {
-			const ms = rows[0]!.map((v) => (v as MatrixValue).m);
+			const ms = rows[0].map((v) => v.m);
 			const cols = ms[0]!.cols;
 			if (ms.some((m) => m.cols !== cols)) throw new CalcError("matrix-shape");
 			const data: Entry[] = [];
 			for (const m of ms) data.push(...m.a);
-			return matrix(mat(ms.reduce((n, m) => n + m.rows, 0), cols, data), rows[0]!.some((v) => v.dec));
+			return matrix(mat(ms.reduce((n, m) => n + m.rows, 0), cols, data), rows[0].some((v) => v.dec));
 		}
 		const width = rows[0]!.length;
 		const data: Entry[] = [];
