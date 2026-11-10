@@ -237,6 +237,7 @@ import { tableOfSelection } from "../ink/table";
 import { chartOfSelection, tableInSelection } from "../ink/chart";
 import { ChartTools } from "./chart-tools";
 import { ChemTools, holdsReaction } from "./chem-tools";
+import { CalculatorTools } from "./calculator";
 import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
@@ -577,6 +578,8 @@ export class NotebookView extends FileView {
 	private charts: ChartTools | null = null;
 	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
 	private chem: ChemTools | null = null;
+	/** 0.29 (#182): the advanced calculator (null before the view is open). */
+	private calculator: CalculatorTools | null = null;
 	/** 0.20 (#39): groups and locked elements (Group, Ungroup, Lock, the Unlock chip, the list of locked elements). */
 	private groups: GroupTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
@@ -943,6 +946,7 @@ export class NotebookView extends FileView {
 		this.tables = new TableTools(this.tableHost());
 		this.charts = new ChartTools(this.tableHost());
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
+		this.calculator = new CalculatorTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
 		this.lineHandles = new LineHandleTools(this.lineHandleHost());
@@ -1429,6 +1433,7 @@ export class NotebookView extends FileView {
 		this.tables = null;
 		this.charts = null;
 		this.chem = null;
+		this.calculator = null;
 		this.checklist = null;
 		this.groups?.destroy();
 		this.groups = null;
@@ -3724,6 +3729,11 @@ export class NotebookView extends FileView {
 	/** 0.23 (#294): balancing of typed chemical reactions (null before the view is open). */
 	get chemTools(): ChemTools | null {
 		return this.chem;
+	}
+
+	/** 0.29 (#182): the advanced calculator of this view (null before the view is open). */
+	get calculatorTools(): CalculatorTools | null {
+		return this.calculator;
 	}
 
 	/** 0.19 (#103): handwritten checklists of this view (null before the view is open). */

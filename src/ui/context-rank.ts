@@ -107,6 +107,13 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	if (a.id === "chart-update" && c.selection?.chart === true) boost += HERE_MIN_BOOST + 6;
 	if (a.id === "insert-table" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 4;
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
+	// 0.29 (#182): the calculator fits where numbers are being worked on: a selected text box, equation or graph (the expression to work out,
+	// or the formula to check) and the text tool in hand (enough for "For this page" when a text or an equation is selected); otherwise it
+	// only leans forward a little on a page that can be edited, and never reaches "For this page" on its own.
+	if (a.id === "calculator") {
+		const worked = (c.selection?.texts ?? 0) + (c.selection?.equations ?? 0) + (c.selection?.graphs ?? 0);
+		boost += worked > 0 ? HERE_MIN_BOOST + 2 : c.tool === "text" ? 12 : c.page && !c.page.locked ? 2 : 0;
+	}
 	// 0.28 (#184): the paint bucket fills shapes: with the shape tool in hand it is the next thing wanted (enough for "For this page"); with a selection
 	// it steps back (the person is editing, not colouring); otherwise it only leans forward a little on a page that can be edited.
 	if (a.id === "paint-bucket") boost += hasSelection ? 0 : c.tool === "shape" ? HERE_MIN_BOOST + 2 : c.page && !c.page.locked ? 3 : 0;

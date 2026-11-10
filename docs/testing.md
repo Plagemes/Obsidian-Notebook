@@ -4832,3 +4832,38 @@ A chart is ordinary shape strokes and text boxes of one group; "Update chart" re
 | Statistics card, Insert as text (one undo step), Copy, action, help, context rank | yes | harness `doc=stats` | | | |
 | Reading handwriting in cells | no | | | | needs recognition; type numbers in text boxes |
 | Regression line drawn on a chart | no | | | | with the table charts |
+### 0.29 — calculator: advanced calculator (roadmap #182; steps 3400-3419)
+
+*All actions › Insert › Calculator* (or the command *Open the calculator*) opens a dialog with an expression line, a big answer, large keys, a tape and your variables. Nothing is written into the notebook file by the dialog itself: the tape, the display choices and the variables of each notebook are kept on this device only. A result reaches the page only through the three insert buttons, each one undo step. No document format change.
+
+3400. **Open.** Open the calculator from *All actions* (Insert) and from the command palette. On a tablet the soft keyboard stays away until you tap the keyboard button next to the line; on desktop the line has the focus. With a text box selected, its first line is already in the expression line.
+3401. **Keys with the pen and a finger.** Tap `1`, `÷`, `3`, `+`, `1`, `÷`, `6`: the line reads `1/3+1/6`, a muted preview `= 1/2` shows while you type. Every key is at least 48 px and reacts to the S Pen tip and to a finger; the caret stays in the line. `⌫` deletes one character (or the selection), `C` empties the line.
+3402. **Equals.** Tap `=`: the answer is `1/2` with `≈ 0.5` under it, the line joins the tape. Typing an operator right after (`+`) continues from the answer.
+3403. **Decimals stay exact.** `0.1 + 0.2` gives `0.3`, `1.1 * 1.1` gives `1.21`, `20!` and `2^100` give every digit.
+3404. **Units.** `3 km/h to m/s` gives `0.833333333333 m/s`; `3 km + 200 m` gives `3.2 km`; `2 kg * 9.8 m/s^2` gives `19.6 N`; `100 degC to K`, `1 mi to km`, `5 kg to lb`. `3 m + 2 s` and `3 m to s` say why they cannot be done, in the dialog, with the unit names.
+3405. **Constants by name.** `c`, `h`, `NA`, `kB`, `R`, `qe`… give the value with its unit; `m = 5 kg` then `m * g` gives `49.03325 N`. The *Constants* group of keys lists them (long-press a key for its meaning in the bubble where it has one). After a number, `g`/`h` mean gram/hour (`3 g`, `2 h`); on their own they are the constants.
+3406. **Variables on the page's notebook.** `a = 3.2`, then `a * 2` gives `6.4`. `f(x) = a * x`, then `f(5)` gives `16`. They show as chips under the answer (tap a chip to use it, × to forget it). Close and reopen the dialog, restart Obsidian: they are still there, for this notebook, and not in another notebook; they are not on another device.
+3407. **Fractions, complex numbers, matrices.** `(1 + 2i) * (3 - i)` gives `5 + 5i`; `sqrt(-4)` gives `2i`; `inv([1, 2; 3, 4])` gives a grid `-2 1; 3/2 -1/2`; `det([1, 2; 3, 4])` gives `-2`; `[1, 2; 3, 4]^2`; `cross([1,0,0],[0,1,0])`. A singular matrix says it has no inverse.
+3408. **Statistics.** `mean([2, 4, 4, 5])`, `median`, `mode`, `std`, `var`, `quantile([1,2,3,4,5], 0.5)`, `slope([1,2,3],[2,4,6])`; `mean(2 m, 4 m)` keeps the unit.
+3409. **Equation solver.** `solve(x^2 = 2, x)` gives `[-1.41421356237, 1.41421356237]`; `solve(cos(x) = x, x, 0, 1)` in radians gives `0.739085133215`; `integrate(x^2, x, 0, 3)` gives `9`; `diff(x^3, x, 2)` gives `12`. An equation with no real root says so. The dialog stays responsive (these only run on `=`, not while typing).
+3410. **Degrees and radians.** *Angles* chips: `sin(30)` is `0.5` in degrees and `-0.988031624093` in radians; `sin(30 deg)` is `0.5` in both. `asin(1)` is `90` in degrees. The choice is kept.
+3411. **Notation and significant figures.** *Notation*: `123456` as scientific is `1.23456 × 10⁵`, engineering `123.456 × 10³`. *Significant figures* − / +: Auto, 15 … 3; at 3, `123456.789` shows `123000` and `2.5` shows `2.50`. *Fractions › Decimal* shows `0.5` and `0.583333333333` instead of fractions. Changing a choice changes the answer on screen at once.
+3412. **Tape.** Each worked-out line stays on the tape (newest first, 100 lines, on this device). Tap the left part of a row to put the expression back in the line; the right part to put the answer in the expression; *Clear the tape* empties it.
+3413. **Insert as text.** With a page that can be edited in view, work out `sin(30)` and tap *Insert as text*: a text box `sin(30) = 0.5` appears in the middle of the view, selected, in the pen colour. One undo removes it.
+3414. **Insert as formula.** Tap *Insert as formula*: a typeset formula element `sin(30) = 0.5` (fractions as fractions, units upright, matrices as brackets) is added and selected, one undo step. If the formula cannot be typeset a notice says so and the line goes in as text.
+3415. **Draw as graph.** Type `f(x) = x^2 - 3` and press `=`: *Draw as graph* adds a graph with that function (the graph panel can change it); with `a = 3` and `a * x` the graph has a slider for `a`; in degrees mode the graph's trigonometry is in degrees. A plain sum has the button dimmed with the reason in its tooltip.
+3416. **Locked and read-only pages.** On a locked page the insert buttons give the *page locked* notice and add nothing; in a read-only notebook they are dimmed (the calculator itself still works).
+3417. **Help.** Long-press the keys, the *Angles / Notation / Fractions / Significant figures* controls and the four result buttons: a bubble explains each, in English and Italian. The *Examples* section loads sample expressions into the line.
+3418. **Phone and themes.** On a phone-width view the dialog is one column (line, answer, tape, keys), nothing scrolls sideways; light, dark and *Follow Obsidian theme* read well; the Italian texts (errors too) fit.
+3419. **Unusual input.** `1/0`, `(1 +`, `foo`, `sin(3 m)`, `2^100000`, 1000 characters, a deeply nested bracket: each gives a sentence in the dialog and changes nothing; Obsidian stays responsive.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Exact arithmetic: fractions, decimals without float noise, big integers (BigInt, bounded) | yes | `tests/calc.test.ts` | | | |
+| Units and conversions (SI, prefixes, common non-SI, degC/degF), dimension checking, constants by name | yes | `tests/calc.test.ts`, `tests/calc-ui.test.ts` | | | the constants table is the one the reference sheets (#181) will read; #181 itself is not built |
+| Variables and functions, kept per notebook on this device | yes | `tests/calc.test.ts`, `tests/calc-ui.test.ts` | | | "on the page" is per notebook: a per-page store would need a format change |
+| Complex numbers, matrices and vectors, statistics on lists, numeric equation solver, integrals, derivatives | yes | `tests/calc.test.ts` | | | |
+| Degrees/radians, notation, significant figures, fractions as decimals; tape | yes | `tests/calc.test.ts`, `tests/calc-ui.test.ts`, harness `doc=calculator` | | | |
+| Large pen-friendly keys; dialog on the shared shell; help, ranking | yes | `tests/calc-ui.test.ts`, harness `doc=calculator` | | | |
+| Result inserted as text, as a formula element with its expression, as a function graph | yes | harness `doc=calculator` | | | |
+| Handwritten calculations | no | | | | later (M5, as the roadmap says) |

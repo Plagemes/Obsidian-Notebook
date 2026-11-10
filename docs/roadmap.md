@@ -378,7 +378,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - Docked side panel or floating window.
     - Drag a formula or an element card onto the page and it becomes a real element (formula #110 or stamp #142); values are available by name in the calculator (#182).
     - Visual style consistent with the rest of the plugin and with Obsidian.
-182. **P2** Advanced calculator:
+182. **P2** 🧪 Advanced calculator (0.29: *All actions › Insert › Calculator*; all of the list below except handwritten calculations; the constants come from a built-in table that the reference sheets of #181 will read, because #181 is not built; variables are kept per notebook on the device, not per page, so there is no format change; offline and eval-free):
     - Unit-aware expressions ("3 km/h to m/s") and constants by name from the reference sheets (g, c, h…).
     - Variables that persist on the page (a = 3.2, then a·2); exact fractions, complex numbers, matrices and vectors, statistics on lists, numeric equation solver.
     - Degrees/radians, scientific notation and significant figures configurable; calculation history tape; large pen-friendly keys; link to function graphs (#113).

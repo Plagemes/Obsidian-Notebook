@@ -239,6 +239,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "smooth", theme, device, lowLatency: false });
 // 0.26 ctxpalette (#394): the colour picker's context rows on a PDF page and a written page (dev/harness/ctxpalette-check.ts), tablet and phone, light and dark (dist/shots/ctxpalette-*.png, ctxpalettew-*.png).
 for (const doc of ["ctxpalette", "ctxpalettew"]) for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc, theme, device, lowLatency: false });
+// 0.29 calculator (#182): the advanced calculator dialog (dev/harness/calculator-check.ts), tablet and phone, light and dark (dist/shots/design/calculator-*.png).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "calculator", theme, device, lowLatency: false });
 // 0.28 geosuggest (#403): suggestion chips from the selection's geometry (dev/harness/geosuggest-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "geosuggest", theme, device, lowLatency: false });
 // 0.29 studytape (#10): study tape, hidden and revealed (dev/harness/studytape-check.ts), tablet and phone, light and dark.
@@ -490,6 +492,7 @@ async function main() {
 				else if (s.doc === "navadapt") report = await cdp.evaluate("window.harness.checkNavadapt()", 90000); // 0.24 navadapt
 				else if (s.doc === "smooth") report = await cdp.evaluate("window.harness.checkSmooth()", 90000); // 0.26 smooth
 				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
+				else if (s.doc === "calculator") report = await cdp.evaluate("window.harness.checkCalculator()", 120000); // 0.29 calculator
 				else if (s.doc === "geosuggest") report = await cdp.evaluate("window.harness.checkGeosuggest()", 90000); // 0.28 geosuggest
 				else if (s.doc === "studytape") report = await cdp.evaluate("window.harness.checkStudytape()", 90000); // 0.29 studytape
 				else if (s.doc === "strikedelete") report = await cdp.evaluate("window.harness.checkStrikedelete()", 90000); // 0.29 strikedelete
@@ -731,6 +734,19 @@ async function main() {
 						writeFileSync(join(designDir, `smooth-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`smooth ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.29 calculator: the dialog on a fraction, a unit conversion, a matrix and an error.
+			if (s.doc === "calculator") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["fraction", "units", "matrix", "error"]) {
+					try {
+						await cdp.evaluate(`window.harness.calculatorShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `calculator-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`calculator ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

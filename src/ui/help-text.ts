@@ -55,6 +55,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"selection-make-task": "help.makeTask",
 	"comment-selection": "help.comment",
 	"math-edit": "help.mathEdit",
+	// 0.29 (#182): the advanced calculator
+	calculator: "help.calculator",
 	"pdf-search": "help.pdfSearch",
 	// 0.28 (#76): turn and crop the PDF page
 	"pdf-rotate-right": "help.pdfRotateRight",
