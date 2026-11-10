@@ -10,6 +10,8 @@
  * Scales and ticks (`niceTicks`) and pie angles (`pieSlices`) are exported for the tests.
  */
 
+import { dashedSegment, fitTrend, trendLabel } from "./chart-regression";
+
 export type Vec = readonly [number, number];
 
 export const CHART_KINDS = ["bar", "line", "pie"] as const;
@@ -261,6 +263,8 @@ export interface ChartStyleSpec {
 	colours: readonly string[];
 	/** The name of the joined slice of a pie with many slices. */
 	otherLabel?: string;
+	/** Line chart: a dashed least-squares trend line through the first series, with its equation and R² (0.30, #295). */
+	trend?: boolean;
 }
 
 interface ShapeBase {
@@ -439,6 +443,15 @@ function cartesian(out: Out, kind: "bar" | "line", data: ChartData, style: Chart
 				if (v !== null) out.circle(centre(i), yOf(v), 2.6, colour, 0.6, { fill: colour });
 			});
 		});
+	}
+
+	const first = data.series[0];
+	const fit = kind === "line" && style.trend === true && first ? fitTrend(first.values) : null;
+	if (fit) {
+		const colour = colourAt(style.colours, 0);
+		const at = (i: number): Vec => [centre(i), yOf(fit.slope * (i + 1) + fit.intercept)];
+		for (const [p, q] of dashedSegment(at(0), at(n - 1), top, bottom)) out.poly([[round(p[0]), round(p[1])], [round(q[0]), round(q[1])]], false, colour, 1.4, { opacity: 0.85 });
+		out.startAt(left + 5, top + 6, clip(trendLabel(fit), Math.max(6, (right - left - 8) / (LABEL_SIZE * 0.55))), LABEL_SIZE, CHART_INK);
 	}
 
 	// Axes over the data: the left one and the zero line.

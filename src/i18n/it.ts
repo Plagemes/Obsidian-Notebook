@@ -5481,6 +5481,10 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"chart.other": "Altro",
 	"chart.inserted": "Grafico inserito. Dopo aver cambiato la tabella, selezionalo e scegli Aggiorna grafico.",
 	"chart.updated": "Grafico aggiornato.",
+	// 0.30 chartreg
+	"chart.trend": "Linea di tendenza",
+	"chart.trend.off": "Nessuna",
+	"chart.trend.on": "Retta di regressione",
 	"chart.same": "Il grafico mostra già i numeri della sua tabella.",
 	"chart.noData": "La tabella non contiene numeri da mostrare. Scrivi ogni numero in una casella di testo dentro la sua cella.",
 	"chart.noSource": "La tabella da cui nasce questo grafico non è più nel quaderno.",

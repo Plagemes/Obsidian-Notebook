@@ -22636,3 +22636,8 @@ body.notebook-style-obsidian {
 	display: flex;
 	justify-content: flex-end;
 }
+
+/* ===== 0.30 chartreg ===== */
+.nb-ui.nb-chart-dialog .nb-chart-trend[hidden] {
+	display: none;
+}
