@@ -4,7 +4,8 @@ import {
 	cellIndexAt, colsOf, evenCells, gridAt, insertCol, insertRow, normaliseSpec, removeLastCol, removeLastRow, rowsOf, tableOfSelection,
 	type DetectedTable, type GridEdit,
 } from "../ink/table";
-import { editTableCommand, insertTableCommand } from "../ink/table-edit";
+import type { RedactGuard } from "../ink/redact";
+import { insertTableCommand, planTableEdit, type TableEditRefusal } from "../ink/table-edit";
 import type { Command } from "../model/history";
 import type { NotebookDocument, Page, PageElement, Stroke } from "../model/types";
 import { showNotice } from "./notice";
@@ -31,7 +32,16 @@ export interface TableHost {
 	/** The ink of a page that is in view (hidden ink and the ink a collapsed note keeps hidden are not in it). */
 	inkOf(page: Page): readonly Stroke[];
 	refresh(): void;
+	/** The redaction boxes of a page, and whether the stored boxes could not be read (an insert never moves ink under a box). */
+	redactGuard(pageId: string): RedactGuard;
 }
+
+/** The notice for each reason a table edit is refused (`gone` has none). */
+const REFUSALS: Record<Exclude<TableEditRefusal, "gone">, Parameters<typeof t>[0]> = {
+	states: "table.noStates",
+	edge: "table.noRoom",
+	redacted: "table.noRedacted",
+};
 
 export class TableTools {
 	constructor(private readonly host: TableHost) {}
@@ -107,8 +117,13 @@ export class TableTools {
 			showNotice(t(refused), 2500);
 			return;
 		}
-		const made = editTableCommand(cur.page, cur.table, edit, this.host.inkOf(cur.page));
-		if (!made || !this.host.execute(made.cmd)) return;
+		const made = planTableEdit(cur.page, cur.table, edit, this.host.inkOf(cur.page), undefined, this.host.redactGuard(cur.page.id));
+		if (!made.ok) {
+			// Nothing was changed: say why (a lost selection needs no words, the person selects the table again).
+			if (made.reason !== "gone") showNotice(t(REFUSALS[made.reason]), 3500);
+			return;
+		}
+		if (!this.host.execute(made.cmd)) return;
 		const group = cur.table.strokes[0]?.group;
 		const after = this.host.doc()?.pages[cur.part.pageIndex];
 		if (after && group !== undefined) this.host.select(cur.part.pageIndex, after.strokes.filter((s) => s.group === group), []);

@@ -27,7 +27,7 @@ import { isCheckbox } from "../model/checklist";
 import { pageCopy } from "../model/states";
 import { countBoxes, rectsOverlap, type RedactBox, type Redactions, boxesOf } from "../model/redact";
 import { pieceTaper } from "../model/taper";
-import { RENDER_INK, type AreaElement, type ExcerptElement, type NotebookMeta, type Page, type PageComment, type PageElement, type Point, type Stroke } from "../model/types";
+import { RENDER_INK, type AreaElement, type CommentRegion, type ExcerptElement, type NotebookMeta, type Page, type PageComment, type PageElement, type Point, type Stroke } from "../model/types";
 import { boundGraphId } from "./attach";
 import { checkboxLabelBounds } from "./checklist";
 import { elementBounds } from "./elements";
@@ -628,4 +628,29 @@ export function burnPlan(page: Page): BurnPlan | null {
 /** A key for caches of burned pictures: the same boxes burn the same picture. */
 export function burnKey(boxes: readonly RedactBox[]): string {
 	return boxes.map((b) => `${b.x},${b.y},${b.width},${b.height}`).join(";");
+}
+
+/** What a bulk move of ink must know about redaction: the boxes of the page, and whether the stored boxes could not be read at all. */
+export interface RedactGuard {
+	boxes: readonly RedactBox[];
+	unreadable?: boolean;
+}
+
+/**
+ * Review fix (R2-4): whether moving `before` to `after` (the same items, translated) takes ink from under a redaction box or puts ink under
+ * one: a box is placed over what to hide, so a bulk move (reorder lines, a table insert) that changes what lies under it would export the
+ * line that slid out, in clear. Fail closed: with unreadable boxes any non-empty move counts. Margin comment regions are checked too.
+ */
+export function movesUnderRedaction(
+	guard: RedactGuard,
+	before: { strokes: readonly Stroke[]; elements: readonly PageElement[]; regions?: readonly CommentRegion[] },
+	after: { strokes: readonly Stroke[]; elements: readonly PageElement[]; regions?: readonly CommentRegion[] },
+): boolean {
+	const count = (m: typeof before): number => m.strokes.length + m.elements.length + (m.regions?.length ?? 0);
+	if (count(before) === 0 && count(after) === 0) return false;
+	if (guard.unreadable) return true;
+	if (guard.boxes.length === 0) return false;
+	if (boxesTouching(before, guard.boxes).length > 0 || boxesTouching(after, guard.boxes).length > 0) return true;
+	const hit = (r: CommentRegion): boolean => overlaps({ minX: r.x, minY: r.y, maxX: r.x + r.width, maxY: r.y + r.height }, guard.boxes, ELEMENT_PAD);
+	return (before.regions ?? []).some(hit) || (after.regions ?? []).some(hit);
 }

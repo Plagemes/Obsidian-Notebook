@@ -6,6 +6,7 @@ import { transformStroke } from "./lasso";
 import { inkOwnership } from "./selection-transform";
 import { joinPieces, TIDY_RULES, unionBox, type Row } from "./tidy";
 import { estimateMeasure } from "./text-layout";
+import { movesUnderRedaction, type RedactGuard } from "./redact";
 import { translate } from "./transform";
 import { isNote, SetPageComments } from "../model/comments";
 import { isLockedElement, UpdateItems, type PageItem } from "../model/groups";
@@ -420,6 +421,8 @@ export interface LineMovePlan {
 	command: Command;
 	/** Strokes and elements that move, and how far (by id). */
 	moved: ReadonlyMap<string, number>;
+	/** Margin comments of the page that move, and how far (by id). */
+	movedComments: ReadonlyMap<string, number>;
 	strokes: number;
 	elements: number;
 	/** Margin comments whose region moved. */
@@ -467,5 +470,26 @@ export function lineMoveCommand(page: Page, model: LineModel, move: LineMove, me
 		});
 		command = new Batch("Move line", [items, new SetPageComments(page.id, page.comments, list, "Move line")]);
 	}
-	return { command, moved, strokes: strokeDy.size, elements: elementDy.size, comments: commentsHere.length };
+	const movedComments = new Map<string, number>(commentsHere.map((c) => [c.id, commentDy.get(c.id)!]));
+	return { command, moved, movedComments, strokes: strokeDy.size, elements: elementDy.size, comments: commentsHere.length };
+}
+
+/**
+ * Review fix (R2-4): whether the step `plan` takes ink from under a redaction box of the page, or puts ink under one (fail closed: boxes that
+ * cannot be read refuse any move). A reorder moves whole lines in one gesture, so the line a box was drawn over can slide away and another
+ * take its place; the move is refused instead (the person removes or redoes the boxes first).
+ */
+export function lineMoveUnderRedaction(page: Page, plan: LineMovePlan, guard: RedactGuard, measure: MeasureText = estimateMeasure): boolean {
+	const strokes = page.strokes.filter((s) => plan.moved.has(s.id));
+	const elements = (page.elements ?? []).filter((e) => plan.moved.has(e.id));
+	const notes = (page.comments ?? []).filter((c): c is PageCommentNote => isNote(c) && plan.movedComments.has(c.id));
+	return movesUnderRedaction(
+		guard,
+		{ strokes, elements, regions: notes.map((c) => c.region) },
+		{
+			strokes: strokes.map((s) => transformStroke(s, translate(0, plan.moved.get(s.id)!))),
+			elements: elements.map((e) => transformElement(e, translate(0, plan.moved.get(e.id)!), measure)),
+			regions: notes.map((c) => ({ ...c.region, y: c.region.y + plan.movedComments.get(c.id)! })),
+		},
+	);
 }

@@ -3,7 +3,8 @@ import { t } from "../i18n";
 import type { MessageKey } from "../i18n/en";
 import type { MeasureText } from "../ink/elements";
 import type { PageBox } from "../ink/layout";
-import { analyseLines, dropIndex, lineMoveCommand, pageSignature, planLineMove, type LineModel, type LineMoveResult, type LineRefusal } from "../ink/line-reorder";
+import type { RedactGuard } from "../ink/redact";
+import { analyseLines, dropIndex, lineMoveCommand, lineMoveUnderRedaction, pageSignature, planLineMove, type LineModel, type LineMoveResult, type LineRefusal } from "../ink/line-reorder";
 import type { Viewport } from "../ink/viewport";
 import type { Command } from "../model/history";
 import type { NotebookDocument, Page } from "../model/types";
@@ -35,6 +36,8 @@ export interface LineHandleHost {
 	/** The page the handles are for: the one in view (in a two-page spread, the one the page actions use). */
 	currentPage(): number;
 	measure: MeasureText;
+	/** The redaction boxes of a page, and whether the stored boxes could not be read (a move that would change what lies under a box is refused). */
+	redactGuard(pageId: string): RedactGuard;
 	notify(message: string): void;
 	/** The contextual bar and the sheets are redrawn (the mode is a toggle of the All actions sheet). */
 	refreshUi(): void;
@@ -433,6 +436,11 @@ export class LineHandleTools {
 		}
 		const plan = lineMoveCommand(found.page, model, result, this.host.measure);
 		if (!plan) return false;
+		// Review fix (R2-4): never slide ink out from under (or into) a redaction box.
+		if (lineMoveUnderRedaction(found.page, plan, this.host.redactGuard(found.page.id), this.host.measure)) {
+			this.host.notify(t("linehandle.refused.redacted"));
+			return false;
+		}
 		// Refused by the history (a locked page, a change the writer would reject): the view says why itself, the document is as it was.
 		if (!this.host.execute(plan.command)) return false;
 		this.chosen = to;
