@@ -22557,3 +22557,82 @@ body.notebook-style-obsidian {
 	padding: 0 12px;
 	font-size: 13px;
 }
+
+/* ===== 0.29 cardtemplates ===== */
+/* Z9: the template picker in the New card dialog (reuses the type tiles) and the template manager (modal shell). */
+.nb-ui .nb-zk-templates {
+	grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+}
+
+.nb-ui .nb-zk-templates .nb-zk-type-hint {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.nb-ui.nb-card-templates .nb-tpl-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-3);
+}
+
+.nb-ui.nb-card-templates .nb-tpl-row {
+	display: flex;
+	align-items: center;
+	gap: var(--nb-space-3);
+	padding: var(--nb-space-3);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-card-templates .nb-tpl-row + .nb-tpl-row {
+	margin-top: var(--nb-space-2);
+}
+
+.nb-ui.nb-card-templates .nb-tpl-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nb-ui.nb-card-templates .nb-tpl-name {
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-card-templates .nb-tpl-sections {
+	font-size: var(--nb-fs-meta);
+	line-height: 1.4;
+	color: var(--nb-text-muted);
+}
+
+.nb-ui.nb-card-templates .nb-tpl-row .nb-icon-btn {
+	flex: 0 0 auto;
+	width: var(--nb-target);
+	height: var(--nb-target);
+}
+
+.nb-ui.nb-card-templates .nb-tpl-edit {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nb-space-3);
+	padding: var(--nb-space-3);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-card-templates .nb-tpl-sections-input {
+	height: auto;
+	min-height: 96px;
+	padding: 10px 14px;
+	resize: vertical;
+	line-height: 1.45;
+}
+
+.nb-ui.nb-card-templates .nb-tpl-tools {
+	display: flex;
+	justify-content: flex-end;
+}

@@ -2,6 +2,8 @@ import { FuzzySuggestModal, Modal, type App, type FuzzyMatch } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import { setIconSafe, subjectVars } from "../ui/components/dom";
 import { CARD_TYPES, parseTagInput, type CardRecord, type CardType } from "./card-content";
+import { renderTemplatePicker } from "./card-template-ui";
+import type { CardTemplate } from "./card-templates";
 import { CARD_TYPE_LOOK } from "./zk-ui";
 
 export interface CardAnswer {
@@ -11,6 +13,8 @@ export interface CardAnswer {
 	tags: string[];
 	/** Luhmann numbering: the card this one branches from (empty: a new top-level card). */
 	parent: string;
+	/** Z9: the card template chosen (empty or "blank": none). */
+	template?: string;
 }
 
 const TYPE_LABEL: Record<CardType, MessageKey> = {
@@ -51,10 +55,11 @@ export class CardModal extends Modal {
 	private tagText = "";
 	private done = false;
 	private tagPreview: HTMLElement | null = null;
+	private selectType: ((type: CardType) => void) | null = null;
 
 	constructor(
 		app: App,
-		private readonly opts: { luhmann: boolean; preview: string | null; /** Z4: values the dialog starts with. */ defaults?: Partial<CardAnswer> },
+		private readonly opts: { luhmann: boolean; preview: string | null; /** Z4: values the dialog starts with. */ defaults?: Partial<CardAnswer>; /** Z9: templates to offer (none: no picker). */ templates?: readonly CardTemplate[] },
 		private readonly finish: (answer: CardAnswer | null) => void,
 	) {
 		super(app);
@@ -96,6 +101,13 @@ export class CardModal extends Modal {
 		const titleInput = input(title, this.answer.title, (v) => (this.answer.title = v));
 		window.setTimeout(() => titleInput.focus(), 0);
 
+		// Z9: the template first; choosing one preselects its type tile below.
+		if (this.opts.templates?.length) {
+			renderTemplatePicker(form, this.opts.templates, this.answer.template ?? "", (id, tpl) => {
+				this.answer.template = id;
+				if (tpl) this.selectType?.(tpl.type);
+			});
+		}
 		this.renderTypes(form);
 
 		const source = field(form, t("zettel.modal.source"), t("zettel.modal.source.desc"));
@@ -147,6 +159,7 @@ export class CardModal extends Modal {
 			tile.addEventListener("click", () => select(type));
 			tiles.set(type, tile);
 		}
+		this.selectType = select;
 		select(this.answer.type);
 	}
 

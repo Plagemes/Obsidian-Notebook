@@ -44,6 +44,9 @@
 ### hygiene
 - **Zettelkasten system hygiene (Z10).** The command *Check Zettelkasten hygiene* opens a report with three lists: cards nothing links to and that link to nothing (links in the card property or in any note, both directions), likely duplicates (same title, the same page and region, or nearly the same text) and cards without a typed title. Each row has *Open*. Reading and scanning write nothing; the scan runs in idle slices with a progress line, so a large vault stays responsive, and at most 100 rows per list are drawn.
 - **Fixes always ask first.** *Add title…* (the same writer as *Set card title*), *Link…* (pick a card, confirm, both notes get the link) and *Move to trash* (confirmation naming the note; `fileManager.trashFile`, the notebook page is untouched). No format change. Code: `src/zettel/hygiene.ts` (pure detection), `hygiene-view.ts`.
+### cardtemplates
+- **Card templates (Z9).** The *New card* dialog has a *Template* row: Blank, Concept, Question, Quote and Definition, then your own. A template starts the card's note with labelled areas under the ink (one Markdown heading each, in the plugin language), suggests the card type and adds its tags (question, quote, definition) to yours. The choice also works from the Inbox. The note gets a `card-template` property; nothing in the notebook or its format changes, and a blank card is exactly as before.
+- **Your own templates.** *Settings → Study → Zettelkasten → Card templates* opens a manager built on the shared dialog: copy a built-in template to change it, or add one; a name, a suggested type, tags and one area per line (`{{date}}` is filled in when the card is made). Changes save as you leave a field; deleting asks for a second tap. Stored in the plugin settings, read leniently (bad entries dropped, unknown fields kept).
 
 ## 0.28.0 — 2026-11-10
 

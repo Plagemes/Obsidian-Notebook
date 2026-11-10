@@ -115,7 +115,7 @@ export const GROUPS: readonly GroupSpec[] = [
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open" | "meanings-edit" | "macros-manage";
+export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open" | "meanings-edit" | "macros-manage" | "card-templates";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info" | "backup-now" | "cloud-account" | "cloud-sync-now" | "cloud-log" | "cloud-secret";
 
@@ -623,6 +623,12 @@ const STUDY: SettingSpec[] = [
 	{
 		id: "tapeColor", section: "study", order: 10, name: "settings.tapeColor", desc: "settings.tapeColor.desc", keywords: "study tape hide reveal cover answers colour nastro studio nascondi rivela copri risposte colore",
 		control: { type: "dropdown", options: options(TAPE_COLOR_NAMES.map((n) => [n, TAPE_COLOR_LABELS[n]] as const)) },
+	},
+	// 0.29 cardtemplates: the template manager
+	{
+		id: "cardTemplates", section: "study", group: "zettel", order: 40, name: "settings.cardTemplates", desc: "settings.cardTemplates.desc",
+		control: { type: "action", run: "card-templates", button: "settings.open" }, edits: ["zettelCardTemplates"],
+		keywords: "card templates concept question quote definition zettel modelli schede citazione definizione domanda",
 	},
 ];
 
