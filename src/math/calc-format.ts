@@ -288,6 +288,13 @@ export function latexOf(n: Node): string {
 	return "";
 }
 
+/** `a = 3.2` (or `a = 2·1.6 = 3.2` when the value was worked out) as one LaTeX line. */
+export function assignLatex(name: string, expr: Node, result: Formatted): string {
+	const lhs = latexOf({ k: "name", name });
+	const plain = expr.k === "num" || (expr.k === "unit" && expr.a.k === "num");
+	return plain ? `${lhs} = ${result.latex}` : `${lhs} = ${latexOf(expr)} = ${result.latex}`;
+}
+
 /** `expr = result` as one LaTeX line. */
 export function equationLatex(expr: Node, result: Formatted): string {
 	return `${latexOf(expr)} = ${result.latex}`;
