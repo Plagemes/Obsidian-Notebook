@@ -10,6 +10,7 @@ import type { NotebookSettings } from "../settings";
 import { isNotebookFile, readNotebookText } from "../storage/format";
 import { quickDocId } from "../storage/history";
 import { createNotebook } from "../storage/notebooks";
+import { existsInsensitive } from "../storage/names";
 import { ensureFolder } from "../storage/vault-io";
 import { NotebookView, VIEW_TYPE } from "../view/notebook-view";
 import { arrowLink, type CardArea } from "./arrows";
@@ -370,7 +371,8 @@ export class ZettelService implements OverlaySource {
 		const prefix = folder === "/" ? "" : `${folder}/`;
 		const base = cardFileName(id, answer.title, nameSuffixFor(scheme, answer.title));
 		let path = normalizePath(`${prefix}${base}.md`);
-		for (let i = 2; this.app.vault.getAbstractFileByPath(path); i++) path = normalizePath(`${prefix}${base} ${i}.md`);
+		// Case-insensitive (review Z6): `1a Energy.md` next to `1A energy.md` would be one file on Windows and Android.
+		for (let i = 2; existsInsensitive(this.app.vault, path); i++) path = normalizePath(`${prefix}${base} ${i}.md`);
 		const note = await this.app.vault.create(path, applyTemplate(newCardText(card, (data) => stringifyYaml(data)), template, TEXT_DEPS, now));
 		// The metadata cache indexes the note a moment later: the id must count as taken right away.
 		const record = readCard(path, cardProperties(card));
