@@ -22636,3 +22636,22 @@ body.notebook-style-obsidian {
 	display: flex;
 	justify-content: flex-end;
 }
+
+/* ===== 0.30 zsequence ===== */
+/* Z7: the card sequence dialog (modal shell): one section per relation, a row per card that opens it. */
+.nb-ui.nb-sequence-modal .nb-seq-section .nb-modal-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui.nb-sequence-modal .nb-seq-row .nb-modal-row-label {
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
+.nb-ui.nb-sequence-modal .nb-seq-row .nb-modal-row-detail {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

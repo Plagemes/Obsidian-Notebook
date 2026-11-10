@@ -4925,3 +4925,35 @@ Update to 0.29 and fully close and reopen Obsidian. Use a vault with a notebook 
 | A line only strikes ink written before it | yes | `tests/strikethrough.test.ts` | | | |
 | Groups complete with hidden struck members; very dense pages are skipped in the view | yes | `tests/strikethrough.test.ts` | | | |
 | Pictures of a selection into notes, copies, digests leave out struck words | no | | | | not covered; the setting text says which files are |
+
+### 0.30 — zsequence: card sequences and branches, roadmap Z7 (steps 3640-3659)
+
+Update to 0.30 and fully close and reopen Obsidian. Use a vault with a notebook that has a few pages with handwriting. Set *Settings → Study → Zettelkasten → Card ids* to *Luhmann numbering*. Reference screenshots after `HARNESS_DOC=zsequence npm run harness:check`: `dev/harness/dist/shots/zsequence-*.png` (tablet and phone, light and dark). Not verified on a device.
+
+3640. **Off by default.** With *Card ids* on *Timestamp*, the command palette has none of the sequence commands (*New follow-up card*, *New branch card*, *Show card sequence*, *Go to previous / next card in the sequence*, *Go to parent card*, *Go to child cards*) and the setting *Link follow-up and branch cards to their origin* is hidden. Switch to *Luhmann numbering*: the setting appears.
+3641. **First card.** On page 1 run *Make card from this page* (no parent): card `1`. Go to page 2, *Make card from this page*: card `2`.
+3642. **Branch.** Go to page 3 (no card yet). *New branch card*: a list asks which card to continue (both are numbered); choose `1`. The normal card dialog opens without the *Parent card* field. Create it: the note is `1a …`, a notice says "Card 1a created, a branch of 1.", and both notes (`1` and `1a`) now list each other in `links`. Nothing else in either note changed.
+3643. **Follow-up.** Page 4, *New follow-up card*, choose `1a`: the id is `1b`. Again on page 5, choose `1a`: `1b` is taken, so the id is `1c`.
+3644. **Branch of a branch.** Page 6, *New branch card*, choose `1a`: `1a1`. Page 7, again: `1a2`.
+3645. **A gap.** Delete the note `1b` in Obsidian, then make a follow-up of `1a` on a new page: it takes `1b` (the free place right after `1a`). A branch of `1` after that is `1d` (one past the last branch, deleted ids are not reused while later ones exist).
+3646. **A page that is already a card.** On page 1 run *New follow-up card* without a selection: a notice says the page is already card `1`. Select an area of the page with the lasso and run it again: the card is made from the selection and continues `1` (its id is the next free number after `1`).
+3647. **A note with the id's name.** In the card folder make a plain note named `1a3 Ideas` (no properties). A branch of `1a` is `1a4`, not `1a3`: the name counts as taken.
+3648. **No card to continue.** In a notebook with no numbered card, *New branch card* says there is nothing to continue yet and creates nothing.
+3649. **Sequence dialog.** Open the note of card `1a` (or its notebook page) and run *Show card sequence*: sections Parent (`1`), Previous (None), Next (`1b`), Children (`1a1`, `1a2`). Each card is a row; tapping it opens that note and closes the dialog. From a notebook page the footer also has *New follow-up card* and *New branch card*; from a note it does not.
+3650. **Go to.** With a card note open, *Go to next card in the sequence* from `1a` opens `1b`; from the last card of a line, a notice says there is none. *Go to previous card…* from `1b` opens `1a`. *Go to parent card* from `1a1` opens `1a`; from `1` a notice says it has none. *Go to child cards* from `1a` shows a list (search by id or title); from a card with one child opens it directly.
+3651. **Order.** Make cards `2`, `10` and `1z`, `1aa` by hand (edit `zettel-id`). The order of *Next* is `1a < 1b < … < 1z < 1aa < 2 < 10`.
+3652. **A missing parent.** Delete the note `1a` but keep `1a1`: *Go to parent card* from `1a1` opens `1`; `1` lists `1a1` among its children.
+3653. **Renamed card.** Rename the file of `1b` in Obsidian (the id in its properties is unchanged): the sequence and the commands still find it. Edit its `zettel-id` to `5`: it becomes a top-level card and leaves the children of `1`.
+3654. **Link off.** Switch *Link follow-up and branch cards to their origin* off: a new follow-up card is made as before but neither note gets a link.
+3655. **Never overwritten.** Make two cards quickly one after the other from the same card: they get different ids and different files; no existing note is changed except `links`.
+3656. **Menu.** In the notebook tab's ⋯ menu, *Show card sequence* appears only when the page in view is a numbered card.
+3657. **Phone and tablet, light, dark, Italian.** The dialog fits, rows are at least 44 px tall, nothing scrolls sideways; strings are Italian with the plugin in Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Sequence order, parent, previous / next sibling, children (missing parents skipped), pure | yes | `tests/zettel-sequence.test.ts` | | | |
+| Next free id of a follow-up or branch card (gaps, taken ids, notes named like an id, case) | yes | `tests/zettel-sequence.test.ts` | | | |
+| Commands: new follow-up / branch card, go to previous / next / parent / children, show sequence (Luhmann numbering only) | yes | | | | |
+| Card sequence dialog | yes | harness `doc=zsequence` | | | |
+| Link with the origin card through `links` (setting) | yes | | | | |
+| On-page sequence strip | no | | | | not built; the dialog and commands cover navigation |
