@@ -34,6 +34,8 @@ export interface PenGestureView {
 	boundsOf(): ((s: Stroke) => BBox) | undefined;
 	/** v8: whether the hidden ink of `page` is shown (solutions revealed); hidden ink is never a gesture target otherwise. */
 	revealed(page: Page): boolean;
+	/** 0.29 (#96): ids of the struck words the view hides on `page` (null: none); a scribble gesture never deletes them. */
+	struckHidden?(page: Page): ReadonlySet<string> | null;
 	/** The current lasso selection, if any (page, strokes, objects). */
 	selection(): { pageIndex: number; strokes: readonly Stroke[]; elements: readonly PageElement[] } | null;
 	/** Is this page-local point on the selection (box or handles)? */
@@ -85,7 +87,7 @@ export function gestureWorld(v: PenGestureView): GestureWorld {
 			}
 			const duration = trail[trail.length - 1]!.t - trail[0]!.t;
 			const scribble = detectScribble(pts, duration);
-			return scribble ? scribbleVictims(scribble, erasableStrokes(page), v.penStyle().width, v.boundsOf(), v.revealed(page)).length : 0;
+			return scribble ? scribbleVictims(scribble, erasableStrokes(page, v.struckHidden?.(page)), v.penStyle().width, v.boundsOf(), v.revealed(page)).length : 0;
 		},
 		onPage: (p) => v.pageIndexAt(p) >= 0,
 		onSelection(p) {
@@ -170,7 +172,7 @@ export function runGesture(v: PenGestureView, r: Recognition, trail: readonly Tr
 	switch (r.id) {
 		case "delete": {
 			if (!ink) return;
-			const steps = scribbleEraseSteps(ink.page, ink.stroke, trail[trail.length - 1]!.t - trail[0]!.t, v.boundsOf(), {}, v.revealed(ink.page));
+			const steps = scribbleEraseSteps(ink.page, ink.stroke, trail[trail.length - 1]!.t - trail[0]!.t, v.boundsOf(), {}, v.revealed(ink.page), v.struckHidden?.(ink.page));
 			if (steps) {
 				v.clearSelection();
 				v.execute([steps.keep, steps.erase]);

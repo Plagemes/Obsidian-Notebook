@@ -6639,7 +6639,9 @@ export class NotebookView extends FileView {
 		if (!this.host.settings.scribbleErase || !isLinePen(active.stroke.tool) || active.snap || active.recognized || !this.renderer) return false;
 		const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
 		// v8: hidden ink (the solutions) is never scratched out while it is not shown.
-		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf, {}, this.markers?.isRevealed(page) ?? false);
+		// 0.29 (#96): struck words hidden from the view are not scratched out with what is in front of them.
+		const struck = this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null;
+		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf, {}, this.markers?.isRevealed(page) ?? false, struck);
 		if (!steps) return false;
 		this.clearSelection();
 		this.renderer.cancelWet();
@@ -6968,6 +6970,7 @@ export class NotebookView extends FileView {
 			stageRect: () => this.stage.getBoundingClientRect(),
 			boundsOf: () => this.renderer?.boundsOf,
 			revealed: (page) => this.markers?.isRevealed(page) ?? false,
+			struckHidden: (page) => (this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null),
 			selection: () => this.selection,
 			selectionHit: (pageIndex, local) => this.selection?.pageIndex === pageIndex && this.selectionHit(local) !== null,
 			selectPolygon: (pageIndex, polygon) => {
