@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { idSet } from "../src/zettel/ids";
-import { branchId, compareSequenceIds, depthOf, followUpId, idsInNames, isSequenceId, neighbours, parentId, sequenceCardId } from "../src/zettel/sequence";
+import { branchId, compareSequenceIds, depthOf, followUpId, idsInNames, isSequenceId, neighbours, occupiedIds, parentId, sequenceCardId } from "../src/zettel/sequence";
 
 const sorted = (ids: string[]) => [...ids].sort(compareSequenceIds);
 
@@ -106,7 +106,23 @@ describe("follow-up and branch ids", () => {
 
 	it("a branch does not count cards of other branches or deeper levels", () => {
 		expect(branchId("1", idSet(["1", "1a", "1a1", "1a2", "10", "10a"]))).toBe("1b");
-		expect(branchId("1a", idSet(["1a", "1ab", "1a1b"]))).toBe("1a1");
+		expect(branchId("1a", idSet(["1a", "1ab", "1a1b"]))).toBe("1a2"); // 1a1b sits below 1a1, so 1a1 is taken (review Z4)
+		expect(branchId("1a", idSet(["1a", "1ab"]))).toBe("1a1");
+	});
+
+	it("an id above a card that exists counts as taken (review Z4): a new card never adopts a deleted card's descendants", () => {
+		expect(followUpId("1a", idSet(["1a", "1b1"]))).toBe("1c");
+		expect(branchId("1", idSet(["1", "1a1"]))).toBe("1b");
+		expect(branchId("1", idSet(["1", "1a1b2"]))).toBe("1b");
+		expect(followUpId("1", idSet(["1", "2a1"]))).toBe("3");
+		expect(sequenceCardId("follow-up", "1a", ["1a", "1b1"], [])).toBe("1c");
+		expect(sequenceCardId("branch", "1", ["1"], idsInNames(["1a1 Foo"]))).toBe("1b");
+	});
+
+	it("occupiedIds adds every id above the given ones", () => {
+		expect([...occupiedIds(["1b1", "2"])].sort()).toEqual(["1", "1b", "1b1", "2"]);
+		expect([...occupiedIds(["1A2b"])].sort()).toEqual(["1", "1a", "1a2", "1a2b"]);
+		expect([...occupiedIds(["20261029144207-k3f9"])]).toEqual(["20261029144207-k3f9"]);
 	});
 
 	it("is case-insensitive and null for ids outside the numbering", () => {
