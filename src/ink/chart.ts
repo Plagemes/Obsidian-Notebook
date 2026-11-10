@@ -42,6 +42,8 @@ export interface ChartLink {
 	colour: number;
 	/** The chart has a title (the topmost text box of the group). */
 	titled: boolean;
+	/** A line chart with a trend line (0.30): written as a trailing "r" after the titled letter; ids without it (0.29) mean no trend. */
+	trend?: boolean;
 	/** The group id of the table the chart reads, or null when it could not be written. */
 	source: string | null;
 }
@@ -55,8 +57,8 @@ export function chartColours(first: number): string[] {
 }
 
 export function chartGroupId(link: ChartLink, random: string = createId().replace(/-/g, "").slice(0, 8)): string {
-	const src = link.source !== null && link.source !== "" && link.source.length <= MAX_SOURCE && !link.source.includes(".") ? link.source : NO_SOURCE;
-	return `${CHART_PREFIX}.${KIND_CHAR[link.kind]}${clampColour(link.colour)}${link.titled ? "t" : "n"}.${src}.${random}`;
+	const src = link.source !== null && link.source !== "" && link.source.length <= MAX_SOURCE - (link.trend === true && link.kind === "line" ? 1 : 0) && !link.source.includes(".") ? link.source : NO_SOURCE;
+	return `${CHART_PREFIX}.${KIND_CHAR[link.kind]}${clampColour(link.colour)}${link.titled ? "t" : "n"}${link.trend === true && link.kind === "line" ? "r" : ""}.${src}.${random}`;
 }
 
 /** The link a group id carries, or null when the id is not a chart's. */
@@ -64,10 +66,13 @@ export function parseChartGroup(group: string | undefined): ChartLink | null {
 	if (group === undefined) return null;
 	const parts = group.split(".");
 	if (parts.length !== 4 || parts[0] !== CHART_PREFIX) return null;
-	const m = /^([blp])([0-7])([tn])$/.exec(parts[1]!);
+	const m = /^([blp])([0-7])([tn])(r?)$/.exec(parts[1]!);
 	if (!m || parts[2] === "" || parts[3] === "") return null;
 	const kind: ChartKind = m[1] === "b" ? "bar" : m[1] === "l" ? "line" : "pie";
-	return { kind, colour: Number(m[2]), titled: m[3] === "t", source: parts[2] === NO_SOURCE ? null : parts[2]! };
+	const link: ChartLink = { kind, colour: Number(m[2]), titled: m[3] === "t", source: parts[2] === NO_SOURCE ? null : parts[2]! };
+	// the trend is only for a line; "r" on another kind is read as no trend
+	if (m[4] === "r" && kind === "line") link.trend = true;
+	return link;
 }
 
 // --- building ---
@@ -90,8 +95,8 @@ export function buildChart(layout: ChartLayout, group: string, newId: () => stri
 }
 
 /** The chart of a choice, read from `data`, in `box`. */
-export function layoutFor(link: Pick<ChartLink, "kind" | "colour">, data: ChartData, title: string, box: ChartBox, otherLabel?: string): ChartLayout {
-	return layoutChart(link.kind, data, { title, colours: chartColours(link.colour), otherLabel }, box);
+export function layoutFor(link: Pick<ChartLink, "kind" | "colour" | "trend">, data: ChartData, title: string, box: ChartBox, otherLabel?: string): ChartLayout {
+	return layoutChart(link.kind, data, { title, colours: chartColours(link.colour), otherLabel, trend: link.trend === true }, box);
 }
 
 // --- finding things ---
@@ -205,6 +210,8 @@ export interface ChartChoice {
 	/** Palette index of the first colour. */
 	colour: number;
 	size: ChartSize;
+	/** A least-squares trend line (line charts only). */
+	trend?: boolean;
 }
 
 export type ChartInsertPlan = { ok: true; cmd: Command; strokes: Stroke[]; elements: TextElement[]; group: string } | { ok: false; reason: "noData" };
@@ -219,7 +226,7 @@ export function planChartInsert(
 	const placed = placeChart({ x: t.minX, y: t.minY, width: t.maxX - t.minX, height: t.maxY - t.minY }, chartSize(choice.size, page.width), page, target);
 	const box: ChartBox = { x: r2(placed.x), y: r2(placed.y), width: r2(placed.width), height: r2(placed.height) };
 	const title = choice.title.trim();
-	const link: ChartLink = { kind: choice.kind, colour: choice.colour, titled: title !== "", source: table.strokes[0]?.group ?? null };
+	const link: ChartLink = { kind: choice.kind, colour: choice.colour, titled: title !== "", trend: choice.trend === true && choice.kind === "line", source: table.strokes[0]?.group ?? null };
 	const group = chartGroupId(link, newId().replace(/-/g, "").slice(0, 8));
 	const built = buildChart(layoutFor(link, data, title, box, otherLabel), group, newId);
 	const e0 = page.elements?.length ?? 0;

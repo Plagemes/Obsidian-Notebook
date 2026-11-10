@@ -4790,6 +4790,20 @@ A line through the middle of a handwritten word marks it as deleted. The word st
 | Search / headings index / digest ignore struck words | no | | | | left out: not cheap without touching those readers |
 | Thumbnails, minimap and the zoomed-out levels hide struck words | no | | | | they draw the document as it is; only the page canvas and exports honour the switch |
 | Quick exports from a page's menu (without the dialog) | no | | | | they draw the page as it is; use the export dialog |
+### 0.30 — chartreg: trend line on line charts (roadmap #295; steps 3520-3539)
+
+Implemented, not verified on hardware. The line is fitted to the first series against the row position (1, 2, 3 ...), not to numeric labels.
+
+3520. **Choice.** Make a table with numbers (a header row, a month column and two number columns) and open *Chart from table*. With *Line* the dialog shows *Trend line* (None / Line of best fit); with *Bars* or *Pie* it is hidden.
+3521. **Preview.** Choose *Line of best fit*: the picture gets a dashed line and a label like `y = 2x + 1  R² = 0.98`. *None* removes both.
+3522. **Insert.** Insert the chart: the dashed line and the label are part of the chart (ordinary shapes and a text box); the title stays the title.
+3523. **Update keeps it.** Change a number in the table, select the chart, *Update chart*: the trend line and its equation are redrawn for the new numbers; undo brings the old chart back in one step.
+3524. **Old charts.** A chart made by 0.29 still updates and has no trend line.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Trend line (least squares) with equation and R² on line charts, kept by Update chart | yes | `tests/chart-regression.test.ts`, harness `doc=chartreg` | | | |
+
 ### 0.29 — charts: bar, line and pie charts from the numbers of a hand-drawn table (roadmap #244; steps 3340-3359)
 
 A chart is ordinary shape strokes and text boxes of one group; "Update chart" re-reads the table the chart was made from. The plugin does not read handwriting: the numbers are typed in text boxes placed in the cells (Text tool, tap in a cell).

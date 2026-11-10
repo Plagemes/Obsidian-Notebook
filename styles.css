@@ -22980,3 +22980,8 @@ body.notebook-style-obsidian .nb-ui.nb-sections-strip .nb-sections-tab {
 		transform: none;
 	}
 }
+
+/* ===== 0.30 chartreg ===== */
+.nb-ui.nb-chart-dialog .nb-chart-trend[hidden] {
+	display: none;
+}

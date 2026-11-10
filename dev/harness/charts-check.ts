@@ -21,7 +21,7 @@ export interface ChartsCheckApi {
 	notices: string[];
 }
 
-interface ChartsView extends HarnessView {
+export interface ChartsView extends HarnessView {
 	selectItems(pageIndex: number, strokes: Stroke[], elements: PageElement[]): void;
 	clearSelection(): void;
 }
@@ -35,25 +35,25 @@ const cellPrefix = (): string => `cell${serial}`;
 
 const SALES =[["Month", "Sales", "Cost"], ["Jan", "12", "5"], ["Feb", "18", "7"], ["Mar", "9", "6"]];
 
-async function waitFor(sel: string): Promise<HTMLElement | null> {
+export async function waitFor(sel: string): Promise<HTMLElement | null> {
 	for (let i = 0; i < 40 && !q(sel); i++) await sleep(50);
 	const all = document.querySelectorAll<HTMLElement>(sel);
 	return all[all.length - 1] ?? null;
 }
 
 /** Closes every dialog that is open (one left by an earlier screenshot belongs to a view that is gone). */
-async function closeDialogs(api: ChartsCheckApi): Promise<void> {
+export async function closeDialogs(api: ChartsCheckApi): Promise<void> {
 	for (const b of Array.from(document.querySelectorAll<HTMLElement>(".nb-modal-close"))) b.click();
 	await api.frames(2);
 }
 
-const press = async (api: ChartsCheckApi, el: Element | null | undefined): Promise<void> => {
+export const press = async (api: ChartsCheckApi, el: Element | null | undefined): Promise<void> => {
 	(el as HTMLElement | null)?.click();
 	await api.frames(3);
 };
 
 /** Inserts a 4 x 3 table through the real dialog and writes SALES into its cells as text boxes; selects the table. */
-async function tableWithNumbers(api: ChartsCheckApi): Promise<void> {
+export async function tableWithNumbers(api: ChartsCheckApi): Promise<void> {
 	const v = api.view as ChartsView;
 	await closeDialogs(api);
 	v.clearSelection();
@@ -86,7 +86,7 @@ async function tableWithNumbers(api: ChartsCheckApi): Promise<void> {
 	await api.frames(3);
 }
 
-const pageOf = (v: ChartsView): Page => v.document.pages[v.currentPage()]!;
+export const pageOf = (v: ChartsView): Page => v.document.pages[v.currentPage()]!;
 
 /** The group of the newest table on the page (a notebook that was opened again may already hold one from an earlier run). */
 function lastTableGroup(page: Page): string | undefined {
@@ -103,7 +103,7 @@ function selectTable(v: ChartsView): void {
 	v.selectItems(v.currentPage(), page.strokes.filter((s) => s.group === group), []);
 }
 
-function selectChart(v: ChartsView): void {
+export function selectChart(v: ChartsView): void {
 	const page = pageOf(v);
 	const group = [...page.strokes].reverse().find((s) => parseChartGroup(s.group) !== null)?.group;
 	v.selectItems(v.currentPage(), page.strokes.filter((s) => s.group === group), (page.elements ?? []).filter((e) => e.group === group));

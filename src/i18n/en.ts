@@ -5540,6 +5540,10 @@ export const en = {
 	"chart.other": "Other",
 	"chart.inserted": "Chart inserted. After you change the table, select the chart and choose Update chart.",
 	"chart.updated": "Chart updated.",
+	// 0.30 chartreg
+	"chart.trend": "Trend line",
+	"chart.trend.off": "None",
+	"chart.trend.on": "Line of best fit",
 	"chart.same": "The chart already shows the numbers in its table.",
 	"chart.noData": "The table holds no numbers to show. Type each number in a text box inside its cell.",
 	"chart.noSource": "The table this chart was made from is no longer in the notebook.",
