@@ -4867,3 +4867,20 @@ A chart is ordinary shape strokes and text boxes of one group; "Update chart" re
 | Large pen-friendly keys; dialog on the shared shell; help, ranking | yes | `tests/calc-ui.test.ts`, harness `doc=calculator` | | | |
 | Result inserted as text, as a formula element with its expression, as a function graph | yes | harness `doc=calculator` | | | |
 | Handwritten calculations | no | | | | later (M5, as the roadmap says) |
+### 0.29 — hygiene: Zettelkasten system hygiene (roadmap Z10; steps 3420-3439)
+
+3420. **Open.** Command palette, *Check Zettelkasten hygiene*: a report opens with a progress line, then three lists (Unlinked cards, Cards without a title, Likely duplicates) with counts. No file changes (check the vault's modified times).
+3421. **Unlinked.** A card nothing links to and that links to nothing is listed; add a wikilink to it from any note, scan again: it is gone. A link written in the card's `links` property counts too.
+3422. **Untitled.** A card with an empty `title` is listed; *Open* opens its note.
+3423. **Duplicates.** Make two cards with the same title (or two cards of the same page and region, or copy a card's text into another card): they appear as one group with the reason (same title / same page and region / nearly the same text).
+3424. **Add title.** *Add title…* opens a prompt; Cancel changes nothing; Save writes the title (and renames the note only if it still had the plugin's name); the row disappears.
+3425. **Link.** *Link…* opens a card picker, then a confirmation; Cancel changes nothing; confirming adds the link to both notes' `links`.
+3426. **Trash.** *Move to trash* asks first, naming the note; Cancel keeps it; confirming moves the note to Obsidian's trash (restorable) and the notebook page is untouched.
+3427. **Large vault.** With a few thousand cards the report stays responsive while it reads (progress counts up) and closing it stops the scan.
+3428. **Phone and tablet.** Rows wrap, buttons are at least 40 px, nothing scrolls sideways; light, dark and Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Detection: unlinked, untitled, duplicates (title, page and region, near-identical text), idle slices (pure) | yes | `tests/zettel-hygiene.test.ts` | | | |
+| Read-only report with Open per row | yes | harness `doc=hygiene` | | | |
+| Fixes with confirmation: add title, link two cards, move to trash | yes | harness `doc=hygiene` (trash path; title and link are asked first) | | | |

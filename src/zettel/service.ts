@@ -637,6 +637,18 @@ export class ZettelService implements OverlaySource {
 		await this.plugin.saveSettings();
 		this.refreshOverlays();
 	}
+
+	// 0.29 hygiene (Z10): the fixing actions of the hygiene report. The report asks first; these only run after a confirmation.
+
+	/** Sets a card's typed title through the same writer as "Set card title" (the note is renamed only while it has the plugin's own name). */
+	retitleCard(card: CardRecord, title: string): Promise<unknown> {
+		return this.enqueue(() => this.writeTitle(card, title));
+	}
+
+	/** Adds a link between two cards in both notes. True when something was added. */
+	async linkCardPair(a: CardRecord, b: CardRecord): Promise<boolean> {
+		return (await this.enqueue(() => this.linkCards(a, b))) === true;
+	}
 }
 
 /** Ids of the shape strokes of a document (arrows are drawn with the shape tool). */
