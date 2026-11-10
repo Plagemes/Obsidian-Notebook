@@ -91,6 +91,8 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Make axes": ["histpanel.t.axes", "activity"],
 	"Insert table": ["histpanel.t.tableInsert", "table"],
 	"Edit table": ["histpanel.t.tableEdit", "table"],
+	"Insert chart": ["histpanel.t.chartInsert", "bar-chart-3"],
+	"Update chart": ["histpanel.t.chartUpdate", "refresh-cw"],
 	"Convert equation to ink": ["histpanel.t.eqInk", "pencil"],
 	"Balance reaction": ["histpanel.t.balance", "flask-conical"],
 	"Edit graph": ["histpanel.t.graph", "activity"],

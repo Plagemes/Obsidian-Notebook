@@ -228,6 +228,8 @@ import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
 import { AxesTools, type AxesHost } from "./axes-tools";
 import { TableTools, type TableHost } from "./table-tools";
 import { tableOfSelection } from "../ink/table";
+import { chartOfSelection, tableInSelection } from "../ink/chart";
+import { ChartTools } from "./chart-tools";
 import { ChemTools, holdsReaction } from "./chem-tools";
 import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
@@ -560,6 +562,8 @@ export class NotebookView extends FileView {
 	private axes: AxesTools | null = null;
 	/** 0.28 (#41): hand-drawn tables (insert, add / remove rows and columns, even cells). */
 	private tables: TableTools | null = null;
+	/** 0.29 (#244): charts from table data (make one from a selected table, update it when the numbers change). */
+	private charts: ChartTools | null = null;
 	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
 	private chem: ChemTools | null = null;
 	/** 0.20 (#39): groups and locked elements (Group, Ungroup, Lock, the Unlock chip, the list of locked elements). */
@@ -922,6 +926,7 @@ export class NotebookView extends FileView {
 		this.checklist = new ChecklistTools(this.checklistHost());
 		this.axes = new AxesTools(this.axesHost());
 		this.tables = new TableTools(this.tableHost());
+		this.charts = new ChartTools(this.tableHost());
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
@@ -1390,6 +1395,7 @@ export class NotebookView extends FileView {
 		this.axes?.destroy();
 		this.axes = null;
 		this.tables = null;
+		this.charts = null;
 		this.chem = null;
 		this.checklist = null;
 		this.groups?.destroy();
@@ -3525,6 +3531,11 @@ export class NotebookView extends FileView {
 		return this.tables;
 	}
 
+	/** 0.29 (#244): charts from table data of this view (null before the view is open). */
+	get chartTools(): ChartTools | null {
+		return this.charts;
+	}
+
 	/** 0.22 (#206): instant axes of this view (null before the view is open). */
 	get axesTools(): AxesTools | null {
 		return this.axes;
@@ -4801,6 +4812,9 @@ export class NotebookView extends FileView {
 			grouped: parts.reduce((n, p) => n + p.strokes.filter((s) => s.group !== undefined).length + p.elements.filter((e) => e.group !== undefined).length, 0),
 			// 0.28 (#41): the selection is exactly one hand-drawn table (the table actions show then).
 			table: parts.length === 1 && !!parts[0] && tableOfSelection(parts[0].strokes, parts[0].elements.length) !== null,
+			// 0.29 (#244): the selection holds one table a chart can be made from (other items allowed), or is exactly one chart (Update chart).
+			chartable: parts.length === 1 && !!parts[0] && tableInSelection(parts[0].strokes) !== null,
+			chart: parts.length === 1 && !!parts[0] && chartOfSelection(parts[0].strokes, parts[0].elements) !== null,
 			// 0.28 (#403): the chips the shape of the selection suggests (one page, ink only; empty when the setting is off).
 			suggest: this.suggestionsFor(sel),
 		};

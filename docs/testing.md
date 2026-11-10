@@ -4664,3 +4664,35 @@ Rules only, no AI. Chips appear in a row above the selection bar; they run exist
 | *Highlight* action (area behind the selection, one undo step) | yes | harness `doc=geosuggest` | | | |
 | Flashcards / a "Make card" action | no | | | | none exists in the plugin: the row offers *Insert into note* instead |
 | Region-to-region link | no | | | | the plugin has links from a selection to a note only: the arrow offers *Link to a note…* |
+
+### 0.29 — charts: bar, line and pie charts from the numbers of a hand-drawn table (roadmap #244; steps 3340-3359)
+
+A chart is ordinary shape strokes and text boxes of one group; "Update chart" re-reads the table the chart was made from. The plugin does not read handwriting: the numbers are typed in text boxes placed in the cells (Text tool, tap in a cell).
+
+3340. **Table with numbers.** Insert a table (4 rows, 3 columns) and type in text boxes: row 1 "Month", "Sales", "Cost"; rows 2 to 4 a month name and two numbers each (use a decimal comma in one of them, e.g. 12,5). Select the table (tap it). *All actions* shows *Chart from table* (and *For this page* offers it first). With nothing selected, or a chart selected, it is not there.
+3341. **Dialog.** Tap it: the dialog shows the type (Bars, Line, Pie), a title field, eight colour dots, the size, a small picture of the chart and "Numbers found: 6 (rows: 3, columns: 2)". Every control works; the picture follows each choice; the picture is not a control. Delete the numbers of a second table and open the dialog: it says no numbers were found and *Insert chart* is disabled.
+3342. **Insert.** Choose Bars, type a title, a colour, Medium, *Insert chart*. The chart appears below the table (to the right when there is no room below) with a frame, the title, a value axis with round ticks and light grid lines, one label per month, two bars per month in two colours, value labels on the bars and a legend (Sales, Cost). The chart is selected. One undo removes it whole; redo brings it back.
+3343. **Line and pie.** Repeat with *Line* (a line per series with a dot per number; an empty cell leaves a gap) and *Pie* (one wedge per row of the first column of numbers, clockwise from the top; a legend with the share of each). A zero or negative value has no wedge.
+3344. **Move and restyle.** Drag the chart, resize it, change its colour with the selection bar: it behaves as any group (the title and labels are text boxes, the bars are shapes).
+3345. **Update.** Change a number in the table (edit the text box). Select the chart: *All actions* shows *Update chart* (and no *Chart from table*). Tap it: the chart is redrawn in the same place and size, with the same type and colours, and a notice says so. One undo brings the previous chart back exactly. Tap *Update chart* again without changing anything: "The chart already shows the numbers in its table."
+3346. **Edited title.** Edit the title text box of the chart, change a number, update: the new title is kept.
+3347. **Table changes.** Add a row to the table (*Add row*), type a new month, update: the chart has one more category. Change a cell to text: it is left out and the chart still draws. Empty every number and update: refused with "The table holds no numbers…", the chart is untouched.
+3348. **Table gone / copy.** Delete the table and update the chart: "The table this chart was made from is no longer in the notebook." Copy the chart and paste it: the copy has no table to read (*Update chart* says so); the original still updates. Chart and table on different pages: update still works.
+3349. **Locked.** Lock the page: *Chart from table* and *Update chart* are disabled and nothing changes. Lock a text box of the chart (Lock): *Update chart* is refused with a reason.
+3350. **Exports.** Export the page as PDF, PNG and SVG and print or share it: the chart is drawn with its bars, wedges, lines and text. With redaction on, a box over the chart hides it in the exports.
+3351. **History panel.** The steps read "Chart inserted" and "Chart updated" (in Italian "Grafico inserito", "Grafico aggiornato"). With *Undo on this page only* on, undo of a chart step acts on that page only.
+3352. **Phone, light, dark, Italian.** The dialog fits a phone, reads in light and dark and with *Follow Obsidian theme* (its picture sits on a light paper), and all texts are in Italian with the plugin in Italian. Long-press *Chart from table* / *Update chart* in the sheet: the help bubble explains each.
+3353. **Many numbers.** A table of 12 rows and 4 series: labels thin out (every other one, clipped) rather than overlap; a pie of 15 rows shows 11 slices and "Other".
+3354. **Real device.** On the tablet with the S Pen: the colour dots and segments are easy to hit, the picture is crisp, inserting is instant, and the text of the chart is a similar size to the table's.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Number parsing (decimal comma, thousands, percent, currency, minus), data from cells (labels, series, header row, gaps, limits) | yes | `tests/chart-layout.test.ts` | | | |
+| Axis ticks, scales, pie angles, bar / line / pie layout (empty, negative, non-numeric, tiny boxes) | yes | `tests/chart-layout.test.ts` | | | |
+| Text of the cells of a table (text boxes and number equations) | yes | `tests/chart.test.ts` | | | |
+| Chart as shape strokes + text boxes of one group, valid document, one undo step to insert | yes | `tests/chart.test.ts`, harness `doc=charts` | | | |
+| Update chart: re-reads the table, same place / type / colour / title, one undo step, "same", refusals (gone, no link, no source, no data, locked, states) | yes | `tests/chart.test.ts`, harness `doc=charts` | | | |
+| Dialog (type, title, colour, size, live picture, what was read), actions, help, ranking, commands, en + it | yes | `tests/chart-actions.test.ts`, `tests/ui-registry.test.ts`, harness `doc=charts` | | | |
+| Reading the numbers from handwriting | no | | | | the plugin has no handwriting recognition: numbers are typed in text boxes |
+| Updating by itself when a number changes | no | | | | explicit *Update chart* only (a chart is plain content; nothing watches the table) |
+| Axis titles, stacked or horizontal bars, a secondary axis | no | | | | not in this wave |

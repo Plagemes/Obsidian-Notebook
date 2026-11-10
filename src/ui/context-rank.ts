@@ -98,6 +98,9 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// one that starts somewhere it cannot (nothing selected, a locked page) steps back; any other leans forward a little.
 	// 0.28 (#41): the table actions fit a selected table above all (enough for "For this page"); inserting one leans forward a little on grid and plain paper.
 	if (a.id.startsWith("table-") && c.selection?.table === true) boost += HERE_MIN_BOOST + 4;
+	// 0.29 (#244): "Chart from table" fits a selected table and "Update chart" a selected chart (both enough for "For this page"; the actions only show then).
+	if (a.id === "chart-from-table" && c.selection?.chartable === true) boost += HERE_MIN_BOOST + 5;
+	if (a.id === "chart-update" && c.selection?.chart === true) boost += HERE_MIN_BOOST + 6;
 	if (a.id === "insert-table" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 4;
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
 	// 0.28 (#184): the paint bucket fills shapes: with the shape tool in hand it is the next thing wanted (enough for "For this page"); with a selection
