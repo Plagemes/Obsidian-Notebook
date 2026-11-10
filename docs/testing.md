@@ -5117,7 +5117,7 @@ Update to 0.30 and fully close and reopen Obsidian. Use a vault with a notebook 
 3643. **Follow-up.** Page 4, *New follow-up card*, choose `1a`: the id is `1b`. Again on page 5, choose `1a`: `1b` is taken, so the id is `1c`.
 3644. **Branch of a branch.** Page 6, *New branch card*, choose `1a`: `1a1`. Page 7, again: `1a2`.
 3645. **A gap.** Delete the note `1b` in Obsidian, then make a follow-up of `1a` on a new page: it takes `1b` (the free place right after `1a`). A branch of `1` after that is `1d` (one past the last branch, deleted ids are not reused while later ones exist).
-3646. **A page that is already a card.** On page 1 run *New follow-up card* without a selection: a notice says the page is already card `1`. Select an area of the page with the lasso and run it again: the card is made from the selection and continues `1` (its id is the next free number after `1`).
+3646. **A page that is already a card.** On page 1 (card `1`) run *New follow-up card* without a selection: the normal card dialog opens; press *Create* and a new page is added right after page 1, with the new card on it (`2`, or the next free id), linked with `1`. Cancel instead: no page is added. Press *Undo*: the added page goes away in one step. Select an area of the page with the lasso and run it again: the card is made from the selection (no new page) and continues `1`. In a slip-box the new page does not also get a card of its own.
 3647. **A note with the id's name.** In the card folder make a plain note named `1a3 Ideas` (no properties). A branch of `1a` is `1a4`, not `1a3`: the name counts as taken.
 3648. **No card to continue.** In a notebook with no numbered card, *New branch card* says there is nothing to continue yet and creates nothing.
 3649. **Sequence dialog.** Open the note of card `1a` (or its notebook page) and run *Show card sequence*: sections Parent (`1`), Previous (None), Next (`1b`), Children (`1a1`, `1a2`). Each card is a row; tapping it opens that note and closes the dialog. From a notebook page the footer also has *New follow-up card* and *New branch card*; from a note it does not.
@@ -5126,6 +5126,8 @@ Update to 0.30 and fully close and reopen Obsidian. Use a vault with a notebook 
 3652. **A missing parent.** Delete the note `1a` but keep `1a1`: *Go to parent card* from `1a1` opens `1`; `1` lists `1a1` among its children.
 3653. **Renamed card.** Rename the file of `1b` in Obsidian (the id in its properties is unchanged): the sequence and the commands still find it. Edit its `zettel-id` to `5`: it becomes a top-level card and leaves the children of `1`.
 3654. **Link off.** Switch *Link new sequence cards to their origin* off: a new follow-up card is made as before but neither note gets a link.
+3658. **An id above a card that exists.** With `1a` and `1b1` (no `1b`): *New follow-up card* of `1a` gives `1c`, not `1b`. With `1` and `1a1` only: *New branch card* of `1` gives `1b`, not `1a`.
+3659. **No second card for a page.** In a slip-box, run *New follow-up card* on a card page, keep the dialog open for more than ten seconds while typing the title, then *Create*: the notebook gets one new page with one card; no page has two cards. Make a card from a card-less page of a slip-box and wait in the dialog: the page still has exactly one card afterwards.
 3655. **Never overwritten.** Make two cards quickly one after the other from the same card: they get different ids and different files; no existing note is changed except `links`.
 3656. **Menu.** In the notebook tab's ⋯ menu, *Show card sequence* appears only when the page in view is a numbered card.
 3657. **Phone and tablet, light, dark, Italian.** The dialog fits, rows are at least 44 px tall, nothing scrolls sideways; strings are Italian with the plugin in Italian.
@@ -5136,7 +5138,10 @@ Update to 0.30 and fully close and reopen Obsidian. Use a vault with a notebook 
 | Next free id of a follow-up or branch card (gaps, taken ids, notes named like an id, case) | yes | `tests/zettel-sequence.test.ts` | | | |
 | Commands: new follow-up / branch card, go to previous / next / parent / children, show sequence (Luhmann numbering only) | yes | | | | |
 | Card sequence dialog | yes | harness `doc=zsequence` | | | |
-| Link with the origin card through `links` (setting) | yes | | | | |
+| Link with the origin card through `links` (setting); the origin is found again by id after a rename | yes | | | | not covered outside Obsidian |
+| An id above a card that exists counts as taken (follow-up / branch never adopt a deleted card's descendants) | yes | `tests/zettel-sequence.test.ts` | | | |
+| Follow-up / branch on a page that is already a card adds a new page for the new card (on Create only) | yes | | | | needs the open notebook view; not checked outside Obsidian |
+| A page being given a card is held while its dialog is open and checked again before writing (no second page card) | yes | | | | not checked outside Obsidian |
 | On-page sequence strip | no | | | | not built; the dialog and commands cover navigation |
 
 ### 0.30 — linksuggest: link suggestions while creating a card, roadmap Z5 (steps 3620-3639)
@@ -5148,7 +5153,7 @@ Update to 0.30 and fully close and reopen Obsidian. Use a vault with at least si
 3622. **By title.** Clear the tag and type a title that shares a word with an existing card title (accents and capitals do not matter): that card is listed with *Shared words*. A title containing or contained in another title shows *Similar title*.
 3623. **Ranking.** A card sharing two tags comes before one sharing a single word. Unrelated cards never appear, however few cards match.
 3624. **One tap.** Tap a suggestion: it turns accented with a check and *Will link*; tap it again to take it back. Choose two cards, *Create card*.
-3625. **Links written.** A moment after the note appears, a notice says *Linked to 2 cards*. Open the new note and one of the chosen notes: each has the other in its `links` property (the same two-way link as a drawn arrow). Obsidian's graph shows the edge.
+3625. **Links written.** Right after the note is made, a notice says *Linked to 2 cards* (*Linked to 1 card.* for one; *The chosen cards were already linked.* when nothing new was added). Open the new note and one of the chosen notes: each has the other in its `links` property (the same two-way link as a drawn arrow). Obsidian's graph shows the edge.
 3626. **Nothing chosen.** Create a card without tapping any suggestion: no links are added and no notice appears.
 3627. **Cancel.** Choose a card and press *Cancel*: nothing is linked and the chosen note is untouched.
 3628. **From the Inbox.** *Make card* on an Inbox item shows the same field and links the same way.
@@ -5157,11 +5162,12 @@ Update to 0.30 and fully close and reopen Obsidian. Use a vault with at least si
 3631. **Cheap.** In a vault with hundreds of cards, typing in the title keeps up with the pen or keyboard (no stutter); the list updates after you pause. No note file is read (only the metadata cache).
 3632. **Pen, finger, mouse.** The rows work with the S Pen, a finger and the mouse and are 44 px high.
 3633. **Phone width, light, dark.** Rows wrap their text on one line with an ellipsis, nothing scrolls sideways, and the field reads in light, dark and *Follow Obsidian theme*; in Italian the texts are Italian.
+3634. **Links go to the right note (review).** Choose a card in the dialog, press *Create card*, and at the same moment let another card appear (sync from another device, or a slip-box page that gets its card): only the note made from the dialog is linked. From the Inbox, with the page gone (*Make card* then delete the page elsewhere), nothing is linked and no notice about links appears. Wait over a minute after *Cancel*: still nothing linked. Disable the plugin right after *Create card*: nothing is written later.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Pure ranking of link suggestions (shared tags, title words, contained title, recency tie-break, bounded candidates) | yes | `tests/zettel-link-suggest.test.ts` | | | |
 | Cards to link in the New card dialog (debounced, one tap to choose) | yes | harness `doc=linksuggest` | | | |
-| Chosen cards linked two-way with the zettel writer once the note exists | yes | harness `doc=linksuggest` (writer faked) | | | the real vault write and the cache event are not checked outside Obsidian |
+| Chosen cards linked two-way with the zettel writer, inside the task that makes the note (the answer carries them; no watcher) | yes | `tests/zettel-link-suggest.test.ts` (which cards, which notice), harness `doc=linksuggest` (the answer carries them) | | | the real vault write is not checked outside Obsidian |
 | Settings: suggest on/off and how many (1-8) | yes | `tests/zettel-link-suggest.test.ts` | | | |
 | Text of the card pages (text boxes) as a similarity signal | no | | | | titles, tags and source only |
