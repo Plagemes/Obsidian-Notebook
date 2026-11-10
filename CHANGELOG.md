@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### linehandle
+- **Line handle (#256).** *Reorder lines* (page menu, All actions, command palette) shows a small handle at the left of every handwritten line of the page in view. Drag a handle and the whole line moves between the other lines; the lines in between shift up or down by the moved line's height, so the spacing is kept. Up and down buttons in a small bar (and the arrow keys on a focused handle) do the same one place at a time. A handle that is only tapped chooses its line.
+- **What moves.** The line's line-pen handwriting (pen, fountain pen, brush), its invisible ink, and every element wholly inside the line's strip (an area highlighter behind it, a text box, checkbox or picture at its end, a sticky note with the ink it keeps hidden, a graph with its bound ink) move together, as rigid translations (same points, pressure, width, taper, id and layer). One undo step per drop (`UpdateItems`, titled *Line moved* in the history panel); the page times and the document format do not change.
+- **What refuses.** A locked element on the line, a group that reaches beyond the line, a shape, drawing or highlighter stroke across it, an item that two lines would both move, a locked page, a read-only notebook, a line that would land on something that stays put or outside the page: the handle is dimmed, and the message says why. Nothing is moved on a refusal.
+- **Code.** Pure planner `src/ink/line-reorder.ts` (reuses `analyseBaseline` and the line joining of `tidy.ts`), the handles layer `src/view/line-handles.ts` (DOM over the canvas, no change to the pointer controller or the input policy), registry action `page-reorder-lines`. English and Italian texts, long-press help, context ranking. Tests `tests/line-reorder.test.ts`; harness `doc=linehandle`. Not verified on Android hardware.
+
 ## 0.27.0 — 2026-11-09
 
 Eight features: stroke taper for the pens, two pages side by side, headings when zoomed out, macros, a layout that follows the input device, workspace presets, suggested search terms for PDFs and tasks due on planner pages. The notebook format moves to version 25 (taper): the migration from version 24 is automatic, and Notebook 0.26 and older open a v25 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).

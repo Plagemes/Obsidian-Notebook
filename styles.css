@@ -21198,3 +21198,236 @@ body.notebook-style-obsidian {
 		display: none;
 	}
 }
+
+/* ===== 0.28 linehandle ===== */
+.nb-ui.nb-lh-layer {
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.nb-ui.nb-lh-layer.notebook-hidden,
+.nb-ui.nb-lh-bar.notebook-hidden,
+.nb-ui .nb-lh-slot.notebook-hidden,
+.nb-ui .nb-lh-band.notebook-hidden,
+.nb-ui .nb-lh-handle.notebook-hidden {
+	display: none;
+}
+
+/* the outline of a line: a quiet rail at rest, the whole box when chosen or dragged */
+.nb-ui .nb-lh-band,
+.nb-ui .nb-lh-slot {
+	position: absolute;
+	left: var(--nb-lh-x, 0);
+	top: var(--nb-lh-y, 0);
+	width: var(--nb-lh-w, 0);
+	height: var(--nb-lh-h, 0);
+	box-sizing: border-box;
+	border-radius: 6px;
+	pointer-events: none;
+}
+
+.nb-ui .nb-lh-band {
+	border: 0 solid var(--nb-accent);
+	border-left-width: 2px;
+	opacity: 0.45;
+	transform: translateY(var(--nb-lh-dy, 0px));
+}
+
+.nb-ui .nb-lh-band.is-shifting {
+	border-left-width: 2px;
+	border-style: dashed;
+	border-width: 1px;
+	opacity: 0.55;
+	transition: transform 120ms ease-out;
+}
+
+.nb-ui .nb-lh-band.is-chosen,
+.nb-ui .nb-lh-band.is-dragging {
+	border-width: 2px;
+	border-style: solid;
+	background: var(--nb-accent-bg);
+	opacity: 1;
+}
+
+.nb-ui .nb-lh-band.is-blocked {
+	border-color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-lh-band.is-dragging.is-refused {
+	border-color: var(--nb-danger);
+	background: transparent;
+}
+
+.nb-ui .nb-lh-slot {
+	border: 2px dashed var(--nb-accent);
+	background: var(--nb-accent-bg);
+	opacity: 0.8;
+}
+
+.nb-ui .nb-lh-handle {
+	position: absolute;
+	left: var(--nb-lh-x, 0);
+	top: var(--nb-lh-y, 0);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: var(--nb-lh-hh, 32px);
+	min-height: 0;
+	padding: 0;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-panel);
+	color: var(--nb-text-muted);
+	box-shadow: var(--nb-shadow-1);
+	cursor: grab;
+	pointer-events: auto;
+	touch-action: none;
+	user-select: none;
+	transform: translateY(var(--nb-lh-dy, 0px));
+}
+
+.nb-ui .nb-lh-handle::after {
+	/* a larger target than the 32 px grip, for a finger */
+	content: "";
+	position: absolute;
+	inset: -6px -8px;
+}
+
+.nb-ui .nb-lh-handle .nb-lh-grip {
+	display: inline-flex;
+}
+
+.nb-ui .nb-lh-handle .nb-lh-grip svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui .nb-lh-handle:hover {
+	color: var(--nb-text);
+	border-color: var(--nb-accent);
+}
+
+.nb-ui .nb-lh-handle.is-chosen {
+	color: #ffffff;
+	border-color: var(--nb-accent);
+	background: var(--nb-accent);
+}
+
+.nb-ui .nb-lh-handle.is-blocked {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.nb-ui .nb-lh-handle.is-dragging {
+	cursor: grabbing;
+	box-shadow: var(--nb-shadow-float);
+	z-index: 1;
+}
+
+.nb-ui .nb-lh-handle.is-dragging.is-refused {
+	border-color: var(--nb-danger);
+}
+
+.nb-ui .nb-lh-handle.is-shifting {
+	transition: transform 120ms ease-out;
+}
+
+.nb-ui .nb-lh-handle:focus-visible,
+.nb-ui .nb-lh-step:focus-visible,
+.nb-ui .nb-lh-done:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+/* the bar: what the mode is, the two step buttons and the way out (like the comment rectangle hint) */
+.nb-ui.nb-lh-bar {
+	position: absolute;
+	top: calc(12px + var(--nb-top-shift, 0px));
+	left: 50%;
+	z-index: 9;
+	transform: translateX(-50%);
+	display: inline-flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	max-width: calc(100% - 24px);
+	padding: 5px 6px 5px 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	box-shadow: var(--nb-shadow-float);
+	cursor: default;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-bar-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-lh-bar .nb-lh-bar-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-bar-hint {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	min-height: 0;
+	padding: 0;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	color: var(--nb-text);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-step svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-step:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-done {
+	min-height: 34px;
+	padding: 0 14px;
+	border: 1px solid var(--nb-accent);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	color: #ffffff;
+	font-size: var(--nb-fs-chip);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+@media (max-width: 480px) {
+	.nb-ui.nb-lh-bar .nb-lh-bar-hint {
+		display: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui .nb-lh-band.is-shifting,
+	.nb-ui .nb-lh-handle.is-shifting {
+		transition: none;
+	}
+}

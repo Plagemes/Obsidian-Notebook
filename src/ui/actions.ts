@@ -80,6 +80,7 @@ export interface UiContext {
 		/** 0.25 (#99): the highlighter marks rectangles (area highlighter) instead of strokes. */ highlighterArea?: boolean;
 		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
 		/** 0.17 (#71): snap is available (the setting is not "off") and whether it is on now (not paused in this view). Optional (absent: available, on). */ snapAvailable?: boolean; snap?: boolean;
+		/** 0.28 (#256): the "Reorder lines" mode (handles at the left of the handwritten lines) is on. Optional (off when absent). */ lineHandles?: boolean;
 	};
 	/** wave 0.10 (81): the device can print (desktop with a print dialog); false or absent on a phone or tablet. */
 	canPrint?: boolean;
@@ -366,6 +367,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-unlock", label: "page.unlock", icon: "lock-open", group: "page", surfaces: ["page", "sheet"], priority: 49, scope: "view", when: (c) => !!c.page?.locked, keywords: "unlock edit sblocca" },
 	{ id: "page-lock-toggle", label: "command.lockPage", icon: "lock", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true },
 	// 0.26 (#238): the same tidy-up for the whole page (the selection, when there is one, in the palette).
+	// 0.28 (#256): a handle at the left of every handwritten line: drag it to move the whole line between the others (a toggle; also up and down buttons).
+	{ id: "page-reorder-lines", label: "linehandle.action", icon: "grip-vertical", group: "page", surfaces: ["page", "sheet"], priority: 43, scope: "view", command: "command.reorderLines", enabled: (c) => c.editable && (!c.page?.locked || !!c.toggles.lineHandles), checked: (c) => !!c.toggles.lineHandles, keywords: "reorder lines line handle drag move swap up down handwriting riordina righe riga maniglia trascina sposta scrittura" },
 	{ id: "page-tidy", label: "tidy.pageAction", icon: "align-left", group: "page", surfaces: ["page", "sheet"], priority: 44, scope: "view", command: "command.tidyPage", enabled: pageOpen, keywords: "tidy up clean straighten align margin gap space spacing handwriting selection riordina allinea raddrizza margine spazio scrittura" },
 	// 0.20 (#39): the elements locked on the page (a background picture that must not move): listed, shown and unlocked from here.
 	{ id: "locked-elements", label: "groups.lockedElements", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: "groups.command.lockedElements", when: (c) => (c.page?.lockedElements ?? 0) > 0, keywords: "locked lock fixed background element unlock bloccati sblocca sfondo" },
