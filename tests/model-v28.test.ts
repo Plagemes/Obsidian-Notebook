@@ -646,6 +646,61 @@ describe("format v28: history", () => {
 		expect(sectionsAfterReorder(list, before, ["p6", "p1", "p2", "p3", "p4", "p5"], new Set(["p6"]))).toBe(list);
 	});
 
+	it("review R1: recurring sections with the same look (Lecture / Homework every week) are never joined by a move", () => {
+		const lecture = { title: "Lecture", color: "#2f80f7" };
+		const homework = { title: "Homework", color: "#16c2a3" };
+		const doc = laidOut(["a1", "a2", "b1", "c1", "c2", "d1"], {});
+		doc.sections = [section("l1", "a1", lecture), section("h1", "b1", homework), section("l2", "c1", lecture), section("h2", "d1", homework)];
+		const start = [...doc.sections];
+		const history = historyOf(doc);
+		// The one-page section h1 moved to the end, then back, with MovePage (the page panel's moves).
+		expect(history.execute(new MovePage("b1", 2, 5))).toBe(true);
+		expect(ids(doc)).toEqual(["a1", "a2", "c1", "c2", "d1", "b1"]);
+		expect(membership(doc)).toEqual(["l1", "l1", "l2", "l2", "h2", "h1"]);
+		expect(doc.sections).toHaveLength(4);
+		expect(history.execute(new MovePage("b1", 5, 2))).toBe(true);
+		expect(membership(doc)).toEqual(["l1", "l1", "h1", "l2", "l2", "h2"]);
+		expect(doc.sections).toEqual(start);
+		history.undo();
+		history.undo();
+		expect(doc.sections).toEqual(start);
+		// A whole section dropped right after an independent section with the same look stays a section of its own.
+		expect(history.execute(new ReorderPages(ids(doc), ["a1", "a2", "c1", "c2", "b1", "d1"], ["c1", "c2"]))).toBe(true);
+		expect(membership(doc)).toEqual(["l1", "l1", "l2", "l2", "h1", "h2"]);
+		expect(doc.sections).toHaveLength(4);
+	});
+
+	it("review R1: the pieces of a section split twice are put back together, the original keeping its id", () => {
+		const doc = laidOut(["x1", "x2", "x3", "s1", "t1", "y1"], { x: "x1", s: "s1", t: "t1", y: "y1" });
+		const start = [...doc.sections!];
+		const history = historyOf(doc);
+		// s1 between x1 and x2, then t1 between x2 and x3: X is in three pieces.
+		expect(history.execute(new MovePage("s1", 3, 1))).toBe(true);
+		expect(history.execute(new MovePage("t1", 4, 3))).toBe(true);
+		expect(ids(doc)).toEqual(["x1", "s1", "x2", "t1", "x3", "y1"]);
+		expect(looks(doc)).toEqual(["Section x", "Section s", "Section x", "Section t", "Section x", "Section y"]);
+		expect(doc.sections).toHaveLength(6);
+		// Both moved back out, in the other order: one X again, with its own id.
+		expect(history.execute(new MovePage("s1", 1, 4))).toBe(true);
+		expect(history.execute(new MovePage("t1", 2, 4))).toBe(true);
+		expect(ids(doc)).toEqual(["x1", "x2", "x3", "s1", "t1", "y1"]);
+		expect(membership(doc)).toEqual(["x", "x", "x", "s", "t", "y"]);
+		expect(doc.sections).toHaveLength(4);
+		for (let i = 0; i < 4; i++) history.undo();
+		expect(doc.sections).toEqual(start);
+	});
+
+	it("review R1: a continuation renamed by the person is a section of its own and is not joined back", () => {
+		const doc = laidOut(["x1", "x2", "s1", "y1"], { x: "x1", s: "s1", y: "y1" });
+		const history = historyOf(doc);
+		expect(history.execute(new MovePage("s1", 2, 1))).toBe(true);
+		const cont = doc.sections!.find((s) => s.page === "x2")!;
+		expect(history.execute(setSections(doc, withSectionRenamed(sectionsOf(doc), cont.id, "Part two"), "Rename section")!)).toBe(true);
+		expect(history.execute(new MovePage("s1", 1, 0))).toBe(true);
+		expect(looks(doc)).toEqual(["Section s", "Section x", "Part two", "Section y"]);
+		expect(doc.sections).toHaveLength(4);
+	});
+
 	it("is classified as a global step for per-page undo, and the panel has a title for it", () => {
 		expect(CLASSIFIED).toContain("SetSections");
 		const scope = computeScope(new SetSections([], [section("a", "p1")], "New section"));

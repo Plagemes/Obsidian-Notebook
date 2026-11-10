@@ -205,18 +205,59 @@ function seededRandom(seed: string): () => number {
 }
 
 /**
+ * Continuations (review R1). A continuation of section `root` gets the first id of the sequence `seededRandom(root.id)` that is not taken, so
+ * it is the same on every redo and, with no format change, it can be recognised later: an id among the first `SECTIONS_MAX + 1` ids of that
+ * sequence (a list never holds more than `SECTIONS_MAX` ids, so the one chosen is always among them).
+ */
+const CONTINUATION_SEED = "continuation\n";
+
+class Continuations {
+	private readonly ids = new Map<string, ReadonlySet<string>>();
+
+	/** The ids a continuation of section `rootId` can have. */
+	private of(rootId: string): ReadonlySet<string> {
+		let set = this.ids.get(rootId);
+		if (!set) {
+			const random = seededRandom(CONTINUATION_SEED + rootId);
+			const made = new Set<string>();
+			for (let i = 0; i <= SECTIONS_MAX; i++) made.add(newSectionId(made, random));
+			set = made;
+			this.ids.set(rootId, set);
+		}
+		return set;
+	}
+
+	/** Whether `b` is a continuation of `a` (its id comes from `a`'s sequence) and still looks the same (not renamed or recoloured since). */
+	continues(a: Section, b: Section): boolean {
+		return a.id !== b.id && a.title === b.title && a.color === b.color && this.of(a.id).has(b.id);
+	}
+
+	/** The section of `list` that `s` continues, or `s` itself. */
+	rootOf(s: Section, list: readonly Section[]): Section {
+		for (const r of list) if (this.continues(r, s)) return r;
+		return s;
+	}
+
+	/** A new continuation id of `root`, not in `taken`. */
+	newId(root: Section, taken: ReadonlySet<string>): string {
+		return newSectionId(taken, seededRandom(CONTINUATION_SEED + root.id));
+	}
+}
+
+/**
  * The sections after the pages were put in the order `after` (ids) from the order `before`, `moved` being the pages the person moved. The
  * rule is that a page the person did not move keeps the section it had, as far as the anchor model can show it:
  * - A section whose pages all moved goes with them (a whole section moved as a block).
  * - Any other moved page takes the section of the place it lands in (the page before it; no section at the very start).
  * - Every page that did not move keeps its section. A section whose first page moved away while others stayed starts at the first of those
  *   that stayed (in the new order). When a moved block lands inside another section, that section's pages after the block keep their
- *   section through a continuation: a new section with the same title and colour (a deterministic id, so a redo makes the same one),
- *   starting at the first of them. When the list is full, or the page id cannot be stored, there is no continuation and they join the
- *   section before them.
+ *   section through a continuation: a new section with the same title and colour (a deterministic id, so a redo makes the same one, and
+ *   recognisable as a continuation, see `Continuations`), starting at the first of them. When the list is full, or the page id cannot be
+ *   stored, there is no continuation and they join the section before them.
  * - Pages that were in no section can stay so only at the start of the notebook: when a moved section lands in front of them, they join it.
- * - Two sections with the same title and colour that the move puts next to each other (they were not before) become one: the second is
- *   removed and its pages join the first. This is what puts a section back together when a block that split it moves out again.
+ * - Two pieces of one split section (a continuation and the section it continues, still with the same title and colour) that the move puts
+ *   next to each other (they were not before) become one: the original keeps its id. This is what puts a section back together when a block
+ *   that split it moves out again. Independent sections that only share a title and colour are never joined (review R1).
  * Dormant sections, and a second section on a page that already starts one, are kept as they are. The same list when nothing changes.
  */
 export function sectionsAfterReorder(sections: readonly Section[], before: readonly string[], after: readonly string[], moved: ReadonlySet<string>): readonly Section[] {
@@ -245,6 +286,7 @@ export function sectionsAfterReorder(sections: readonly Section[], before: reado
 	}
 	// Where each section starts now; a second run of a section becomes a continuation, or joins the section before it.
 	const taken = new Set(sections.map((s) => s.id));
+	const conts = new Continuations();
 	const placed: Array<{ section: Section; first: string; was: Section }> = [];
 	const start = new Map<string, string>();
 	const extra: Section[] = [];
@@ -258,24 +300,33 @@ export function sectionsAfterReorder(sections: readonly Section[], before: reado
 			continue;
 		}
 		if (sections.length + extra.length >= SECTIONS_MAX || !isUsableSectionPage(run.first)) continue;
-		const id = newSectionId(taken, seededRandom(`${s.id}\n${run.first}`));
+		// Seeded from the section it ultimately continues, so every piece of one split section is recognisable as such.
+		const id = conts.newId(conts.rootOf(s, sections), taken);
 		taken.add(id);
 		const copy = Object.freeze({ id, title: s.title, color: s.color, page: run.first });
 		extra.push(copy);
 		placed.push({ section: copy, first: run.first, was: s });
 	}
-	// Sections with the same look that the move made neighbours become one.
+	// Review R1: two pieces of one split section (a continuation and the section it continues, or two continuations of one section) that
+	// the move made neighbours become one again. Independent sections that only share a title and colour are never joined.
 	const neighbours = new Set<string>();
 	for (let i = 1; i < shown.length; i++) neighbours.add(`${shown[i - 1]!.section.id}\n${shown[i]!.section.id}`);
+	const all = [...sections, ...extra];
 	const gone = new Set<string>();
-	let prev: Section | null = null;
+	let prev: { section: Section; root: Section } | null = null;
 	for (const p of placed) {
 		const s = p.section;
-		if (prev && prev.title === s.title && prev.color === s.color && !neighbours.has(`${prev.id}\n${s.id}`)) {
-			gone.add(s.id);
+		const root = conts.rootOf(s, all);
+		if (prev && prev.root.id === root.id && !neighbours.has(`${prev.section.id}\n${s.id}`)) {
+			if (s.id === root.id) {
+				// The original comes second: it keeps its id and starts where the piece before it started.
+				gone.add(prev.section.id);
+				start.set(s.id, start.get(prev.section.id) ?? prev.section.page);
+				prev = { section: s, root };
+			} else gone.add(s.id);
 			continue;
 		}
-		prev = s;
+		prev = { section: s, root };
 	}
 	const shownIds = new Set(shown.map((r) => r.section.id));
 	let changed = sections.some((s) => gone.has(s.id)) || extra.some((s) => !gone.has(s.id));
