@@ -4,7 +4,7 @@ import type { TableGrid } from "../src/ink/table";
 import { createDocument } from "../src/model/document";
 import { History } from "../src/model/history";
 import { serializeChecked } from "../src/model/serialize";
-import type { EquationElement, Page, TextElement } from "../src/model/types";
+import type { EquationElement, Page, TapeElement, TextElement } from "../src/model/types";
 import { RESULT_MARK } from "../src/math/table-formula";
 
 const NOW = new Date("2026-11-10T10:00:00.000Z");
@@ -204,5 +204,18 @@ describe("Compute keeps the words it did not write (review 0.30 I7)", () => {
 			const r = computeOne(text);
 			for (const word of ["alpha", "beta"]) if (text.includes(word)) expect(r.after).toContain(word);
 		}
+	});
+});
+
+describe("Compute and study tapes (review 0.30 I16)", () => {
+	it("refuses when a formula box that would be written lies under a tape, and does not mind a tape elsewhere", () => {
+		const { p } = setup();
+		fill(p, { "0,0": "4", "1,0": "=A1*2" });
+		const under = { id: "tp", type: "tape", x: grid.xs[0]!, y: grid.ys[1]!, width: 50, height: 20, color: "#ffd60a" } as unknown as TapeElement;
+		p.elements!.push(under);
+		expect(planTableCompute(p, grid)).toMatchObject({ ok: false, reason: "tape" });
+		const far = { ...under, x: 400, y: 600 };
+		p.elements![p.elements!.length - 1] = far;
+		expect(planTableCompute(p, grid)).toMatchObject({ ok: true });
 	});
 });

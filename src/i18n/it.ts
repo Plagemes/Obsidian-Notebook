@@ -5868,6 +5868,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"tablecalc.same": "Ogni formula mostra già il suo risultato.",
 	"tablecalc.locked": "Una casella con una formula è bloccata. Sbloccala prima.",
 	"tablecalc.states": "Una casella con una formula fa parte di un disegno con stati. Non è stato cambiato nulla.",
+	"tablecalc.tape": "Non è stato cambiato nulla: una casella con una formula è sotto un nastro di studio e il suo risultato cambierebbe fuori vista. Togli prima il nastro.",
 	"tablecalc.redacted": "Non è stato cambiato nulla: la tabella o una casella con una formula tocca un riquadro di oscuramento, e un risultato potrebbe rivelare ciò che c'è sotto.",
 	// 0.30 figmarkers (#247)
 	"fm.add": "Aggiungi segnaposto numerato",

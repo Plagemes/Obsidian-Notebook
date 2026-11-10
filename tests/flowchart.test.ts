@@ -554,6 +554,13 @@ describe("planFlowchart refusals (0.30, #245): redaction, tape, page edge", () =
 		expect(run(page, [a, b])).toEqual({ ok: false, reason: "edge" });
 	});
 
+	it("lets a chart hugging the left edge snap onto the grid, but not ink that sticks far out (review 0.30 I15)", () => {
+		const near = [rect(1, 50, 120, 48), rect(5, 190, 120, 48, 7)];
+		expect(run(pageWith(near).page, near).ok).toBe(true);
+		const out = [rect(-13, 50, 120, 48), rect(-9, 190, 120, 48, 7)];
+		expect(run(pageWith(out).page, out)).toEqual({ ok: false, reason: "edge" });
+	});
+
 	it("is classified: the step names ONE page and is not global", () => {
 		const c = chart();
 		const plan = must(run(c.page, [c.top, c.bottom, c.a]));

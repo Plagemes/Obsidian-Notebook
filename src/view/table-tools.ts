@@ -59,6 +59,7 @@ const COMPUTE_REFUSALS: Record<ComputeRefusal, Parameters<typeof t>[0]> = {
 	same: "tablecalc.same",
 	locked: "tablecalc.locked",
 	states: "tablecalc.states",
+	tape: "tablecalc.tape",
 	redacted: "tablecalc.redacted",
 };
 

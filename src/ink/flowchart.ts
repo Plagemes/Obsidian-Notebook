@@ -63,6 +63,8 @@ const HEAD_NEIGHBOUR = 3;
 const LABEL_SHARE = 0.25;
 /** Items may stick out of the page by this much (pt) before the tidy-up is refused. */
 const EDGE_TOL = 6;
+/** Ink that was on the page may end up this far (pt) off it: the reach of its own line after the boxes snap to the grid. */
+const EDGE_SLACK = 2;
 /** Wing length of a redrawn head when it cannot be read from the old one, and its limits. */
 const WING_DEFAULT = 12;
 const WING_MIN = 6;
@@ -490,8 +492,11 @@ export function flowGrid(paperStep: number | undefined): number {
 	return paperStep && paperStep > 0 ? paperStep * Math.max(1, Math.ceil(DEFAULT_GRID / paperStep)) : DEFAULT_GRID;
 }
 
-const inside = (page: Pick<Page, "width" | "height" | "infinite">, b: BBox): boolean =>
-	b.minX >= -EDGE_TOL && b.minY >= -EDGE_TOL && b.maxX <= page.width + EDGE_TOL && (page.infinite === true || b.maxY <= page.height + EDGE_TOL);
+const within = (page: Pick<Page, "width" | "height" | "infinite">, b: BBox, tol: number): boolean =>
+	b.minX >= -tol && b.minY >= -tol && b.maxX <= page.width + tol && (page.infinite === true || b.maxY <= page.height + tol);
+/** Moved ink stays on the page (give or take the width of its own line); only ink that already stuck out (`was`) is allowed EDGE_TOL of it afterwards. */
+const inside = (page: Pick<Page, "width" | "height" | "infinite">, b: BBox, was: BBox): boolean =>
+	within(page, b, within(page, was, EDGE_SLACK) ? EDGE_SLACK : EDGE_TOL);
 
 function redrawn(s: Stroke, points: Point[]): Stroke {
 	if (s.tool === "shape") return freezeStroke({ ...s, points });
@@ -584,8 +589,11 @@ export function planFlowchart(page: Page, req: { strokes: readonly Stroke[]; ele
 		const touches = (set: typeof before): boolean => set.strokes.some((s) => strokeTouchesTapes(s, tapes)) || set.elements.some((e) => boxTouchesTapes(elementBounds(e, measure), tapes));
 		if (touches(before) || touches(after)) return { ok: false, reason: "tape" };
 	}
-	for (const s of after.strokes) if (!inside(page, strokeBounds(s))) return { ok: false, reason: "edge" };
-	for (const e of after.elements) if (!inside(page, elementBounds(e, measure))) return { ok: false, reason: "edge" };
+	let edgeOut = false;
+	// `before` and `after` line up one to one (the dropped heads come last in `before` and have no partner).
+	after.strokes.forEach((s, i) => { if (!inside(page, strokeBounds(s), strokeBounds(before.strokes[i]!))) edgeOut = true; });
+	after.elements.forEach((e, i) => { if (!inside(page, elementBounds(e, measure), elementBounds(before.elements[i]!, measure))) edgeOut = true; });
+	if (edgeOut) return { ok: false, reason: "edge" };
 	// The command: moves first, then the connectors drawn again, then the heads that are gone (last index first, so Undo puts them back in place).
 	const commands: Command[] = placedPlan ? [...placedPlan.command.commands] : [];
 	for (const r of redraw) commands.push(new ReplaceStroke(page.id, r.edge.stroke, [r.stroke], page.strokes.indexOf(r.edge.stroke)));

@@ -1,8 +1,9 @@
 import { evaluateSheet, formulaOfText, rewriteWithResult, showValue, type CellValue, type SheetCell } from "../math/table-formula";
 import { Batch, ReplaceElement, type Command } from "../model/history";
 import { isLockedElement } from "../model/groups";
-import type { Page, PageElement, TextElement } from "../model/types";
+import type { Page, PageElement, TapeElement, TextElement } from "../model/types";
 import { boxesTouching, type RedactGuard } from "./redact";
+import { elementTouchesTapes } from "./tape-guard";
 import { colsOf, rowsOf, type TableGrid } from "./table";
 import { cellAnchor, cellText } from "./table-data";
 
@@ -83,6 +84,8 @@ export type ComputeRefusal =
 	| "locked"
 	/** A formula box belongs to a part of a drawing with states. */
 	| "states"
+	/** A formula box to be written lies under a study tape. */
+	| "tape"
 	/** The table, or a box to be written, touches a redaction box (or the boxes cannot be read). */
 	| "redacted";
 
@@ -129,6 +132,9 @@ export function planTableCompute(page: Page, grid: TableGrid, guard?: RedactGuar
 	if (edits.length === 0) return { ok: false, reason: "same", summary };
 	if (edits.some((e) => isLockedElement(e.before))) return { ok: false, reason: "locked", summary };
 	if (edits.some((e) => inPart.has(e.before.id))) return { ok: false, reason: "states", summary };
+	// A study tape hides what is under it: a result that changes under one would change a quiz answer unseen.
+	const tapes = elements.filter((e): e is TapeElement => e.type === "tape");
+	if (tapes.length > 0 && edits.some((e) => elementTouchesTapes(e.before, tapes) || elementTouchesTapes(e.after, tapes))) return { ok: false, reason: "tape", summary };
 	if (guard) {
 		if (guard.unreadable) return { ok: false, reason: "redacted", summary };
 		if (guard.boxes.length > 0 && boxesTouching({ strokes: [], elements: [...sheet.read, ...edits.map((e) => e.after)] }, guard.boxes).length > 0) {
