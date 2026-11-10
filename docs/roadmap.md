@@ -93,7 +93,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 7. **P2** 🧪 Free colour picker with recent colours and an eyedropper.
 8. **P2** Pressure curve calibration per device, with a test area.
 9. **P2** Tilt-aware pencil (tiltX/tiltY widen and lighten the stroke).
-10. **P2** Study tape: opaque strips that hide parts of a page and reveal on tap.
+10. **P2** 🧪 Study tape: opaque strips that hide parts of a page and reveal on tap. (0.29, document format 27.)
 11. **P2** Zoom window for writing small on a large page.
 12. **P3** 🧪 Laser pointer (fading temporary ink) for presentations. (Delivered inside presentation mode, #87.)
 13. **P3** Protractor and compass alongside the ruler.

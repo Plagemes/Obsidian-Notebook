@@ -4664,3 +4664,41 @@ Rules only, no AI. Chips appear in a row above the selection bar; they run exist
 | *Highlight* action (area behind the selection, one undo step) | yes | harness `doc=geosuggest` | | | |
 | Flashcards / a "Make card" action | no | | | | none exists in the plugin: the row offers *Insert into note* instead |
 | Region-to-region link | no | | | | the plugin has links from a selection to a note only: the arrow offers *Link to a note…* |
+
+### 0.29 — studytape: study tape, opaque strips that hide part of a page and reveal on tap (roadmap #10; document format 27; steps 3320-3339)
+
+Whether a tape is revealed is never saved: every tape is covered again when the notebook is opened.
+
+3320. **Lay a tape.** Write a question and its answer. *All actions* > *Study tape*: a notice says the mode is on and the action shows as checked. Drag with the S Pen over the answer: one opaque strip in the colour of the setting covers it while you drag (a preview) and stays when you lift. No ink is written. One undo removes the tape, redo brings it back.
+3321. **Tap to reveal and hide.** With the mode still on, tap the tape with the pen: only a faint tint and a dashed outline are left and the answer reads again; tap again: covered. A tap where there is no tape gives a short hint and lays nothing.
+3322. **Mode off.** Run *Study tape* again, or pick any tool in the toolbar: the mode turns off (a notice the first way). With the pen, a tap on a tape still reveals or hides it; nothing is written by the tap (no dot).
+3323. **No ink under a hidden tape.** With the pen in hand, start a stroke on a hidden tape and drag off it: nothing is written. On a revealed tape the same stroke is ordinary ink.
+3324. **Finger.** With *Write with finger* off, tap a tape with a finger: it reveals or hides. A finger drag that starts on a tape pans the page and leaves the tape as it is. Resting the palm while writing with the pen never reveals a tape.
+3325. **Reveal all / Hide all.** With some tapes hidden, *All actions* offers *Reveal all study tapes* (under *For this page* too); it reveals every tape of the notebook. *Hide all study tapes* covers them again. With no tapes neither is offered.
+3326. **Reopen.** Reveal a tape, close the notebook and open it again (or restart Obsidian): every tape is covered again. Synced to another device, the tapes are there, covered.
+3327. **Read-only and locked.** In read-only mode, a pen or finger tap still reveals and hides; *Study tape* is not available and no tape can be laid. On a locked page a drag in the mode lays nothing, a tap still reveals.
+3328. **Select, move, resize, delete.** Lasso a tape: it moves, resizes and turns a quarter turn with the selection; *Delete* removes it; each is one undo step. Group it with ink, lock it: a locked tape is not offered to edit and is listed in the locked-items list as *Study tape*.
+3329. **Erasers and lasso under a tape.** Over a hidden tape, the stroke and segment erasers and the lasso leave the covered ink alone; the area eraser removes a tape only with *Area eraser removes text and images* on.
+3330. **Colour setting.** Settings > Study > *Study tape colour*: pick Sky, Rose, Sand or Slate; the next tape takes that colour, the old ones keep theirs.
+3331. **Night and themes.** In dark mode the tape is darker but still clearly opaque; read in light, dark and with *Follow Obsidian theme*.
+3332. **Exports.** Export a page with tapes as PDF, PNG, SVG and interactive HTML: every tape is drawn covering (as the notebook opens), even one revealed on screen. *Copy as image* and thumbnails also show them covering.
+3333. **Clean copy and hand-in.** A clean export leaves the tapes out (the answers show). *Hand in* leaves the tapes out too and keeps everything else.
+3334. **Redaction.** Redact a region that a tape overlaps: the exported black box is on top and the tape is cut around it; nothing under a redaction shows.
+3335. **Older plugin.** Open a notebook with a tape in 0.28 (format 26): it opens read-only with the "newer version" message and is never overwritten.
+3336. **History panel and page info.** The history panel names the step "study tape"; *Page info* counts the tapes.
+3337. **Phone.** On a phone-width view the actions, notices and the tape itself read well; a tap with a finger on a small tape still hits it.
+3338. **Long-press help and Italian.** Hold a finger on the actions in *All actions*: one line of help each. Texts read in Italian.
+3339. **Performance.** A page with 30 tapes over a full page of writing scrolls and writes without lag; writing next to a hidden tape never draws on top of it.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v27: element `tape`, migration 26→27, lenient read / strict write, staged load, repair, merge, schema | yes | `tests/model-v27.test.ts`, `tests/format-schema.test.ts` | | | |
+| Study tape mode: drag to lay (one undo step), colour setting | yes | `tests/model-v27.test.ts`, harness `doc=studytape` | | | |
+| Tap to reveal / hide (pen, finger that pans, read-only), view-only state | yes | `tests/model-v27.test.ts`, harness `doc=studytape` | | | |
+| Reveal all / Hide all actions, ranking, help | yes | `tests/model-v27.test.ts`, harness `doc=studytape` | | | |
+| No ink under a hidden tape; erasers and lasso skip covered ink | yes | `tests/model-v27.test.ts` (tool), harness `doc=studytape` (pen) | | | |
+| Select, move, resize, quarter turn, delete, group, lock | yes | `tests/model-v27.test.ts` (geometry) | | | |
+| Exports draw tapes covering (PDF, PNG, SVG, HTML, thumbnails, Copy as image) | yes | `tests/model-v27.test.ts` | | | |
+| Clean copy and hand-in leave tapes out; redaction cuts tapes (fail-closed) | yes | `tests/model-v27.test.ts` | | | |
+| A tape's own colour picker in the selection bar | no | | | | the colour is chosen in the settings for new tapes |
+| Remembering revealed tapes across reopen | no | | | | by design: tapes cover again each time |

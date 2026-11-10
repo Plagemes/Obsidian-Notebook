@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### studytape
+- **Study tape (#10) and document format 27.** *Study tape* (All actions, command palette) turns on a mode where a drag with the pen, the mouse or a drawing finger lays an opaque strip over part of the page (one undo step), in the colour chosen in Settings > Study > *Study tape colour* (mint, sky, rose, sand or slate). Tap a tape to reveal what it covers (only a faint tint and a dashed outline stay), tap again to cover it. This works with the mode off too: with the pen, with a finger that pans, and on a read-only notebook.
+- **Reveal is for this screen only.** Whether a tape is revealed is never saved, synced or undone: every tape is covered again when the notebook opens. *Reveal all study tapes* and *Hide all study tapes* act on every tape of the notebook.
+- **Nothing hides behind a tape by accident.** A pen stroke that starts on a hidden tape writes nothing; the erasers and the lasso leave the ink a hidden tape covers alone. Tapes select, move, resize, turn a quarter turn, group, lock and delete like other elements; a locked page takes no new tape but its tapes still reveal.
+- **Exports.** PDF, PNG, SVG, interactive HTML, thumbnails and *Copy as image* draw every tape covering, as the notebook opens. A clean copy and *Hand in* leave the tapes out. Redaction cuts a tape around a black box, so nothing redacted can show and the box is never under a tape.
+- **Document format v27.** One more element type, `tape` (`x`, `y`, `width`, `height` 4 to 20000 pt, `color`; the usual `group`/`locked`/`lockAt`). Migration 26 → 27 is the identity plus the version (a v26 file holding a tape is refused, like any element type before its version); older plugins open a v27 notebook read-only. JSON Schema `docs/schema/notebook-v27.schema.json`.
+- **Code.** `src/model/tape.ts` (geometry, reveal state), `src/ink/tape-render.ts` (look), `src/view/tape-tools.ts` (the mode and the taps). Tests `tests/model-v27.test.ts`; harness `doc=studytape`.
+
 ## 0.28.0 — 2026-11-10
 
 Eight features: rotate and crop PDF pages (#76), per-page undo (#98, a setting, off by default), hand-drawn tables (#41), a paint bucket (#184), a line handle to reorder lines (#256), a live lecture mode (#132), numbered boxes with an index (#205) and actions suggested by the selection's geometry (#403). The notebook format moves to version 26 (PDF page rotation and crop): the migration from version 25 is automatic, and Notebook 0.27 and older open a v26 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).
