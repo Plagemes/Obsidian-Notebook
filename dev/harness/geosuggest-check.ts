@@ -42,7 +42,7 @@ function scene(state: GeosuggestState): Stroke[] {
 	switch (state) {
 		case "row": return row(60, 200);
 		case "paragraph": return [...row(60, 200), ...row(60, 236), ...row(60, 272)];
-		case "arrow": return [...word(60, 200), ...word(330, 200), make(line([130, 212], [326, 212], 16), "shape"), make(line([314, 204], [326, 212], 3), "shape"), make(line([314, 220], [326, 212], 3), "shape")];
+		case "arrow": return [...word(60, 200), ...word(330, 200), make(line([130, 212], [321, 212], 16), "shape"), make(line([309, 204], [321, 212], 3), "shape"), make(line([309, 220], [321, 212], 3), "shape")];
 		case "loop": return [...word(100, 210), ...word(100, 240), make(ring(150, 235, 90), "shape")];
 	}
 }
