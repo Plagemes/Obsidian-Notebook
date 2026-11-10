@@ -121,6 +121,12 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// tapes (enough for "For this page"); laying one leans forward a little on a PDF page (slides to learn from) when the mode is off.
 	if (a.id === "study-tape") boost += c.tapes?.drawing ? HERE_MIN_BOOST + 6 : c.page?.background === "pdf" ? 4 : 0;
 	if ((a.id === "tapes-reveal-all" || a.id === "tapes-hide-all") && (c.tapes?.total ?? 0) > 0) boost += HERE_MIN_BOOST + 2;
+	// 0.30 (#52): the sections list and the jumps fit a notebook divided into two or more sections (enough for "For this page" with three or
+	// more); a new section leans forward in a long notebook that has none yet; editing one leans forward a little on the page that starts it.
+	const sections = c.sections?.count ?? 0;
+	if (a.id === "sections-list" || a.id === "section-next" || a.id === "section-previous") boost += sections >= 3 ? HERE_MIN_BOOST + 1 : sections >= 2 ? 10 : 0;
+	if (a.id === "section-new") boost += sections === 0 && (c.page?.count ?? 0) >= 12 ? 8 : 0;
+	if ((a.id === "section-rename" || a.id === "section-recolour") && c.sections?.starts) boost += 6;
 	return boost;
 }
 

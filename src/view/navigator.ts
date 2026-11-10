@@ -12,6 +12,7 @@ import { attachLongPressHelp, resolveHelp } from "../ui/long-press-help";
 import { markCounts, markedPages, MARK_KINDS, toggleKind, type MarkContext, type MarkKind, type PageMark } from "../ui/nav-marked";
 import { renderOutline, type OutlineHost } from "./outline";
 import { pageSignature } from "./view-helpers";
+import { sectionDivider, type NavigatorSections } from "./sections-tools";
 
 export interface NavigatorHost {
 	pages(): readonly Page[];
@@ -41,6 +42,8 @@ export interface NavigatorHost {
 	setMarkedKinds?(kinds: readonly MarkKind[] | null): void;
 	/** 0.25 (#419): what makes a page marked besides its own content (global bookmarks, the colour legend). */
 	markContext?(): Pick<MarkContext, "globalBookmarks" | "legend" | "tolerance">;
+	/** 0.30 (#52): the coloured sections: the tab strip above the list and the dividers and colour edges of the rows. Absent: none. */
+	sections?: NavigatorSections;
 }
 
 /** 0.25 (#419): the icon of each reason a page is marked. */
@@ -79,6 +82,8 @@ export class PageNavigator {
 	private layoutButton: HTMLButtonElement | null = null;
 	private markButton: HTMLButtonElement | null = null;
 	private readonly markBar: HTMLElement;
+	/** 0.30 (#52): the tab strip of the coloured sections. */
+	private readonly sectionBar: HTMLElement;
 	private layout: NavLayout = "normal";
 	/** Bumped on every rebuild: a chunked build that finds another number stops. */
 	private buildToken = 0;
@@ -184,6 +189,7 @@ export class PageNavigator {
 		});
 		this.tagBar = this.el.createDiv({ cls: "notebook-navigator-tagbar notebook-hidden" });
 		this.markBar = this.el.createDiv({ cls: "notebook-navigator-tagbar notebook-navigator-markbar notebook-hidden" });
+		this.sectionBar = this.el.createDiv({ cls: "nb-ui nb-sections-strip notebook-hidden" }); // 0.30 (#52)
 		this.listEl = this.el.createDiv({ cls: "notebook-navigator-list" });
 		this.observer = new IntersectionObserver((entries) => {
 			// Wave 0.8 (374): thumbnails are drawn at the first pause in writing, not under the pen.
@@ -257,6 +263,8 @@ export class PageNavigator {
 		const current = this.host.current();
 		this.mate = this.host.companion?.() ?? -1;
 		this.updateTagBar();
+		this.host.sections?.strip(this.sectionBar);
+		this.host.sections?.reset();
 		if (this.outlineMode) {
 			renderOutline(this.listEl, this.host.outline, { category: this.outlineCategory, current }, (category) => {
 				this.outlineCategory = category;
@@ -327,7 +335,14 @@ export class PageNavigator {
 	private buildItem(page: Page, index: number, current: number, marks: ReadonlySet<string>, info: NonNullable<ReturnType<OutlineHost["meta"]>>["bookmarkInfo"], why?: readonly PageMark[]): void {
 		{
 			const list = this.layout === "list";
+			// 0.30 (#52): a divider with the title above the first listed page of a section, and the section's colour on its rows.
+			const section = this.host.sections?.mark(index) ?? null;
+			if (section?.divider) sectionDivider(this.listEl, section);
 			const item = this.listEl.createDiv({ cls: "notebook-navigator-item", attr: { tabindex: "0", "data-index": String(index), "data-id": page.id } });
+			if (section) {
+				item.addClass("has-section");
+				item.setCssProps({ "--nb-section-color": section.color });
+			}
 			item.toggleClass("is-current", index === current || index === this.mate);
 			item.toggleClass("is-selected", this.selected.has(page.id));
 			setIcon(item.createDiv({ cls: "notebook-navigator-check" }), "check");
@@ -589,6 +604,7 @@ export class PageNavigator {
 	markCurrent(index: number, mate = -1): void {
 		this.mate = mate;
 		if (!this.open) return;
+		this.host.sections?.strip(this.sectionBar); // 0.30 (#52): the tab of the section in view (rebuilt only when it changes)
 		this.listEl.querySelectorAll(".notebook-navigator-item").forEach((el) => {
 			const item = el as HTMLElement;
 			const current = Number(item.dataset.index) === index || Number(item.dataset.index) === mate;
