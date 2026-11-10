@@ -171,6 +171,7 @@ async function prepareFiles(host: ShareHost, choice: ShareChoice, plan: Extract<
 	const cleaned = clean ? cleanPagesForExport(all, clean) : all;
 	const base: ExportOptions = { ...host.options(), layers: "both" };
 	if (clean && resolveCleanOptions(clean).comments) delete base.comments;
+	delete base.struck; // handled above with the clean copy (host.struck), so the writer does not look for it twice
 	// 0.26 (#285): the pages with the redaction boxes applied; the PDF, the page images and the crop of a selection all draw the copies.
 	const { pages, options } = withRedaction(cleaned, base);
 	const chosen = plan.pages.map((i) => pages[i]).filter((p): p is Page => p !== undefined);

@@ -33,6 +33,11 @@ export interface StrikeHideHost {
 export const STRIKE_DELAY_MS = 300;
 /** One slice of work lasts about this long; the next slice follows on a new timer tick. */
 export const STRIKE_SLICE_MS = 10;
+/**
+ * A page with more strokes than this is not looked at for the view (its struck words stay shown): finding words on one page cannot be
+ * split into slices, and a page this dense would hold the main thread after every edit. Exports still leave its struck words out.
+ */
+export const STRIKE_MAX_STROKES = 6000;
 
 export class StrikeHide {
 	private readonly cache = new StrikeCache();
@@ -119,7 +124,7 @@ export class StrikeHide {
 				break;
 			}
 			const before = this.cache.peek(page.id)?.ink;
-			const after = this.cache.get(page.id, page.strokes).ink;
+			const after = this.cache.get(page.id, page.strokes, STRIKE_MAX_STROKES).ink;
 			if (!sameSet(before, after)) changed = true;
 		}
 		if (changed) this.host.renderer()?.invalidate();

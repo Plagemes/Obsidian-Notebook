@@ -5448,7 +5448,7 @@ export const en = {
 	"settings.hideStruck": "Hide struck-out words",
 	"settings.hideStruck.desc": "A word with a line through its middle is hidden in the view; nothing is erased.",
 	"settings.exportHideStruck": "Leave struck-out words out of exports",
-	"settings.exportHideStruck.desc": "Exports and shares leave out struck-through words. The notebook is not changed.",
+	"settings.exportHideStruck.desc": "PDF, PNG, SVG, HTML, print, Markdown, hand-in and share files leave out struck-through words (the export dialog starts with its tick on). Pictures of a selection put into notes, copies and digests keep them. The notebook is not changed.",
 	"export.struck": "Leave out struck-out words",
 	"export.struck.desc": "Words with a line through their middle, and those lines, are not drawn in the PDF, SVG, HTML, PNG images or print. Your notebook is not changed.",
 	// 0.29 charts (#244)

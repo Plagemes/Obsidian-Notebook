@@ -476,7 +476,11 @@ class NotebookApiImpl implements NotebookApi {
 			throw new NotebookApiError("export-failed", `A page of "${f.path}" was turned or cropped after its redaction boxes were drawn, so no PDF was written. Open the notebook, Export… › Redact… and draw those boxes again.`, { path: f.path });
 		}
 		// Review fix (U1): the set knows the notebook's id, so every excerpt of it (also of a page since deleted) is left out.
-		const { pages } = withRedaction(doc.pages, isArmed(stored) ? { redact: withExcerptChains(doc.pages, stored.boxes, doc.id) ?? stored.boxes } : {});
+		// 0.29 (#96): the setting "Leave struck-out words out of exports" covers this PDF too.
+		const { pages } = withRedaction(doc.pages, {
+			...(isArmed(stored) ? { redact: withExcerptChains(doc.pages, stored.boxes, doc.id) ?? stored.boxes } : {}),
+			...(this.settings.exportHideStruck ? { struck: true as const } : {}),
+		});
 		const media = new NotebookMedia(this.app, () => doc, () => this.settings.folder, () => undefined);
 		try {
 			const { images, skipped } = await collectPageImages(media, pages);

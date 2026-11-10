@@ -144,6 +144,11 @@ export interface ExportOptions {
 	 * out while it has a box) from those of another (`withExcerptChains`). Absent: every excerpt is left out while there is a box.
 	 */
 	redactDoc?: string;
+	/**
+	 * 0.29 (#96): the setting "Leave struck-out words out of exports" is on. Every writer that goes through `withRedaction` draws the pages
+	 * without the struck words and their lines. The export dialog and the share sheet decide this themselves and drop it from what they pass on.
+	 */
+	struck?: true;
 }
 
 /**
@@ -330,6 +335,7 @@ export async function runExport(app: App, notebook: TFile, allPages: readonly Pa
 	// 0.26 (#285): the dialog decides what is covered; each writer applies it to the pages it is given (`withRedaction`).
 	// Its choice is the one the reader saw: no hint about switched-off boxes; boxes it holds are readable (in memory at least).
 	delete base.redactOff;
+	delete base.struck; // 0.29 (#96): the dialog's own "leave out struck words" choice is in `clean`
 	if (request.redact && countBoxes(request.redact) > 0) {
 		// Review fix (R5): excerpt chains over every page of the notebook, also when only a range is exported.
 		base.redact = withExcerptChains(allPages, request.redact, options.redactDoc) ?? request.redact;

@@ -20,6 +20,8 @@ import { segmentText, type TextLine, type TextOptions } from "./words";
  *     passes through the middle band of the line's letters (above the baseline by 15 % to 85 % of the letter height). An
  *     underline (at or below the baseline), an overline, the bar of a t, an A, an e or a hyphen (too short) therefore do not count;
  *     a long line over several words of one line strikes them all; a single crossed-out letter is a word of its own.
+ *     A line strikes only the strokes written before it (earlier in the page's stroke order): a word written on the place of a
+ *     struck one afterwards is not struck.
  *  4. The struck words' strokes and the lines that struck them are the "struck ink". A line that struck nothing is ordinary ink.
  */
 export interface StrikeOptions {
@@ -175,7 +177,20 @@ export function detectStrikes(strokes: readonly Stroke[], options: Partial<Strik
 		}
 	}
 	if (found.size === 0) return NO_STRIKES;
-	const words = [...found.values()];
+	// A line strikes only what was written BEFORE it (page order is writing order): ink written after the newest line that
+	// crosses a word, for instance a new word on the empty place of a hidden struck one, is never struck, so it stays visible.
+	const order = new Map<string, number>();
+	strokes.forEach((s, i) => order.set(s.id, i));
+	const words: StruckWord[] = [];
+	for (const w of found.values()) {
+		const lastLine = Math.max(...w.strikeIds.map((id) => order.get(id) ?? -1));
+		const before = w.strokeIds.filter((id) => (order.get(id) ?? Infinity) < lastLine);
+		if (before.length === 0) continue;
+		const first = Math.min(...before.map((id) => order.get(id)!));
+		const lines = w.strikeIds.filter((id) => (order.get(id) ?? -1) > first);
+		words.push(before.length === w.strokeIds.length && lines.length === w.strikeIds.length ? w : { strokeIds: before, strikeIds: lines, bounds: w.bounds });
+	}
+	if (words.length === 0) return NO_STRIKES;
 	const ink = new Set<string>();
 	for (const w of words) {
 		for (const id of w.strokeIds) ink.add(id);
@@ -209,9 +224,13 @@ export class StrikeCache {
 		return this.pages.get(pageId)?.result ?? null;
 	}
 
-	get(pageId: string, strokes: readonly Stroke[]): StrikeResult {
+	/**
+	 * The result for the page, computed when stale. `maxStrokes` (review S5): a page with more strokes than this is not looked at
+	 * (nothing on it is hidden in the view): the detection cannot be sliced, so a very dense page would hold the main thread.
+	 */
+	get(pageId: string, strokes: readonly Stroke[], maxStrokes = Infinity): StrikeResult {
 		if (this.fresh(pageId, strokes)) return this.pages.get(pageId)!.result;
-		const result = detectStrikes(strokes);
+		const result = strokes.length > maxStrokes ? NO_STRIKES : detectStrikes(strokes);
 		this.pages.set(pageId, { seen: strokes.slice(), result });
 		return result;
 	}
