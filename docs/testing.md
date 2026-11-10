@@ -4682,6 +4682,10 @@ A line through the middle of a handwritten word marks it as deleted. The word st
 3470. **Clean copy.** *Clean copy* alone does not drop struck words; with both ticked it does both. *Settings, Reading, Leave out struck-out words from exports* on: the export dialog opens with the tick on, and *Share page…* leaves them out too.
 3471. **Phone and tablet, Italian, themes.** The two settings, the action in All actions (with the strikethrough icon) and the export row read well on a phone width, in Italian, in light and dark and with *Follow Obsidian theme*. Long-press the action in the sheet: the help bubble explains it.
 3472. **Limits to know.** The text boxes, equations and pictures are never "struck". Search, the headings index and the Markdown digest still see struck words. A struck word on a page with states follows the state shown.
+3473. **Scribble is safe.** With *Scribble to erase* and *Hide struck words* on, strike a word (it disappears), then scratch a word next to it: only the scratched word is erased; switch hiding off, the struck word is still there.
+3474. **Setting reaches the quick exports.** With *Leave out struck-out words from exports* on and a word struck: run the *Export PDF* command, a page's PDF action, the page-range export and the Markdown export: none shows the struck word. Turn the setting off: all of them show it again.
+3475. **Writing over a hidden word.** With hiding on, write a new word on the empty place of a hidden struck one: it stays visible after the pause and is in the exported PDF.
+3476. **Group.** Group a word you then strike with another word; with hiding on, move the visible word: the group moves whole, and with hiding off the struck word is at the new place.
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
@@ -4692,4 +4696,8 @@ A line through the middle of a handwritten word marks it as deleted. The word st
 | Export dialog switch, settings en + it, help text | yes | `tests/settings-schema.test.ts`, harness `doc=strikedelete` | | | |
 | Search / headings index / digest ignore struck words | no | | | | left out: not cheap without touching those readers |
 | Thumbnails, minimap and the zoomed-out levels hide struck words | no | | | | they draw the document as it is; only the page canvas and exports honour the switch |
-| Quick exports from a page's menu (without the dialog) | no | | | | they draw the page as it is; use the export dialog |
+| Quick exports (Export PDF command, page range, page menu PDF, API `exportPdf`, Markdown, hand-in) follow the setting | yes | `tests/strike-export.test.ts` | | | |
+| Scribble erase / pen delete gesture skip hidden struck ink | yes | `tests/strike-scribble.test.ts` | | | |
+| A line only strikes ink written before it | yes | `tests/strikethrough.test.ts` | | | |
+| Groups complete with hidden struck members; very dense pages are skipped in the view | yes | `tests/strikethrough.test.ts` | | | |
+| Pictures of a selection into notes, copies, digests leave out struck words | no | | | | not covered; the setting text says which files are |
