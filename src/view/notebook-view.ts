@@ -115,7 +115,7 @@ import { announceRedactionOff, redactBlockedMessage, redactionRefused, withRedac
 import { RedactModal } from "./redact-dialog";
 import { loadRedactState, resetRedactStorage, saveRedactState, takeRedactStoreNotice } from "../ui/redact-store";
 import { boxesOf, countBoxes, isArmed, staleRedactionPages, tagNewBoxes, type RedactState } from "../model/redact";
-import { elementKept, headerAfterRedaction, withExcerptChains } from "../ink/redact";
+import { elementKept, headerAfterRedaction, withExcerptChains, type RedactGuard } from "../ink/redact";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
@@ -3370,9 +3370,16 @@ export class NotebookView extends FileView {
 			addOverlayListener: (fn) => this.addOverlayListener(fn),
 			currentPage: () => this.currentPageIndex(),
 			measure: measureText,
+			redactGuard: (pageId) => this.redactGuard(pageId),
 			notify: (message) => void showNotice(message, 3500),
 			refreshUi: () => this.refreshUi(),
 		};
+	}
+
+	/** Review fix (R2-4): the redaction boxes of a page, for the bulk moves (reorder lines, table inserts) that must not change what lies under them. */
+	private redactGuard(pageId: string): RedactGuard {
+		const stored = this.redactState();
+		return { boxes: boxesOf(stored.boxes, pageId), unreadable: stored.unreadable === true };
 	}
 
 	/** What the comment tools need from the view. */
@@ -3509,6 +3516,7 @@ export class NotebookView extends FileView {
 			app: this.app, doc: () => c.doc(), editable: () => c.editable(), execute: (cmd) => c.execute(cmd), insertTarget: () => c.insertTarget(),
 			selection: () => (this.selection ? this.selectionParts(this.selection) : null),
 			select: (p, s, e) => c.select(p, s, e), penColor: () => c.penColor(), inkOf: (page) => c.inkOf(page), refresh: () => c.refresh(),
+			redactGuard: (pageId) => this.redactGuard(pageId),
 		};
 	}
 
