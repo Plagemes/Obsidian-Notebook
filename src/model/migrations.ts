@@ -617,6 +617,24 @@ export function v27OnlyElement(page: unknown, index: number): string | null {
 	return null;
 }
 
+/**
+ * v28 adds the optional notebook-level `sections` list (coloured sections, #52). Every valid v27 document is a valid v28 document without it:
+ * the migration is the identity apart from the version. A v27 reader ignored unknown document fields, so a `sections` key in a v27 file was
+ * never ours and never meant anything: it is dropped, not interpreted (like `views` in v20 -> v21). Nothing else changes, so a large v27 file
+ * can still be read page by page (StagedParse) after `withoutV28Sections`.
+ */
+function v27ToV28(raw: RawObject): RawObject {
+	return { ...withoutV28Sections(raw), version: 28 };
+}
+
+/** `raw` without the v28 document list `sections` (a copy when there is one; `raw` itself otherwise). */
+export function withoutV28Sections(raw: RawObject): RawObject {
+	if (!("sections" in raw)) return raw;
+	const copy = { ...raw };
+	delete copy.sections;
+	return copy;
+}
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -658,6 +676,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	24: v24ToV25,
 	25: v25ToV26,
 	26: v26ToV27,
+	27: v27ToV28,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

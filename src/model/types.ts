@@ -2,6 +2,8 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v28: coloured sections (#52): the optional notebook-level `sections` list (a title and a colour that start at a page and run up to the next
+ * section, like the tab dividers of a paper notebook; see `model/sections.ts`).
  * v27: study tape (#10): the page element "tape" (an opaque axis-aligned rectangle in a tape colour, drawn above all the ink, that hides what is
  * under it until it is tapped; whether a tape is revealed is view-only and never saved, see `model/tape.ts`).
  * v26: rotate and crop an imported PDF page (#76): the optional `rotate` (90, 180 or 270 degrees clockwise) and `crop` (`{x, y, width, height}` in PDF points) of a
@@ -31,7 +33,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 27;
+export const CURRENT_VERSION = 28;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -873,6 +875,29 @@ export interface SavedView {
 	zoom: number;
 }
 
+/** v28: most sections a notebook holds, longest title (characters, after trimming) and longest section / page id. */
+export const SECTIONS_MAX = 200;
+export const SECTION_TITLE_MAX = 60;
+export const SECTION_ID_MAX = 64;
+export const SECTION_PAGE_ID_MAX = 200;
+
+/**
+ * v28 (#52): a coloured section of the notebook, like a tab divider of a paper notebook. It is anchored to a page id (never an index), so it
+ * follows the page when pages are added, moved or deleted around it.
+ * - `page`: the id of the first page of the section. The section runs from that page up to the page before the next section's first page
+ *   (in page order), or to the end. Pages before the first section belong to no section.
+ * - `title`: one line, 1 to `SECTION_TITLE_MAX` characters, trimmed, single spaces.
+ * - `color`: `#rrggbb` (the app offers the subject palette).
+ * A section whose page the notebook does not have stays in the list but shows nowhere (it is dormant, and works again if the page comes back
+ * with that id); the page operations of the history move a section's anchor so that this does not happen in normal use (see `model/sections.ts`).
+ */
+export interface Section {
+	id: string;
+	title: string;
+	color: string;
+	page: string;
+}
+
 export interface NotebookDocument {
 	format: typeof FORMAT_ID;
 	version: typeof CURRENT_VERSION;
@@ -888,6 +913,8 @@ export interface NotebookDocument {
 	slides?: SlideRef[];
 	/** v21 (#264): the saved views, in the order the list shows them. Written only when there is one; edited only through `SetViews` (model/views.ts), which replaces the array. */
 	views?: SavedView[];
+	/** v28 (#52): the coloured sections, in the order they were made (shown in page order). Written only when there is one; edited only through `SetSections` and the page commands of the history (model/sections.ts), which replace the array. */
+	sections?: Section[];
 	/** v4: assets referenced by pages, keyed by Asset.id. */
 	assets?: Record<string, Asset>;
 }

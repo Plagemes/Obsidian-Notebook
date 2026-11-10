@@ -93,6 +93,8 @@ export interface UiContext {
 	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
 	/** 0.29 (#10): the "Study tape" mode is on, how many study tapes the notebook has and how many are revealed (view-only). Optional (absent: none). */
 	tapes?: { drawing: boolean; total: number; revealed: number };
+	/** 0.30 (#52): how many coloured sections show, whether the page is in one and whether it starts one. Optional (absent: none). */
+	sections?: { count: number; here: boolean; starts: boolean };
 	/** wave 0.9: view-only night mode (367) and cropped PDF margins (376). Optional (both off when absent). */
 	display?: { night: boolean; crop: boolean };
 	/** 0.15 (241): the state strip is open. Optional (closed when absent). */
@@ -518,6 +520,15 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.23 (#264): saved views: a named page region with a zoom, recalled in one step. Saving needs an editable notebook; going to one works on a read-only one too.
 	{ id: "saved-view-save", label: "views.save.menu", icon: "frame", group: "view", surfaces: ["sheet", "notebook"], priority: 33, scope: "view", command: "command.savedViewSave", keywords: "saved views place zoom region name save viste salvate zona salva" },
 	{ id: "saved-view-go", label: "views.go.menu", icon: "scan-eye", group: "view", surfaces: ["sheet", "notebook"], priority: 32, scope: "view", command: "command.savedViewGo", readOnly: true, keywords: "saved views go recall place zoom region viste salvate vai richiama zona" },
+	// 0.30 sections (#52): coloured sections inside a notebook (tab dividers). Making, renaming, recolouring and removing one needs an editable
+	// notebook and acts on the page of the page sheet (default: the page in view); the list and the jumps work on a read-only one too.
+	{ id: "sections-list", label: "sections.action.list", icon: "layers", group: "navigate", surfaces: ["sheet", "notebook"], priority: 34, scope: "view", command: true, readOnly: true, keywords: "sections tabs dividers chapters jump go colour sezioni schede divisori capitoli vai colore" },
+	{ id: "section-new", label: "sections.action.new", icon: "folder-plus", group: "page", surfaces: ["page", "sheet"], priority: 46, scope: "view", command: true, when: (c) => !c.sections?.starts, keywords: "section tab divider chapter start new colour sezione scheda divisore capitolo nuova inizia" },
+	{ id: "section-rename", label: "sections.action.rename", icon: "pencil", group: "page", surfaces: ["page", "sheet"], priority: 38, scope: "view", command: true, when: (c) => !!c.sections?.here, keywords: "section rename title name sezione rinomina titolo nome" },
+	{ id: "section-recolour", label: "sections.action.recolour", icon: "palette", group: "page", surfaces: ["page", "sheet"], priority: 37, scope: "view", command: true, when: (c) => !!c.sections?.here, keywords: "section colour color recolour sezione colore ricolora" },
+	{ id: "section-delete", label: "sections.action.delete", icon: "folder-minus", group: "page", surfaces: ["page", "sheet"], priority: 30, scope: "view", command: true, when: (c) => !!c.sections?.here, keywords: "section remove delete divider sezione rimuovi elimina divisore" },
+	{ id: "section-next", label: "sections.action.next", icon: "chevrons-down", group: "navigate", surfaces: ["sheet"], priority: 31, scope: "view", command: true, readOnly: true, when: (c) => (c.sections?.count ?? 0) > 0, keywords: "next section jump tab sezione successiva vai scheda" },
+	{ id: "section-previous", label: "sections.action.previous", icon: "chevrons-up", group: "navigate", surfaces: ["sheet"], priority: 30, scope: "view", command: true, readOnly: true, when: (c) => (c.sections?.count ?? 0) > 0, keywords: "previous section jump tab sezione precedente vai scheda" },
 
 	// --- export and share.
 	{ id: "share-copy-link", label: "share.copyLink", icon: "link", group: "share", surfaces: ["page"], priority: 40, scope: "view", readOnly: true },

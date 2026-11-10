@@ -4925,3 +4925,40 @@ Update to 0.29 and fully close and reopen Obsidian. Use a vault with a notebook 
 | A line only strikes ink written before it | yes | `tests/strikethrough.test.ts` | | | |
 | Groups complete with hidden struck members; very dense pages are skipped in the view | yes | `tests/strikethrough.test.ts` | | | |
 | Pictures of a selection into notes, copies, digests leave out struck words | no | | | | not covered; the setting text says which files are |
+
+### 0.30 — sections: coloured sections inside a notebook, tab dividers as in OneNote (roadmap #52; document format 28; steps 3500-3519)
+
+A section starts at a page and runs to the page before the next section; pages before the first section belong to none.
+
+3500. **Make a section.** Open a notebook of at least 8 pages, go to page 3. Page sheet (or *All actions*) > *New section…*: the dialog shows "Page 3", a title field with the cursor in it, eight colours (one already chosen that no section uses yet) and a preview of the tab. Type "Chemistry", pick a colour, *Create*: the page navigator shows a tab strip with "Chemistry" and, in the list, a coloured divider "Chemistry · 6 pages" above page 3, with a colour edge on pages 3 to 8. One undo removes it, redo brings it back.
+3501. **A second section.** Go to page 6, *New section…* "Physics": the strip shows two tabs in page order; the Chemistry divider now says 3 pages and Physics 3 pages. On page 6 the page sheet no longer offers *New section…* but *Rename section…*, *Change section colour…* and *Delete section*.
+3502. **Tabs follow the reading.** Scroll from page 1 to the end with the S Pen: the tab of the section in view becomes current (tinted, bold) and slides into view in the strip; on pages 1 and 2 no tab is current. A tap on a tab goes to the first page of its section.
+3503. **Sections dialog.** Tap the list button at the end of the strip (or *All actions* > *Sections…*): every section with its colour bar, title and "Pages 3–5 · 3 pages"; the one in view is highlighted. A tap on a row goes there and closes the dialog. The *New section at page N* button starts one at the page in view (on a page that already starts one it says so and opens that section's editor).
+3504. **Rename and recolour.** From a row's menu, or the page sheet: rename "Chemistry" to "Organic chemistry" (the strip, the divider and the dialog update); change its colour (the swatches update in place, the preview follows, *Save* applies it; in the title field Enter saves too). Each is one undo step, named in the history panel.
+3505. **Title rules.** A title of only spaces cannot be saved; a long title (60 characters) is cut in the field; extra spaces are collapsed. A title that is too long to show is shortened with an ellipsis on the tab and on the divider.
+3506. **Delete a section.** *Delete section* on a page of Physics: the tab and the divider go away and those pages join the section before them (Chemistry) in the list. Undo brings Physics back on the same page.
+3507. **Delete the first page of a section.** Delete page 6 (the first page of Physics) from the page sheet: Physics now starts at the next page and keeps its title and colour. Delete the only page of a one-page section that is followed by another section: that section is removed. Undo of the page delete brings back the page and the section exactly as before.
+3508. **Move pages.** In page selection mode move the first page of Chemistry after the last page of the notebook: Chemistry now starts at its second page; the moved page belongs to whatever section is at the end. Select all the pages of a section and move them together to the front: the section moves with them. Undo puts pages and sections back.
+3509. **Add, insert, duplicate.** Add a page at the end, insert a page in the middle of Chemistry, duplicate the first page of Physics: no section moves; the inserted page belongs to Chemistry; the duplicate (placed after the original) belongs to Physics, which still starts at the original.
+3510. **Next / previous section.** *All actions* > *Next section* and *Previous section* (also as commands, so a hotkey can be bound): next goes to the first page of the next section; previous goes to the start of the section in view, then to the one before. With three or more sections the list and the jumps appear under *For this page*.
+3511. **Read-only and locked.** In read-only mode the strip, the dividers, the dialog (no *New section* button, rows without a menu) and the jumps work; nothing can be changed (a notice says so). On a locked page a section can still be made (sections are notebook-level, not page content).
+3512. **Older plugin.** Open a notebook with sections in 0.29 (format 27): it opens read-only with the "newer version" message and is never overwritten. A notebook of 0.29 opened here gains sections only when one is made.
+3513. **Conflicted copy.** Make a section on two devices while offline (different pages), sync: the merge dialog counts "n sections added"; after merging both sections are there. A section of the copy on a page where the main notebook already starts a section is not added.
+3514. **Template.** Save the notebook as a notebook template, then make a notebook from it: the sections are there, on the same pages, with the same titles and colours. Move or copy pages to another notebook: the other notebook's sections are not changed and no section comes along.
+3515. **Themes.** Look at the strip, the dividers and both dialogs in light, dark and with *Follow Obsidian theme* (try a community theme): the colours, tints and text read well and nothing uses a hard-coded background.
+3516. **Phone.** On a phone-width view open the page drawer: the strip scrolls sideways with a finger, every tab and the list button are easy to hit (at least 32 px high; dialog rows and swatches 44 px), the dialogs fit the screen.
+3517. **Long-press help and Italian.** Hold a finger on each sections action in *All actions*: one line of help. Switch Obsidian to Italian: the actions, the dialogs, the divider ("3 pagine"), the notices and the colour names are in Italian.
+3518. **Many sections.** Make 25 sections in a 100-page notebook: the strip scrolls and the current tab is always brought into view; the navigator scrolls without lag; writing on a page is not slowed down.
+3519. **Sync.** Sync a notebook with sections to another device (Obsidian Sync with "all other types", Syncthing): the sections are there and the strip and dividers match.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v28: optional `sections` list, migration 27→28, lenient read / strict write, history guard, staged load, repair, schema | yes | `tests/model-v28.test.ts`, `tests/format-schema.test.ts` | | | |
+| Section rules: resolution by page order, dormant sections, delete / move / reorder keep sections consistent (exact undo) | yes | `tests/model-v28.test.ts` | | | |
+| SetSections command (global per-page-undo class, history panel title) | yes | `tests/model-v28.test.ts` | | | |
+| Merge of a conflicted copy, templates, page transfer out of a closed notebook | yes | `tests/model-v28.test.ts` | | | |
+| Navigator tab strip, dividers, colour edges | yes | harness `doc=sections` | | | |
+| Sections dialog and new / edit dialog (title, eight colours, preview) | yes | harness `doc=sections` | | | |
+| Actions: list, new, rename, recolour, delete, next, previous; help; context ranking | yes | `tests/sections-logic.test.ts`, `tests/ui-registry.test.ts` | | | |
+| Drag a section's tab to reorder, or drag a divider to move a section's start | no | | | | not planned for 0.30: a section is moved by moving its pages |
+| Sections in exports (PDF outline, Markdown headings) | no | | | | to do |

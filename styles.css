@@ -22636,3 +22636,347 @@ body.notebook-style-obsidian {
 	display: flex;
 	justify-content: flex-end;
 }
+
+/* ===== 0.30 sections ===== */
+/* Coloured sections (#52). Every surface takes the section's own colour from --nb-section-color (and its soft tint from
+   --nb-section-tint, the palette's 16 % tint), set inline per tab, row and divider; the rest is the --nb-* tokens, so the dark
+   and the light theme and "Follow Obsidian theme" need no colour of their own. */
+
+/* The tab strip above the page navigator's list: the tabs scroll sideways, the list button stays at the end. */
+.nb-ui.nb-sections-strip {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 2px;
+	padding: 6px 4px 6px 8px;
+	border-bottom: 1px solid var(--nb-border);
+	background: var(--nb-bg-elevated);
+}
+
+.nb-ui.nb-sections-strip.notebook-hidden {
+	display: none;
+}
+
+.nb-ui.nb-sections-strip .nb-sections-tabs {
+	display: flex;
+	flex: 1 1 auto;
+	gap: 6px;
+	min-width: 0;
+	padding: 2px 0;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: none;
+	touch-action: pan-x;
+}
+
+.nb-ui.nb-sections-strip .nb-sections-tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.nb-ui.nb-sections-strip .nb-sections-tab {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	max-width: 132px;
+	height: 32px;
+	margin: 0;
+	padding: 0 10px 0 8px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-surface);
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-label);
+	font-weight: 500;
+	cursor: pointer;
+	transition: background-color var(--nb-motion-fast) var(--nb-ease), border-color var(--nb-motion-fast) var(--nb-ease), color var(--nb-motion-fast) var(--nb-ease);
+}
+
+.nb-ui.nb-sections-strip .nb-sections-tab:hover {
+	border-color: var(--nb-section-color, var(--nb-accent));
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-sections-strip .nb-sections-tab.is-current {
+	border-color: var(--nb-section-color, var(--nb-accent));
+	background: var(--nb-section-tint, var(--nb-accent-bg));
+	color: var(--nb-text);
+	font-weight: 600;
+}
+
+.nb-ui.nb-sections-strip .nb-sections-tab:focus-visible,
+.nb-ui.nb-sections-strip .nb-sections-more:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 1px;
+}
+
+.nb-ui .nb-sections-tab-dot {
+	flex: none;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--nb-section-color, var(--nb-accent));
+	box-shadow: 0 0 0 2px var(--nb-section-tint, transparent);
+}
+
+.nb-ui .nb-sections-tab-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-sections-strip .nb-sections-more {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui.nb-sections-strip .nb-sections-more:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-sections-strip .nb-sections-more svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* The divider row before the first page of a section in the navigator list. */
+.nb-ui.nb-sections-divider {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 6px 0 6px;
+	padding: 6px 8px;
+	border-left: 3px solid var(--nb-section-color, var(--nb-accent));
+	border-radius: 0 var(--nb-radius-s) var(--nb-radius-s) 0;
+	background: var(--nb-section-tint, var(--nb-accent-bg));
+	color: var(--nb-text);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+}
+
+.nb-ui.nb-sections-divider:first-child {
+	margin-top: 0;
+}
+
+.nb-ui.nb-sections-divider .nb-sections-tab-dot {
+	display: none;
+}
+
+.nb-ui.nb-sections-divider .nb-sections-divider-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-sections-divider .nb-sections-divider-count {
+	flex: none;
+	color: var(--nb-text-muted);
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+/* The pages of a section: a colour edge on the left of the row (the strip precedes the list in the navigator). */
+.nb-ui.nb-sections-strip ~ .notebook-navigator-list .notebook-navigator-item.has-section {
+	box-shadow: inset 3px 0 0 var(--nb-section-color, transparent);
+}
+
+/* The Sections dialog. */
+.nb-ui.nb-sections-modal .nb-sections-new {
+	align-self: flex-start;
+	margin-bottom: var(--nb-space-3);
+}
+
+.nb-ui.nb-sections-modal .nb-sections-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui.nb-sections-modal .nb-sections-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 56px;
+	padding: 4px 6px 4px 0;
+	overflow: hidden;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-sections-modal .nb-sections-row.is-current {
+	border-color: var(--nb-section-color, var(--nb-accent));
+	background: var(--nb-section-tint, var(--nb-accent-bg));
+}
+
+.nb-ui.nb-sections-modal .nb-sections-row-bar {
+	flex: none;
+	align-self: stretch;
+	width: 6px;
+	margin: -4px 4px -4px 0;
+	background: var(--nb-section-color, var(--nb-accent));
+}
+
+.nb-ui.nb-sections-modal .nb-sections-row-text {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	min-width: 0;
+	min-height: 44px;
+	margin: 0;
+	padding: 4px 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.nb-ui.nb-sections-modal .nb-sections-row-label {
+	max-width: 100%;
+	overflow: hidden;
+	font-size: var(--nb-fs-row);
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-sections-modal .nb-sections-row-detail {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui.nb-sections-modal .nb-sections-row-more {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text-muted);
+	cursor: pointer;
+}
+
+.nb-ui.nb-sections-modal .nb-sections-row-more:hover {
+	background: var(--nb-hover);
+	color: var(--nb-text);
+}
+
+.nb-ui.nb-sections-modal .nb-sections-row-more svg {
+	width: 18px;
+	height: 18px;
+}
+
+/* The new / edit dialog: the colour swatches and the preview of the tab. */
+.nb-ui.nb-sections-edit .nb-sections-swatches {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.nb-ui.nb-sections-edit .nb-sections-swatch {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	margin: 0;
+	padding: 0;
+	border: 2px solid transparent;
+	border-radius: 50%;
+	background: transparent;
+	box-shadow: none;
+	cursor: pointer;
+	transition: border-color var(--nb-motion-fast) var(--nb-ease), transform var(--nb-motion-fast) var(--nb-ease);
+}
+
+.nb-ui.nb-sections-edit .nb-sections-swatch::before {
+	content: "";
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	background: var(--nb-section-color);
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui.nb-sections-edit .nb-sections-swatch:hover {
+	transform: scale(1.06);
+}
+
+.nb-ui.nb-sections-edit .nb-sections-swatch.is-on {
+	border-color: var(--nb-section-color);
+}
+
+.nb-ui.nb-sections-edit .nb-sections-swatch:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+.nb-ui.nb-sections-edit .nb-sections-preview {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	max-width: 100%;
+	height: 36px;
+	margin-top: var(--nb-space-4);
+	padding: 0 14px 0 10px;
+	border: 1px solid var(--nb-section-color, var(--nb-accent));
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-section-tint, var(--nb-accent-bg));
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+}
+
+/* A dark theme: the tint is a little stronger so the current tab and the divider stand out from the dark panel. */
+body.theme-dark:not(.notebook-style-obsidian) .nb-ui.nb-sections-divider,
+body.theme-dark:not(.notebook-style-obsidian) .nb-ui.nb-sections-strip .nb-sections-tab.is-current {
+	background: color-mix(in srgb, var(--nb-section-color, var(--nb-accent)) 22%, transparent);
+}
+
+/* "Follow Obsidian theme": the strip sits on the theme's second surface, like Obsidian's own tab headers, and a tab takes the theme's page colour. */
+body.notebook-style-obsidian .nb-ui.nb-sections-strip {
+	background: var(--nb-surface-2);
+}
+
+body.notebook-style-obsidian .nb-ui.nb-sections-strip .nb-sections-tab {
+	background: var(--nb-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui.nb-sections-strip .nb-sections-tab,
+	.nb-ui.nb-sections-edit .nb-sections-swatch {
+		transition: none;
+	}
+
+	.nb-ui.nb-sections-edit .nb-sections-swatch:hover {
+		transform: none;
+	}
+}

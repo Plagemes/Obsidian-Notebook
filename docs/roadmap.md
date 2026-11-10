@@ -155,7 +155,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 49. **P2** 🧪 Two-page spread view (landscape tablets): pages in pairs like an open book (first page alone or not), scrolled pair by pair; writing on both pages; page sheet button, settings and an optional automatic spread in landscape; a phone keeps one column.
 50. **P2** 🧪 Fast scrollbar with a page preview while dragging.
 51. **P2** 🧪 Read-only mode to read without accidental marks.
-52. **P2** Coloured sections inside a notebook (tab dividers, as in OneNote).
+52. **P2** 🧪 Coloured sections inside a notebook (tab dividers, as in OneNote).
 
 ### Library
 53. **P2** 🧪 Custom covers (image or template).

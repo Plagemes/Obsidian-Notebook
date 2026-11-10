@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### sections
+- **Coloured sections inside a notebook (#52), as in OneNote.** *New section…* (page sheet, *All actions*, command) starts a section at a page with a title and one of the eight subject colours; it runs to the page before the next section. The page navigator shows a coloured tab strip (the section in view is current; a tap jumps to its first page), a divider with the title and page count before each section, and a colour edge on its pages. The *Sections* dialog lists them (tap to go; rename, recolour, delete from the row's menu). *Next section* and *Previous section* jump between them. Every change is one undo step, named in the history panel. Read-only notebooks show and navigate sections but do not change them.
+- **Sections stay consistent with the pages.** Sections are anchored to page ids. Deleting the first page of a section moves the section to the next page (or removes it if that page starts a section of its own); moving pages keeps a section with its pages, or starts it at the first page that stayed; adding, inserting and duplicating pages change nothing. Undo puts pages and sections back exactly.
+- **Copies, merges, templates.** A conflicted copy's merge adds the copy's sections the notebook lacks (counted in the summary); notebook templates keep the sections; pages copied or moved to another notebook take none; repair salvages them.
+- **Document format v28.** One optional notebook-level list, `sections` (`id`, `title` 1–60 characters, `color`, `page`; at most 200; no two on one page). Migration 27 → 28 is the identity plus the version; older plugins open a v28 notebook read-only. JSON Schema `docs/schema/notebook-v28.schema.json` (renamed from v27).
+- **Code.** `src/model/sections.ts` (rules, `SetSections`), `src/view/sections-tools.ts`, `src/view/sections-modal.ts`, `src/view/sections-logic.ts`. English and Italian texts, long-press help, context ranking. Tests `tests/model-v28.test.ts`, `tests/sections-logic.test.ts`; harness `doc=sections`. Not verified on Android hardware.
+
 ## 0.29.0 — 2026-11-11
 
 Seven roadmap features: study tape (#10), charts from table data (#244), figure captions and numbering (#248), an advanced calculator (#182), strike-through as logical deletion (#96), Zettelkasten card templates (Z9) and Zettelkasten hygiene (Z10), plus table statistics (part of #295, still partial: no chart regression line) and redaction hardening for undo and redo, page geometry and merges. The notebook format moves to version 27 (study tape): the migration from version 26 is automatic, and Notebook 0.28 and older open a v27 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).

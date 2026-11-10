@@ -247,6 +247,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "geosuggest", theme, device, lowLatency: false });
 // 0.29 studytape (#10): study tape, hidden and revealed (dev/harness/studytape-check.ts), tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "studytape", theme, device, lowLatency: false });
+// 0.30 sections (#52): coloured sections of a notebook, navigator strip and dialogs (dev/harness/nbsections-check.ts), tablet and phone, light and dark.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "sections", theme, device, lowLatency: false });
 // 0.29 strikedelete (#96): struck words hidden in the view, the export switch (dev/harness/strikedelete-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "strikedelete", theme, device, lowLatency: false });
 // 0.25 baseline (#93): Align to baseline (dev/harness/baseline-check.ts).
@@ -499,6 +501,7 @@ async function main() {
 				else if (s.doc === "calculator") report = await cdp.evaluate("window.harness.checkCalculator()", 120000); // 0.29 calculator
 				else if (s.doc === "geosuggest") report = await cdp.evaluate("window.harness.checkGeosuggest()", 90000); // 0.28 geosuggest
 				else if (s.doc === "studytape") report = await cdp.evaluate("window.harness.checkStudytape()", 90000); // 0.29 studytape
+				else if (s.doc === "sections") report = await cdp.evaluate("window.harness.checkNbSections()", 90000); // 0.30 sections
 				else if (s.doc === "strikedelete") report = await cdp.evaluate("window.harness.checkStrikedelete()", 90000); // 0.29 strikedelete
 				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
 				else if (s.doc === "macros") report = await cdp.evaluate("window.harness.checkMacros()", 120000); // 0.27 macros
@@ -778,6 +781,19 @@ async function main() {
 						writeFileSync(join(designDir, `studytape-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`studytape ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.30 sections: the navigator with three sections, the Sections dialog and the edit dialog.
+			if (s.doc === "sections") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["navigator", "list", "edit"]) {
+					try {
+						await cdp.evaluate(`window.harness.nbSectionsShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `sections-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`sections ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

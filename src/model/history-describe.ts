@@ -29,6 +29,7 @@ import { AddSlideRef } from "./slide-links";
 import { SetPageStates } from "./states";
 import type { PageElement, Stroke } from "./types";
 import { SetViews } from "./views";
+import { SetSections } from "./sections";
 
 /** What the panel shows for one step. */
 export interface Described {
@@ -181,6 +182,13 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Move view": ["histpanel.t.views", "scan-eye"],
 	"Delete view": ["histpanel.t.views", "scan-eye"],
 	"Merge saved views": ["histpanel.t.views", "scan-eye"],
+	// 0.30 sections (#52)
+	"Change sections": ["histpanel.t.sections", "layers"],
+	"New section": ["histpanel.t.sections", "layers"],
+	"Rename section": ["histpanel.t.sections", "layers"],
+	"Recolour section": ["histpanel.t.sections", "layers"],
+	"Delete section": ["histpanel.t.sections", "layers"],
+	"Merge sections": ["histpanel.t.sections", "layers"],
 	"Change states": ["histpanel.t.states", "toggle-left"],
 	"Keep parts": ["histpanel.t.states", "toggle-left"],
 	"Merge states": ["histpanel.t.states", "toggle-left"],
@@ -300,6 +308,7 @@ function leafInfo(cmd: Command): { title: Title; thing?: MessageKey } {
 	if (cmd instanceof SetMarkerDone) return { title: ["histpanel.t.marker", "bookmark-check"] };
 	if (cmd instanceof SetPageStates) return { title: ["histpanel.t.states", "toggle-left"] };
 	if (cmd instanceof SetViews) return { title: ["histpanel.t.views", "scan-eye"] };
+	if (cmd instanceof SetSections) return { title: ["histpanel.t.sections", "layers"] };
 	if (cmd instanceof UpdateItems) return { title: titleForLabel(cmd.label) ?? ["histpanel.t.items", "layers"] };
 	// A class this file does not know: its own label if the code is known to use it, else the generic title.
 	return { title: titleForLabel(cmd.label) ?? GENERIC };

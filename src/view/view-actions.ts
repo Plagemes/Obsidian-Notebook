@@ -490,6 +490,14 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.23 (#264): saved views
 	"saved-view-save": (v) => v.openSavedViews(true),
 	"saved-view-go": (v) => v.openSavedViews(),
+	// 0.30 sections (#52): page actions act on the page of the page sheet (default: the page in view)
+	"sections-list": (v) => v.sectionTools.openList(),
+	"section-new": onPage((v, _p, i) => v.sectionTools.create(i)),
+	"section-rename": onPage((v, _p, i) => v.sectionTools.renameAt(i)),
+	"section-recolour": onPage((v, _p, i) => v.sectionTools.recolourAt(i)),
+	"section-delete": onPage((v, _p, i) => v.sectionTools.removeAt(i)),
+	"section-next": (v) => v.sectionTools.step(1),
+	"section-previous": (v) => v.sectionTools.step(-1),
 	// 0.18 mentions (O7): the notes that link to this page
 	"mentions": (v) => v.openMentions(),
 	// 0.19 (#228): the Figures gallery

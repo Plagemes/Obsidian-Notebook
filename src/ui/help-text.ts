@@ -104,6 +104,14 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"study-tape": "tape.help.draw",
 	"tapes-reveal-all": "tape.help.revealAll",
 	"tapes-hide-all": "tape.help.hideAll",
+	// 0.30 sections (#52)
+	"sections-list": "sections.help.list",
+	"section-new": "sections.help.new",
+	"section-rename": "sections.help.rename",
+	"section-recolour": "sections.help.recolour",
+	"section-delete": "sections.help.delete",
+	"section-next": "sections.help.next",
+	"section-previous": "sections.help.previous",
 	// 0.29 charts (#244)
 	"chart-from-table": "help.chart.fromTable",
 	"chart-update": "help.chart.update",

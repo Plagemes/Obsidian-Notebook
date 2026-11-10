@@ -311,6 +311,7 @@ export function describeMerge(s: MergeSummary): string[] {
 	add(s.viewsAdded, "merge.summary.views");
 	add(s.viewsDiffer, "merge.summary.viewsDiffer");
 	add(s.viewsFull, "merge.summary.viewsFull");
+	add(s.sectionsAdded, "merge.summary.sections");
 	add(s.onlyInMain, "merge.summary.onlyMain");
 	return lines;
 }

@@ -6,7 +6,8 @@ import { elementTextChanged, SetPageTimes, stampPages } from "./page-times";
 import { shiftComments } from "./comments";
 import { shiftPivots } from "./states";
 import { sharesTables, survivingRedo, touchesPage, type PageRules, type PageStepResult } from "./page-scope";
-import type { Asset, NotebookDocument, NotebookMeta, Page, PageBackground, PageComment, PageElement, PageMargins, PageStates, Paper, Stroke } from "./types";
+import { followSections, restoreSections, sectionsAfterDelete, sectionsAfterReorder } from "./sections";
+import type { Asset, Section, NotebookDocument, NotebookMeta, Page, PageBackground, PageComment, PageElement, PageMargins, PageStates, Paper, Stroke } from "./types";
 
 /** A command knows how to apply and revert itself on a document: no snapshots. */
 export interface Command {
@@ -208,17 +209,23 @@ export class AddPage implements Command {
 export class DeletePage implements Command {
 	readonly label = "Delete page";
 	private applied = false;
+	/** v28: the sections before this delete moved or removed the one that started at the page (model/sections.ts). */
+	private sections: readonly Section[] | undefined;
 	constructor(readonly page: Page, readonly index: number) {}
 
 	apply(doc: NotebookDocument): void {
 		const i = doc.pages.indexOf(this.page);
 		this.applied = i >= 0 && doc.pages.length > 1;
-		if (this.applied) doc.pages.splice(i, 1);
+		if (!this.applied) return;
+		doc.pages.splice(i, 1);
+		this.sections = doc.sections ? followSections(doc, sectionsAfterDelete(doc.sections, this.page.id, doc.pages[i]?.id)) : undefined;
 	}
 
 	revert(doc: NotebookDocument): void {
 		if (!this.applied) return;
 		this.applied = false;
+		restoreSections(doc, this.sections);
+		this.sections = undefined;
 		if (doc.pages.includes(this.page)) return;
 		doc.pages.splice(Math.max(0, Math.min(this.index, doc.pages.length)), 0, this.page);
 	}
@@ -233,6 +240,8 @@ export class MovePage implements Command {
 	readonly label = "Move page";
 	/** Position the page actually had and reached; revert() puts it back exactly there. */
 	private applied: { from: number; to: number } | null = null;
+	/** v28: the sections before the move re-anchored one whose first page moved away (model/sections.ts). */
+	private sections: readonly Section[] | undefined;
 	constructor(readonly pageId: string, readonly from: number, readonly to: number) {}
 
 	apply(doc: NotebookDocument): void {
@@ -244,14 +253,18 @@ export class MovePage implements Command {
 		const to = Math.max(0, Math.min(this.to, doc.pages.length - 1));
 		this.applied = i === to ? null : { from: i, to };
 		if (!this.applied) return;
+		const before = doc.sections ? doc.pages.map((p) => p.id) : null;
 		const [page] = doc.pages.splice(i, 1);
 		doc.pages.splice(to, 0, page!);
+		this.sections = before && doc.sections ? followSections(doc, sectionsAfterReorder(doc.sections, before, doc.pages.map((p) => p.id), new Set([this.pageId]))) : undefined;
 	}
 
 	revert(doc: NotebookDocument): void {
 		if (!this.applied) return;
 		const { from, to } = this.applied;
 		this.applied = null;
+		restoreSections(doc, this.sections);
+		this.sections = undefined;
 		if (doc.pages[to]?.id !== this.pageId) return;
 		const [page] = doc.pages.splice(to, 1);
 		doc.pages.splice(from, 0, page!);

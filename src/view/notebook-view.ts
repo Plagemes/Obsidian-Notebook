@@ -102,6 +102,8 @@ import { normalizeIndexPrefix } from "../model/book-index";
 import { HighlightsDigestModal, digestCounts, runHighlightsDigest } from "./highlight-digest";
 import { MeaningTools } from "./colour-meaning";
 import { SavedViewTools } from "./saved-views";
+import { SectionTools } from "./sections-tools";
+import { sectionsContext } from "./sections-logic";
 import { HistoryTools } from "./history-tools";
 import { WorkspaceTools, type WorkspaceHost } from "./workspace-tools";
 import { ReferencePickerModal } from "./ref-window-picker";
@@ -725,6 +727,8 @@ export class NotebookView extends FileView {
 	private meaningTools: MeaningTools | null = null;
 	/** 0.23 (#264): saved views: a named page region with a zoom, recalled in one step (view/saved-views.ts; stored in the notebook, format 21). */
 	private savedViews: SavedViewTools | null = null;
+	/** 0.30 (#52): coloured sections (see `sectionTools`). */
+	private sectionsTool: SectionTools | null = null;
 	/** 0.25 (#84): the action history panel: every step listed, a tap goes back or forward to that point (view/history-tools.ts). */
 	private historyTools: HistoryTools | null = null;
 	/** 0.27 (#375): workspace presets: which plugin panels are open around the notebook (view/workspace-tools.ts). */
@@ -853,6 +857,7 @@ export class NotebookView extends FileView {
 				legend: this.meaningTools?.legend() ?? [],
 				tolerance: TOLERANCES[this.host.settings.meaningTolerance] ?? MATCH_TOLERANCE,
 			}),
+			sections: this.sectionTools, // 0.30 (#52)
 		});
 		// The panel sits to the left of the page (a drawer over it on narrow views).
 		this.body.insertBefore(this.pageNav.el, this.stage);
@@ -4128,6 +4133,19 @@ export class NotebookView extends FileView {
 		return this.tapes;
 	}
 
+	/** 0.30 (#52): the coloured sections of this notebook (view/sections-tools.ts; stored in the notebook, format 28). Made on first use. */
+	get sectionTools(): SectionTools {
+		this.sectionsTool ??= new SectionTools({
+			app: this.app,
+			doc: () => this.shownDoc(),
+			editable: () => !!this.editableDocument(),
+			execute: (cmd) => this.applyCommand(cmd),
+			current: () => this.currentPageIndex(),
+			goTo: (index) => this.goToPage(index),
+		});
+		return this.sectionsTool;
+	}
+
 	private mountMarkers(): void {
 		this.markers = new MarkerTools({
 			app: this.app,
@@ -5119,6 +5137,7 @@ export class NotebookView extends FileView {
 				pageSolutions: !!page && (this.markers?.pageSolutionsShown(page) ?? false),
 			},
 			tapes: { drawing: this.tapes?.drawing === true, ...(this.tapes?.counts() ?? { total: 0, revealed: 0 }) },
+			sections: sectionsContext(doc, index), // 0.30 (#52)
 			nav: this.navState(),
 			history: this.historyCounts(),
 			figures: { captioned: this.figureNumbers.items().length },
