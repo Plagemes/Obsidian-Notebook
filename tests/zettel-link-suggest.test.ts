@@ -101,7 +101,7 @@ describe("linking the chosen cards to the note just made (review Z1)", () => {
 		expect(linkOutcome(0, 0, 1, 1)).toBe("none"); // the one still there was linked already; the gone one is said apart
 		expect(linkOutcome(1, 0, 1, 0)).toBe("one");
 		expect(linkOutcome(0, 1, 1, 0)).toBe("failed");
-		for (const key of ["zettel.suggest.gone", "zettel.suggest.goneOne", "sequence.linkFailed", "sequence.pageKept", "zettel.pageGone"] as const) {
+		for (const key of ["zettel.suggest.gone", "zettel.suggest.goneOne", "sequence.linkFailed", "sequence.pageKept", "sequence.pageKeptSlipBox", "zettel.pageGone"] as const) {
 			expect(en[key]).toBeTruthy();
 			expect(itMessages[key]).toBeTruthy();
 		}

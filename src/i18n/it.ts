@@ -5874,7 +5874,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	// 0.30 tablecalc
 	"tablecalc.action": "Calcola tabella",
 	"tablecalc.command": "Tabella: calcola le formule",
-	"help.tablecalc": "Calcola le formule scritte nelle celle della tabella selezionata, come =SOMMA(B1:B4), =MEDIA(B1:B4), =A2*B2 o =C2*15%, e scrive ogni risultato dopo la sua formula. A1 è la cella in alto a sinistra. Scrivi le formule in caselle di testo dentro le celle; la scrittura a mano non viene letta. Un solo passo di annullamento.",
+	"help.tablecalc": "Calcola le formule scritte nelle celle della tabella selezionata, come =SOMMA(B1:B4), =MEDIA(B1:B4), =A2*B2 o =C2*15%, e scrive ogni risultato dopo la sua formula. A1 è la cella in alto a sinistra. Scrivi le formule in caselle di testo dentro le celle; la scrittura a mano non viene letta. Scrivi le note sulla riga sotto la formula, o dopo una seconda freccia. Un solo passo di annullamento.",
 	"histpanel.t.tableCompute": "Tabella calcolata",
 	"tablecalc.done": "{formulas} formule calcolate.",
 	"tablecalc.doneErrors": "{formulas} formule calcolate, {errors} con un errore (#REF, #CYCLE, #DIV/0...).",
@@ -6007,6 +6007,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"sequence.cannotAddPage": "Questo quaderno non può essere modificato ora, quindi non è stato possibile aggiungere una pagina per la nuova scheda.",
 	"sequence.linkFailed": "La scheda è stata creata, ma non è stato possibile collegarla alla scheda {origin} (forse è stata eliminata nel frattempo).",
 	"sequence.pageKept": "Non è stato possibile scrivere la scheda ({error}). La pagina aggiunta per lei è rimasta: Annulla la rimuove.",
+	"sequence.pageKeptSlipBox": "Non è stato possibile scrivere la scheda ({error}). La pagina aggiunta per lei è rimasta e riceverà una scheda semplice al prossimo salvataggio: Annulla la rimuove.",
 	"sequence.pageHasCard": "Questa pagina è già la scheda {id}.",
 	"sequence.noOrigin": "Questo quaderno non ha ancora una scheda numerata da continuare. Prima crea una scheda da questa pagina.",
 	"sequence.kind.followUp": "seguito",

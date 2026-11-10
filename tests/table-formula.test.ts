@@ -230,6 +230,20 @@ describe("formula boxes, round 2 (review 0.30 R2, R3)", () => {
 		expect(formulaOfText("=A1\n+B1\nchecked")?.typed).toBe("=A1 +B1");
 	});
 
+	it("T1: a bullet note (an operator, a blank and a plain word) is a note; operators with a reference, a number, a call or a bracket continue", () => {
+		for (const note of ["- includes VAT", "* see p. 4", "+ rounded", "  - net of VAT", "- già arrotondato", "- AB is a note"]) {
+			expect(formulaOfText(`=SUM(B1:B4)\n${note}`)?.typed).toBe("=SUM(B1:B4)");
+		}
+		expect(formulaOfText("=SUM(B1:B4)\n- includes VAT\n- rounded")?.typed).toBe("=SUM(B1:B4)");
+		for (const cont of ["-D2", "- D2", "+ B3", "* 2", "/ (A1+A2)", "+SUM(A1:A2)", "- SUM(A1:A2)", "- AB12", "- ROUND (A1, 2)"]) {
+			expect(formulaOfText(`=A1\n${cont}`)?.typed).toBe(`=A1 ${cont.trim()}`);
+		}
+		// A bullet note under a formula keeps the formula's result, and Compute is stable on it.
+		const once = rewriteWithResult("=A1*2\n- includes VAT", "20");
+		expect(once).toBe(`=A1*2 ${RESULT_MARK} 20\n- includes VAT`);
+		expect(rewriteWithResult(once!, "20")).toBe(once);
+	});
+
 	it("R3: a number the person wrote after their own arrow is never replaced; Compute's results are", () => {
 		expect(rewriteWithResult(`=A1 ${RESULT_MARK} 3 apples`, "7")).toBe(`=A1 ${RESULT_MARK} 7 ${RESULT_MARK} 3 apples`);
 		expect(rewriteWithResult(`=A1 ${RESULT_MARK} 7 ${RESULT_MARK} 3 apples`, "8")).toBe(`=A1 ${RESULT_MARK} 8 ${RESULT_MARK} 3 apples`);
