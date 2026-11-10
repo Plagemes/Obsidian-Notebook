@@ -98,21 +98,21 @@ describe("0.29 integration: study tape and the redaction undo guard", () => {
 	it("a step that moves a tape onto a redaction box is refused, like any other element", () => {
 		const doc = docWith(tapeAt(300, 300, 80, 30));
 		const before = captureForStep(doc, boxes())!;
-		doc.pages[0]!.elements = [{ ...doc.pages[0]!.elements![0]!, x: 110, y: 105 } as PageElement];
+		doc.pages[0]!.elements = [{ ...doc.pages[0]!.elements![0]!, x: 110, y: 105 }];
 		expect(stepMovesUnderRedaction(before, doc, boxes())).toBe(true);
 	});
 
 	it("a step that moves a tape out from over a redaction box is refused", () => {
 		const doc = docWith(tapeAt(110, 105, 80, 30));
 		const before = captureForStep(doc, boxes())!;
-		doc.pages[0]!.elements = [{ ...doc.pages[0]!.elements![0]!, x: 400, y: 400 } as PageElement];
+		doc.pages[0]!.elements = [{ ...doc.pages[0]!.elements![0]!, x: 400, y: 400 }];
 		expect(stepMovesUnderRedaction(before, doc, boxes())).toBe(true);
 	});
 
 	it("a tape that moves far from every box is not a problem", () => {
 		const doc = docWith(tapeAt(300, 300, 80, 30));
 		const before = captureForStep(doc, boxes())!;
-		doc.pages[0]!.elements = [{ ...doc.pages[0]!.elements![0]!, x: 420, y: 500 } as PageElement];
+		doc.pages[0]!.elements = [{ ...doc.pages[0]!.elements![0]!, x: 420, y: 500 }];
 		expect(stepMovesUnderRedaction(before, doc, boxes())).toBe(false);
 	});
 });
