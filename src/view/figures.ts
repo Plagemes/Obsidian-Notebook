@@ -360,19 +360,17 @@ export class FiguresModal extends Modal {
 		menu.addItem((i) => i.setTitle(t("figures.act.copy")).setIcon("copy").onClick(() => void this.copy(entry)));
 		const host = this.figures;
 		// 0.29 (#248): caption it (or change the words), and refer to it. These close the gallery: the dialogs work on the page.
-		const caption = host.caption;
-		if (caption) {
+		if (host.caption) {
 			const has = (host.captionNumber?.(entry) ?? null) !== null;
 			menu.addItem((i) => i.setTitle(t(has ? "figures.act.captionEdit" : "figures.act.caption")).setIcon("quote").onClick(() => {
 				this.close();
-				caption.call(host, entry);
+				host.caption?.(entry);
 			}));
 		}
-		const reference = host.insertReference;
-		if (reference && (host.captionNumber?.(entry) ?? null) !== null) {
+		if (host.insertReference && (host.captionNumber?.(entry) ?? null) !== null) {
 			menu.addItem((i) => i.setTitle(t("figures.act.reference")).setIcon("link").onClick(() => {
 				this.close();
-				reference.call(host, entry);
+				host.insertReference?.(entry);
 			}));
 		}
 		if (host.insertIntoNote) {

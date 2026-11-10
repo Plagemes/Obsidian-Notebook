@@ -21914,3 +21914,12 @@ body.notebook-style-obsidian {
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 }
+
+/* Dev harness only: the strip of drawn boxes under the reference picker. */
+.nb-ui .nb-figcap-preview {
+	display: block;
+	max-width: 100%;
+	margin-top: var(--nb-space-3);
+	border-radius: var(--nb-radius-sm, 8px);
+	background: #fff;
+}

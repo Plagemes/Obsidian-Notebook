@@ -65,7 +65,7 @@ export async function checkFigcaptions(api: FigcaptionsCheckApi): Promise<{ ok: 
 	const canvas = createEl("canvas");
 	canvas.width = 420;
 	canvas.height = 120;
-	canvas.style.cssText = "display:block;background:#fff;border-radius:8px;margin-top:12px;max-width:100%";
+	canvas.addClass("nb-figcap-preview");
 	const ctx = canvas.getContext("2d");
 	let markerPixels = 0;
 	if (ctx) {
