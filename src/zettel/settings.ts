@@ -9,6 +9,8 @@ export interface ZettelSettings {
 	zettelShowRegions: boolean;
 	/** Document ids of the slip-box notebooks (Z2): every page of these is a card. */
 	zettelSlipBoxes: string[];
+	/** 0.30 zsequence (Z7): a follow-up or branch card is linked with the card it continues (both notes get the link). */
+	zettelSequenceLink: boolean;
 }
 
 export const DEFAULT_ZETTEL_SETTINGS: Readonly<ZettelSettings> = {
@@ -16,6 +18,7 @@ export const DEFAULT_ZETTEL_SETTINGS: Readonly<ZettelSettings> = {
 	zettelIdScheme: "timestamp",
 	zettelShowRegions: true,
 	zettelSlipBoxes: [],
+	zettelSequenceLink: true,
 };
 
 function cleanFolder(folder: string): string {
@@ -28,6 +31,7 @@ export function readZettelSettings(d: Record<string, unknown>): ZettelSettings {
 	if (typeof d.zettelFolder === "string" && cleanFolder(d.zettelFolder)) s.zettelFolder = cleanFolder(d.zettelFolder);
 	if (ID_SCHEMES.includes(d.zettelIdScheme as ZettelIdScheme)) s.zettelIdScheme = d.zettelIdScheme as ZettelIdScheme;
 	if (typeof d.zettelShowRegions === "boolean") s.zettelShowRegions = d.zettelShowRegions;
+	if (typeof d.zettelSequenceLink === "boolean") s.zettelSequenceLink = d.zettelSequenceLink;
 	if (Array.isArray(d.zettelSlipBoxes)) {
 		s.zettelSlipBoxes = [...new Set(d.zettelSlipBoxes.filter((x): x is string => typeof x === "string" && x.length > 0))];
 	}

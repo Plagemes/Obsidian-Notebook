@@ -23,6 +23,8 @@ import { cardFileName, idSet, isUntitledCardName, localDate, nameSuffixFor, next
 import { CardListModal, CardModal, ConfirmCardsModal, type CardAnswer, type CardListItem } from "./modals";
 import { LocalPages } from "./local-pages";
 import { CardOverlay, type OverlaySource } from "./overlay";
+import { idsInNames, isSequenceId, neighbours, sequenceCardId, type SequenceKind } from "./sequence";
+import { SequenceModal, type SequenceInfo } from "./sequence-view";
 import { A6_PAGE } from "./settings";
 import { regionFromBounds, type Region } from "./subpath";
 import { renderThumbnail } from "../library/thumbnail";
@@ -30,6 +32,12 @@ import { renderThumbnail } from "../library/thumbnail";
 export interface ZettelHost extends Plugin {
 	settings: NotebookSettings;
 	saveSettings(): Promise<void>;
+}
+
+/** Z7: a card that continues another one: `kind` says how (the next card after it, or a branch of it). */
+interface SequenceRequest {
+	kind: SequenceKind;
+	origin: CardRecord;
 }
 
 /** After this device's own save of an open notebook (new slip-box page, arrow, deleted page). */
@@ -342,12 +350,15 @@ export class ZettelService implements OverlaySource {
 	}
 
 	/** Creates a card note. Returns the new note. */
-	private async writeCard(file: TFile, doc: NotebookDocument, pageIndex: number, region: Region | null, answer: CardAnswer, transcription?: string): Promise<TFile> {
+	private async writeCard(file: TFile, doc: NotebookDocument, pageIndex: number, region: Region | null, answer: CardAnswer, transcription?: string, sequence?: SequenceRequest): Promise<TFile> {
 		const page = doc.pages[pageIndex];
 		if (!page) throw new Error(`page ${pageIndex + 1} not found`);
 		const now = new Date();
 		const scheme = this.settings.zettelIdScheme;
-		const id = nextCardId(scheme, now, idSet([...this.cards.values()].map((c) => c.id)), answer.parent || null);
+		const taken = idSet([...this.cards.values()].map((c) => c.id));
+		// Z7: a follow-up or branch card takes the next free id after the card it continues (a note named like it counts as taken).
+		const planned = sequence && scheme === "luhmann" ? sequenceCardId(sequence.kind, sequence.origin.id, taken, idsInNames(this.noteNamesInFolder())) : null;
+		const id = planned ?? nextCardId(scheme, now, taken, answer.parent || null);
 		const template = findTemplate(this.cardTemplates(), answer.template);
 		const card: NewCard = {
 			id, title: answer.title, type: answer.type, source: answer.source, tags: templateTags(answer.tags, template), date: localDate(now),
@@ -476,7 +487,7 @@ export class ZettelService implements OverlaySource {
 		this.askAndCreate(ctx.file, ctx.doc, index, null);
 	}
 
-	private askAndCreate(file: TFile, doc: NotebookDocument, pageIndex: number, region: Region | null): void {
+	private askAndCreate(file: TFile, doc: NotebookDocument, pageIndex: number, region: Region | null, sequence?: SequenceRequest): void {
 		const page = doc.pages[pageIndex];
 		let preview: string | null = null;
 		try {
@@ -484,13 +495,174 @@ export class ZettelService implements OverlaySource {
 		} catch {
 			preview = null;
 		}
-		new CardModal(this.app, { luhmann: this.settings.zettelIdScheme === "luhmann", preview, templates: this.cardTemplates() }, (answer) => {
+		// Z7: the id of a follow-up / branch card follows from the card it continues, so the dialog does not ask for a parent.
+		const luhmann = this.settings.zettelIdScheme === "luhmann" && !sequence;
+		new CardModal(this.app, { luhmann, preview, templates: this.cardTemplates() }, (answer) => {
 			if (!answer) return;
 			void this.enqueue(async () => {
-				const note = await this.writeCard(file, doc, pageIndex, region, answer);
-				new Notice(t("zettel.created", { name: note.basename }));
+				const note = await this.writeCard(file, doc, pageIndex, region, answer, undefined, sequence);
+				if (!sequence) {
+					new Notice(t("zettel.created", { name: note.basename }));
+					return;
+				}
+				const made = this.cards.get(note.path);
+				await this.linkSequence(sequence, made ?? null);
+				new Notice(t("sequence.created", { id: made?.id ?? note.basename, origin: sequence.origin.id, kind: t(sequence.kind === "branch" ? "sequence.kind.branch" : "sequence.kind.followUp") }));
 			});
 		}).open();
+	}
+
+	// ------------------------------------------------------------------- sequences (Z7)
+
+	/** Whether the sequence commands are on: they exist only with Luhmann numbering. */
+	sequenceOn(): boolean {
+		return this.settings.zettelIdScheme === "luhmann";
+	}
+
+	/** What the sequence commands act on: the numbered cards of the page in view, or the card note that is open. */
+	private sequenceContext(): { cards: CardRecord[]; view: NotebookView | null } {
+		const view = this.app.workspace.getActiveViewOfType(NotebookView);
+		const ctx = view ? this.doc(view) : null;
+		if (view && ctx) {
+			const page = ctx.doc.pages[view.currentPage()];
+			const cards = page ? this.cardsOfFile(ctx.file, ctx.doc.id).filter((c) => c.pageId === page.id && isSequenceId(c.id)) : [];
+			return { cards, view };
+		}
+		const file = this.app.workspace.getActiveFile();
+		const card = file ? this.cards.get(file.path) : undefined;
+		return { cards: card && isSequenceId(card.id) ? [card] : [], view: null };
+	}
+
+	/** Whether a sequence command can run now: `needs` is "card" (a numbered card is in view) or "notebook" (a notebook page is in view). */
+	sequenceAvailable(needs: "card" | "notebook"): boolean {
+		if (!this.sequenceOn()) return false;
+		const ctx = this.sequenceContext();
+		return needs === "card" ? ctx.cards.length > 0 : ctx.view !== null;
+	}
+
+	/** Cards by lower-case id; of two cards with the same id the one still on its page, then the first by path. */
+	private cardsById(): Map<string, CardRecord> {
+		const out = new Map<string, CardRecord>();
+		for (const card of [...this.cards.values()].sort((a, b) => a.path.localeCompare(b.path))) {
+			const key = card.id.toLowerCase();
+			const have = out.get(key);
+			if (!have || (have.orphaned && !card.orphaned)) out.set(key, card);
+		}
+		return out;
+	}
+
+	/** The cards around a card in the numbering. */
+	sequenceInfo(card: CardRecord): SequenceInfo {
+		const byId = this.cardsById();
+		const near = neighbours(card.id, byId.keys());
+		const get = (id: string | null) => (id ? byId.get(id) ?? null : null);
+		return {
+			card, parent: get(near.parent), previous: get(near.previous), next: get(near.next),
+			children: near.children.map((id) => byId.get(id)).filter((c): c is CardRecord => !!c),
+		};
+	}
+
+	/** Names of the notes in the card folder: a new card must not take an id such a note already uses. */
+	private noteNamesInFolder(): string[] {
+		const folder = normalizePath(this.settings.zettelFolder || "/");
+		return this.app.vault.getMarkdownFiles().filter((f) => (f.parent?.path ?? "/") === folder).map((f) => f.basename);
+	}
+
+	/** The card to act on: the only one, or the one chosen from a list. */
+	private chooseCard(cards: readonly CardRecord[], then: (card: CardRecord) => void): void {
+		if (cards.length === 1) {
+			then(cards[0]!);
+			return;
+		}
+		const items: CardListItem[] = cards.map((card) => ({ card, where: card.path, orphaned: false }));
+		new CardListModal(this.app, items, (item) => then(item.card)).open();
+	}
+
+	/** Goes to a card related to the one in view: previous / next sibling, parent, or a child (a list when there are several). */
+	goSequence(to: "previous" | "next" | "parent" | "children"): void {
+		if (!this.sequenceOn()) return;
+		const { cards } = this.sequenceContext();
+		if (cards.length === 0) {
+			new Notice(t("sequence.noCard"));
+			return;
+		}
+		this.chooseCard(cards, (card) => {
+			const info = this.sequenceInfo(card);
+			if (to === "children") {
+				if (info.children.length === 0) new Notice(t("sequence.noChildren", { id: card.id }));
+				else if (info.children.length === 1) void this.openCard(info.children[0]!);
+				else new CardListModal(this.app, info.children.map((c) => ({ card: c, where: card.id, orphaned: false })), (item) => void this.openCard(item.card)).open();
+				return;
+			}
+			const target = info[to];
+			if (target) void this.openCard(target);
+			else new Notice(t(to === "parent" ? "sequence.noParent" : to === "previous" ? "sequence.noPrevious" : "sequence.noNext", { id: card.id }));
+		});
+	}
+
+	/** Shows the sequence dialog of the card in view. */
+	showSequence(): void {
+		if (!this.sequenceOn()) return;
+		const { cards, view } = this.sequenceContext();
+		if (cards.length === 0) {
+			new Notice(t("sequence.noCard"));
+			return;
+		}
+		this.chooseCard(cards, (card) => {
+			new SequenceModal(this.app, this.sequenceInfo(card), {
+				open: (target) => void this.openCard(target),
+				create: view ? (kind) => this.newSequenceCard(view, kind, card) : undefined,
+			}).open();
+		});
+	}
+
+	/**
+	 * Z7: a follow-up (the next card after one) or a branch (a card that continues one in its own line) in the notebook in view:
+	 * made from the lasso selection, else from the page in view when it is not a card yet. The card it continues is the one given,
+	 * else the numbered card on the page, else one of the notebook's numbered cards (a list when there are several).
+	 */
+	newSequenceCard(view: NotebookView, kind: SequenceKind, origin?: CardRecord): void {
+		if (!this.sequenceOn()) return;
+		const ctx = this.doc(view);
+		if (!ctx) return;
+		let pageIndex = view.currentPage();
+		let region: Region | null = null;
+		const sel = view.selectionRegion();
+		const selPage = sel ? ctx.doc.pages[sel.pageIndex] : undefined;
+		const selRegion = sel && selPage ? regionFromBounds(sel.bounds, selPage) : null;
+		if (sel && selRegion) {
+			pageIndex = sel.pageIndex;
+			region = selRegion;
+		}
+		const page = ctx.doc.pages[pageIndex];
+		if (!page) return;
+		const mine = this.cardsOfFile(ctx.file, ctx.doc.id);
+		const pageCard = region ? undefined : mine.find((c) => c.pageId === page.id && !c.region);
+		if (pageCard) {
+			new Notice(t("sequence.pageHasCard", { id: pageCard.id }));
+			return;
+		}
+		const numbered = (cards: CardRecord[]) => cards.filter((c) => isSequenceId(c.id) && !c.orphaned);
+		const onPage = numbered(mine.filter((c) => c.pageId === page.id));
+		const pool = origin ? [origin] : onPage.length > 0 ? onPage : numbered(mine);
+		if (pool.length === 0) {
+			new Notice(t("sequence.noOrigin"));
+			return;
+		}
+		this.chooseCard(pool, (from) => this.askAndCreate(ctx.file, ctx.doc, pageIndex, region, { kind, origin: from }));
+	}
+
+	/** Links a new follow-up / branch card with the card it continues (both notes get the link), when the setting is on. */
+	private async linkSequence(sequence: SequenceRequest, made: CardRecord | null): Promise<void> {
+		if (!made || !this.settings.zettelSequenceLink) return;
+		const origin = this.cards.get(sequence.origin.path);
+		if (!origin) return;
+		try {
+			await this.linkCards(origin, made);
+		} catch (e) {
+			// The card is made and kept; only its link is missing (the hygiene report offers it).
+			console.error("[notebook] zettel: could not link the sequence", e);
+		}
 	}
 
 	/** Z3, explicit: links the cards joined by every arrow on the page in view (also arrows drawn before). */

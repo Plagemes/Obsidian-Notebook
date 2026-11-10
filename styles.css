@@ -23050,3 +23050,37 @@ body.notebook-style-obsidian .nb-ui.nb-sections-strip .nb-sections-tab {
 	flex-direction: column;
 	gap: 4px;
 }
+
+/* ===== 0.30 zsequence ===== */
+/* Z7: the card sequence dialog (modal shell): one section per relation, a row per card that opens it. */
+.nb-ui.nb-sequence-modal .nb-seq-section .nb-modal-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui.nb-sequence-modal .nb-seq-row .nb-modal-row-label {
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
+.nb-ui.nb-sequence-modal .nb-seq-row .nb-modal-row-detail {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* The footer wraps: three buttons in a row where there is room, one under the other on a narrow screen. */
+.nb-ui.nb-sequence-modal .nb-modal-foot {
+	flex-wrap: wrap;
+}
+
+.nb-ui.nb-sequence-modal .nb-modal-foot > .nb-modal-btn {
+	flex: 1 1 160px;
+}
+
+@media (max-width: 600px) {
+	.nb-ui.nb-sequence-modal .nb-modal-foot > .nb-modal-btn {
+		flex: 1 1 100%;
+	}
+}

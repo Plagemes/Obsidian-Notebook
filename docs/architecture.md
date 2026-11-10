@@ -401,6 +401,8 @@ src/
   zettel/                 Zettelkasten core (M15, §12 "Zettelkasten"); the first five files and local-pages.ts are pure (no 'obsidian', lint-enforced)
     subpath.ts            card subpaths `#p3&id=<page id>&r=x,y,w,h`: parse/build, page lookup by id, region clamping
     ids.ts                card ids: timestamp, Luhmann (top level and branches), file names, random suffixes
+    sequence.ts           0.30 Z7: the Luhmann numbering as a tree (order `1 < 1a < 1a1 < 1b < 2 < 10`, parent / siblings / children, next free follow-up and branch id); pure
+    sequence-view.ts      0.30 Z7: the card sequence dialog (modal shell); service.ts has the commands' logic (`sequenceInfo`, `goSequence`, `newSequenceCard`)
     local-pages.ts        slip-box: which pages were made on this device in this session
     card-content.ts       card note text, reading a card from frontmatter, frontmatter-only edits (orphaned, links, title)
     arrows.ts             arrow strokes → tail/tip → the two cards they join (drawn links)

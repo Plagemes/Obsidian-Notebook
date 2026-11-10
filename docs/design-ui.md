@@ -441,6 +441,8 @@ is removed under `prefers-reduced-motion: reduce`.
 **Dialogs.** `zettel/modals.ts`: `CardModal` and `ConfirmCardsModal` carry `nb-ui` on the modal element; head (icon square, title, one line), labelled fields, the card type as radio tiles (`CARD_TYPE_LOOK`: permanent blue, literature amber, fleeting violet), a tag preview, footer buttons. `CardListModal` keeps the fuzzy suggest behaviour and draws rows as id, title, location.
 
 **Card regions** over the page (`notebook-zettel-region`, `overlay.ts`) are unchanged: tokens only, no pointer events.
+
+**Card sequence (0.30, Z7).** `zettel/sequence-view.ts`: a modal-shell dialog (`nb-sequence-modal`, medium) with one section per relation (Parent, Previous, Next, Children). Each related card is a `shellRow` (id and title, the note path as the detail line, 44 px+ target, help text); a relation with no card says "None" in a muted note, never a dead control. The footer has the two creation buttons only when it was opened from a notebook, and Close. No floating strip: navigation is the dialog and the commands, so the pill stacking is untouched.
 ## Hint bubble (0.13)
 
 A just-in-time tip (`src/ui/components/hint-bubble.ts`, rules in `src/ui/hint-logic.ts`): a floating card at the bottom centre

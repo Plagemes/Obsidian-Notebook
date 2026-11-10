@@ -5,6 +5,7 @@ import { NotebookView } from "../view/notebook-view";
 import { openHygiene } from "./hygiene-view";
 import { registerInbox } from "./inbox";
 import type { InboxService } from "./inbox-service";
+import type { SequenceKind } from "./sequence";
 import { ZettelService, type ZettelHost } from "./service";
 
 export type { ZettelHost } from "./service";
@@ -50,6 +51,29 @@ export function registerZettel(plugin: ZettelHost): ZettelService {
 	plugin.addCommand({ id: "zettel-hygiene", name: t("hygiene.command"), callback: () => openHygiene(app, service) }); // 0.29 hygiene (Z10)
 	plugin.addCommand({ id: "zettel-toggle-regions", name: t("zettel.command.toggleRegions"), callback: () => void service.toggleRegions() });
 
+	// 0.30 zsequence (Z7): follow-up and branch cards and walking the numbering; they exist only with Luhmann numbering.
+	const sequenceCommand = (id: string, name: MessageKey, needs: "card" | "notebook", run: () => void) => {
+		plugin.addCommand({
+			id, name: t(name),
+			checkCallback: (checking) => {
+				if (!service.sequenceAvailable(needs)) return false;
+				if (!checking) run();
+				return true;
+			},
+		});
+	};
+	const newSequenceCard = (kind: SequenceKind) => {
+		const view = app.workspace.getActiveViewOfType(NotebookView);
+		if (view?.document) service.newSequenceCard(view, kind);
+	};
+	sequenceCommand("zettel-sequence-follow-up", "sequence.command.followUp", "notebook", () => newSequenceCard("follow-up"));
+	sequenceCommand("zettel-sequence-branch", "sequence.command.branch", "notebook", () => newSequenceCard("branch"));
+	sequenceCommand("zettel-sequence-show", "sequence.command.show", "card", () => service.showSequence());
+	sequenceCommand("zettel-sequence-previous", "sequence.command.previous", "card", () => service.goSequence("previous"));
+	sequenceCommand("zettel-sequence-next", "sequence.command.next", "card", () => service.goSequence("next"));
+	sequenceCommand("zettel-sequence-parent", "sequence.command.parent", "card", () => service.goSequence("parent"));
+	sequenceCommand("zettel-sequence-children", "sequence.command.children", "card", () => service.goSequence("children"));
+
 	// The notebook tab's "More options" menu (and the file menu of the notebook in that tab).
 	plugin.registerEvent(app.workspace.on("file-menu", (menu: Menu, file, _source, leaf) => {
 		const view = leaf?.view;
@@ -61,6 +85,7 @@ export function registerZettel(plugin: ZettelHost): ZettelService {
 		menu.addItem((i) => i.setTitle(t("zettel.command.fromPage")).setIcon("id-card").onClick(() => service.cardFromPage(view)));
 		menu.addItem((i) => i.setTitle(t("zettel.command.title")).setIcon("heading").onClick(() => service.setCardTitle(view)));
 		menu.addItem((i) => i.setTitle(t("zettel.command.showCards")).setIcon("layout-list").onClick(() => service.showCards(view)));
+		if (service.sequenceAvailable("card")) menu.addItem((i) => i.setTitle(t("sequence.command.show")).setIcon("split").onClick(() => service.showSequence()));
 		menu.addItem((i) => i.setTitle(t(service.isSlipBox(view) ? "zettel.menu.slipBoxOff" : "zettel.menu.slipBoxOn")).setIcon("archive")
 			.onClick(() => service.toggleSlipBox(view)));
 	}));

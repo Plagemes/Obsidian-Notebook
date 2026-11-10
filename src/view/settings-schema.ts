@@ -619,6 +619,11 @@ const STUDY: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["timestamp", "settings.zettelIdScheme.timestamp"], ["luhmann", "settings.zettelIdScheme.luhmann"]]) },
 	},
 	{ id: "zettelShowRegions", section: "study", group: "zettel", order: 30, name: "settings.zettelShowRegions", desc: "settings.zettelShowRegions.desc", control: { type: "toggle" } },
+	// 0.30 zsequence (Z7): with Luhmann numbering the sequence commands (follow-up, branch, previous / next / parent / children) are on; this link is their one option
+	{
+		id: "zettelSequenceLink", section: "study", group: "zettel", order: 21, name: "settings.zettelSequenceLink", desc: "settings.zettelSequenceLink.desc", control: { type: "toggle" },
+		parent: "zettelIdScheme", visible: (s) => s.zettelIdScheme === "luhmann", keywords: "sequence follow-up branch luhmann link parent card sequenza scheda collega ramo",
+	},
 	// 0.29 studytape (#10): the colour of new study tapes (a main option of the section: the tape is a study tool of every notebook)
 	{
 		id: "tapeColor", section: "study", order: 10, name: "settings.tapeColor", desc: "settings.tapeColor.desc", keywords: "study tape hide reveal cover answers colour nastro studio nascondi rivela copri risposte colore",
