@@ -5,7 +5,7 @@ import { lockedChanges, snapshotLocked } from "./page-lock";
 import { elementTextChanged, SetPageTimes, stampPages } from "./page-times";
 import { shiftComments } from "./comments";
 import { shiftPivots } from "./states";
-import { redoSurvives, touchesPage, type PageRules, type PageStepResult } from "./page-scope";
+import { sharesTables, survivingRedo, touchesPage, type PageRules, type PageStepResult } from "./page-scope";
 import type { Asset, NotebookDocument, NotebookMeta, Page, PageBackground, PageComment, PageElement, PageMargins, PageStates, Paper, Stroke } from "./types";
 
 /** A command knows how to apply and revert itself on a document: no snapshots. */
@@ -1003,8 +1003,10 @@ export class History {
 			const stack = step === "undo" ? this.undoStack : this.redoStack;
 			stack.splice(Math.min(keepAt, stack.length), 0, cmd);
 		} else if (step === "redo") {
+			// The refused step was the next Redo, so every undone step left is below it: when it shares the tables they all go (R2-1).
 			const rules = this.rules;
-			this.redoStack = this.pagewise && rules ? this.redoStack.filter((r) => redoSurvives(rules.scope(r), rules.scope(cmd))) : [];
+			const scope = rules ? rules.scope(cmd) : null;
+			this.redoStack = this.pagewise && rules && scope ? survivingRedo(this.redoStack, (r) => rules.scope(r), scope, sharesTables(scope)) : [];
 		}
 		this.refused?.(problem, step, keepAt !== null);
 	}
@@ -1047,13 +1049,13 @@ export class History {
 	/**
 	 * 0.28 (#98): the redo steps that stay after the new edit `cmd`. Ordinarily none. With per-page undo on, a step undone on its own page
 	 * stays redoable while the person writes on another page: only the undone steps that touch the pages `cmd` touches (and every global
-	 * one) are dropped. See `redoSurvives`.
+	 * one) are dropped. See `redoSurvives`. 0.28 review (R2-1): when a dropped step is global or registers a file or slide entry, every
+	 * undone step below it is dropped too, on every page (`survivingRedo`), so no step left can be redone pointing at an entry that is gone.
 	 */
 	private keptRedo(cmd: Command): Command[] {
 		const rules = this.rules;
 		if (!this.pagewise || !rules || this.redoStack.length === 0) return [];
-		const fresh = rules.scope(cmd);
-		return this.redoStack.filter((r) => redoSurvives(rules.scope(r), fresh));
+		return survivingRedo(this.redoStack, (r) => rules.scope(r), rules.scope(cmd));
 	}
 
 	/** 0.28 (#98): how the pages a step touches are told (page-undo.ts `pageRules`); null: per-page undo is not available. */
