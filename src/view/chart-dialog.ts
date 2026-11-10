@@ -152,7 +152,8 @@ export function paintLayout(parent: HTMLElement, layout: ChartLayout, width: num
 		}
 	}
 	for (const tx of layout.texts) {
-		svg.createSvg("text", { attr: { x: num(tx.x), y: num(tx.y + tx.size * 0.95), fill: tx.color, "font-size": num(tx.size), "font-family": "sans-serif" }, text: tx.text });
+		const el = svg.createSvg("text", { attr: { x: num(tx.x), y: num(tx.y + tx.size * 0.95), fill: tx.color, "font-size": num(tx.size), "font-family": "sans-serif" } });
+		el.textContent = tx.text;
 	}
 }
 

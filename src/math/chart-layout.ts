@@ -63,7 +63,7 @@ function numberOf(body: string, dec: "." | "," | null): number | null {
  * thousands separators ("1.234.567"), and with both the last one is the decimal separator ("1.234,5" and "1,234.5" are 1234.5).
  */
 export function parseCellNumber(raw: string): number | null {
-	let s = raw.replace(/[\s  ]/g, "").replace(/[−‒–]/g, "-");
+	let s = raw.replace(/\s/g, "").replace(/[\u2212\u2012\u2013]/g, "-"); // \s covers the no-break spaces
 	if (s === "") return null;
 	s = s.replace(/%$/, "").replace(/^([+-]?)[€$£¥]/, "$1").replace(/[€$£¥]$/, "");
 	let neg = false;
