@@ -58,7 +58,7 @@ describe("every export writer leaves struck words out when the setting is on (wi
 		const page = struckPage();
 		const pages = [page];
 		expect(withRedaction(pages, {}).pages).toBe(pages);
-		const plain: Page = { ...page, strokes: page.strokes.filter((s) => s.id !== "strike") } as Page;
+		const plain: Page = { ...page, strokes: page.strokes.filter((s) => s.id !== "strike") };
 		const plainPages = [plain];
 		expect(withRedaction(plainPages, { struck: true }).pages).toBe(plainPages);
 	});
@@ -83,7 +83,8 @@ function fakeApp(): { app: App; notebook: TFile; files: Map<string, Uint8Array> 
 	const Made = TFile as unknown as new (path: string) => unknown;
 	const made = new Made("Notebooks/Demo.notebook");
 	Object.defineProperty(made, "parent", { value: { path: "Notebooks" } });
-	return { app, notebook: made as TFile, files };
+	if (!(made instanceof TFile)) throw new Error("test: could not build the notebook file");
+	return { app, notebook: made, files };
 }
 
 const sizeOf = (files: Map<string, Uint8Array>): number => [...files.values()][0]!.length;

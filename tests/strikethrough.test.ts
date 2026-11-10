@@ -236,7 +236,7 @@ describe("a group a selection touches comes whole, with its hidden struck member
 		const strike = strikeWord(text, 1);
 		const all = [...text, strike];
 		const struck = struckInk(all);
-		const grouped = all.map((s) => (struck.has(s.id) || s.id === text[0]!.id ? { ...s, group: "g1" } : s)) as Stroke[];
+		const grouped = all.map((s) => (struck.has(s.id) || s.id === text[0]!.id ? { ...s, group: "g1" } : s));
 		const page = { strokes: grouped, elements: [] } as unknown as Page;
 		const seen = grouped.filter((s) => !struck.has(s.id));
 		const visible = seen.filter((s) => s.group === "g1");
