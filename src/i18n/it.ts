@@ -5190,7 +5190,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.searchSuggest.text": "Una parola che usi spesso in questo quaderno.",
 	// 0.28 livelecture
 	"settings.liveBar": "Barra della lezione in diretta",
-	"settings.liveBar.desc": "Durante una lezione, una barra piccola mostra il tempo trascorso con due pulsanti rapidi: nuova pagina e momento importante.",
+	"settings.liveBar.desc": "A lezione, mostra il timer con i pulsanti nuova pagina e momento importante.",
 	"liveBar.label": "Lezione in diretta",
 	"liveBar.newPage": "Nuova pagina",
 	"liveBar.mark": "Momento importante",

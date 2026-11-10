@@ -5189,7 +5189,7 @@ export const en = {
 	"help.searchSuggest.text": "A word you often use in this notebook.",
 	// 0.28 livelecture
 	"settings.liveBar": "Live lecture bar",
-	"settings.liveBar.desc": "While a lecture runs, a small bar shows the elapsed time with quick buttons: new page and important moment.",
+	"settings.liveBar.desc": "During a lecture, shows the timer with new page and important moment buttons.",
 	"liveBar.label": "Live lecture",
 	"liveBar.newPage": "New page",
 	"liveBar.mark": "Important moment",
