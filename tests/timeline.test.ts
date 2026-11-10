@@ -605,13 +605,13 @@ describe("edit timeline (#148)", () => {
 		expect(history.execute(upd.cmd)).toBe(true);
 		// a label that moved by the edit (the same box, another place)
 		const moved = upd.elements.find((e) => {
-			const old = plan.elements.find((o) => o.id === e.id) as TextElement | undefined;
+			const old = plan.elements.find((o) => o.id === e.id);
 			return old !== undefined && (Math.abs(old.x - e.x) > 4 || Math.abs(old.y - e.y) > 4);
 		});
 		expect(moved).toBeDefined();
 		const old = plan.elements.find((o) => o.id === moved!.id) as TextElement;
 		const r = redactBounds(moved!);
-		boxes.push({ x: r.minX, y: r.minY, width: r.maxX - r.minX, height: r.maxY - r.minY } as RedactBox);
+		boxes.push({ x: r.minX, y: r.minY, width: r.maxX - r.minX, height: r.maxY - r.minY });
 		const snap = JSON.stringify([page.strokes, page.elements]);
 		expect(history.undo()).toBeNull();
 		expect(refused).toEqual(["undo"]);

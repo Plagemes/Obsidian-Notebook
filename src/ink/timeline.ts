@@ -308,7 +308,7 @@ function updateCommand(page: Page, tl: DetectedTimeline, built: { strokes: Strok
 	const oldStrokes = inOrder(tl.strokes, page.strokes);
 	const oldElements = inOrder(tl.elements, elements);
 	// strokes: by order
-	const strokes: Stroke[] = built.strokes.map((s, i) => (oldStrokes[i] ? { ...s, id: oldStrokes[i]!.id } : s));
+	const strokes: Stroke[] = built.strokes.map((s, i) => (oldStrokes[i] ? { ...s, id: oldStrokes[i].id } : s));
 	const keptStrokes = Math.min(oldStrokes.length, strokes.length);
 	// text boxes: exact text and size first, then what is left by order among the boxes of one size
 	const twin = new Map<TextElement, PageElement>();
