@@ -5775,4 +5775,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	// 0.29 review round 3
 	"tape.text.hidden": "Questo punto è sotto un nastro di studio coperto. Prima rivela il nastro (toccalo con la penna), poi scrivi o modifica il testo lì.",
 	"merge.redacted": "sposterebbe o allungherebbe lo sfondo di una pagina con riquadri di oscuramento, che non coprirebbero più ciò che coprono. Prima togli o rifai i riquadri di quella pagina (Esporta… › Oscura…).",
+	// 0.29 review round 4
+	"merge.redactUnreadable": "i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi una modifica che sposta o allunga lo sfondo di una pagina non può essere verificata. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto).",
+	"redactmove.unreadable": "Modifica non eseguita: i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi una modifica che sposta o allunga lo sfondo di una pagina non può essere verificata. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto).",
+	"table.noTapeLocked": "L'inserimento sposterebbe inchiostro che sta sotto un nastro di studio bloccato, che resta dov'è: la risposta uscirebbe da sotto il nastro. Prima sblocca il nastro.",
 };

@@ -31,6 +31,8 @@ export interface DiffSide {
 export interface DiffRestoreTarget {
 	editableDocument(): NotebookDocument | null;
 	applyCommand(cmd: Command, scrollTo?: number): boolean;
+	/** Round-4 review (Y6): why `applyCommand` would refuse `cmd` for the redaction boxes (see ReliabilityView.redactRefusal), or null. */
+	redactRefusal?(cmd: Command): "boxes" | "unreadable" | null;
 }
 
 export interface VersionDiffOptions {
@@ -372,6 +374,12 @@ export class VersionDiffModal extends Modal {
 		const now = plan();
 		if (!now || now.kind !== "ok") {
 			showNotice(now?.kind === "locked" ? t("lock.needsUnlock", { n: String(now.n) }) : now?.kind === "other-notebook" ? t("vdiff.restore.otherNotebook") : t("merge.notEditable"));
+			return;
+		}
+		// Round-4 review (Y6): a restore refused for the redaction boxes says why, once (not also "cannot be edited").
+		const why = target.redactRefusal?.(now.plan.command) ?? null;
+		if (why) {
+			showNotice(t(why === "unreadable" ? "redactmove.unreadable" : "redactmove.background"), 9000);
 			return;
 		}
 		if (!target.applyCommand(now.plan.command, now.plan.pageIndex)) {

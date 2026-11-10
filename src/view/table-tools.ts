@@ -49,6 +49,7 @@ const REFUSALS: Record<Exclude<TableEditRefusal, "gone">, Parameters<typeof t>[0
 	states: "table.noStates",
 	edge: "table.noRoom",
 	redacted: "table.noRedacted",
+	tapeLocked: "table.noTapeLocked",
 };
 
 export class TableTools {
