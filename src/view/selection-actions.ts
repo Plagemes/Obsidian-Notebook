@@ -73,6 +73,8 @@ export interface SelectionHost {
 	/** Runs the command as one undo step and refreshes everything that depends on the document; false when it was refused (nothing changed). */
 	execute(cmd: Command): boolean;
 	deleteSelection(): void;
+	/** 0.29 (#10, review R3): whether the selection holds what a hidden study tape covers (then deleteSelection asks first). */
+	selectionCovered?(): boolean;
 	/** Page in view and the centre of the view in that page's coordinates. */
 	pasteTarget(): { pageIndex: number; page: Page; x: number; y: number } | null;
 	textStyle(): { fontSize: number; color: string };
@@ -580,9 +582,11 @@ export class SelectionActions {
 	async cut(): Promise<void> {
 		const marker = this.copySync();
 		if (marker === null || !this.host.editable()) return;
+		// 0.29 (#10, review R3): with covered content the delete waits for the answer to its question: the copy is made, "cut" is not said.
+		const asks = this.host.selectionCovered?.() ?? false;
 		this.host.deleteSelection();
 		await writeSystemText(marker);
-		new Notice(t("selection.cutDone"));
+		if (!asks) new Notice(t("selection.cutDone"));
 	}
 
 	/** wave 0.10 (359): duplicates a selection across pages, each page's items next to the originals on their own page. */

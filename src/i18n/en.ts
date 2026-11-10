@@ -5764,6 +5764,9 @@ export const en = {
 	"settings.cardTemplates.desc": "Concept, question, quote and definition, and templates of your own, for new cards.",
 	"redactundo.unreadable": "{step} was not done: the redaction boxes stored on this device cannot be read, so no step that moves writing can be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done); the step stays in the history.",
 	"tape.erase.kept": "Ink under a covered study tape is kept. Tap the tape to reveal it, then erase.",
+	"tape.delete.title": "Delete hidden content?",
+	"tape.delete.body": "This selection includes content hidden under study tapes. Delete it anyway?",
+	"tape.delete.confirm": "Delete",
 	"tape.export.note": "Study tapes only cover content visually; text under them can still be found in exported files. Use Redact to remove content from exports.",
 } as const;
 
