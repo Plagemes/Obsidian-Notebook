@@ -11,6 +11,7 @@ import type { NotebookDocument, Page, PageElement, Stroke, TextElement } from ".
 import { AddElement } from "../model/history";
 import { createId } from "../model/document";
 import { readTableCells } from "../ink/table-numbers";
+import { planTableCompute, type ComputeRefusal } from "../ink/table-compute";
 import { boxBeside } from "../ink/table-report";
 import { showNotice } from "./notice";
 import { openTableStats } from "./table-stats";
@@ -50,6 +51,15 @@ const REFUSALS: Record<Exclude<TableEditRefusal, "gone">, Parameters<typeof t>[0
 	edge: "table.noRoom",
 	redacted: "table.noRedacted",
 	tapeLocked: "table.noTapeLocked",
+};
+
+/** 0.30 (#147): the notice for each reason "Compute table" changes nothing. */
+const COMPUTE_REFUSALS: Record<ComputeRefusal, Parameters<typeof t>[0]> = {
+	none: "tablecalc.none",
+	same: "tablecalc.same",
+	locked: "tablecalc.locked",
+	states: "tablecalc.states",
+	redacted: "tablecalc.redacted",
 };
 
 export class TableTools {
@@ -135,6 +145,22 @@ export class TableTools {
 				return true;
 			},
 		});
+	}
+
+	/** 0.30 (#147): works out the formulas typed in the cells of the selected table; ONE undo step (see ink/table-compute.ts). */
+	compute(): void {
+		if (!this.host.editable()) return;
+		const cur = this.current();
+		if (!cur) return;
+		const plan = planTableCompute(cur.page, cur.table.grid, this.host.redactGuard(cur.page.id));
+		if (!plan.ok) {
+			showNotice(t(COMPUTE_REFUSALS[plan.reason]), 3500);
+			return;
+		}
+		if (!this.host.execute(plan.cmd)) return;
+		this.host.refresh();
+		const { formulas, errors } = plan.summary;
+		showNotice(errors > 0 ? t("tablecalc.doneErrors", { formulas: String(formulas), errors: String(errors) }) : t("tablecalc.done", { formulas: String(formulas) }), 3000);
 	}
 
 	evenOut(): void {

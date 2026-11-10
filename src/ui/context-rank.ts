@@ -105,6 +105,8 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.29 (#244): "Chart from table" fits a selected table and "Update chart" a selected chart (both enough for "For this page"; the actions only show then).
 	if (a.id === "chart-from-table" && c.selection?.chartable === true) boost += HERE_MIN_BOOST + 5;
 	if (a.id === "chart-update" && c.selection?.chart === true) boost += HERE_MIN_BOOST + 6;
+	// 0.30 (#147): "Compute table" fits a selected table a little more than its other actions (it is what typing a formula leads to).
+	if (a.id === "table-compute" && c.selection?.table === true) boost += 2;
 	if (a.id === "insert-table" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 4;
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
 	// 0.29 (#182): the calculator fits where numbers are being worked on: a selected text box, equation or graph (the expression to work out,

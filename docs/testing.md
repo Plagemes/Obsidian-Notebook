@@ -4962,3 +4962,28 @@ A section starts at a page and runs to the page before the next section; pages b
 | Actions: list, new, rename, recolour, delete, next, previous; help; context ranking | yes | `tests/sections-logic.test.ts`, `tests/ui-registry.test.ts` | | | |
 | Drag a section's tab to reorder, or drag a divider to move a section's start | no | | | | not planned for 0.30: a section is moved by moving its pages |
 | Sections in exports (PDF outline, Markdown headings) | no | | | | to do |
+
+### 0.30 — tablecalc: computable table (roadmap #147; steps 3540-3559)
+
+*Compute table* in the All actions sheet (and the command palette) while a hand-drawn table is selected. Implemented, not verified on hardware. Formulas are typed in TEXT BOXES inside the cells (handwriting is not read). A formula starts with `=`; `A1` is the top-left cell of the table (header row included). After computing, the box reads `=formula → result` (U+2192): the formula stays recoverable, and computing again after a change updates the result. One undo step. No format change.
+
+3540. **Offered.** Draw a table (Insert > Table, 5 rows, 3 columns). Type a header row (Item, Qty, Price) and under it text boxes: pen / 3 / 1,5 and ink / 2 / 4. Select the table: All actions lists *Compute table*; with nothing, or a non-table, selected it is not offered.
+3541. **Row cost.** Add a fourth column header Cost and in D2 a text box `=B2*C2`, in D3 `=B3*C3`. Choose *Compute table*: D2 reads `=B2*C2 → 4.5`, D3 reads `=B3*C3 → 8`; a notice says 2 formulas computed.
+3542. **Totals.** In B4 type `=SUM(B2:B3)` and in D4 `=SUM(D2:D3)`: after computing they show 5 and 12.5 (the header text in D1 is skipped). `=AVG(D2:D3)` gives 6.25; `=MIN`, `=MAX`, `=COUNT` over a range give the right values; `=D4*10%` gives 1.25.
+3543. **Update.** Change the quantity 3 to 4 (edit the text box) and choose *Compute table* again: D2 and the totals change. Choosing it again without a change says every formula already shows its result and changes nothing.
+3544. **Edit a formula.** Edit a computed box (`=B2*C2 → 4.5`) to `=B2*C2*2` (keep or delete the old result): computing replaces the result and the formula stays.
+3545. **Errors.** `=1/0` shows `#DIV/0`; `=Z9` shows `#REF`; `=A1+1` typed in A1 shows `#CYCLE`; two cells that use each other both show `#CYCLE`; `=B1+1` where B1 is a word shows `#VALUE`; `=FOO(1)` shows `#NAME`; `=1+` shows `#ERR`. A formula that uses an error cell shows the same error. The notice counts the errors.
+3546. **Undo and redo.** One undo puts every box back to the formula as it was before; one redo brings the results back. History lists *Table computed*.
+3547. **Refused.** On a locked page the action is disabled. With a formula text box locked (lock it from the selection bar) the notice says it is locked and nothing changes. With a redaction box (Export > Redact) over any text box of the table the notice says nothing was changed; moving the redaction box away makes it work.
+3548. **Phone, dark, light, Italian.** The notice and the history title read in both themes and in Italian (Italian function names such as `=SOMMA(B2:B3)` and `=MEDIA(...)` work; `;` separates arguments); long-press help of the action explains what it does.
+3549. **Saved.** Close and reopen the notebook: the boxes keep the formula and the result.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Formula parser and evaluator, A1 references and ranges, functions, `%`, errors, cycles (`src/math/table-formula.ts`) | yes | `tests/table-formula.test.ts` | | | |
+| Reading formula cells from the text boxes of a table, writing results as one History step, locked / states / redaction refusals (`src/ink/table-compute.ts`) | yes | `tests/table-compute.test.ts` | | | |
+| Action, help, context rank, command, History title, en + it | yes | `tests/table-compute-actions.test.ts`, harness `doc=tablecalc` | | | |
+| Reading handwriting in cells | no | | | | needs recognition; type formulas in text boxes |
+| Updating by itself when a number changes | no | | | | explicit *Compute table* only |
+| Charts and statistics reading a computed cell as a number | no | | | | a computed box holds `=formula → result`, which is not a plain number |
+| Cell formats (currency, percent display), absolute / relative copying | no | | | | not in this wave |

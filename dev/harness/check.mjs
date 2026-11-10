@@ -195,6 +195,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "charts", theme, device, lowLatency: false });
 // 0.29 stats (#295): the table statistics card (dev/harness/stats-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "stats", theme, device, lowLatency: false });
+// 0.30 tablecalc (#147): Compute table, formulas before and after (dev/harness/tablecalc-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tablecalc", theme, device, lowLatency: false });
 // 0.29 cardtemplates: the card template picker and manager (dev/harness/cardtemplates-check.ts), tablet and phone, light and dark.
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "cardtemplates", theme, device, lowLatency: false });
 // 0.28 tables (#41): the insert dialog and a table with writing in it (dev/harness/tables-check.ts).
@@ -509,6 +511,7 @@ async function main() {
 				else if (s.doc === "tables") report = await cdp.evaluate("window.harness.checkTables()", 120000); // 0.28 tables
 				else if (s.doc === "charts") report = await cdp.evaluate("window.harness.checkCharts()", 120000); // 0.29 charts
 				else if (s.doc === "stats") report = await cdp.evaluate("window.harness.checkStats()", 120000); // 0.29 stats
+				else if (s.doc === "tablecalc") report = await cdp.evaluate("window.harness.checkTablecalc()", 120000); // 0.30 tablecalc
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
 				else if (s.doc === "spread") report = await cdp.evaluate("window.harness.checkSpread()", 120000); // 0.27 spread
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
@@ -873,6 +876,19 @@ async function main() {
 						writeFileSync(join(designDir, `stats-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`stats ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.30 tablecalc: screenshots of the table with its formulas typed and computed.
+			if (s.doc === "tablecalc") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["before", "after"]) {
+					try {
+						await cdp.evaluate(`window.harness.tablecalcShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `tablecalc-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`tablecalc ${state} screenshot: ${e.message}`);
 					}
 				}
 			}
