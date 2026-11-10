@@ -5209,7 +5209,7 @@ export const en = {
 	"help.pdfRotateRight": "Turns the PDF page a quarter turn clockwise. The ink and notes on it turn with it, and Undo puts everything back.",
 	"help.pdfRotateLeft": "Turns the PDF page a quarter turn anticlockwise. The ink and notes on it turn with it, and Undo puts everything back.",
 	"help.pdfCrop": "Keeps only part of the PDF page, on this page or on every page of the PDF. Nothing is deleted: Whole page brings it all back.",
-	"redact.stale": "A page was turned or cropped after its redaction boxes were drawn, so the boxes no longer cover what they covered and nothing was written. Open Export… › Redact…, delete the boxes of that page and draw them again.",
+	"redact.stale": "A page was turned, cropped or resized, or its background was moved or replaced, after its redaction boxes were drawn, so the boxes no longer cover what they covered and nothing was written. Open Export… › Redact…, delete the boxes of that page and draw them again.",
 	"pdfView.invalidFrame": "The frame is too small to keep. Make it larger.",
 	"pdfView.redacted": "Remove or redo the redaction boxes on this page first: they would stay where the old page was.",
 	"pdfView.skipped": "Pages left as they are: {n} ({why}).",
@@ -5410,7 +5410,7 @@ export const en = {
 	"redactundo.redo": "Redo was not done: it would move writing out from under a redaction box (or under one) on this page. Remove or redo the boxes on this page first; the step stays in the history.",
 	// 0.29 redactfix (round-2 review H1, H4)
 	"redactundo.failed": "{step} was not done: the check that keeps the redaction boxes covering what they cover failed. The step stays in the history; try again, or remove the redaction boxes of this page first.",
-	"redactmove.background": "Remove or redo the redaction boxes on this page first: a new left margin would move the page and its writing out from under them.",
+	"redactmove.background": "Remove or redo the redaction boxes on this page first: this change (a new left margin, another page size, another background) would move or stretch the page and its writing out from under them.",
 	// 0.29 figcaptions (#248): figure captions and references
 	"figcap.abbr": "Fig.",
 	"figcap.caption.menu": "Caption figure…",
@@ -5771,6 +5771,9 @@ export const en = {
 	"tape.delete.body": "This selection includes content hidden under study tapes. Delete it anyway?",
 	"tape.delete.confirm": "Delete",
 	"tape.export.note": "Study tapes only cover content visually; text under them can still be found in exported files. Use Redact to remove content from exports.",
+	// 0.29 review round 3
+	"tape.text.hidden": "This spot is under a covered study tape. Reveal the tape first (tap it with the pen), then write or edit text there.",
+	"merge.redacted": "it would move or stretch the background of a page with redaction boxes, so they would no longer cover what they cover. Remove or redo the boxes of that page first (Export… › Redact…).",
 } as const;
 
 export type MessageKey = keyof typeof en;

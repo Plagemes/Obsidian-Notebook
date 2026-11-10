@@ -1,4 +1,5 @@
-import { A4_HEIGHT, A4_WIDTH } from "../model/types";
+import { SetPageMargins, SetPageSize, type Command } from "../model/history";
+import { A4_HEIGHT, A4_WIDTH, type Page } from "../model/types";
 
 /** An infinite page never grows beyond this multiple of its width. */
 export const MAX_INFINITE_RATIO = 20;
@@ -26,4 +27,14 @@ export function growForInfinite(
 	while (bounds.maxY >= height * (1 - margin) && height < cap) height += step;
 	height = Math.min(cap, Math.round(height * 100) / 100);
 	return height > page.height ? height : null;
+}
+
+/**
+ * The command that grows `page` to `height` (from `growForInfinite`). Round-3 review (Z3): a page with a background (a PDF page or a
+ * picture) and no margins grows by a bottom margin, as a page with margins does through `SetPageSize`: the background keeps its box
+ * instead of being stretched down, so it stays under its redaction boxes and the Undo of the writing that grew it is never refused.
+ */
+export function growCommand(page: Pick<Page, "id" | "width" | "height" | "background" | "margins">, height: number): Command {
+	if (page.background && !page.margins) return new SetPageMargins(page.id, undefined, { left: 0, right: 0, bottom: Math.round((height - page.height) * 100) / 100 });
+	return new SetPageSize(page.id, { width: page.width, height: page.height }, { width: page.width, height });
 }

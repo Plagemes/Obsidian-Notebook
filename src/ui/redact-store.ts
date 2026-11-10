@@ -19,7 +19,7 @@
 // - A notebook whose switch is on is never forgotten to make room: only switched-off notebooks are, oldest first, and the caller is told
 //   how many. When every remembered notebook is switched on, a new one is held in memory only (and the caller is told).
 // - An id the store cannot use as a key (unusual characters, too long) is stored under a hash of it instead of not at all.
-import { EMPTY_REDACT_STATE, isPageId, normaliseRedactions, type RedactState } from "../model/redact";
+import { EMPTY_REDACT_STATE, hash53, isPageId, normaliseRedactions, type RedactState } from "../model/redact";
 import type { LocalStore } from "./usage-store";
 
 /** Local storage key of the per-notebook sets. */
@@ -38,20 +38,6 @@ export const QUARANTINE_MAX_CHARS = 128_000;
 const NOTEBOOK_PATTERN = /^[A-Za-z0-9_.-]{1,80}$/;
 /** A notebook id the store can use as a key as it is (the same rule as a page id, which also refuses the names an object treats specially). */
 const plainKey = (id: string): boolean => NOTEBOOK_PATTERN.test(id) && isPageId(id);
-
-/** 53-bit string hash (cyrb53), as 14 hex digits. */
-function hash53(s: string): string {
-	let h1 = 0xdeadbeef;
-	let h2 = 0x41c6ce57;
-	for (let i = 0; i < s.length; i++) {
-		const c = s.charCodeAt(i);
-		h1 = Math.imul(h1 ^ c, 2654435761);
-		h2 = Math.imul(h2 ^ c, 1597334677);
-	}
-	h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-	h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-	return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, "0");
-}
 
 /** The key a notebook is stored under: its id, or `x-<hash>` for an id that cannot be a key as it is. */
 export function redactKey(notebookId: string): string {

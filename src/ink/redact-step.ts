@@ -28,11 +28,11 @@
  * Fail closed: when the stored boxes cannot be read, any move on a page the step names refuses the step (`refused(step, true)`: the view says
  * so with its own notice, review U2).
  */
-import type { CommentRegion, NotebookDocument, Page, PageBackground, PageComment, PageCommentNote, PageElement, Point, Stroke } from "../model/types";
-import type { RedactBox } from "../model/redact";
-import { Batch, SetPageMargins, SetPageSize, type Command, type StepCheck, type StepInfo, type StepVerdict } from "../model/history";
+import type { CommentRegion, NotebookDocument, Page, PageComment, PageCommentNote, PageElement, Point, Stroke } from "../model/types";
+import { backgroundGeometry, backgroundKey, type RedactBox } from "../model/redact";
+import { Batch, SetPageBackground, SetPageMargins, SetPageSize, type Command, type StepCheck, type StepInfo, type StepVerdict } from "../model/history";
 import { backgroundRect, marginsAfterResize, marginsOf, type Rect } from "../model/margins";
-import { backgroundViewKey } from "../model/pdf-view";
+import { ReplacePage } from "../model/page-restore";
 import { INK_PAD, movesUnderRedaction, redactBounds, redactReach, type RedactGuard } from "./redact";
 
 /** The redaction boxes as the guard sees them: the boxes of a page, and whether the stored boxes could not be read. */
@@ -54,24 +54,24 @@ export interface PageShot {
 	backgroundKey: string;
 }
 
-/** What a background shows, as a text: the PDF asset, page, turn and crop, or the picture; "" without a background. */
-export function backgroundKey(bg: PageBackground | undefined): string {
-	if (!bg) return "";
-	return bg.kind === "pdf" ? `pdf|${backgroundViewKey(bg)}` : `${bg.kind}|${bg.asset}`;
-}
-
 /** The background of `page` as a `PageShot` holds it. */
 function backgroundOf(page: Page): { background: Rect | null; backgroundKey: string } {
 	return { background: page.background ? backgroundRect(page) : null, backgroundKey: backgroundKey(page.background) };
 }
 
+/** Round-3 review: compared to 0.01 pt, like the stored values (a height less a bottom margin is not always exact in floating point). */
+const near = (a: number, b: number): boolean => Math.round(a * 100) === Math.round(b * 100);
 const sameRect = (a: Rect | null, b: Rect | null): boolean =>
-	a === b || (a !== null && b !== null && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height);
+	a === b || (a !== null && b !== null && near(a.x, b.x) && near(a.y, b.y) && near(a.width, b.width) && near(a.height, b.height));
 
 /**
- * Round-2 review (H1): the pages whose background `cmd` would move sideways when it runs on `doc` (a left margin that changes, or a page size
- * that drops the margins). A margin change moves the background and the ink together, out from under the boxes, which stay in page
- * coordinates: the actions refuse it on a page with boxes, like a PDF turn or crop. Pure: nothing runs.
+ * Round-2 review (H1): the pages whose background `cmd` would move, stretch or change when it runs on `doc`. A margin change moves the
+ * background and the ink together, out from under the boxes, which stay in page coordinates: the actions refuse it on a page with boxes,
+ * like a PDF turn or crop. Pure: nothing runs. Round-3 review: also inside a wrapper that carries its command as `inner` (a merge is
+ * `exemptFromLocks(Batch)`, Z1), and (Z2) a page size or orientation that moves or stretches the background (with or without margins), a
+ * background replaced by another one ("Update PDF") and a page restore whose background is elsewhere or shows something else. A background
+ * added to a page that had none, or taken away, is not counted: nothing the boxes covered can show. The export checks the same thing on
+ * the page as it is (`staleRedactionPages`), so this is the early notice, not the only guard.
  */
 export function backgroundShifts(doc: NotebookDocument, cmd: Command): string[] {
 	const out: string[] = [];
@@ -80,13 +80,34 @@ export function backgroundShifts(doc: NotebookDocument, cmd: Command): string[] 
 			for (const x of c.commands) walk(x);
 			return;
 		}
+		const inner = (c as { inner?: unknown }).inner;
+		if (typeof inner === "object" && inner !== null && "apply" in inner && "revert" in inner) {
+			walk(inner as Command);
+			return;
+		}
 		if (c instanceof SetPageMargins) {
 			if (marginsOf({ margins: c.before }).left !== marginsOf({ margins: c.after }).left) out.push(c.pageId);
 			return;
 		}
+		const page = (id: string): Page | undefined => doc.pages.find((p) => p.id === id);
 		if (c instanceof SetPageSize) {
-			const page = doc.pages.find((p) => p.id === c.pageId);
-			if (page?.margins && marginsOf(page).left !== marginsOf({ margins: marginsAfterResize(page, c.after) }).left) out.push(c.pageId);
+			const p = page(c.pageId);
+			if (!p?.background) return;
+			const margins = marginsAfterResize(p, c.after);
+			if (!sameRect(backgroundRect(p), backgroundRect({ ...c.after, ...(margins ? { margins } : {}) }))) out.push(c.pageId);
+			return;
+		}
+		if (c instanceof SetPageBackground) {
+			const p = page(c.pageId);
+			if (!p?.background) return;
+			const next = { background: c.background, width: c.size.width, height: c.size.height, ...(p.margins ? { margins: p.margins } : {}) };
+			if (backgroundGeometry(p) !== backgroundGeometry(next)) out.push(c.pageId);
+			return;
+		}
+		if (c instanceof ReplacePage) {
+			const a = backgroundGeometry(c.before);
+			const b = backgroundGeometry(c.after);
+			if (a !== "" && b !== "" && a !== b) out.push(c.before.id);
 		}
 	};
 	walk(cmd);
@@ -210,7 +231,13 @@ export function stepMovesUnderRedaction(before: readonly PageShot[], doc: Notebo
 		// shows what it showed: a margin change, a page size or another background slides it out from under the boxes.
 		if ((guard.boxes.length > 0 || guard.unreadable === true) && (shot.background !== null || page.background)) {
 			const now = backgroundOf(page);
-			if (!sameRect(shot.background, now.background) || shot.backgroundKey !== now.backgroundKey) return true;
+			if (!sameRect(shot.background, now.background) || shot.backgroundKey !== now.backgroundKey) {
+				// Round-3 review (Z2): unless the step puts the background back where every box of the page was drawn (each box knows it,
+				// `geo`): the Undo of a size change that moved it is the way back, never refused.
+				const geo = backgroundGeometry(page);
+				const back = guard.unreadable !== true && geo !== "" && guard.boxes.every((b) => b.geo === geo);
+				if (!back) return true;
+			}
 		}
 		const nowStrokes = new Set<Stroke>(page.strokes);
 		const nowElements = new Set<PageElement>(page.elements ?? []);

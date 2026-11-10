@@ -59,26 +59,26 @@ describe("H1: a left margin never moves the background out from under the boxes"
 		expect(backgroundShifts(doc, new SetPageMargins(page.id, undefined, { left: 85, right: 0, bottom: 0 }))).toEqual([page.id]);
 		expect(backgroundShifts(doc, new SetPageMargins(page.id, undefined, { left: 0, right: 85, bottom: 40 }))).toEqual([]);
 		expect(backgroundShifts(doc, new Batch("Change page margins", [new SetPageMargins(page.id, undefined, { left: 10, right: 0, bottom: 0 })]))).toEqual([page.id]);
-		expect(backgroundShifts(doc, new SetPageSize(page.id, { width: page.width, height: page.height }, { width: 300, height: 400 }))).toEqual([]);
+		// Round-3 review (Z2): a page size on a PDF page without margins stretches the background: counted too.
+		expect(backgroundShifts(doc, new SetPageSize(page.id, { width: page.width, height: page.height }, { width: 300, height: 400 }))).toEqual([page.id]);
 		page.margins = { left: 200, right: 0, bottom: 0 };
 		// Narrower than the left margin: the margins are dropped and the background goes back to x 0.
 		expect(backgroundShifts(doc, new SetPageSize(page.id, { width: page.width, height: page.height }, { width: 150, height: 400 }))).toEqual([page.id]);
 		expect(backgroundShifts(doc, new SetPageSize(page.id, { width: page.width, height: page.height }, { width: page.width + 50, height: page.height }))).toEqual([]);
 	});
 
-	it("the margins dialog refuses a new left margin on a page with boxes (or unreadable boxes), with a notice; right and bottom stay free", () => {
+	it("the margins dialog refuses a new left margin on a page with boxes (or unreadable boxes); right and bottom stay free", () => {
 		const { doc, page } = scanDoc();
 		const shown = (Notice as unknown as { shown: string[] }).shown;
 		shown.length = 0;
 		const left = new SetPageMargins(page.id, undefined, { left: 85, right: 0, bottom: 0 });
 		const right = new SetPageMargins(page.id, undefined, { left: 0, right: 85, bottom: 0 });
 		expect(marginsRefused({ doc, hasRedaction: () => true }, left)).toBe(true);
-		expect(shown).toHaveLength(1);
-		expect(shown[0]).toContain("left margin");
 		expect(marginsRefused({ doc, hasRedaction: () => true }, right)).toBe(false);
 		expect(marginsRefused({ doc, hasRedaction: () => false }, left)).toBe(false);
 		expect(marginsRefused({ doc }, left)).toBe(false);
-		expect(shown).toHaveLength(1);
+		// Round-3 review (Z7): the dialog shows the reason in place, so no notice repeats it.
+		expect(shown).toHaveLength(0);
 	});
 
 	it("scenario B: Undo of a margin change on a background-only page with a box is refused and stays; it runs once the box is gone", () => {

@@ -195,7 +195,8 @@ describe("R4, R5, R6: text tool, Insert space and reference windows", () => {
 	it("R4: a text-tool tap on a hidden tape opens no covered text box", () => {
 		const body = viewSrc.slice(viewSrc.indexOf("private beginText(pageIndex: number"), viewSrc.indexOf("private commitText(): void"));
 		expect(body).toContain("pointUnderTapes(this.hidingTapesOf(page), local[0], local[1])");
-		expect(body).toContain("const texts = onTape ? [] :");
+		// Round-3 review (Z4): nor is a new box started under it (it would be saved where nobody sees it): the tap only says so.
+		expect(body).toContain("showNotice(t(\"tape.text.hidden\"), 5000);");
 	});
 
 	it("R5: ink a tape reaches over moves with the tape when the tape straddles the line", () => {
