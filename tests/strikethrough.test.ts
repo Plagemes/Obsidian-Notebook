@@ -4,6 +4,7 @@ import type { Page, Point, Stroke, Tool } from "../src/model/types";
 import { detectStrikes, NO_STRIKES, StrikeCache, strikeLineOf, struckInk } from "../src/ink/strikethrough";
 import { segmentText } from "../src/ink/words";
 import { cleanPageForExport, hasCleanableContent } from "../src/model/clean-export";
+import { expandToGroups } from "../src/model/groups";
 import { reseed, writeLine } from "./words-gen";
 
 /** A straight pass from (x0, y0) to (x1, y1) with a little hand wobble (deterministic). */
@@ -215,6 +216,34 @@ describe("StrikeCache", () => {
 		expect(cache.get("p", less).words).toHaveLength(0);
 		cache.retain(new Set(["other"]));
 		expect(cache.peek("p")).toBeNull();
+	});
+
+	it("does not look at a page with more strokes than the cap (a dense page never holds the thread) and remembers that", () => {
+		reseed(3);
+		const text = writeLine("a", "hello brave new world", { x: 40, baseY: BASE });
+		const strokes = [...text, strikeWord(text, 1)];
+		const cache = new StrikeCache();
+		expect(cache.get("dense", strokes, strokes.length - 1)).toBe(NO_STRIKES);
+		expect(cache.fresh("dense", strokes)).toBe(true);
+		expect(cache.get("ok", strokes, strokes.length).words).toHaveLength(1);
+	});
+});
+
+describe("a group a selection touches comes whole, with its hidden struck members", () => {
+	it("expandToGroups completes the group from the ink it is given", () => {
+		reseed(3);
+		const text = writeLine("a", "hello brave new world", { x: 40, baseY: BASE });
+		const strike = strikeWord(text, 1);
+		const all = [...text, strike];
+		const struck = struckInk(all);
+		const grouped = all.map((s) => (struck.has(s.id) || s.id === text[0]!.id ? { ...s, group: "g1" } : s)) as Stroke[];
+		const page = { strokes: grouped, elements: [] } as unknown as Page;
+		const seen = grouped.filter((s) => !struck.has(s.id));
+		const visible = seen.filter((s) => s.group === "g1");
+		expect(visible).toHaveLength(1);
+		// With the view's list (struck ink left out) the hidden members stay behind; with the whole list they come along.
+		expect(expandToGroups(page, { strokes: visible, elements: [] }, seen).strokes).toHaveLength(1);
+		expect(expandToGroups(page, { strokes: visible, elements: [] }, grouped).strokes).toHaveLength(1 + struck.size);
 	});
 });
 

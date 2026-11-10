@@ -3278,8 +3278,14 @@ export class NotebookView extends FileView {
 			...(this.host.settings.commentsInPdf ? { comments: pdfCommentLabels() } : {}),
 			// Review fix (U1): tells the excerpts of this notebook from those of another, also for the boxes of the export dialog.
 			...(doc ? { redactDoc: doc.id } : {}),
+			...this.struckOption(),
 			...this.redactOptions(),
 		};
+	}
+
+	/** 0.29 (#96): the setting "Leave struck-out words out of exports", for every writer that goes through `withRedaction`. */
+	private struckOption(): Pick<ExportOptions, "struck"> {
+		return this.host.settings.exportHideStruck ? { struck: true } : {};
 	}
 
 	/**
@@ -3695,13 +3701,14 @@ export class NotebookView extends FileView {
 	}
 
 	/** The strokes of `page` the reader can see (v8: hidden ink only while the solutions are shown). */
-	private inkInView(page: Page): readonly Stroke[] {
+	private inkInView(page: Page, withStruck = false): readonly Stroke[] {
 		const shown = visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
 		// 0.17 (#20): the ink a collapsed sticky note keeps hidden is not there to erase, select or offer.
 		const noteInk = hiddenStickyInk(page.elements);
 		const unnoted = noteInk ? shown.filter((s) => !noteInk.has(s.id)) : shown;
 		// 0.29 (#96): struck words that are hidden are not there to erase, select or offer either (nothing is deleted by touching empty paper).
-		const struck = this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null;
+		// `withStruck`: only to complete a group (review S4): a group a selection touches comes whole, its hidden struck members with it.
+		const struck = !withStruck && this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null;
 		const ink = struck ? unnoted.filter((s) => !struck.has(s.id)) : unnoted;
 		// 0.15 (241): a shown state moved some strokes away from where they were drawn: the ink tools leave them alone.
 		const moved = this.statesTools?.displaced(page);
@@ -4202,7 +4209,8 @@ export class NotebookView extends FileView {
 			exportPages: async (pages, suffix) => {
 				// 0.26 (#285): no other option is passed here, but the redaction boxes of the notebook still cover what the file would show (and
 				// boxes that cannot be read refuse the file, review fix P4).
-				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media, this.redactOptions());
+				// 0.29 (#96): the struck-out words setting covers this export too.
+				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media, { ...this.struckOption(), ...this.redactOptions() });
 			},
 		};
 	}
@@ -7219,7 +7227,7 @@ export class NotebookView extends FileView {
 			elements = elementsInLasso(page.elements ?? [], lasso.points, measureText);
 		}
 		// 0.20 (#39): picking one member of a group picks all of them.
-		({ strokes, elements } = expandToGroups(page, { strokes, elements }, this.inkInView(page)));
+		({ strokes, elements } = expandToGroups(page, { strokes, elements }, this.inkInView(page, true)));
 		const bounds = unionBounds(strokes, elements, measureText);
 		if (!bounds) return;
 		this.groups?.hideChip();
@@ -7243,7 +7251,7 @@ export class NotebookView extends FileView {
 		}).map((part) => {
 			// 0.20 (#39): a group is picked whole on each page (a group never spans pages).
 			const there = doc.pages[part.pageIndex];
-			return there ? { ...part, ...expandToGroups(there, part, this.inkInView(there)) } : part;
+			return there ? { ...part, ...expandToGroups(there, part, this.inkInView(there, true)) } : part;
 		});
 		const first = parts[0];
 		if (!first) return false;
@@ -7664,7 +7672,7 @@ export class NotebookView extends FileView {
 		// A group it touches is completed (as the lasso does), so a move, cut or delete never splits one.
 		const settle = (index: number, sel: { strokes: Stroke[]; elements: PageElement[] }): { strokes: Stroke[]; elements: PageElement[] } => {
 			const page = this.pageAtIndex(index);
-			return page ? selectableItems(page, sel, this.inkInView(page)) : { strokes: sel.strokes, elements: [...unlockedElements(sel.elements)] };
+			return page ? selectableItems(page, sel, this.inkInView(page, true)) :{ strokes: sel.strokes, elements: [...unlockedElements(sel.elements)] };
 		};
 		({ strokes, elements } = settle(pageIndex, { strokes, elements }));
 		others = others?.map((o) => ({ ...o, ...settle(o.pageIndex, o) }));
