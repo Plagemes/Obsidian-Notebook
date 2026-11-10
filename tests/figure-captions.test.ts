@@ -310,7 +310,7 @@ describe("outputs that carry text as Markdown", () => {
 
 	it("the companion note body numbers the figures from the document alone", () => {
 		const pages = [pageWith(image("f1"), text(captionText("f1", "Lake"), 10, 80), text(`see ${referenceToken("f1")}`, 10, 300))];
-		const doc = { id: "d1", version: 26, pages, assets: {}, meta: { bookmarks: [] } } as unknown as NotebookDocument;
+		const doc = { id: "d1", version: 27, pages, assets: {}, meta: { bookmarks: [] } } as unknown as NotebookDocument;
 		const body = companionContent(doc, { notebookPath: "Notes/T.notebook", pageUri: (n: number) => `obsidian://x/${n}`, searchText: true }).text;
 		expect(body).toContain("Fig. 1");
 		expect(body).not.toContain("figcap");
