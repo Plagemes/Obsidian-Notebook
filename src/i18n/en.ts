@@ -5959,6 +5959,8 @@ export const en = {
 	"timeline.noRedacted": "The timeline would touch a redaction box of this page, so it was not drawn. Move the view or remove the box first (Export… › Redact…).",
 	"timeline.locked": "A part of this timeline is locked. Unlock it first.",
 	"timeline.noStates": "These shapes belong to a part of a drawing with states, so the timeline cannot be edited.",
+	"timeline.tape": "Nothing was changed: some of the timeline lies under a study tape. Remove the tape first.",
+	"timeline.read.keep": "Fix or delete the lines listed above to update: a line left out would take its label box off the page.",
 	"timeline.gone": "The timeline is no longer all on the page in view. Select it again.",
 	"timeline.unreadable": "The text of this timeline was resized or changed too much to be read back. Insert a new timeline instead.",
 	"help.timeline.insert": "Draw a timeline from events you type with their dates: years, years BC, centuries, decades or dates. The axis is spaced by time, with ticks and labels that do not overlap. It is ordinary shapes and text you can move and restyle.",

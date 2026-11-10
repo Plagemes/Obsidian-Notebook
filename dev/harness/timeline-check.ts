@@ -40,6 +40,8 @@ async function waitFor(sel: string): Promise<HTMLElement | null> {
 async function closeDialogs(api: TimelineCheckApi): Promise<void> {
 	for (const b of Array.from(document.querySelectorAll<HTMLElement>(".nb-modal-close"))) b.click();
 	await api.frames(2);
+	// The overlay the harness wraps a dialog in stays behind when the dialog closes: it dims the page of every screenshot after it.
+	for (const layer of Array.from(document.querySelectorAll(".harness-modal-container"))) if (!layer.querySelector(".modal, .nb-modal-shell, .nb-timeline-dialog")) layer.remove();
 }
 
 const press = async (api: TimelineCheckApi, el: Element | null | undefined): Promise<void> => {
@@ -217,6 +219,18 @@ export async function checkTimeline(api: TimelineCheckApi): Promise<{ ok: boolea
 	v.runAction("timeline-edit");
 	const edit4 = await waitFor(".nb-timeline-dialog");
 	add("an edited label shows in the dialog as typed", !!edit4 && (edit4.querySelector<HTMLTextAreaElement>("#nb-timeline-events")?.value ?? "").includes("1500: Columbus again"), edit4?.querySelector<HTMLTextAreaElement>("#nb-timeline-events")?.value ?? "");
+	// review 0.30 (I4): a line the dialog would leave out (and so its box off the page) holds the Update button until it is fixed
+	const area4 = edit4?.querySelector<HTMLTextAreaElement>("#nb-timeline-events");
+	const update4 = edit4?.querySelector<HTMLButtonElement>(".nb-modal-foot .mod-cta");
+	if (area4 && update4) {
+		const good = area4.value;
+		setValue(area4, `${good}\nno date on this line`);
+		await frames(2);
+		add("an edit with a line that would be left out holds Update and says why", update4.disabled && /Fix or delete|Correggi/.test(edit4?.querySelector(".nb-timeline-notes")?.textContent ?? ""), edit4?.querySelector(".nb-timeline-notes")?.textContent ?? "");
+		setValue(area4, good);
+		await frames(2);
+		add("fixing the line enables Update again", !update4.disabled);
+	}
 	await closeDialogs(api);
 
 	v.clearSelection();

@@ -1,7 +1,7 @@
 import { Modal, type App } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import { previewLayout, TIMELINE_SIZES, timelineWidth, type TimelineChoice, type TimelineSize } from "../ink/timeline";
-import { MAX_EVENTS, MAX_LABEL, parseEventLines, type TimelineLabels, type TimelineLayout } from "../math/timeline-layout";
+import { editNeedsFixing, MAX_EVENTS, MAX_LABEL, parseEventLines, type TimelineLabels, type TimelineLayout } from "../math/timeline-layout";
 import { modalShell, shellButton, shellField, shellNote, type ModalShell } from "../ui/components/modal-shell";
 import { SUBJECT_COLORS } from "../ui/palette";
 
@@ -95,11 +95,16 @@ class TimelineDialog extends Modal {
 
 	private submit(): void {
 		const choice = this.choice();
-		if (choice.events.length === 0 || !this.fits(choice)) return;
+		if (choice.events.length === 0 || !this.fits(choice) || this.mustFix()) return;
 		this.answered = true;
 		if (this.o.mode === "insert") last = { colour: this.colour, size: this.size };
 		this.close();
 		this.finish(choice);
+	}
+
+	/** Review 0.30 (I4): an edit with a line that would be left out (and so its label box removed) waits until the person fixes or deletes it. */
+	private mustFix(): boolean {
+		return this.o.mode === "edit" && editNeedsFixing(parseEventLines(this.typed));
 	}
 
 	private layout(choice: TimelineChoice): TimelineLayout {
@@ -183,6 +188,10 @@ class TimelineDialog extends Modal {
 		}
 		if (read.problems.length > MAX_LISTED) shellNote(this.notes, t("timeline.read.more", { n: String(read.problems.length - MAX_LISTED) }));
 		if (read.dropped > 0) shellNote(this.notes, t("timeline.read.dropped", { max: String(MAX_EVENTS), n: String(read.dropped) }));
+		if (this.mustFix()) {
+			shellNote(this.notes, t("timeline.read.keep"), "error");
+			ok = false;
+		}
 		this.primary.disabled = !ok;
 	}
 }
