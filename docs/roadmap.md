@@ -321,7 +321,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 144. **P2** Parametric 3D solids (cube, cylinder, cone, prism) with editable dimensions and perspective.
 145. **P2** Automatic geometric constraints while drawing shapes: snap to parallels, perpendiculars, tangents and midpoints of existing shapes.
 146. **P3** Symmetric drawing: mirror or radial axis.
-147. **P2** Computable table: typed cells with spreadsheet-like formulas (sums, averages, percentages).
+147. **P2** 🧪 Computable table: typed cells with spreadsheet-like formulas (sums, averages, percentages).
 148. **P2** Timeline element: dated events with automatic spacing.
 149. **P1** 🧪 Ink attached to objects: ink written over an image, table, graph or formula moves and scales with it.
 150. **P2** Free page rotation with two fingers, like turning real paper.

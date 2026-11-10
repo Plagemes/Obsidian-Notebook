@@ -5779,4 +5779,16 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"merge.redactUnreadable": "i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi una modifica che sposta o allunga lo sfondo di una pagina non può essere verificata. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto).",
 	"redactmove.unreadable": "Modifica non eseguita: i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi una modifica che sposta o allunga lo sfondo di una pagina non può essere verificata. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto).",
 	"table.noTapeLocked": "L'inserimento sposterebbe inchiostro che sta sotto un nastro di studio bloccato, che resta dov'è: la risposta uscirebbe da sotto il nastro. Prima sblocca il nastro.",
+	// 0.30 tablecalc
+	"tablecalc.action": "Calcola tabella",
+	"tablecalc.command": "Tabella: calcola le formule",
+	"help.tablecalc": "Calcola le formule scritte nelle celle della tabella selezionata, come =SOMMA(B1:B4), =MEDIA(B1:B4), =A2*B2 o =C2*15%, e scrive ogni risultato dopo la sua formula. A1 è la cella in alto a sinistra. Scrivi le formule in caselle di testo dentro le celle; la scrittura a mano non viene letta. Un solo passo di annullamento.",
+	"histpanel.t.tableCompute": "Tabella calcolata",
+	"tablecalc.done": "{formulas} formule calcolate.",
+	"tablecalc.doneErrors": "{formulas} formule calcolate, {errors} con un errore (#REF, #CYCLE, #DIV/0...).",
+	"tablecalc.none": "Nessuna formula in questa tabella. Scrivine una, come =SOMMA(B1:B4), in una casella di testo dentro una cella.",
+	"tablecalc.same": "Ogni formula mostra già il suo risultato.",
+	"tablecalc.locked": "Una casella con una formula è bloccata. Sbloccala prima.",
+	"tablecalc.states": "Una casella con una formula fa parte di un disegno con stati. Non è stato cambiato nulla.",
+	"tablecalc.redacted": "Non è stato cambiato nulla: la tabella o una casella con una formula tocca un riquadro di oscuramento, e un risultato potrebbe rivelare ciò che c'è sotto.",
 };

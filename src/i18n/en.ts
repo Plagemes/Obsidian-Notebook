@@ -5778,6 +5778,18 @@ export const en = {
 	"merge.redactUnreadable": "the redaction boxes stored on this device cannot be read, so a change that moves or stretches the background of a page cannot be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done).",
 	"redactmove.unreadable": "This change was not made: the redaction boxes stored on this device cannot be read, so a change that moves or stretches the background of a page cannot be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done).",
 	"table.noTapeLocked": "Ink this insert would push lies under a locked study tape, which stays where it is: the answer would come out from under it. Unlock the tape first.",
+	// 0.30 tablecalc
+	"tablecalc.action": "Compute table",
+	"tablecalc.command": "Table: compute formulas",
+	"help.tablecalc": "Works out the formulas typed in the cells of the selected table, such as =SUM(B1:B4), =AVG(B1:B4), =A2*B2 or =C2*15%, and writes each result after its formula. A1 is the top-left cell. Type the formulas in text boxes inside the cells; handwriting is not read. One undo step.",
+	"histpanel.t.tableCompute": "Table computed",
+	"tablecalc.done": "{formulas} formulas computed.",
+	"tablecalc.doneErrors": "{formulas} formulas computed, {errors} with an error (#REF, #CYCLE, #DIV/0...).",
+	"tablecalc.none": "No formulas in this table. Type one such as =SUM(B1:B4) in a text box inside a cell.",
+	"tablecalc.same": "Every formula already shows its result.",
+	"tablecalc.locked": "A formula box is locked. Unlock it first.",
+	"tablecalc.states": "A formula box belongs to a drawing with states. Nothing was changed.",
+	"tablecalc.redacted": "Nothing was changed: the table or a formula box touches a redaction box, and a result could give away what is under it.",
 } as const;
 
 export type MessageKey = keyof typeof en;
