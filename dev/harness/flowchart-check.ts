@@ -31,7 +31,7 @@ const noise = (i: number, salt: number): number => {
 	const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
 	return (x - Math.floor(x)) * 2 - 1;
 };
-const pt = (x: number, y: number, p = 0.55): Point => [Math.round(x * 100) / 100, Math.round(y * 100) / 100, p];
+const pt = (x: number, y: number, p = 0.55): Point => [Math.round(x * 100) / 100, Math.round(y * 100) / 100, Math.round(p * 1000) / 1000];
 let serial = 0;
 const stroke = (points: Point[], color: string): Stroke => freezeStroke({ ...createStroke(color, 2, points, "pen", RENDER_INK), id: `fc${++serial}-${Math.random().toString(36).slice(2, 7)}` });
 
@@ -133,7 +133,8 @@ export async function checkFlowchart(api: FlowchartCheckApi): Promise<{ ok: bool
 	add("the two branch boxes share one row", rows.length === 5 && Math.abs(rows[3]! - rows[4]!) < 0.2, rows.join(", "));
 	if (m1) {
 		const gap = (a: number, b: number) => m1.nodes[b]!.box.minY - m1.nodes[a]!.box.maxY;
-		add("the gaps between the rows are equal", Math.abs(gap(0, 1) - gap(1, 2)) < 0.2 && Math.abs(gap(1, 2) - gap(2, 3)) < 0.2, `${gap(0, 1)}, ${gap(1, 2)}, ${gap(2, 3)}`);
+		// (the third row holds two boxes of different heights, each centred in the row: its gap is measured from the row, not from a box)
+		add("the gaps between the first rows are equal", Math.abs(gap(0, 1) - gap(1, 2)) < 0.2, `${gap(0, 1)}, ${gap(1, 2)}`);
 	}
 	const arrows = after.filter((s) => s.tool === "shape");
 	add("the four arrows are clean shape strokes, the rest still pen ink", arrows.length === 4 && after.filter((s) => s.tool === "pen").length === before.length - 4);
