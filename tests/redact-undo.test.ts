@@ -10,11 +10,12 @@ import { insertTableCommand, planTableEdit } from "../src/ink/table-edit";
 import { createDocument, createPage, createStroke, quantizePoint } from "../src/model/document";
 import { UpdateItems, type PageItem } from "../src/model/groups";
 import { jumpHistory } from "../src/model/history-jump";
-import { AddElement, AddStroke, Batch, EraseStrokes, History, type Command } from "../src/model/history";
+import { AddElement, AddPage, AddStroke, Batch, EraseStrokes, History, type Command, type StepInfo } from "../src/model/history";
 import { pageRules } from "../src/model/page-undo";
 import type { RedactBox } from "../src/model/redact";
 import { checkContent, freezeStroke } from "../src/model/serialize";
-import { PAPER_SPACING, RENDER_INK, type NotebookDocument, type Page, type Point, type Stroke, type TextElement } from "../src/model/types";
+import { PAPER_SPACING, RENDER_INK, type NotebookDocument, type Page, type PageComment, type Point, type Stroke, type TextElement } from "../src/model/types";
+import { redactBounds } from "../src/ink/redact";
 import { line } from "./helpers";
 
 const NOW = new Date("2026-11-10T10:00:00.000Z");
@@ -42,8 +43,17 @@ function rig(opts: { guard?: boolean; pages?: number; pagewise?: boolean; unread
 	}
 	const s = store(opts.unreadable);
 	const refused: Array<"undo" | "redo"> = [];
-	history.setStepCheck(redactStepCheck(s.read, (step) => refused.push(step)));
-	return { doc, history, s, refused };
+	const unreadable: boolean[] = [];
+	let reads = 0;
+	const read = (): StepBoxes => {
+		reads++;
+		return s.read();
+	};
+	history.setStepCheck(redactStepCheck(read, (step, u) => {
+		refused.push(step);
+		unreadable.push(u);
+	}));
+	return { doc, history, s, refused, unreadable, reads: () => reads };
 }
 
 const items = (p: Page): unknown[] => [...p.strokes, ...(p.elements ?? [])];
@@ -59,14 +69,17 @@ const loopRow = (base: number): Stroke[] =>
 	});
 
 /** Three lines of handwriting (y 100, 150, 200) and the step that moves the first one below the second. */
-function reorder(doc: NotebookDocument): Command {
+function reorder(doc: NotebookDocument, comments?: PageComment[]): Command {
 	const page = createPage(undefined, { kind: "blank", spacing: PAPER_SPACING.blank });
 	page.strokes.push(...[100, 150, 200].flatMap(loopRow));
+	if (comments) page.comments = comments;
 	doc.pages[0] = page;
 	const model = analyseLines(page);
 	const move = planLineMove(model, 0, 1);
 	if (!move.ok) throw new Error("setup: the move is refused");
-	return lineMoveCommand(page, model, move)!.command;
+	const plan = lineMoveCommand(page, model, move)!;
+	if (comments && plan.movedComments.size === 0) throw new Error("setup: no comment moves with the line");
+	return plan.command;
 }
 
 const translate = (dx: number, dy: number) => (item: PageItem): PageItem =>
@@ -302,6 +315,243 @@ describe("R3-1: per-page undo, groups, history-panel jumps and a failing check",
 		expect(p.strokes).toEqual([s]);
 		history.setStepCheck(null);
 		expect(history.undo()).not.toBeNull();
+	});
+});
+
+const note = (id: string, region: { x: number; y: number; width: number; height: number }): PageComment =>
+	({ id, region, text: "PIN 9999", author: "me", created: NOW.getTime() });
+
+/** An AddStroke whose `apply` can be made to throw (a command whose inverse fails halfway, review U4). */
+class Flaky extends AddStroke {
+	fail = false;
+	override apply(doc: NotebookDocument): void {
+		if (this.fail) throw new Error("half done");
+		super.apply(doc);
+	}
+}
+
+describe("review U1-U7: the undo/redo redaction check, hardened", () => {
+	it("U1: the Undo of a Move line that carried a margin comment is refused when a box covers only the comment's region", () => {
+		const { doc, history, s, refused } = rig();
+		const comments: PageComment[] = [
+			note("c1", { x: 300, y: 91, width: 40, height: 8 }),
+			{ id: "c2", parent: "c1", text: "reply", author: "me", created: NOW.getTime() },
+		];
+		const cmd = reorder(doc, comments);
+		expect(history.execute(cmd)).toBe(true);
+		const page = doc.pages[0]!;
+		const region = (page.comments!.find((c) => c.id === "c1") as { region: { x: number; y: number; width: number; height: number } }).region;
+		expect(region.y).toBeGreaterThan(120);
+		// The box covers the comment where it is now, and no ink.
+		s.boxes[page.id] = [{ x: region.x - 2, y: region.y - 2, width: region.width + 4, height: region.height + 4 }];
+		const list = page.comments;
+		const ink = [...page.strokes];
+		expect(history.undo()).toBeNull();
+		expect(refused).toEqual(["undo"]);
+		expect(page.comments).toBe(list);
+		page.strokes.forEach((x, i) => expect(x).toBe(ink[i]));
+		expect(history.stepsTo(cmd)).toEqual({ direction: "undo", steps: 0 });
+		s.boxes[page.id] = [];
+		expect(history.undo()).toBe(cmd);
+	});
+
+	it("U1: a comment region shifted by a step (margins, a PDF turn, a page restore) is a move; one left in place or far from a box is not", () => {
+		const doc = createDocument(NOW);
+		const p = doc.pages[0]!;
+		p.comments = [note("c1", { x: 300, y: 100, width: 40, height: 10 })];
+		const s = store();
+		s.boxes[p.id] = [{ x: 295, y: 95, width: 50, height: 20 }];
+		const before = captureForStep(doc, s.read())!;
+		p.comments = [note("c1", { x: 330, y: 100, width: 40, height: 10 })];
+		expect(stepMovesUnderRedaction(before, doc, s.read())).toBe(true);
+		p.comments = [note("c1", { x: 300, y: 100, width: 40, height: 10 })];
+		expect(stepMovesUnderRedaction(before, doc, s.read())).toBe(false);
+		s.boxes[p.id] = [{ x: 600, y: 600, width: 20, height: 20 }];
+		p.comments = [note("c1", { x: 330, y: 100, width: 40, height: 10 })];
+		expect(stepMovesUnderRedaction(captureForStep(doc, s.read())!, doc, s.read())).toBe(false);
+	});
+
+	it("U2: unreadable boxes still refuse a move, flagged as unreadable; only the pages the step names are captured", () => {
+		const { doc, history, refused, unreadable } = rig({ unreadable: true, pages: 3, pagewise: true });
+		const cmd = reorder(doc);
+		history.execute(cmd);
+		expect(history.undo()).toBeNull();
+		expect(refused).toEqual(["undo"]);
+		expect(unreadable).toEqual([true]);
+		expect(history.stepsTo(cmd)).toEqual({ direction: "undo", steps: 0 });
+		const s = store(true);
+		expect(captureForStep(doc, s.read(), new Set([doc.pages[0]!.id]))!.map((p) => p.id)).toEqual([doc.pages[0]!.id]);
+		expect(captureForStep(doc, s.read(), null)).toHaveLength(3);
+		// Readable boxes: the pages with boxes are always captured, with the pages the step names.
+		const r = store();
+		r.boxes[doc.pages[2]!.id] = [{ x: 1, y: 1, width: 5, height: 5 }];
+		expect(captureForStep(doc, r.read(), new Set([doc.pages[0]!.id]))!.map((p) => p.id)).toEqual([doc.pages[0]!.id, doc.pages[2]!.id]);
+	});
+
+	it("U2: a refusal for a box is not flagged unreadable; the history hands the check the pages a step names (null: every page)", () => {
+		const { doc, history, s, unreadable } = rig();
+		const cmd = reorder(doc);
+		history.execute(cmd);
+		s.boxes[doc.pages[0]!.id] = [{ x: 70, y: 140, width: 120, height: 14 }];
+		expect(history.undo()).toBeNull();
+		expect(unreadable).toEqual([false]);
+
+		const d2 = createDocument(NOW);
+		d2.pages.push(createPage());
+		const h2 = new History(() => d2, 100, checkContent);
+		h2.setPageRules(pageRules);
+		const infos: StepInfo[] = [];
+		h2.setStepCheck((_d, _s, info) => {
+			infos.push(info);
+			return null;
+		});
+		const other = d2.pages[1]!;
+		h2.execute(new AddStroke(other.id, line(10, 10, 60, 12), 0));
+		const odd: Command = { label: "Odd", apply: () => undefined, revert: () => undefined };
+		h2.execute(odd);
+		h2.undo();
+		h2.undo();
+		expect(infos[0]).toEqual({ pages: null, run: null });
+		expect([...infos[1]!.pages!]).toEqual([other.id]);
+		expect(infos[1]!.run).toBeNull();
+	});
+
+	it("U3: a text box made smaller (a font size undone) is a move for the export's measure; one that only grew, or a recolour, is not", () => {
+		const { doc, history, s, refused } = rig();
+		const p = doc.pages[0]!;
+		const small: TextElement = { id: "t1", type: "text", x: 100, y: 100, width: 10, text: "PIN 9999", fontSize: 12, color: "#000000" };
+		const big: TextElement = { ...small, fontSize: 24 };
+		const a = redactBounds(small);
+		const b = redactBounds(big);
+		expect(b.maxX).toBeGreaterThan(a.maxX + 10);
+		const box: RedactBox = { x: a.maxX + 5, y: a.minY + 3, width: b.maxX - a.maxX - 6, height: 10 };
+		history.execute(new AddElement(p.id, small, 0));
+		const grow = new UpdateItems(p.id, new Set([small.id]), (item) => ("type" in item && item.type === "text" ? { ...item, fontSize: 24 } : item), "Font size");
+		expect(history.execute(grow)).toBe(true);
+		// The box covers the right of the 24 pt text: the whole text box is dropped from the export. Undo back to 12 pt would uncover it.
+		s.boxes[p.id] = [box];
+		expect(history.undo()).toBeNull();
+		expect(refused).toEqual(["undo"]);
+		expect((p.elements![0] as TextElement).fontSize).toBe(24);
+		// The pure check: shrinking is a move, growing and recolouring are not.
+		p.elements = [small];
+		const before = captureForStep(doc, s.read())!;
+		p.elements = [big];
+		expect(stepMovesUnderRedaction(before, doc, s.read())).toBe(false);
+		const before2 = captureForStep(doc, s.read())!;
+		p.elements = [{ ...big, color: "#ff0000" }];
+		expect(stepMovesUnderRedaction(before2, doc, s.read())).toBe(false);
+		const before3 = captureForStep(doc, s.read())!;
+		p.elements = [small];
+		expect(stepMovesUnderRedaction(before3, doc, s.read())).toBe(true);
+	});
+
+	it("U4: when the inverse of a refused step throws, the document is put back and the step is dropped like a failed step, without throwing", () => {
+		const doc = createDocument(NOW);
+		const p = doc.pages[0]!;
+		const messages: string[] = [];
+		// No content guard: before U4 the error was rethrown with the step in neither stack.
+		const history = new History(() => doc, 100, null, (m) => messages.push(m));
+		const ink = line(100, 300, 160, 305);
+		const cmd = new Flaky(p.id, ink, 0);
+		history.execute(cmd);
+		history.setStepCheck(() => () => true);
+		cmd.fail = true;
+		expect(() => history.undo()).not.toThrow();
+		expect(p.strokes).toEqual([ink]);
+		expect(history.canUndo()).toBe(false);
+		expect(history.canRedo()).toBe(false);
+		expect(messages).toEqual(["half done"]);
+	});
+
+	it("U4: out of order (per-page undo), a step whose inverse throws stays where it was and the document is put back", () => {
+		const doc = createDocument(NOW);
+		doc.pages.push(createPage());
+		const [a, b] = [doc.pages[0]!, doc.pages[1]!];
+		const messages: string[] = [];
+		const history = new History(() => doc, 100, checkContent, (m) => messages.push(m));
+		history.setPageRules(pageRules);
+		history.setPagewise(true);
+		const ink = line(100, 300, 160, 305);
+		const cmd = new Flaky(a.id, ink, 0);
+		history.execute(cmd);
+		history.execute(new AddStroke(b.id, line(10, 10, 60, 12), 0));
+		const order = history.entries().undo.map((e) => e.cmd);
+		history.setStepCheck(() => () => true);
+		cmd.fail = true;
+		expect(history.undoOnPage(a.id)).toEqual({ kind: "refused" });
+		expect(a.strokes).toEqual([ink]);
+		expect(history.entries().undo.map((e) => e.cmd)).toEqual(order);
+		expect(messages).toEqual(["half done"]);
+		expect(checkContent(doc)).toBeNull();
+	});
+
+	it("U5: a stroke resampled and moved (another number of points) is a move; one that only shrank or grew in place is not", () => {
+		const doc = createDocument(NOW);
+		const p = doc.pages[0]!;
+		const ink = line(100, 300, 160, 305);
+		p.strokes.push(ink);
+		const s = store();
+		s.boxes[p.id] = [{ x: 90, y: 290, width: 90, height: 30 }];
+		const before = captureForStep(doc, s.read())!;
+		p.strokes[0] = freezeStroke({ ...ink, points: line(300, 300, 360, 305, 20).points });
+		expect(stepMovesUnderRedaction(before, doc, s.read())).toBe(true);
+		// A join: the stroke grows from where it was.
+		p.strokes[0] = freezeStroke({ ...ink, points: [...ink.points, ...line(162, 305, 220, 310).points] });
+		expect(stepMovesUnderRedaction(before, doc, s.read())).toBe(false);
+		// A piece left by an area erase keeps the id and shrinks in place.
+		p.strokes[0] = freezeStroke({ ...ink, points: ink.points.slice(0, 3) });
+		expect(stepMovesUnderRedaction(before, doc, s.read())).toBe(false);
+	});
+
+	it("U6a: ink of a page the step removed, found on another page after it, is checked against the boxes of the page it left", () => {
+		const doc = createDocument(NOW);
+		doc.pages.push(createPage());
+		const [a, b] = [doc.pages[0]!, doc.pages[1]!];
+		const ink = line(100, 300, 160, 305);
+		a.strokes.push(ink);
+		const s = store();
+		s.boxes[a.id] = [{ x: 90, y: 290, width: 90, height: 30 }];
+		const before = captureForStep(doc, s.read())!;
+		doc.pages.splice(0, 1);
+		b.strokes.push(ink);
+		expect(stepMovesUnderRedaction(before, doc, s.read())).toBe(true);
+		// The page removed with its ink (nothing found elsewhere): not a move.
+		b.strokes.length = 0;
+		expect(stepMovesUnderRedaction(before, doc, s.read())).toBe(false);
+	});
+
+	it("U6b: a Redo that moves ink from a page without boxes onto a box of another page is refused (with and without page rules)", () => {
+		for (const pagewise of [false, true]) {
+			const { doc, history, s, refused } = rig({ pages: 2, pagewise });
+			const [a, b] = [doc.pages[0]!, doc.pages[1]!];
+			const ink = line(100, 300, 160, 305);
+			history.execute(new AddStroke(b.id, ink, 0));
+			const move = new Batch("Move to page", [new EraseStrokes(b.id, [{ stroke: ink, index: 0 }]), new AddStroke(a.id, ink, 0, false)]);
+			expect(history.execute(move)).toBe(true);
+			expect(history.undo()).toBe(move);
+			s.boxes[a.id] = [{ x: 90, y: 290, width: 90, height: 30 }];
+			expect(history.redo()).toBeNull();
+			expect(refused).toEqual(["redo"]);
+			expect(b.strokes).toContain(ink);
+			expect(a.strokes).not.toContain(ink);
+			// A box far from where the ink lands: the Redo runs.
+			s.boxes[a.id] = [{ x: 400, y: 600, width: 20, height: 20 }];
+			expect(history.redo()).toBe(move);
+		}
+	});
+
+	it("U7: the stored boxes are read once per history-panel jump, and once per ordinary step", () => {
+		const { doc, history, s, reads } = rig();
+		const p = doc.pages[0]!;
+		for (let i = 0; i < 3; i++) history.execute(new AddStroke(p.id, line(100, 300 + i * 40, 160, 305 + i * 40), p.strokes.length));
+		s.boxes[p.id] = [{ x: 400, y: 700, width: 20, height: 20 }];
+		const r0 = reads();
+		expect(jumpHistory(history, { kind: "start" })).toMatchObject({ direction: "undo", wanted: 3, done: 3 });
+		expect(reads() - r0).toBe(1);
+		history.redo();
+		history.redo();
+		expect(reads() - r0).toBe(3);
 	});
 });
 

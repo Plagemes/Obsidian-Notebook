@@ -4717,11 +4717,16 @@ Hardening from the 0.28 reviews, not a roadmap item. Implemented, not verified o
 3488. **Move to another page.** Select writing, move it to another page, Undo it (it is back), draw a box over it on the first page, Redo: refused.
 3489. **Drawing states and tables.** Make a drawing with states whose ink sits in the last row of a table (state part over that ink). Select the table, *Add row* above that row: refused with "These lines, or the writing the change would push, belong to a part of a drawing with states…"; nothing moves. *Add row* below the part's ink still works.
 3490. **Italian.** With the plugin in Italian the two notices read in Italian ("Annulla non eseguito…", "Ripeti non eseguito…").
+3491. **Margin comment (U1).** Write three lines and add a margin comment on the first one ("PIN 9999", with a reply). *Reorder lines*: drag the first line below the second (the comment moves with it). Draw a redaction box over the comment's region only, not over the writing. Undo: refused with the notice. Export: the comment and its reply are not in the export. Remove the box: Undo works.
+3492. **Font size (U3).** Add a text box "PIN 9999" at a small size, make it larger, draw a box over the part of the larger text that the small one did not reach. Undo the size change: refused. Remove the box, Undo, then draw a box beside the small text where the larger one will reach and Redo: allowed (a text that only grows can only be covered more).
+3493. **Unreadable storage (U2).** Only on a test vault: damage the redaction storage (developer console: set the local-storage value `notebook-redactions`, which Obsidian prefixes with the vault id, to `{`), reopen the notebook. Lasso-move a word, Undo: refused with the notice that the stored boxes cannot be read, naming *Reset redaction storage* (not the "remove the boxes" notice). Writing a stroke and undoing it still works. Export… › Redact… › *Reset redaction storage*, confirm: the Undo now works. Check the Italian text too.
+3494. **Long jump (U7).** In a notebook with boxes and a few hundred steps, tap the first entry of the history panel: the jump runs as fast as without boxes (no visible pause per slice).
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
 | Undo / Redo refused when they move writing out from under (or under) a redaction box; step kept in place (also per page, groups, jumps; unreadable boxes refuse any move) | yes | `tests/redact-undo.test.ts` | | | |
 | Table row / column insert refuses pushed ink of a drawing-state part (R3-2) | yes | `tests/redact-undo.test.ts` | | | |
+| Undo / Redo check hardened: comment regions (U1), unreadable-storage notice and pages named by the step only (U2), export area of elements (U3), failing inverse dropped like a failed step (U4), resampled strokes (U5), cross-page moves to/from removed or box-free pages (U6), one store read per jump (U7) | yes | `tests/redact-undo.test.ts` | | | |
 | Excerpts in other notebooks marked stale after a PDF turn or crop; reading position remapped (R2-3) | no | | | | needs a view key in the excerpt source (format change); documented in `docs/architecture.md` |
 ### 0.29 — figcaptions: figure captions and self-updating references (roadmap #248; steps 3360-3379)
 

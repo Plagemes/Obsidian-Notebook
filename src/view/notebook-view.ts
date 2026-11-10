@@ -3574,8 +3574,14 @@ export class NotebookView extends FileView {
 				const stored = this.redactState();
 				return { boxesOf: (pageId) => boxesOf(stored.boxes, pageId), unreadable: stored.unreadable === true, any: countBoxes(stored.boxes) > 0 };
 			},
-			// Nothing changed (the step is back where it was), so the buttons are already right.
-			(step) => void showNotice(t(step === "undo" ? "redactundo.undo" : "redactundo.redo"), 8000),
+			// Nothing changed (the step is back where it was), so the buttons are already right. Review U2: when the stored boxes cannot be
+			// read there is no box to remove, so the notice names the way out (Redact > Reset redaction storage, or the boxes drawn again).
+			(step, unreadable) => void showNotice(
+				unreadable
+					? t("redactundo.unreadable", { step: t(step === "undo" ? "tool.undo" : "tool.redo") })
+					: t(step === "undo" ? "redactundo.undo" : "redactundo.redo"),
+				unreadable ? 12000 : 8000,
+			),
 		);
 	}
 

@@ -5761,6 +5761,7 @@ export const en = {
 	"zettel.tpl.manage.confirmDelete": "Tap again to delete",
 	"settings.cardTemplates": "Card templates",
 	"settings.cardTemplates.desc": "Concept, question, quote and definition, and templates of your own, for new cards.",
+	"redactundo.unreadable": "{step} was not done: the redaction boxes stored on this device cannot be read, so no step that moves writing can be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done); the step stays in the history.",
 } as const;
 
 export type MessageKey = keyof typeof en;

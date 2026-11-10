@@ -5762,4 +5762,5 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"zettel.tpl.manage.confirmDelete": "Tocca ancora per eliminare",
 	"settings.cardTemplates": "Modelli di scheda",
 	"settings.cardTemplates.desc": "Concetto, domanda, citazione e definizione, più modelli tuoi, per le nuove schede.",
+	"redactundo.unreadable": "{step} non eseguito: i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi nessun passo che sposta la scrittura può essere verificato. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto); il passo resta nella cronologia.",
 };

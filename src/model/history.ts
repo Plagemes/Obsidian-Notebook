@@ -755,8 +755,18 @@ export type ContentGuard = (doc: NotebookDocument) => string | null;
  * the step; it returns null (nothing to check) or a function called with the document AFTER the step, which returns true to refuse the step.
  * A refused step changes nothing: the document is put back as it was and the step stays exactly where it was in its stack (it is not dropped,
  * like a step on a locked page), so it is still offered once what refused it is gone. The check says why itself.
+ * Review U4: should the inverse that takes a refused step back throw, the document is put back from a snapshot and the step is treated like
+ * a step that failed (`dropStep`: an in-order step is dropped, one taken from the middle stays where it was), never left half done.
  */
-export type StepCheck = (doc: NotebookDocument, step: "undo" | "redo") => ((after: NotebookDocument) => boolean) | null;
+export type StepCheck = (doc: NotebookDocument, step: "undo" | "redo", info: StepInfo) => ((after: NotebookDocument) => boolean) | null;
+
+/** 0.29 (reviews U2, U7): what the history knows about a step when it asks a `StepCheck`. */
+export interface StepInfo {
+	/** The ids of the pages the step names (per-page undo rules); null: unknown, or the step may change every page. */
+	pages: ReadonlySet<string> | null;
+	/** A token that stays the same for every step of one `runSteps` run (a history-panel jump); null outside a run. */
+	run: object | null;
+}
 
 /** What an object of the document held before an undo or a redo: its own fields, and the contents of its lists and tables that can change in place. */
 interface Shot {
@@ -959,15 +969,22 @@ export class History {
 	 */
 	runSteps<T>(fn: () => T): T {
 		const was = this.stepsRun;
+		const token = this.runToken;
 		this.stepsRun = true;
 		this.knownBad = null;
+		// 0.29 (review U7): one token per run (an inner run keeps the outer one), so a step check can read what it needs once per jump.
+		if (!token) this.runToken = {};
 		try {
 			return fn();
 		} finally {
 			this.stepsRun = was;
+			this.runToken = token;
 			this.knownBad = null;
 		}
 	}
+
+	/** 0.29 (review U7): the token of the `runSteps` run in progress (null outside one), handed to the step check. */
+	private runToken: object | null = null;
 
 	/** The guard result the previous step of a `runSteps` run ended with (true: the document failed it), taken: the next step sets it again. */
 	private takeKnown(): boolean | null {
@@ -1093,10 +1110,12 @@ export class History {
 	}
 
 	/** The outside check for one step, taken before it; a check that fails to start refuses the step (fail closed). */
-	private prepareCheck(doc: NotebookDocument, step: "undo" | "redo"): ((after: NotebookDocument) => boolean) | null {
+	private prepareCheck(doc: NotebookDocument, step: "undo" | "redo", cmd: Command): ((after: NotebookDocument) => boolean) | null {
 		if (!this.stepCheck) return null;
 		try {
-			return this.stepCheck(doc, step);
+			// Review U2: the pages the step names, so that a check need not copy every page of the notebook for each step.
+			const scope = this.rules ? this.rules.scope(cmd) : null;
+			return this.stepCheck(doc, step, { pages: scope && !scope.all ? scope.pages : null, run: this.runToken });
 		} catch (e) {
 			console.error("[notebook] undo/redo check", e);
 			return () => true;
@@ -1106,10 +1125,13 @@ export class History {
 	/**
 	 * 0.29 (review R3-1): asks the outside check about the step just taken; when it refuses (or fails: fail closed), the step is taken back
 	 * with its own inverse (`inverse`: as for a locked page, so a command that remembers what it swapped, like `UpdateItems`, is ready for
-	 * the next try). Should the inverse throw, the document is put back from `snapshot`. True when refused: the caller puts the step back
-	 * where it was.
+	 * the next try): "refused", the caller puts the step back where it was. Review U4: should the inverse throw, the command may be half
+	 * updated inside, so the document is put back from `snapshot` and the step goes the way of a step that failed (`dropStep`: dropped in
+	 * order, kept where it was out of order, and said): "dropped", the caller does nothing more. "ok": the step stands.
 	 */
-	private checkRefused(check: (after: NotebookDocument) => boolean, snapshot: Shot[] | null, inverse: () => void): boolean {
+	private checkRefused(
+		check: (after: NotebookDocument) => boolean, snapshot: Shot[], inverse: () => void, step: "undo" | "redo", cmd: Command, keepAt: number | null,
+	): "ok" | "refused" | "dropped" {
 		let refuse: boolean;
 		try {
 			refuse = check(this.doc());
@@ -1117,14 +1139,14 @@ export class History {
 			console.error("[notebook] undo/redo check", e);
 			refuse = true;
 		}
-		if (!refuse) return false;
+		if (!refuse) return "ok";
 		try {
 			inverse();
 		} catch (e) {
-			if (!snapshot) throw e;
-			for (const s of snapshot) restoreShot(s);
+			this.dropStep(snapshot, e instanceof Error ? e.message : String(e), step, cmd, keepAt);
+			return "dropped";
 		}
-		return true;
+		return "refused";
 	}
 
 	/** Drops the oldest steps beyond the limit. */
@@ -1198,13 +1220,15 @@ export class History {
 		this.undoStack.splice(at, 1);
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
-		const snapshot = this.guard ? snapshotDocument(doc) : null;
+		const check = this.prepareCheck(doc, "undo", cmd);
+		// Review U4: a snapshot whenever a check may take the step back (shallow: no stroke or element is copied).
+		const snapshot = this.guard || check ? snapshotDocument(doc) : null;
 		const wasBad = this.badBefore(doc, snapshot, known);
-		const check = this.prepareCheck(doc, "undo");
 		if (!this.ran(() => cmd.revert(doc), snapshot, "undo", cmd, keepAt)) return null;
-		if (check && this.checkRefused(check, snapshot, () => cmd.apply(doc))) {
-			this.undoStack.splice(at, 0, cmd);
-			return null;
+		if (check && snapshot) {
+			const verdict = this.checkRefused(check, snapshot, () => cmd.apply(doc), "undo", cmd, keepAt);
+			if (verdict === "refused") this.undoStack.splice(at, 0, cmd);
+			if (verdict !== "ok") return null;
 		}
 		if (locks) {
 			// An older edit of a page that has been locked since (a synced change, a lock set later and left on): the undo
@@ -1238,13 +1262,14 @@ export class History {
 		this.redoStack.splice(at, 1);
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
-		const snapshot = this.guard ? snapshotDocument(doc) : null;
+		const check = this.prepareCheck(doc, "redo", cmd);
+		const snapshot = this.guard || check ? snapshotDocument(doc) : null;
 		const wasBad = this.badBefore(doc, snapshot, known);
-		const check = this.prepareCheck(doc, "redo");
 		if (!this.ran(() => cmd.apply(doc), snapshot, "redo", cmd, keepAt)) return null;
-		if (check && this.checkRefused(check, snapshot, () => cmd.revert(doc))) {
-			this.redoStack.splice(at, 0, cmd);
-			return null;
+		if (check && snapshot) {
+			const verdict = this.checkRefused(check, snapshot, () => cmd.revert(doc), "redo", cmd, keepAt);
+			if (verdict === "refused") this.redoStack.splice(at, 0, cmd);
+			if (verdict !== "ok") return null;
 		}
 		if (locks) {
 			const hit = lockedChanges(doc, locks);
