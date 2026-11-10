@@ -345,6 +345,49 @@ describe("updating a chart (#244)", () => {
 		expect(planChartUpdate(states.doc.pages, states.page, states.chart(), states.inView())).toEqual({ ok: false, reason: "states" });
 	});
 
+	it("keeps the z-order slot of the chart: ink written over it stays over it (C1)", () => {
+		const w = withChart();
+		const old = w.chart();
+		const over = { ...old.strokes[0]!, id: "over-ink", group: undefined, points: [[1, 1, 0.5], [9, 9, 0.5]] } as unknown as Stroke;
+		w.page.strokes.push(over);
+		const edited = w.page.elements!.find((e) => e.type === "text" && e.text === "12" && e.group === undefined) as TextElement;
+		w.page.elements![w.page.elements!.indexOf(edited)] = { ...edited, text: "40" };
+		const firstS = w.page.strokes.indexOf(old.strokes[0]!);
+		const firstE = w.page.elements!.indexOf(old.elements[0]!);
+		const plan = planChartUpdate(w.doc.pages, w.page, w.chart(), w.inView(), undefined, ids);
+		if (!plan.ok) throw new Error("plan");
+		expect(w.history.execute(plan.cmd)).toBe(true);
+		expect(w.page.strokes[w.page.strokes.length - 1]).toBe(over);
+		expect(w.page.strokes.indexOf(plan.strokes[0]!)).toBe(firstS);
+		expect(w.page.elements!.indexOf(plan.elements[0]!)).toBe(firstE);
+		expect(w.history.undo()).not.toBeNull();
+		expect(w.page.strokes.indexOf(old.strokes[0]!)).toBe(firstS);
+		expect(w.page.strokes[w.page.strokes.length - 1]).toBe(over);
+	});
+
+	it("says locked, not gone, when a text box of the chart is locked and so left out of the selection (C2)", () => {
+		const w = withChart();
+		const chart = w.chart();
+		const first = chart.elements[0]!;
+		w.page.elements![w.page.elements!.indexOf(first)] = { ...first, locked: true };
+		const selected = { ...chart, elements: chart.elements.slice(1) };
+		expect(planChartUpdate(w.doc.pages, w.page, selected, w.inView())).toEqual({ ok: false, reason: "locked" });
+	});
+
+	it("does not turn an axis label into the title when the title box was deleted (C3)", () => {
+		const w = withChart();
+		const old = w.chart();
+		expect(old.link.titled).toBe(true);
+		const title = w.page.elements!.find((e) => e.group === old.group && e.type === "text" && e.text === "Sales" && e.fontSize === 13) as TextElement;
+		expect(title).toBeTruthy();
+		w.page.elements = w.page.elements!.filter((e) => e !== title);
+		const edited = w.page.elements.find((e) => e.type === "text" && e.text === "12" && e.group === undefined) as TextElement;
+		w.page.elements[w.page.elements.indexOf(edited)] = { ...edited, text: "40" };
+		const plan = planChartUpdate(w.doc.pages, w.page, w.chart(), w.inView(), undefined, ids);
+		if (!plan.ok) throw new Error("plan");
+		expect(plan.elements.some((e) => e.fontSize === 13)).toBe(false);
+	});
+
 	it("refuses a chart with no table to read", () => {
 		const w = withChart();
 		const c = w.chart();
