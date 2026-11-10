@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createDocument, createPage } from "../src/model/document";
 import {
@@ -11,6 +9,9 @@ import { CLASSIFIED, pageRules, pageScope, sharedElsewhere } from "../src/model/
 import { checkContent } from "../src/model/serialize";
 import type { Asset, NotebookDocument, PageElement, Stroke } from "../src/model/types";
 import { line } from "./helpers";
+
+/** Every source file of the plugin as text (the command classes are read from it). */
+const SOURCES = import.meta.glob<string>("../src/**/*.ts", { query: "?raw", import: "default", eager: true });
 
 const text = (id: string, body = "hello"): PageElement => ({ id, type: "text", x: 10, y: 10, width: 100, text: body, fontSize: 14, color: "#000000" });
 const image = (id: string, asset: string): PageElement => ({ id, type: "image", asset, x: 0, y: 0, width: 50, height: 50, rotation: 0 });
@@ -58,7 +59,7 @@ describe("step scopes", () => {
 
 	it("a batch or group on one page is local; across pages it is global and names both", () => {
 		const r = rig();
-		const one = new Batch("Run macro", [new AddStroke(r.pages[0], line(0, 0, 5, 5), 0), new SetPaper(r.pages[0], { kind: "grid", spacing: 20 }, { kind: "lined", spacing: 30 })]);
+		const one = new Batch("Run macro", [new AddStroke(r.pages[0], line(0, 0, 5, 5), 0), new SetPaper(r.pages[0], { kind: "grid", spacing: 20 }, { kind: "ruled", spacing: 30 })]);
 		expect(pageScope(one).local).toBe(true);
 		const two = new Batch("Run macro", [new AddStroke(r.pages[0], line(0, 0, 5, 5), 0), new AddStroke(r.pages[1], line(0, 0, 5, 5), 0)]);
 		const scope = pageScope(two);
@@ -85,16 +86,9 @@ describe("step scopes", () => {
 	it("every command class of the source is classified (a new one must be decided on purpose)", () => {
 		const names = new Set<string>(CLASSIFIED);
 		const found: string[] = [];
-		const walk = (dir: string): void => {
-			for (const entry of readdirSync(dir, { withFileTypes: true })) {
-				const path = join(dir, entry.name);
-				if (entry.isDirectory()) walk(path);
-				else if (entry.name.endsWith(".ts")) {
-					for (const m of readFileSync(path, "utf8").matchAll(/class (\w+) implements Command\b/g)) found.push(m[1]!);
-				}
-			}
-		};
-		walk(join(__dirname, "..", "src"));
+		for (const source of Object.values(SOURCES)) {
+			for (const m of source.matchAll(/class (\w+) implements Command\b/g)) found.push(m[1]!);
+		}
 		expect(found.length).toBeGreaterThan(25);
 		expect(found.filter((n) => !names.has(n))).toEqual([]);
 	});
@@ -309,7 +303,7 @@ describe("dependency refusal and global steps", () => {
 	it("a step that touches the whole notebook does not block a page, and is not undone by a page", () => {
 		const r = rig();
 		r.write(0);
-		r.history.execute(new SetMeta(r.doc.meta!, { ...r.doc.meta!, favorite: true } as typeof r.doc.meta));
+		r.history.execute(new SetMeta(r.doc.meta!, { ...r.doc.meta!, favorite: true }));
 		expect(r.history.undoOnPage(r.pages[0]).kind).toBe("done");
 		expect(r.history.depth().undo).toBe(1);
 	});
@@ -430,7 +424,7 @@ describe("remap after an upkeep change swapped element objects", () => {
 		const el = text("t1", "note");
 		r.history.execute(new AddElement(r.pages[0], el, 0));
 		const first = r.doc.pages[0]!.elements![0]!;
-		r.history.execute(new ReplaceElement(r.pages[0], first, { ...first, x: 99 } as PageElement));
+		r.history.execute(new ReplaceElement(r.pages[0], first, { ...first, x: 99 }));
 		r.write(1);
 		const now = r.doc.pages[0]!.elements![0]!;
 		expect(r.history.applyQuietly(new ReplaceElement(r.pages[0], now, { ...now, text: "renamed" } as PageElement))).toBe(true);
@@ -469,7 +463,7 @@ describe("the document guard and the unsavable step", () => {
 		armed = true;
 		expect(r.history.redoOnPage(r.pages[0]).kind).toBe("refused");
 		expect(r.ids(0)).toEqual([]);
-		expect(r.refused.at(-1)?.step).toBe("redo");
+		expect(r.refused[r.refused.length - 1]?.step).toBe("redo");
 		expect(r.history.depth().redo).toBe(0);
 		expect(r.history.undoOnPage(r.pages[1]).kind).toBe("done");
 	});
@@ -483,7 +477,7 @@ describe("the document guard and the unsavable step", () => {
 		r.doc.pages[2]!.strokes.push(a);
 		expect(r.history.redoOnPage(r.pages[0]).kind).toBe("refused");
 		expect(r.ids(0)).toEqual([]);
-		expect(r.refused.at(-1)?.step).toBe("redo");
+		expect(r.refused[r.refused.length - 1]?.step).toBe("redo");
 	});
 
 	it("read-only mode refuses everything", () => {
@@ -523,7 +517,7 @@ describe("files shared with another page", () => {
 		const step = new Batch("Insert image", [new AddAsset(a), new AddElement(r.pages[0], image("i1", a.id), 0)]);
 		r.history.execute(step);
 		expect(sharedElsewhere(r.doc, pageScope(step), r.pages[0])).toBe(false);
-		r.doc.meta = { ...r.doc.meta!, coverArt: { kind: "image", asset: a.id } } as typeof r.doc.meta;
+		r.doc.meta = { ...r.doc.meta!, coverArt: { kind: "image", asset: a.id } };
 		expect(sharedElsewhere(r.doc, pageScope(step), r.pages[0])).toBe(true);
 	});
 });
