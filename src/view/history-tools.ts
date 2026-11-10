@@ -7,7 +7,7 @@ import type { History } from "../model/history";
 import type { JumpResult, JumpTarget } from "../model/history-jump";
 import type { NotebookDocument } from "../model/types";
 import { HistoryPanelModal, type HistoryPanelApi } from "./history-panel";
-import { historyRows, jumpNotice, type HistoryRow } from "./history-panel-logic";
+import { historyRows, jumpNotice, type HistoryRow, type PageView } from "./history-panel-logic";
 import { showNotice } from "./notice";
 
 /** What the tools need from the notebook view. */
@@ -21,6 +21,8 @@ export interface HistoryHost {
 	editable(): boolean;
 	/** How many steps the history keeps at most. */
 	limit: number;
+	/** 0.28 (#98): the page Undo acts on when per-page undo is on; null when it is off (the panel then shows no per-page marks). */
+	pageView?(): PageView | null;
 	/** Goes to the point (through the history, step by step); null when the view cannot now (a stroke is being drawn). */
 	jump(target: JumpTarget, progress: (done: number, wanted: number) => void): JumpResult | Promise<JumpResult> | null;
 }
@@ -37,7 +39,11 @@ export class HistoryTools implements HistoryPanelApi {
 	}
 
 	rows(): HistoryRow[] {
-		return historyRows(this.host.entries(), this.host.doc(), Date.now());
+		return historyRows(this.host.entries(), this.host.doc(), Date.now(), this.host.pageView?.() ?? undefined);
+	}
+
+	perPage(): boolean {
+		return (this.host.pageView?.() ?? null) !== null;
 	}
 
 	counts(): { undo: number; redo: number; max: number } {

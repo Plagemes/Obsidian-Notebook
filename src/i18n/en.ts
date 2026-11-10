@@ -5211,6 +5211,24 @@ export const en = {
 	"help.pdfCrop": "Keeps only part of the PDF page, on this page or on every page of the PDF. Nothing is deleted: Whole page brings it all back.",
 	"histpanel.t.pdfRotate": "PDF page rotated",
 	"histpanel.t.pdfCrop": "PDF page cropped",
+	// 0.28 pageundo (#98): per-page undo
+	"settings.pageUndo": "Undo on this page only",
+	"settings.pageUndo.desc": "Undo and Redo take back the last change made on the page in view, not on other pages.",
+	"tool.undo.page": "Undo on this page",
+	"tool.redo.page": "Redo on this page",
+	"help.undoPage": "Take back the last change made on this page. Other pages keep theirs.",
+	"help.redoPage": "Bring back the change you just undid on this page.",
+	"pageundo.nothing": "Nothing to undo on this page.",
+	"pageundo.nothing.elsewhere": "Nothing to undo on this page. Other pages have changes you can undo from there.",
+	"pageundo.global": "The last change on this page also touched other pages or the whole notebook, so it is not undone from here. Open the history panel to go back past it.",
+	"pageundo.shared": "The last change on this page added a picture file or a slide link that the whole notebook shares, so it is only undone in order. Open the history panel to go back past it.",
+	"pageundo.redo.nothing": "Nothing to redo on this page.",
+	"pageundo.redo.shared": "A change undone after this one added a picture file or a slide link, or touches the whole notebook, so this one is only redone in order. Use the history panel to bring it back.",
+	"history.stepRefusedKept": "This step could not be undone or redone on its own: the notebook could not be saved with it ({message}). The notebook is as it was, and the step is still in the history: use the history panel to go back past the steps after it.",
+	"pageundo.redo.global": "The next change to redo on this page also touches other pages or the whole notebook. Use the history panel to bring it back.",
+	"histpanel.scope.global": "whole notebook",
+	"histpanel.scope.here": "this page",
+	"histpanel.pageundo.note": "Per-page undo is on: Undo and Redo only act on the page in view. A step marked “whole notebook” touches several pages or the page list, so it cannot be undone from one page. Tapping a step goes back or forward through all pages, in order.",
 } as const;
 
 export type MessageKey = keyof typeof en;

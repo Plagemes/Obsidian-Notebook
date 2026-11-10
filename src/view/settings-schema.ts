@@ -325,6 +325,8 @@ const PAGES: SettingSpec[] = [
 	},
 	// 0.27 semzoom (#130)
 	{ id: "semanticZoom", section: "pages", order: 26, name: "settings.semanticZoom", desc: "settings.semanticZoom.desc", control: { type: "toggle" }, keywords: "zoom out overview headings titles labels panoramica titoli orientamento" },
+	// 0.28 pageundo (#98)
+	{ id: "pageUndo", section: "pages", order: 35, name: "settings.pageUndo", desc: "settings.pageUndo.desc", control: { type: "toggle" }, keywords: "undo redo history page per-page annulla ripeti cronologia pagina" },
 	{ id: "autoNextPage", section: "pages", order: 30, name: "settings.autoNextPage", desc: "settings.autoNextPage.desc", control: { type: "toggle" } },
 	{ id: "autoScrollWriting", section: "pages", order: 40, name: "settings.autoScroll", desc: "settings.autoScroll.desc", control: { type: "toggle" } },
 	{ id: "pageTurnerKeys", section: "pages", order: 50, name: "settings.pageTurnerKeys", desc: "settings.pageTurnerKeys.desc", control: { type: "toggle" }, keywords: "keyboard tastiera clicker" },

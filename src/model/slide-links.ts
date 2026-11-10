@@ -76,6 +76,11 @@ export class AddSlideRef implements Command {
 	private added = false;
 	constructor(readonly ref: SlideRef) {}
 
+	/** 0.28 (#98): this command added the entry (it was not there), so undoing it takes the entry away. */
+	get adds(): boolean {
+		return this.added;
+	}
+
 	apply(doc: NotebookDocument): void {
 		const list = (doc.slides ??= []);
 		this.added = !list.some((r) => r.id === this.ref.id);

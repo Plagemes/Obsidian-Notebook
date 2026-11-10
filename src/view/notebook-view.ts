@@ -69,6 +69,7 @@ import {
 	ReplaceStroke, SetMeta, SetPageSize, type Command,
 } from "../model/history";
 import { pageContentCommand } from "../model/page-content";
+import { pageRules } from "../model/page-undo";
 import { checkContent, freezeStroke } from "../model/serialize";
 import { normaliseOpacity } from "../model/opacity";
 import { newStrokeTaper, strokeTaper } from "../model/taper";
@@ -456,13 +457,14 @@ export class NotebookView extends FileView {
 	 * Every edit is checked strictly before it is kept (`checkContent`): an edit that the writer would refuse is undone
 	 * with a notice, so a bad element can never stop every later save.
 	 */
-	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message, step) => {
+	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message, step, kept) => {
 		console.error(`[notebook] ${step ?? "edit"} refused, the notebook could not be saved with it:`, message);
 		// 0.27 (#170): a macro counts the refusals and says it once itself, naming the step.
 		if (!step) this.refusalCount++;
 		if (!step && this.quietRefusals) return;
 		// 0.19: an undo or a redo that would leave a notebook the writer refuses is not done and leaves the history (the document is as before).
-		showNotice(step ? t("history.stepRefused", { message }) : t("history.refused", { message }), 10000);
+		// 0.28 review (P3): a step taken out of order by per-page undo stays in the history, so the notice says that instead.
+		showNotice(step ? t(kept ? "history.stepRefusedKept" : "history.stepRefused", { message }) : t("history.refused", { message }), 10000);
 		if (step) this.updateHistoryButtons();
 	},() => this.userReadOnly, (ids) => this.pagesLocked(ids), () => Date.now());
 	/**
@@ -849,6 +851,7 @@ export class NotebookView extends FileView {
 			entries: () => this.history.entries(),
 			editable: () => !!this.session?.doc && this.editable(),
 			limit: this.history.limit,
+			pageView: () => (this.pageUndoOn() ? { pageId: this.pageUndoTarget() } : null),
 			jump: (target, progress) => this.jumpHistoryTo(target, progress),
 		});
 		this.workspaceTools = new WorkspaceTools(this.workspaceHost());
@@ -1091,10 +1094,10 @@ export class NotebookView extends FileView {
 			editable: () => this.editable() && !this.controller?.drawing,
 			tools: () => this.tools,
 			apply: (patch) => this.toolbar.apply(patch),
-			canUndo: () => this.history.canUndo(),
+			canUndo: () => this.historyAvailable().undo,
 			undo: () => this.runAction("undo"),
 			// ui redesign: the dial's redo, favourites, save-as-favourite, ruler and eyedropper hint.
-			canRedo: () => this.history.canRedo(),
+			canRedo: () => this.historyAvailable().redo,
 			redo: () => this.runAction("redo"),
 			favourites: () => this.penStore().favourites(),
 			applyFavourite: (i) => this.runAction(`favourite-${i + 1}`),
@@ -1788,6 +1791,13 @@ export class NotebookView extends FileView {
 	}
 
 	applySettings(settings: NotebookSettings): void {
+		// 0.28 (#98): per-page undo. The history is told how pages are told apart, and whether a new edit keeps the other pages' undone steps.
+		this.history.setPageRules(pageRules);
+		this.history.setPagewise(settings.pageUndo);
+		if (this.toolbar) {
+			this.toolbar.setPageUndo(settings.pageUndo);
+			this.updateHistoryButtons();
+		}
 		this.meaningTools?.refresh();
 		this.applyInput(settings);
 		refreshSlideBadges(this); // 0.14 slides: the badges setting
@@ -1918,11 +1928,54 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		this.penLinks?.hideChip();
 		this.pageOffer?.cancel();
-		const undone = this.history.undo();
+		const undone = this.pageUndoOn() ? this.undoOnThisPage() : this.history.undo();
 		if (!undone) return;
 		this.afterHistoryChange();
 		// 0.23 (#314): the first Undo after a hook was trimmed at pen-up only gives the hook back; say so, so it does not look like nothing happened.
 		if (isTrimStep(undone)) showNotice(t("trim.undone"), 3000);
+	}
+
+	/** 0.28 (#98): the "Per-page undo" setting is on: Undo and Redo act on the page in view (`currentPageIndex`, the page last touched in a spread). */
+	private pageUndoOn(): boolean {
+		return this.host.settings.pageUndo === true;
+	}
+
+	/** 0.28 (#98): the id of the page Undo / Redo act on, or null when per-page undo is off or there is no page. */
+	private pageUndoTarget(): string | null {
+		if (!this.pageUndoOn()) return null;
+		return this.shownDoc()?.pages[this.currentPageIndex()]?.id ?? null;
+	}
+
+	/** 0.28 (#98): Undo on the page in view; says why when nothing was undone (the history says the rest: a locked page, a refused step). */
+	private undoOnThisPage(): Command | null {
+		const id = this.pageUndoTarget();
+		if (id === null) return this.history.undo();
+		const r = this.history.undoOnPage(id);
+		if (r.kind === "done") return r.cmd;
+		if (r.kind === "nothing") showNotice(t(this.history.canUndo() ? "pageundo.nothing.elsewhere" : "pageundo.nothing"), 3000);
+		else if (r.kind === "global") showNotice(t(r.why === "shared" ? "pageundo.shared" : "pageundo.global"), 5000);
+		else this.updateHistoryButtons();
+		return null;
+	}
+
+	/** 0.28 (#98): Redo on the page in view. */
+	private redoOnThisPage(): Command | null {
+		const id = this.pageUndoTarget();
+		if (id === null) return this.history.redo();
+		const r = this.history.redoOnPage(id);
+		if (r.kind === "done") return r.cmd;
+		if (r.kind === "nothing") showNotice(t("pageundo.redo.nothing"), 3000);
+		else if (r.kind === "global") showNotice(t(r.why === "shared" ? "pageundo.redo.shared" : "pageundo.redo.global"), 5000);
+		else this.updateHistoryButtons();
+		return null;
+	}
+
+	/** 0.28 (#98): the buttons of Undo / Redo: on this page when per-page undo is on. A step that cannot be taken out of order still enables the button (a tap says why). */
+	private historyAvailable(): { undo: boolean; redo: boolean } {
+		const id = this.pageUndoTarget();
+		if (id === null) return { undo: this.history.canUndo(), redo: this.history.canRedo() };
+		const peek = this.history.peekOnPage(id);
+		return { undo: peek.undo !== "none", redo: peek.redo !== "none" };
 	}
 
 	/**
@@ -1952,7 +2005,7 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		this.penLinks?.hideChip();
 		this.pageOffer?.cancel();
-		if (this.history.redo()) this.afterHistoryChange();
+		if (this.pageUndoOn() ? this.redoOnThisPage() : this.history.redo()) this.afterHistoryChange();
 	}
 
 	/** 0.25 (#84): how many steps can be taken back and brought back (for the ranking of the All actions sheet). */
@@ -5183,7 +5236,8 @@ export class NotebookView extends FileView {
 	}
 
 	private updateHistoryButtons(): void {
-		this.toolbar.setHistory(this.editable() && this.history.canUndo(), this.editable() && this.history.canRedo());
+		const available = this.historyAvailable();
+		this.toolbar.setHistory(this.editable() && available.undo, this.editable() && available.redo);
 	}
 
 	private updatePageIndicator(): void {
@@ -5211,6 +5265,7 @@ export class NotebookView extends FileView {
 			this.axes?.cancelOffer();
 			this.smartAdd?.hide();
 			this.refreshUi(); // the contextual bar follows the kind of page in view
+			if (this.pageUndoOn()) this.updateHistoryButtons(); // 0.28 (#98): Undo / Redo belong to the page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
 			this.syncHooks?.page(current);
 		} else if (n && this.file && this.pendingPage === null) {

@@ -2087,9 +2087,17 @@ export function checkContent(doc: NotebookDocument): string | null {
 			if (viewLine(readView(JSON.parse(line), `view ${v.id}`, null)) !== line) return `view ${v.id}: round-trip mismatch`;
 			if (Object.isFrozen(v)) checkedViews.add(v);
 		}
+		// 0.28 review (#98): the references into the notebook's shared tables are checked on EVERY call, not cached with the element: an out-of-order
+		// step must never leave a picture, a background or the cover pointing at a file record that is no longer there. (Ink whose slide is not in
+		// the table is accepted on purpose, see tests/model-v12: the writer drops the link; per-page undo never removes a slide entry out of order.)
+		const asset = (id: string, kind: AssetKind): boolean => Object.prototype.hasOwnProperty.call(assets, id) && assets[id]!.kind === kind;
+		const cover = doc.meta?.coverArt;
+		if (cover?.kind === "image" && !asset(cover.asset, "image")) return "meta.coverArt.asset: not an image asset of this notebook";
 		// 0.19: ids are unique across strokes and elements, as `serializeChecked` requires (two copies of one element would fail every save).
 		const ids = new Set<string>();
 		for (const page of doc.pages) {
+			const bg = page.background;
+			if (bg && !asset(bg.asset, bg.kind === "pdf" ? "pdf" : "image")) return `page ${page.id} background: refers to an asset that does not exist`;
 			// v19: a start and an end time that go together (the writer writes what it has, the strict reader refuses anything else).
 			const times = pageTimesProblem(page.startAt, page.endAt);
 			if (times) return `page ${page.id}: ${times}`;
@@ -2102,6 +2110,8 @@ export function checkContent(doc: NotebookDocument): string | null {
 			for (const el of page.elements ?? []) {
 				if (ids.has(el.id)) return `element ${el.id}: duplicate id`;
 				ids.add(el.id);
+				const ref = el.type === "image" || el.type === "excerpt" ? el.asset : undefined;
+				if (ref !== undefined && !asset(ref, "image")) return `element ${el.id}: refers to an asset that does not exist`;
 			}
 			for (const s of page.strokes) {
 				if (verifiedLines.has(s) || validatedStrokes.has(s)) continue;
