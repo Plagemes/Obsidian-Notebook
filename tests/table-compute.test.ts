@@ -168,12 +168,21 @@ describe("Compute keeps the words it did not write (review 0.30 I7)", () => {
 	}
 
 	it("replaces only the value after the arrow and keeps the person's annotation", () => {
+		// Review R3: "99 (checked by hand)" on one line may be the person's own number: it is kept behind the new result.
 		const r = computeOne(`=A1*2 ${RESULT_MARK} 99 (checked by hand)`);
-		expect(r.after).toBe(`=A1*2 ${RESULT_MARK} 20 (checked by hand)`);
+		expect(r.after).toBe(`=A1*2 ${RESULT_MARK} 20 ${RESULT_MARK} 99 (checked by hand)`);
 		expect(r.again).toBe("same");
+		const own = computeOne(`=A1*2 ${RESULT_MARK} 99`);
+		expect(own.after).toBe(`=A1*2 ${RESULT_MARK} 20`);
 		const e = computeOne(`=SUM(A1:B1) ${RESULT_MARK} #REF see p.3`);
-		expect(e.after).toBe(`=SUM(A1:B1) ${RESULT_MARK} 22 see p.3`);
+		expect(e.after).toBe(`=SUM(A1:B1) ${RESULT_MARK} 22 ${RESULT_MARK} see p.3`);
 		expect(e.again).toBe("same");
+	});
+
+	it("review R2: a formula continued on a line below with a mistake gives #ERR, not the value of the first line", () => {
+		const r = computeOne("=A1*2\n-B1 (discount)");
+		expect(r.after).toMatch(new RegExp(`${RESULT_MARK} #[A-Z]+$`)); // an error code (here #NAME), never 20
+		expect(r.after).toContain("(discount)");
 	});
 
 	it("keeps the box's line breaks and a note on a line below the formula", () => {

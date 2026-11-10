@@ -210,9 +210,38 @@ describe("formula boxes with notes (review 0.30 I7)", () => {
 	});
 	it("rewrites only the result it owns", () => {
 		expect(rewriteWithResult("=A1*2", "42")).toBe(`=A1*2 ${RESULT_MARK} 42`);
-		expect(rewriteWithResult(`=A1*2 ${RESULT_MARK} 120 (checked)`, "42")).toBe(`=A1*2 ${RESULT_MARK} 42 (checked)`);
+		// Review R3: a number with words right after it on its line may be the person's own: it is kept behind the new result.
+		expect(rewriteWithResult(`=A1*2 ${RESULT_MARK} 120 (checked)`, "42")).toBe(`=A1*2 ${RESULT_MARK} 42 ${RESULT_MARK} 120 (checked)`);
+		expect(rewriteWithResult(`=A1*2 ${RESULT_MARK} 42 ${RESULT_MARK} 120 (checked)`, "43")).toBe(`=A1*2 ${RESULT_MARK} 43 ${RESULT_MARK} 120 (checked)`);
+		expect(rewriteWithResult(`=A1*2 ${RESULT_MARK} 120\n(checked)`, "42")).toBe(`=A1*2 ${RESULT_MARK} 42\n(checked)`);
 		expect(rewriteWithResult(`=A1*2 ${RESULT_MARK} 1.5e-7`, "42")).toBe(`=A1*2 ${RESULT_MARK} 42`);
 		expect(rewriteWithResult(`=A1*2 ${RESULT_MARK} #DIV/0`, "42")).toBe(`=A1*2 ${RESULT_MARK} 42`);
 		expect(rewriteWithResult("1+1", "2")).toBeNull();
+	});
+});
+
+describe("formula boxes, round 2 (review 0.30 R2, R3)", () => {
+	it("R2: a line that continues the formula is part of it, so a mistake there is an error, not a result of the lines above", () => {
+		expect(formulaOfText("=B2*C2\n-D2 (discount)")?.typed).toBe("=B2*C2 -D2 (discount)");
+		expect(parseFormula("B2*C2 -D2 (discount)").ok).toBe(false);
+		for (const op of ["+", "*", "/", "^", "&", ",", ";", ")"]) expect(formulaOfText(`=A1\n${op}B1 x`)?.typed).toBe(`=A1 ${op}B1 x`);
+		// A note that does not start with an operator is still a note.
+		expect(formulaOfText("=A1+B1\n(net of VAT)")?.typed).toBe("=A1+B1");
+		expect(formulaOfText("=A1\n+B1\nchecked")?.typed).toBe("=A1 +B1");
+	});
+
+	it("R3: a number the person wrote after their own arrow is never replaced; Compute's results are", () => {
+		expect(rewriteWithResult(`=A1 ${RESULT_MARK} 3 apples`, "7")).toBe(`=A1 ${RESULT_MARK} 7 ${RESULT_MARK} 3 apples`);
+		expect(rewriteWithResult(`=A1 ${RESULT_MARK} 7 ${RESULT_MARK} 3 apples`, "8")).toBe(`=A1 ${RESULT_MARK} 8 ${RESULT_MARK} 3 apples`);
+		// Compute's own shapes: a result alone, before a line break, before a second arrow, or an error code.
+		expect(rewriteWithResult(`=A1 ${RESULT_MARK} 3`, "7")).toBe(`=A1 ${RESULT_MARK} 7`);
+		expect(rewriteWithResult(`=A1 ${RESULT_MARK} #REF see p.3`, "7")).toBe(`=A1 ${RESULT_MARK} 7 ${RESULT_MARK} see p.3`);
+	});
+
+	it("R3: a blank or text value shows '-', so annotations kept behind it never collect a second arrow", () => {
+		const first = rewriteWithResult(`=A1 ${RESULT_MARK} 5 ${RESULT_MARK} checked`, showValue({ k: "blank" }));
+		expect(first).toBe(`=A1 ${RESULT_MARK} - ${RESULT_MARK} checked`);
+		expect(rewriteWithResult(first!, "6")).toBe(`=A1 ${RESULT_MARK} 6 ${RESULT_MARK} checked`);
+		expect(rewriteWithResult("=A1", "")).toBe(`=A1 ${RESULT_MARK} -`);
 	});
 });
