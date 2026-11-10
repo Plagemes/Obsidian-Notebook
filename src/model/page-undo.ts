@@ -28,6 +28,7 @@ import { SetMarkerDone } from "./marker-commands";
 import { SetPageContent } from "./page-content";
 import { SetPageLocked } from "./page-lock";
 import { ReorderPages } from "./page-ops";
+import { SetPdfView } from "./pdf-view-command";
 import { ReplacePage } from "./page-restore";
 import { SetPageTags } from "./page-tags";
 import { SetPageTimes } from "./page-times";
@@ -41,13 +42,18 @@ export { redoSurvives, touchesPage, type PageRules, type PageStepResult, type Sc
 /** Commands that only change the content or the settings of ONE page, found by its id. */
 type PageLeaf =
 	| AddStroke | EraseStrokes | ReplaceStroke | AddElement | RemoveElement | ReplaceElement | ReorderLayer | SetPaper | SetPageSize | SetPageMargins
-	| SetPageBackground | SetPageInfinite | SetPageLocked | SetPageTags | SetPageTimes | SetPageComments | SetPageStates | UpdateCheckbox | SetMarkerDone | UpdateItems;
+	| SetPageBackground | SetPageInfinite | SetPageLocked | SetPageTags | SetPageTimes | SetPageComments | SetPageStates | UpdateCheckbox | SetMarkerDone | UpdateItems
+	| SetPdfView;
 
 function isPageLeaf(cmd: Command): cmd is PageLeaf {
 	return cmd instanceof AddStroke || cmd instanceof EraseStrokes || cmd instanceof ReplaceStroke || cmd instanceof AddElement || cmd instanceof RemoveElement
 		|| cmd instanceof ReplaceElement || cmd instanceof ReorderLayer || cmd instanceof SetPaper || cmd instanceof SetPageSize || cmd instanceof SetPageMargins
 		|| cmd instanceof SetPageBackground || cmd instanceof SetPageInfinite || cmd instanceof SetPageLocked || cmd instanceof SetPageTags || cmd instanceof SetPageTimes
-		|| cmd instanceof SetPageComments || cmd instanceof SetPageStates || cmd instanceof UpdateCheckbox || cmd instanceof SetMarkerDone || cmd instanceof UpdateItems;
+		|| cmd instanceof SetPageComments || cmd instanceof SetPageStates || cmd instanceof UpdateCheckbox || cmd instanceof SetMarkerDone || cmd instanceof UpdateItems
+		// 0.28 (#76): turning / cropping a PDF page rewrites that one page (background fields, size, margins, items, states, comments) and
+		// reads or writes no shared table (the PDF asset is only named, never added or changed), so it is page-local. The "all pages of this
+		// PDF" form is a Batch of one SetPdfView per page and so a multi-page, global step.
+		|| cmd instanceof SetPdfView;
 }
 
 /** The commands a step is made of: batches and the lock-exempt wrapper opened up. */
@@ -134,5 +140,5 @@ export const CLASSIFIED = [
 	"AddStroke", "EraseStrokes", "ReplaceStroke", "AddElement", "RemoveElement", "ReplaceElement", "ReorderLayer", "SetPaper", "SetPageSize", "SetPageMargins",
 	"SetPageBackground", "SetPageInfinite", "SetPageLocked", "SetPageTags", "SetPageTimes", "SetPageComments", "SetPageStates", "UpdateCheckbox", "SetMarkerDone",
 	"UpdateItems", "SetPageContent", "ReplacePage", "AddAsset", "AddSlideRef", "AddPage", "DeletePage", "MovePage", "InsertPages", "ReorderPages",
-	"SetMeta", "SetViews", "RemoveAsset", "Batch",
+	"SetMeta", "SetViews", "RemoveAsset", "Batch", "SetPdfView",
 ] as const;

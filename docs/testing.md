@@ -4526,6 +4526,7 @@ Manual steps (real Obsidian; nothing here is verified on Android hardware). Use 
 | Redo list kept for other pages, dropped by an edit on the same page or a global one; unchanged with the setting off | yes | `tests/page-undo.test.ts` | | | |
 | Groups, locked pages, remap after an upkeep swap, the document guard, read-only | yes | `tests/page-undo.test.ts` | | | |
 | History panel marks (this page, whole notebook), global list and jumps unchanged | yes | `tests/page-undo-panel.test.ts`, harness `doc=pageundo` | | | |
+| Every command the other 0.28 features add is classified for per-page undo (PDF rotate / crop, Move line, Insert / Edit table, Fill area, bookmark, selection highlight); table edits keep opacity, line moves keep taper and opacity | yes | `tests/page-undo-wave28.test.ts` | | | |
 | Setting *Undo on this page only* (default off), button names and help in en and it | yes | `tests/page-undo-panel.test.ts`, `tests/settings-schema.test.ts`, harness `doc=pageundo` | | | |
 | Undo on the page last touched in a two-page spread | yes | uses `currentPageIndex` (not run in the harness) | | | |
 | S Pen side-button replay while a page-undone step waits for redo | no | | | | `retractStroke` still needs an empty redo list |

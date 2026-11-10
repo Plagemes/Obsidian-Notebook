@@ -33,6 +33,8 @@ export interface TableStyle {
 	dash?: ShapeDash;
 	/** Width of the line under the first row (a header); absent = the same as every other line. */
 	headerWidth?: number;
+	/** v24 (#358): the opacity every line of the table carries (absent = full strength). An edit rebuilds the lines, so it keeps it. */
+	opacity?: number;
 }
 
 export interface TableSpec {
@@ -92,6 +94,7 @@ export function buildTable(grid: TableGrid, style: TableStyle, group: string = c
 			points: [quantizePoint(a[0], a[1], SHAPE_PRESSURE), quantizePoint(b[0], b[1], SHAPE_PRESSURE)],
 		};
 		if (style.dash) s.dash = style.dash;
+		if (style.opacity !== undefined) s.opacity = style.opacity;
 		return s;
 	};
 	const header = style.headerWidth !== undefined && style.headerWidth > style.width && rowsOf(grid) >= 2;
@@ -148,6 +151,7 @@ export function detectTable(strokes: readonly Stroke[]): DetectedTable | null {
 	const width = Math.min(...widths);
 	const style: TableStyle = { color: first.color, width };
 	if (first.dash) style.dash = first.dash;
+	if (first.opacity !== undefined && lines.every((l) => l.stroke.opacity === first.opacity)) style.opacity = first.opacity;
 	const under = hs[1]!.stroke.width;
 	if (hs.length >= 3 && under > width && hs.every((l, i) => i === 1 || l.stroke.width === width) && vs.every((l) => l.stroke.width === width)) style.headerWidth = under;
 	return { grid: { xs: vs.map((l) => l.pos), ys: hs.map((l) => l.pos) }, style, strokes: [...strokes] };

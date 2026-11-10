@@ -137,11 +137,11 @@ export async function checkTables(api: TablesCheckApi): Promise<{ ok: boolean; r
 
 	// --- locked page: refused ---
 	const before = lines().length;
-	(page() as Page).locked = true;
+	page().locked = true;
 	v.runAction("table-add-row");
 	await frames(3);
 	add("a locked page refuses an edit", lines().length === before);
-	delete (page() as Page).locked;
+	delete page().locked;
 
 	v.clearSelection();
 	await frames(2);
@@ -153,7 +153,7 @@ export async function checkTables(api: TablesCheckApi): Promise<{ ok: boolean; r
 export async function tablesShot(api: TablesCheckApi, state: "dialog" | "table"): Promise<void> {
 	await api.open("tables");
 	const v = api.view as TablesView;
-	for (const m of Array.from(document.querySelectorAll(".modal-container"))) (m.querySelector(".nb-modal-close") as HTMLElement | null)?.click();
+	for (const m of Array.from(document.querySelectorAll(".modal-container"))) m.querySelector<HTMLElement>(".nb-modal-close")?.click();
 	v.clearSelection();
 	await api.frames(3);
 	if (state === "dialog") {
