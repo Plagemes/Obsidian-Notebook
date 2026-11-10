@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs";
+import { TFile, type App } from "obsidian";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("obsidian", async () => {
 	const base = (await import("./fake-vault")).obsidianMock();
 	class Notice {
-		constructor(_message: unknown) {}
 		setMessage(): void {}
 		hide(): void {}
 	}
@@ -14,7 +13,9 @@ vi.mock("obsidian", async () => {
 import { createStroke } from "../src/model/document";
 import type { Page, Point, Stroke } from "../src/model/types";
 import { struckInk } from "../src/ink/strikethrough";
+import { exportPdf, runExport } from "../src/view/export";
 import { withRedaction } from "../src/view/export-redact";
+import { runHandIn } from "../src/view/hand-in";
 import { reseed, writeLine } from "./words-gen";
 
 const BASE = 100;
@@ -69,17 +70,58 @@ describe("every export writer leaves struck words out when the setting is on (wi
 	});
 });
 
-describe("the export paths pass the setting on", () => {
-	const read = (p: string) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
+function fakeApp(): { app: App; notebook: TFile; files: Map<string, Uint8Array> } {
+	const files = new Map<string, Uint8Array>();
+	const app = {
+		vault: {
+			getAbstractFileByPath: (p: string) => (files.has(p) ? {} : null),
+			createBinary: (p: string, buf: ArrayBuffer) => { files.set(p, new Uint8Array(buf)); return Promise.resolve({ path: p }); },
+		},
+		loadLocalStorage: () => null,
+		saveLocalStorage: () => undefined,
+	} as unknown as App;
+	const Made = TFile as unknown as new (path: string) => unknown;
+	const made = new Made("Notebooks/Demo.notebook");
+	Object.defineProperty(made, "parent", { value: { path: "Notebooks" } });
+	return { app, notebook: made as TFile, files };
+}
 
-	it("the view adds it to the export options and to the page-range PDF; Markdown, the API and the dialogs handle it", () => {
-		const view = read("view/notebook-view.ts");
-		expect(view).toMatch(/\.\.\.this\.struckOption\(\),\s*\.\.\.this\.redactOptions\(\)/);
-		expect(view).toMatch(/\{ \.\.\.this\.struckOption\(\), \.\.\.this\.redactOptions\(\) \}/);
-		expect(read("view/export-markdown.ts")).toMatch(/struck: true as const/);
-		expect(read("integration/api.ts")).toMatch(/exportHideStruck \? \{ struck: true as const \}/);
-		// The dialog and the share sheet decide on their own and do not clean twice.
-		expect(read("view/export.ts")).toMatch(/delete base\.struck/);
-		expect(read("view/share-page.ts")).toMatch(/delete base\.struck/);
+const sizeOf = (files: Map<string, Uint8Array>): number => [...files.values()][0]!.length;
+
+describe("the writers that take the options of the view", () => {
+	beforeEach(() => reseed(11));
+
+	it("the quick PDF leaves the struck words out when the options say so, and keeps them otherwise", async () => {
+		const page = struckPage();
+		const plain = fakeApp();
+		await exportPdf(plain.app, plain.notebook, [page], "", null, {});
+		const clean = fakeApp();
+		await exportPdf(clean.app, clean.notebook, [page], "", null, { struck: true });
+		expect(plain.files.size).toBe(1);
+		expect(clean.files.size).toBe(1);
+		expect(sizeOf(clean.files)).toBeLessThan(sizeOf(plain.files));
+	});
+
+	it("hand-in follows the options too", async () => {
+		const page = struckPage();
+		const request = { pages: [0], fields: { name: "Ada", course: "", title: "", date: "" }, share: false };
+		const plain = fakeApp();
+		await runHandIn({ app: plain.app, file: plain.notebook, pages: () => [page], media: null, options: () => ({}) }, request);
+		const clean = fakeApp();
+		await runHandIn({ app: clean.app, file: clean.notebook, pages: () => [page], media: null, options: () => ({ struck: true }) }, request);
+		expect(sizeOf(clean.files)).toBeLessThan(sizeOf(plain.files));
+	});
+
+	it("the export dialog decides on its own: its request, not the setting, says whether struck words go", async () => {
+		const page = struckPage();
+		const request = { format: "pdf" as const, scope: "notebook" as const, pageIndex: 0, layers: "both" as const };
+		const plain = fakeApp();
+		await runExport(plain.app, plain.notebook, [page], request, null, {});
+		const setting = fakeApp();
+		await runExport(setting.app, setting.notebook, [page], request, null, { struck: true });
+		expect(sizeOf(setting.files)).toBe(sizeOf(plain.files));
+		const ticked = fakeApp();
+		await runExport(ticked.app, ticked.notebook, [page], { ...request, clean: { markers: false, comments: false, collapsedStickies: false, struck: true } }, null, {});
+		expect(sizeOf(ticked.files)).toBeLessThan(sizeOf(plain.files));
 	});
 });
