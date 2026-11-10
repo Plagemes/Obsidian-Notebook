@@ -4969,7 +4969,7 @@ A section starts at a page and runs to the page before the next section; pages b
 |---|---|---|---|---|---|
 | Format v28: optional `sections` list, migration 27→28, lenient read / strict write, history guard, staged load, repair, schema | yes | `tests/model-v28.test.ts`, `tests/format-schema.test.ts` | | | |
 | Section rules: resolution by page order, dormant sections, delete / move / reorder keep sections consistent (exact undo) | yes | `tests/model-v28.test.ts` | | | |
-| Moving pages never changes the section of a page that did not move (review S1): Move up / down of a one-page section, a whole section to the start, a section dropped into another (continuation section, joined again when it moves out), exact undo and redo | yes | `tests/model-v28.test.ts` | | | pages in no section cannot stay so behind a moved section (the anchor model has no "none" after a section); with 200 sections there is no continuation |
+| Moving pages never changes the section of a page that did not move (review S1): Move up / down of a one-page section, a whole section to the start, a section dropped into another (continuation section, joined again when it moves out, also after two splits), exact undo and redo; recurring sections with the same title and colour (Lecture / Homework) are never joined, nor a renamed continuation (review R1) | yes | `tests/model-v28.test.ts` | | | pages in no section cannot stay so behind a moved section (the anchor model has no "none" after a section); with 200 sections there is no continuation |
 | SetSections command (global per-page-undo class, history panel title) | yes | `tests/model-v28.test.ts` | | | |
 | Merge of a conflicted copy, templates, page transfer out of a closed notebook | yes | `tests/model-v28.test.ts` | | | |
 | Merge summary counts the copy's sections left out: differing ones (`sectionsDiffer`) and ones that did not fit (`sectionsFull`); neither is "Nothing new" (review S2, S8) | yes | `tests/model-v28.test.ts`, `tests/reliability-sections.test.ts` | | | |
@@ -5002,6 +5002,7 @@ A section starts at a page and runs to the page before the next section; pages b
 | Formula parser and evaluator, A1 references and ranges, functions, `%`, errors, cycles (`src/math/table-formula.ts`) | yes | `tests/table-formula.test.ts` | | | |
 | Reading formula cells from the text boxes of a table, writing results as one History step, locked / states / redaction refusals (`src/ink/table-compute.ts`) | yes | `tests/table-compute.test.ts` | | | |
 | Action, help, context rank, command, History title, en + it | yes | `tests/table-compute-actions.test.ts`, harness `doc=tablecalc` | | | |
+| Owned result and notes (review R2, R3): a result Compute wrote ends its line or meets a second arrow (or is an error code), so a number typed after one's own arrow with words after it is kept behind the new result; blank or text values show `-`; a line below starting with an operator continues the formula (a mistake there is an error) | yes | `tests/table-formula.test.ts`, `tests/table-compute.test.ts` | | | ambiguity left: a bare number typed alone after one's own arrow (`=A1 → 3`) looks exactly like a result and is replaced; a note line starting with `-` (a bullet) is read as part of the formula and gives an error |
 | Reading handwriting in cells | no | | | | needs recognition; type formulas in text boxes |
 | Updating by itself when a number changes | no | | | | explicit *Compute table* only |
 | Charts and statistics reading a computed cell as a number | no | | | | a computed box holds `=formula → result`, which is not a plain number |
@@ -5042,6 +5043,7 @@ A marker is a ring with its number (a shape stroke and a text box, one group); t
 | Placing a marker by tapping the spot on the figure | no | | | | markers appear on a free spot and are dragged to place |
 | Renumbering by itself after a delete, or in reading order | no | | | | explicit *Renumber markers* in placement order only |
 | Leader lines from a marker to its legend text | no | | | | roadmap #246 |
+| Legend kept in numeric order after a renumber (review R8) | no | | | | known limit: only the digits of each line change, so the legend can read `1. A / 3. B / 2. C`; no *Sort legend* yet |
 
 ### 0.30 — flowchart: hand-drawn flowcharts that tidy themselves (roadmap #245; steps 3580-3599)
 
@@ -5082,6 +5084,7 @@ A marker is a ring with its number (a shape stroke and a text box, one group); t
 | Screens (before / after, tablet and phone, light and dark) | yes | harness `doc=flowchart` | | | |
 | Elbow (right-angle) connectors, swimlanes, boxes in more than one grid cell, triangles | no | | | | arrows are straight; a box nested in a box of similar size is refused |
 | Reading the text of a label | no | | | | the plugin has no handwriting recognition; labels are moved, not read |
+| Every real arrowhead moved with its line (review R4) | no | | | | known limit: a head the strict rules do not take (double-headed arrows, uneven wings, connectors under 24 pt, two heads within 3 pt) stays at the old line end when the boxes move; Undo restores, nothing is deleted |
 
 ### 0.30 — timeline: dated events on an axis (roadmap #148; steps 3600-3619)
 
@@ -5154,6 +5157,7 @@ Update to 0.30 and fully close and reopen Obsidian. Use a vault with a notebook 
 | An id above a card that exists counts as taken (follow-up / branch never adopt a deleted card's descendants) | yes | `tests/zettel-sequence.test.ts` | | | |
 | Follow-up / branch on a page that is already a card adds a new page for the new card (on Create only) | yes | | | | needs the open notebook view; not checked outside Obsidian |
 | A page being given a card is held while its dialog is open and checked again before writing (no second page card) | yes | | | | not checked outside Obsidian |
+| The page added for a follow-up / branch card is found by id when the write runs; a failed write keeps it with a notice (Undo removes it) and leaves it new, so a slip-box gives it a card at the next save; own notice for a failed origin link (review R5, R6) | yes | `tests/zettel-link-suggest.test.ts` (texts only) | | | the service path is not covered by an automated test (it needs Obsidian's vault and an open notebook view) |
 | On-page sequence strip | no | | | | not built; the dialog and commands cover navigation |
 
 ### 0.30 — linksuggest: link suggestions while creating a card, roadmap Z5 (steps 3620-3639)
@@ -5180,6 +5184,6 @@ Update to 0.30 and fully close and reopen Obsidian. Use a vault with at least si
 |---|---|---|---|---|---|
 | Pure ranking of link suggestions (shared tags, title words, contained title, recency tie-break, bounded candidates) | yes | `tests/zettel-link-suggest.test.ts` | | | |
 | Cards to link in the New card dialog (debounced, one tap to choose) | yes | harness `doc=linksuggest` | | | |
-| Chosen cards linked two-way with the zettel writer, inside the task that makes the note (the answer carries them; no watcher) | yes | `tests/zettel-link-suggest.test.ts` (which cards, which notice), harness `doc=linksuggest` (the answer carries them) | | | the real vault write is not checked outside Obsidian |
+| Chosen cards linked two-way with the zettel writer, inside the task that makes the note (the answer carries them; no watcher); chosen cards deleted meanwhile are named as gone, not as already linked (review R6) | yes | `tests/zettel-link-suggest.test.ts` (which cards, which notice), harness `doc=linksuggest` (the answer carries them) | | | the real vault write is not checked outside Obsidian |
 | Settings: suggest on/off and how many (1-8) | yes | `tests/zettel-link-suggest.test.ts` | | | |
 | Text of the card pages (text boxes) as a similarity signal | no | | | | titles, tags and source only |

@@ -289,8 +289,16 @@ export function formulaOfText(text: string): { src: string; typed: string } | nu
 const flatFormula = (s: string): string => s.replace(/\s+/g, " ").trim();
 const parses = (formulaText: string): boolean => parseFormula(flatFormula(formulaText).slice(1)).ok;
 
-/** A result Compute wrote right after the arrow: a number as `showValue` prints it, an error code, or "-" (not finite). */
-const RESULT_TOKEN = /^[ \t]*(?:#[A-Z]+(?:\/0)?|-?\d+(?:\.\d+)?(?:e[+-]?\d+)?|-)(?=\s|$)/;
+/**
+ * A result Compute wrote right after the arrow: an error code, or a number as `showValue` prints it or "-" (no value) that ends its line or is
+ * followed by a second arrow. Compute always writes its result that way (review R3), so a number with the person's words right after it on
+ * the same line ("= A1 -> 3 apples", typed by hand) is theirs and is kept behind the new result.
+ */
+const RESULT_TOKEN = new RegExp(`^[ \\t]*(?:#[A-Z]+(?:\\/0)?(?=\\s|$)|(?:-?\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|-)(?=[ \\t]*(?:$|\\n|${RESULT_MARK})))`);
+/** What a box shows as the result when the value is blank or text: the result slot is never empty, so the token rule stays exact. */
+export const NO_VALUE = "-";
+/** A line that continues a formula from the line above (it starts with an operator, a separator or a closing bracket). */
+const CONTINUES = /^\s*[-+*/^&,;)]/;
 /** Most leading lines tried as the formula of a box that holds notes below it. */
 const NOTE_PREFIX_TRIES = 12;
 
@@ -323,7 +331,9 @@ function splitFormulaBox(text: string): FormulaBox | null {
 	if (before.includes("\n") && !parses(before)) {
 		const lines = before.split("\n");
 		for (let k = Math.min(lines.length - 1, NOTE_PREFIX_TRIES); k >= 1; k--) {
-			if (!parses(lines.slice(0, k).join("\n"))) continue;
+			// Review R2: a line that continues the formula (it starts with an operator) is part of it, not a note: then the whole text is
+			// the formula and a mistake in it shows #ERR instead of a plausible result of the lines above.
+			if (CONTINUES.test(lines[k]!) || !parses(lines.slice(0, k).join("\n"))) continue;
 			head = lines.slice(0, k).join("\n");
 			rest = text.slice(head.length);
 			arrow = false;
@@ -347,17 +357,19 @@ export const withResult = (typed: string, shown: string): string => `${typed} ${
 
 /**
  * The text of the formula box `text` once its result is `shown`, or null when it is not a formula box. Only the result Compute owns is
- * replaced (the value right after the arrow); every other word, and the box's line breaks, stay. If what follows the arrow is not a result
- * (the person's own "-> see p.3"), the result is put in before it and their words are kept after a second arrow, so a later Compute
- * finds the result and changes nothing else (idempotent) and no text is lost.
+ * replaced (see RESULT_TOKEN); every other word, and the box's line breaks, stay. If what follows the arrow is not a result (the person's
+ * own "-> see p.3", or "-> 3 apples"), the result is put in before it and their words are kept after a second arrow, so a later Compute
+ * finds the result and changes nothing else (idempotent) and no text is lost. A blank or text value is written as NO_VALUE (review R3).
  */
 export function rewriteWithResult(text: string, shown: string): string | null {
 	const s = splitFormulaBox(text);
 	if (!s) return null;
-	if (s.arrow && !s.owned) {
-		return s.rest === "" ? withResult(s.head, shown) : `${withResult(s.head, shown)} ${RESULT_MARK}${/^\s/.test(s.rest) ? "" : " "}${s.rest}`;
-	}
-	return withResult(s.head, shown) + s.rest;
+	const result = withResult(s.head, shown.trim() === "" ? NO_VALUE : shown);
+	if (s.rest === "") return result;
+	// Words on a line below, or already behind a second arrow, stay as they are; words on the result's own line go behind a second arrow,
+	// so the result always ends its line or meets an arrow (what RESULT_TOKEN recognises).
+	if (new RegExp(`^[ \\t]*(?:\\n|${RESULT_MARK})`).test(s.rest)) return result + s.rest;
+	return `${result} ${RESULT_MARK}${/^\s/.test(s.rest) ? "" : " "}${s.rest}`;
 }
 
 /** A result as a text box shows it: at most 10 significant digits, no trailing zeros; an error as its code. */

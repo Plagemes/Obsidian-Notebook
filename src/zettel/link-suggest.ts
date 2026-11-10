@@ -107,8 +107,26 @@ export function resolveChosen<T extends ChosenCard>(chosen: readonly ChosenCard[
 	return [...out.values()];
 }
 
-/** What to tell the person after linking: failed (some link could not be written), none (all were linked already), one, or many. */
-export function linkOutcome(linked: number, failed: number): "failed" | "none" | "one" | "many" {
+/**
+ * Review R6: how many of the chosen cards are gone (no card with that path or id any more; the new note itself and doubles do not count).
+ * A card that is found but whose file vanished is counted by the caller.
+ */
+export function goneChosen<T extends ChosenCard>(chosen: readonly ChosenCard[], byPath: ReadonlyMap<string, T>, byId: ReadonlyMap<string, T>, madePath: string): number {
+	const missing = new Set<string>();
+	for (const c of chosen) {
+		if (c.path === madePath) continue;
+		if (!(byPath.get(c.path) ?? byId.get(c.id.toLowerCase()))) missing.add(c.path);
+	}
+	return missing.size;
+}
+
+/**
+ * What to tell the person after linking: failed (some link could not be written), one or many (links made), gone (nothing linked and
+ * every chosen card that is left is gone: review R6), or none (those still there were linked already). `gone` is said on its own
+ * line as well when some links were made.
+ */
+export function linkOutcome(linked: number, failed: number, gone = 0, already = 0): "failed" | "gone" | "none" | "one" | "many" {
 	if (failed > 0) return "failed";
-	return linked <= 0 ? "none" : linked === 1 ? "one" : "many";
+	if (linked > 0) return linked === 1 ? "one" : "many";
+	return gone > 0 && already === 0 ? "gone" : "none";
 }

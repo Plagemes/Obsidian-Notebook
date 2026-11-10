@@ -75,7 +75,7 @@ export class SectionsModal extends Modal {
 			// Review S4: sections whose page is gone show nowhere but count toward the limit: say so and offer to remove them.
 			const hidden = this.api.hiddenCount();
 			if (hidden > 0) {
-				shellNote(shell.body, t("sections.hidden.note", { count: String(hidden) }));
+				shellNote(shell.body, hidden === 1 ? t("sections.hidden.noteOne") : t("sections.hidden.note", { count: String(hidden) }));
 				shellButton(shell.body, "secondary", t("sections.hidden.remove", { count: String(hidden) }), () => {
 					if (this.api.removeHidden()) this.render();
 				}, { icon: "eraser" }).addClass("nb-sections-hidden-remove");
