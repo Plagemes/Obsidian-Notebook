@@ -78,7 +78,7 @@ describe("figure marker actions (#247)", () => {
 	});
 
 	it("keep every notice and refusal in both languages", () => {
-		for (const k of ["added", "addedLegend", "renumbered", "renumberedDropped", "same", "none", "full", "redacted", "locked", "states", "nowhere", "noTarget", "mixed", "gone"]) {
+		for (const k of ["added", "addedLegend", "renumbered", "renumberedDropped", "same", "none", "full", "redacted", "locked", "states", "nowhere", "noTarget", "mixed", "gone", "tape", "edge", "stray", "shared", "drop.title", "drop.body1", "drop.body", "drop.confirm"]) {
 			expect(enSrc.includes(`"fm.${k}":`), `fm.${k} en`).toBe(true);
 			expect(itSrc.includes(`"fm.${k}":`), `fm.${k} it`).toBe(true);
 		}

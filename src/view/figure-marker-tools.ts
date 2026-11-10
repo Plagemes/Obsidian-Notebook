@@ -4,6 +4,7 @@ import {
 } from "../ink/figure-markers";
 import { measureText } from "../ink/renderer";
 import type { Page } from "../model/types";
+import { confirmDestructive } from "../ui/destructive";
 import type { SelectedPart } from "./group-tools";
 import { showNotice } from "./notice";
 import type { TableHost } from "./table-tools";
@@ -27,7 +28,22 @@ const REFUSALS: Record<Exclude<MarkerRefusal, "same" | "none">, Parameters<typeo
 	locked: "fm.locked",
 	states: "fm.states",
 	nowhere: "fm.nowhere",
+	tape: "fm.tape",
+	edge: "fm.edge",
+	stray: "fm.stray",
 };
+
+/** How much of the removed legend lines the question shows (each line cut short, at most a few). */
+const PREVIEW_LINES = 3;
+const PREVIEW_CHARS = 60;
+
+function preview(removed: readonly string[]): string {
+	const shown = removed.slice(0, PREVIEW_LINES).map((r) => {
+		const one = r.replace(/\s+/g, " ").trim();
+		return `“${one.length > PREVIEW_CHARS ? `${one.slice(0, PREVIEW_CHARS - 1)}…` : one}”`;
+	});
+	return removed.length > PREVIEW_LINES ? `${shown.join(", ")}, …` : shown.join(", ");
+}
 
 export class FigureMarkerTools {
 	/** The box of the last figure a marker was added to (a drawing's box is lost when only its markers are selected afterwards). View-only. */
@@ -94,27 +110,62 @@ export class FigureMarkerTools {
 		showNotice(t(plan.legendCreated ? "fm.addedLegend" : "fm.added", { n: String(plan.number) }), plan.legendCreated ? 6000 : 3500);
 	}
 
-	/** "Renumber markers": 1, 2, 3 again in the order they have, the legend following, in one step; the selection stays on what it was. */
-	renumber(): void {
-		if (!this.host.editable()) return;
+	/** The renumber plan of the selected figure, or null after saying why there is none. */
+	private renumberPlan(): { cur: { part: SelectedPart; page: Page }; plan: Extract<ReturnType<typeof planRenumber>, { ok: true }> } | null {
 		const cur = this.resolve();
-		if (!cur) return;
+		if (!cur) return null;
 		const set = markerSets(cur.page).get(cur.target.set);
 		if (!set) {
 			showNotice(t("fm.none"), 4000);
-			return;
+			return null;
 		}
-		const plan = planRenumber(cur.page, set, { measure: measureText });
+		const plan = planRenumber(cur.page, set, { measure: measureText, guard: this.host.redactGuard(cur.page.id) });
 		if (!plan.ok) {
 			showNotice(t(plan.reason === "same" ? "fm.same" : plan.reason === "none" ? "fm.none" : REFUSALS[plan.reason]), 4500);
+			return null;
+		}
+		return { cur, plan };
+	}
+
+	/**
+	 * "Renumber markers": 1, 2, 3 again in the order they have, the legend following, in one step; the selection stays on what it was.
+	 * Review 0.30 (I3): when the legend lines of deleted markers hold words, it asks first (like Delete), and only the very plan it asked about
+	 * runs: when the page changed meanwhile and other lines would go, nothing changes.
+	 */
+	renumber(): void {
+		if (!this.host.editable()) return;
+		const first = this.renumberPlan();
+		if (!first) return;
+		if (first.plan.removed.length === 0) {
+			this.renumberNow(first.cur, first.plan);
 			return;
 		}
+		const asked = JSON.stringify(first.plan.removed);
+		const n = first.plan.removed.length;
+		confirmDestructive(this.host.app, {
+			title: t("fm.drop.title"),
+			body: t(n === 1 ? "fm.drop.body1" : "fm.drop.body", { n: String(n), lines: preview(first.plan.removed) }),
+			confirm: t("fm.drop.confirm"),
+		}, () => {
+			if (!this.host.editable()) return;
+			const now = this.renumberPlan();
+			if (!now) return;
+			if (JSON.stringify(now.plan.removed) !== asked) {
+				showNotice(t("fm.gone"), 4000);
+				return;
+			}
+			this.renumberNow(now.cur, now.plan);
+		});
+	}
+
+	private renumberNow(cur: { part: SelectedPart; page: Page }, plan: Extract<ReturnType<typeof planRenumber>, { ok: true }>): void {
 		const groups = new Set<string>();
 		for (const s of cur.part.strokes) if (s.group !== undefined) groups.add(s.group);
 		for (const e of cur.part.elements) if (e.group !== undefined) groups.add(e.group);
 		if (!this.host.execute(plan.cmd)) return;
 		this.selectGroups(cur.part.pageIndex, groups);
 		this.host.refresh();
-		showNotice(plan.dropped > 0 ? t("fm.renumberedDropped", { n: String(plan.dropped) }) : t("fm.renumbered"), 3500);
+		const done = plan.dropped > 0 ? t("fm.renumberedDropped", { n: String(plan.dropped) }) : t("fm.renumbered");
+		showNotice(plan.shared > 0 ? `${done} ${t("fm.shared", { n: String(plan.shared) })}` : done, plan.shared > 0 ? 6000 : 3500);
 	}
 }

@@ -132,6 +132,8 @@ describe("adding markers (#247)", () => {
 
 	it("refuses when the figure already has the largest number", () => {
 		const { page, history, picture } = setup();
+		// an endless page: a legend of 99 lines runs past the bottom of a fixed one (refused as "edge", below)
+		page.infinite = true;
 		const target = figure(page, picture);
 		const big = { ...picture, x: 10, y: 20, width: 570, height: 790, id: "big" };
 		page.elements!.push(big);
@@ -162,6 +164,73 @@ describe("adding markers (#247)", () => {
 		page.elements![i] = legend.text;
 		page.states = { parts: [{ id: "p", items: [legend.text.id] }] } as never;
 		expect(planAddMarker(page, figure(page, picture), opts)).toEqual({ ok: false, reason: "states" });
+	});
+
+	it("review I2: refuses when the legend it rewrites touches a redaction box, before or after, and changes nothing", () => {
+		const { page, history, picture } = setup();
+		add(page, history, figure(page, picture));
+		const legend = markerSets(page).get("pic-1")!.legend!.text;
+		// a box over the legend only (the new marker lies on the picture, far from it)
+		const box = { x: legend.x, y: legend.y, width: legend.width, height: 10 };
+		const before = JSON.stringify(page);
+		expect(planAddMarker(page, figure(page, picture), opts, { boxes: [box] })).toEqual({ ok: false, reason: "redacted" });
+		expect(JSON.stringify(page)).toBe(before);
+		expect(planAddMarker(page, figure(page, picture), opts, { boxes: [{ x: 500, y: 700, width: 20, height: 20 }] }).ok).toBe(true);
+	});
+
+	it("review I2: the legend keeps the person's blank lines, indentation and notes when a marker is added", () => {
+		const { page, history, picture } = setup();
+		add(page, history, figure(page, picture));
+		const legend = markerSets(page).get("pic-1")!.legend!;
+		page.elements![page.elements!.indexOf(legend.text)] = { ...legend.text, text: "Key\n\n  1) Wall\n       thick\n\nSource: p.4" };
+		add(page, history, figure(page, picture));
+		expect(markerSets(page).get("pic-1")!.legend!.text.text).toBe("Key\n\n  1) Wall\n       thick\n  2)\n\nSource: p.4");
+	});
+
+	it("review I6: refuses when the legend it rewrites lies under a study tape", () => {
+		const { page, history, picture } = setup();
+		add(page, history, figure(page, picture));
+		const legend = markerSets(page).get("pic-1")!.legend!.text;
+		page.elements!.push({ id: "tape-1", type: "tape", x: legend.x, y: legend.y, width: 40, height: 10, color: "#f5d76e" });
+		expect(planAddMarker(page, figure(page, picture), opts)).toEqual({ ok: false, reason: "tape" });
+		// a tape elsewhere does not matter
+		page.elements![page.elements!.length - 1] = { id: "tape-1", type: "tape", x: 500, y: 700, width: 40, height: 10, color: "#f5d76e" };
+		expect(planAddMarker(page, figure(page, picture), opts).ok).toBe(true);
+	});
+
+	it("review I11: refuses when the legend would grow past the bottom of a fixed page", () => {
+		const { page, history, picture } = setup();
+		add(page, history, figure(page, picture));
+		const legend = markerSets(page).get("pic-1")!.legend!;
+		const lh = legend.text.fontSize * 1.25;
+		page.elements![page.elements!.indexOf(legend.text)] = { ...legend.text, y: page.height - lh - 1 };
+		expect(planAddMarker(page, figure(page, picture), opts)).toEqual({ ok: false, reason: "edge" });
+		page.infinite = true;
+		expect(planAddMarker(page, figure(page, picture), opts).ok).toBe(true);
+	});
+
+	it("review I12: with only the legend left, the new marker goes just above the legend, not to the page centre", () => {
+		const { page, history, picture } = setup();
+		add(page, history, figure(page, picture));
+		const s = markerSets(page).get("pic-1")!;
+		page.strokes.splice(page.strokes.indexOf(s.markers[0]!.circle), 1);
+		page.elements!.splice(page.elements!.indexOf(s.markers[0]!.text), 1);
+		const legend = s.legend!.text;
+		const plan = planAddMarker(page, { kind: "set", set: "pic-1", box: null }, opts);
+		if (!plan.ok) throw new Error(plan.reason);
+		const ring = plan.strokes[0]!.points;
+		const cy = ring.reduce((a, p) => a + p[1], 0) / ring.length;
+		expect(cy).toBeLessThan(legend.y);
+		expect(cy).toBeGreaterThan(legend.y - 80);
+	});
+
+	it("review I3 (c): a marker whose number the person edited keeps its number taken", () => {
+		const { page, history, picture } = setup();
+		for (let i = 0; i < 3; i++) add(page, history, figure(page, picture));
+		const m3 = markerSets(page).get("pic-1")!.markers[2]!;
+		page.elements![page.elements!.indexOf(m3.text)] = { ...m3.text, text: "3a" };
+		const plan = add(page, history, figure(page, picture));
+		expect(plan.number).toBe(4);
 	});
 
 	it("works for a region of ink and joins its set when selected again", () => {
@@ -302,6 +371,90 @@ describe("renumbering markers (#247)", () => {
 		const m = set.markers[0]!;
 		page.states = { parts: [{ id: "p", items: [m.text.id] }] } as never;
 		expect(planRenumber(page, markerSets(page).get("pic-1")!)).toEqual({ ok: false, reason: "states" });
+	});
+
+	it("reports the words of the legend lines it removes (the view asks first)", () => {
+		const { page } = three();
+		removeMarker(page, 2);
+		const plan = planRenumber(page, markerSets(page).get("pic-1")!);
+		if (!plan.ok) throw new Error(plan.reason);
+		expect(plan.removed).toEqual(["2. Nucleus"]);
+		expect(plan.shared).toBe(0);
+	});
+
+	it("review I1: refuses when the legend touches a redaction box (a dropped line would shrink it out from under the box)", () => {
+		const { page } = three();
+		const legend = markerSets(page).get("pic-1")!.legend!.text;
+		removeMarker(page, 2);
+		const lh = legend.fontSize * 1.25;
+		// the box covers the last entry only: after the renumber the legend is one line shorter and no longer reaches it
+		const box = { x: legend.x, y: legend.y + 2 * lh + 2, width: legend.width, height: lh - 4 };
+		const before = JSON.stringify(page);
+		expect(planRenumber(page, markerSets(page).get("pic-1")!, { guard: { boxes: [box] } })).toEqual({ ok: false, reason: "redacted" });
+		expect(planRenumber(page, markerSets(page).get("pic-1")!, { guard: { boxes: [], unreadable: true } })).toEqual({ ok: false, reason: "redacted" });
+		expect(JSON.stringify(page)).toBe(before);
+		expect(planRenumber(page, markerSets(page).get("pic-1")!, { guard: { boxes: [{ x: 500, y: 760, width: 20, height: 20 }] } }).ok).toBe(true);
+	});
+
+	it("review I1: refuses when a re-centred number box touches a redaction box", () => {
+		const { page } = three();
+		removeMarker(page, 1);
+		const m = markerSets(page).get("pic-1")!.markers[0]!;
+		const box = { x: m.cx - 2, y: m.cy - 2, width: 4, height: 4 };
+		expect(planRenumber(page, markerSets(page).get("pic-1")!, { guard: { boxes: [box] } })).toEqual({ ok: false, reason: "redacted" });
+	});
+
+	it("review I6: refuses when a legend line or a number that would change lies under a study tape", () => {
+		const { page } = three();
+		const legend = markerSets(page).get("pic-1")!.legend!.text;
+		removeMarker(page, 2);
+		page.elements!.push({ id: "tape-1", type: "tape", x: legend.x, y: legend.y + 20, width: 60, height: 8, color: "#f5d76e" });
+		expect(planRenumber(page, markerSets(page).get("pic-1")!)).toEqual({ ok: false, reason: "tape" });
+		const m = markerSets(page).get("pic-1")!.markers[1]!;
+		page.elements![page.elements!.length - 1] = { id: "tape-1", type: "tape", x: m.cx - 3, y: m.cy - 3, width: 6, height: 6, color: "#f5d76e" };
+		expect(planRenumber(page, markerSets(page).get("pic-1")!)).toEqual({ ok: false, reason: "tape" });
+		page.elements![page.elements!.length - 1] = { id: "tape-1", type: "tape", x: 500, y: 760, width: 6, height: 6, color: "#f5d76e" };
+		expect(planRenumber(page, markerSets(page).get("pic-1")!).ok).toBe(true);
+	});
+
+	it("review I3 (c): refuses while a marker's number was edited (\"3a\") or its ring half erased, and the legend keeps every word", () => {
+		const { page } = three();
+		const s = markerSets(page).get("pic-1")!;
+		page.elements![page.elements!.indexOf(s.markers[2]!.text)] = { ...s.markers[2]!.text, text: "3a" };
+		removeMarker(page, 1);
+		expect(planRenumber(page, markerSets(page).get("pic-1")!)).toEqual({ ok: false, reason: "stray" });
+		// a ring the eraser took most of
+		const { page: p2 } = three();
+		const m = markerSets(p2).get("pic-1")!.markers[2]!;
+		p2.strokes[p2.strokes.indexOf(m.circle)] = { ...m.circle, points: m.circle.points.slice(0, 2) };
+		removeMarker(p2, 1);
+		expect(planRenumber(p2, markerSets(p2).get("pic-1")!)).toEqual({ ok: false, reason: "stray" });
+	});
+
+	it("review I3 (b): a legend line typed twice under one number keeps its words and is reported", () => {
+		const { page, history } = three();
+		const legend = markerSets(page).get("pic-1")!.legend!;
+		page.elements![page.elements!.indexOf(legend.text)] = { ...legend.text, text: "1. Wall\n2. Nucleus\n3. Vacuole\n3. Vacuole, again" };
+		removeMarker(page, 2);
+		const plan = planRenumber(page, markerSets(page).get("pic-1")!);
+		if (!plan.ok) throw new Error(plan.reason);
+		expect(plan.shared).toBe(1);
+		expect(plan.removed).toEqual(["2. Nucleus"]);
+		history.execute(plan.cmd);
+		expect(markerSets(page).get("pic-1")!.legend!.text.text).toBe("1. Wall\n2. Vacuole\n2. Vacuole, again");
+	});
+
+	it("review I3 (a): a note typed after the entries stays when the last marker is deleted", () => {
+		const { page, history } = three();
+		const legend = markerSets(page).get("pic-1")!.legend!;
+		page.elements![page.elements!.indexOf(legend.text)] = { ...legend.text, text: "1. Wall\n2. Nucleus\n3. Vacuole\n\nSource: textbook p.4" };
+		removeMarker(page, 3);
+		removeMarker(page, 1);
+		const plan = planRenumber(page, markerSets(page).get("pic-1")!);
+		if (!plan.ok) throw new Error(plan.reason);
+		history.execute(plan.cmd);
+		expect(markerSets(page).get("pic-1")!.legend!.text.text).toBe("1. Nucleus\n\nSource: textbook p.4");
+		expect(plan.removed).toEqual(["1. Wall", "3. Vacuole"]);
 	});
 
 	it("keeps the colour and size the person gave a marker's number", () => {

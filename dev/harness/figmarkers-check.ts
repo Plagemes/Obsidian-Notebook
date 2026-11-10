@@ -114,7 +114,17 @@ export async function checkFigmarkers(api: FigmarkersCheckApi): Promise<{ ok: bo
 	await frames(2);
 	add("the selected markers offer Renumber, and say the figure is out of order", sel().markers?.kind === "set" && sel().markers?.stale === true);
 	api.notices.length = 0;
+	// review 0.30 (I3): the legend line of the deleted marker holds words ("Nucleus"), so Renumber asks first; Cancel changes nothing
 	v.runAction("figure-markers-renumber");
+	await frames(3);
+	const asked = document.querySelector<HTMLElement>(".modal.nb-confirm");
+	add("the legend line of the deleted marker holds words: Renumber asks first and changes nothing yet", !!asked && /Nucleus/.test(asked.textContent ?? "") && numbers(set).join() === "1,3", asked?.textContent ?? "no dialog");
+	Array.from(asked?.querySelectorAll<HTMLElement>(".nb-modal-btn") ?? []).find((b) => !b.classList.contains("is-danger"))?.click();
+	await frames(2);
+	add("Cancel leaves the numbers and the legend as they were", !document.querySelector(".modal.nb-confirm") && numbers(set).join() === "1,3" && legendOf(set) === "1. Cell wall\n2. Nucleus\n3. Vacuole");
+	v.runAction("figure-markers-renumber");
+	await frames(3);
+	document.querySelector<HTMLElement>(".modal.nb-confirm .nb-modal-btn.is-danger")?.click();
 	await frames(3);
 	add("Renumber closes the gap and the legend follows, descriptions kept", numbers(set).join() === "1,2" && legendOf(set) === "1. Cell wall\n2. Vacuole", `${numbers(set).join()} | ${JSON.stringify(legendOf(set))}`);
 	add("it says so, and the figure is in order", api.notices.some((x) => /renumbered/.test(x)) && sel().markers?.stale === false, api.notices.join(" | "));
