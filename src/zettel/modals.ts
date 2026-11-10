@@ -1,4 +1,5 @@
 import { FuzzySuggestModal, Modal, type App, type FuzzyMatch } from "obsidian";
+import { LinkSuggestField } from "./link-suggest-ui";
 import { t, type MessageKey } from "../i18n";
 import { setIconSafe, subjectVars } from "../ui/components/dom";
 import { CARD_TYPES, parseTagInput, type CardRecord, type CardType } from "./card-content";
@@ -15,6 +16,8 @@ export interface CardAnswer {
 	parent: string;
 	/** Z9: the card template chosen (empty or "blank": none). */
 	template?: string;
+	/** Z5: the cards chosen from the suggestions; linked to the note that is made from this answer, never written to its YAML. */
+	links?: CardRecord[];
 }
 
 const TYPE_LABEL: Record<CardType, MessageKey> = {
@@ -56,6 +59,7 @@ export class CardModal extends Modal {
 	private done = false;
 	private tagPreview: HTMLElement | null = null;
 	private selectType: ((type: CardType) => void) | null = null;
+	private suggest: LinkSuggestField | null = null;
 
 	constructor(
 		app: App,
@@ -98,7 +102,10 @@ export class CardModal extends Modal {
 		};
 
 		const title = field(form, t("zettel.modal.cardTitle"), t("zettel.modal.cardTitle.desc"));
-		const titleInput = input(title, this.answer.title, (v) => (this.answer.title = v));
+		const titleInput = input(title, this.answer.title, (v) => {
+			this.answer.title = v;
+			this.suggest?.changed();
+		});
 		window.setTimeout(() => titleInput.focus(), 0);
 
 		// Z9: the template first; choosing one preselects its type tile below.
@@ -111,15 +118,22 @@ export class CardModal extends Modal {
 		this.renderTypes(form);
 
 		const source = field(form, t("zettel.modal.source"), t("zettel.modal.source.desc"));
-		input(source, this.answer.source, (v) => (this.answer.source = v));
+		input(source, this.answer.source, (v) => {
+			this.answer.source = v;
+			this.suggest?.changed();
+		});
 
 		const tags = field(form, t("zettel.modal.tags"), t("zettel.modal.tags.desc"));
 		input(tags, this.tagText, (v) => {
 			this.tagText = v;
 			this.paintTags();
+			this.suggest?.changed();
 		});
 		this.tagPreview = tags.wrap.createDiv({ cls: "nb-zk-tag-preview" });
 		this.paintTags();
+
+		// Z5: related cards to link (nothing when the setting is off)
+		this.suggest = LinkSuggestField.create(form, this.app, () => ({ title: this.answer.title, tags: parseTagInput(this.tagText), source: this.answer.source }));
 
 		if (this.opts.luhmann) {
 			const parent = field(form, t("zettel.modal.parent"), t("zettel.modal.parent.desc"));
@@ -175,11 +189,14 @@ export class CardModal extends Modal {
 		if (this.done) return;
 		this.done = true;
 		this.answer.tags = parseTagInput(this.tagText);
+		const chosen = this.suggest?.chosenCards() ?? [];
 		this.close();
-		this.finish({ ...this.answer });
+		// Z5: the chosen cards travel with the answer; the service links them in the same task that creates the note (review Z1).
+		this.finish({ ...this.answer, links: chosen.length > 0 ? chosen : undefined });
 	}
 
 	onClose(): void {
+		this.suggest?.dispose();
 		this.contentEl.empty();
 		if (!this.done) {
 			this.done = true;

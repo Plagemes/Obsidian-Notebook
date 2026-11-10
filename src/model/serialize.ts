@@ -6,7 +6,7 @@ import {
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
-import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, v17OnlyElement, v23OnlyElement, v27OnlyElement, withoutV11Meta, withoutV12Slides, withoutV21Views, type RawObject } from "./migrations";
+import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, v17OnlyElement, v23OnlyElement, v27OnlyElement, withoutV11Meta, withoutV12Slides, withoutV21Views, withoutV28Sections, type RawObject } from "./migrations";
 import { isStoredViewName, normalizeViewName, validRegion } from "./views";
 import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE, CHECKBOX_PATH_MAX, cleanCheckboxLabel, isOurBlockId } from "./checklist";
 import { AREA_MAX_SIDE, AREA_MIN_SIDE } from "./area";
@@ -30,7 +30,9 @@ import {
 	type PageBackground, type PageComment, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type StickyElement, type Stroke,
 	type TapeElement, type TextElement, type Tool,
 	VIEWS_MAX, VIEW_ID_MAX, VIEW_PAGE_ID_MAX, type SavedView,
+	SECTIONS_MAX, SECTION_ID_MAX, SECTION_PAGE_ID_MAX, type Section,
 } from "./types";
+import { isStoredSectionTitle, normalizeSectionTitle } from "./sections";
 
 export type ParseFailure =
 	| "empty"
@@ -406,6 +408,11 @@ function viewLine(v: SavedView): string {
 	return `\t\t{"id":${j(v.id)},"name":${j(v.name)},"page":${j(v.page)},"x":${j(v.x)},"y":${j(v.y)},"width":${j(v.width)},"height":${j(v.height)},"zoom":${j(v.zoom)}}`;
 }
 
+/** v28 section: id, title, colour, page, in a fixed order. */
+function sectionLine(s: Section): string {
+	return `\t\t{"id":${j(s.id)},"title":${j(s.title)},"color":${j(s.color)},"page":${j(s.page)}}`;
+}
+
 function positionLine(p: ReadingPosition): string {
 	return p.y !== undefined
 		? `{"page":${j(p.page)},"y":${j(p.y)},"at":${j(p.at)}}`
@@ -484,6 +491,8 @@ function assemble(
 		...(slides.refs.length ? [`\t"slides": [\n${slides.refs.map(slideRefLine).join(",\n")}\n\t],`] : []),
 		// v21: the saved views, as they are (a malformed one is written as it is, so the strict check refuses it: the history's guard keeps such a notebook from being saved).
 		...(doc.views && doc.views.length > 0 ? [`\t"views": [\n${doc.views.map(viewLine).join(",\n")}\n\t],`] : []),
+		// v28: the sections, as they are (like the views: a malformed one is written as it is and the strict check refuses it).
+		...(doc.sections && doc.sections.length > 0 ? [`\t"sections": [\n${doc.sections.map(sectionLine).join(",\n")}\n\t],`] : []),
 		assets.length ? `\t"assets": {\n${assets.map(assetLine).join(",\n")}\n\t},` : `\t"assets": {},`,
 		`\t"pages": [\n${pages.join(",\n")}\n\t]`,
 		"}",
@@ -776,6 +785,62 @@ function readView(v: unknown, path: string, drop: Dropped | null): SavedView {
 	if (!validRegion(region)) fail(path, "region or zoom out of range");
 	return Object.freeze({ id, name, page, ...region });
 }
+
+/**
+ * v28 sections: an array of { id, title, color, page }. Read leniently, an invalid entry (a repeated id, a bad colour, a second section on a
+ * page that already starts one, an entry past the limit) is dropped and counted, a title that is not in its stored form is kept in that form
+ * and counted, and unknown keys of an entry are left out and counted (review S3: the writer does not keep them); the other sections stay. A section that names a page the notebook does not have is
+ * valid (it is dormant). Strict (`drop` null): any of those fails.
+ */
+export function readSections(v: unknown, drop: Dropped | null): Section[] {
+	if (v === undefined) return [];
+	const all = orDrop(drop, () => (Array.isArray(v) ? (v as unknown[]) : fail("sections", "expected an array")));
+	if (!all) return [];
+	const out: Section[] = [];
+	const ids = new Set<string>();
+	const pages = new Set<string>();
+	all.forEach((r, i) => {
+		const at = `sections[${i}]`;
+		if (out.length >= SECTIONS_MAX) {
+			if (!drop) fail("sections", `more than ${SECTIONS_MAX} sections`);
+			drop.count++;
+			return;
+		}
+		const section = orDrop(drop, () => {
+			const read = readSection(r, at, drop);
+			if (ids.has(read.id)) fail(`${at}.id`, "duplicate id");
+			if (pages.has(read.page)) fail(`${at}.page`, "another section starts at this page");
+			return read;
+		});
+		if (!section) return;
+		ids.add(section.id);
+		pages.add(section.page);
+		out.push(section);
+	});
+	return out;
+}
+
+function readSection(v: unknown, path: string, drop: Dropped | null): Section {
+	if (!isObject(v)) fail(path, "expected an object");
+	const id = boundedId(v.id, `${path}.id`, SECTION_ID_MAX);
+	if (typeof v.title !== "string") fail(`${path}.title`, "expected a string");
+	let title = v.title;
+	if (!isStoredSectionTitle(title)) {
+		const kept = drop ? normalizeSectionTitle(title) : "";
+		if (kept === "") fail(`${path}.title`, "expected a title of 1 to 60 characters, trimmed, on one line");
+		title = kept;
+		if (drop) drop.count++;
+	}
+	const color = colour(v.color, `${path}.color`);
+	const page = boundedId(v.page, `${path}.page`, SECTION_PAGE_ID_MAX);
+	// Review S3: the writer does not keep keys it does not know; read leniently they are counted as dropped, so a backup of the file is
+	// kept before the first save loses them (a strict read ignores them: the in-memory section never has any).
+	if (drop && Object.keys(v).some((k) => !SECTION_KEYS.has(k))) drop.count++;
+	return Object.freeze({ id, title, color, page });
+}
+
+/** The keys of a stored section (v28). */
+const SECTION_KEYS: ReadonlySet<string> = new Set(["id", "title", "color", "page"]);
 
 /** v13: a number of a pose, finite and within `[lo, hi]`. */
 function poseNumber(v: unknown, path: string, lo: number, hi: number): number {
@@ -1780,6 +1845,9 @@ function validateWith(raw: unknown, readPageAt: PageReader, ids: Set<string>, dr
 	// v21: the saved views (not tied to the pages read above: a view of a page that is gone stays, shown as missing).
 	const views = readViews(raw.views, drop);
 	if (views.length > 0) doc.views = views;
+	// v28: the sections (like the views, not tied to the pages read above: a section of a page that is gone stays, dormant).
+	const sections = readSections(raw.sections, drop);
+	if (sections.length > 0) doc.sections = sections;
 	return doc;
 }
 
@@ -1907,7 +1975,8 @@ export class StagedParse {
 			const drop: Dropped = { count: 0 };
 			// v12 -> v13 only drops the `states` keys of pages, which `read` ignores page by page; the document-level drops are older.
 			// v20 -> v21 only drops a stray `views` key (a v20 file has none of ours); v21 -> v22 only drops stray stroke keys, ignored page by page.
-			const current = from === CURRENT_VERSION ? raw : { ...(from < 21 ? withoutV21Views(from < 12 ? withoutV12Slides(from < 11 ? withoutV11Meta(raw) : raw) : raw) : raw), version: CURRENT_VERSION };
+			// v27 -> v28 only drops a stray `sections` key (a v27 file has none of ours).
+			const current = from === CURRENT_VERSION ? raw : { ...withoutV28Sections(from < 21 ? withoutV21Views(from < 12 ? withoutV12Slides(from < 11 ? withoutV11Meta(raw) : raw) : raw) : raw), version: CURRENT_VERSION };
 			const doc = validateWith(current, readPageShell, ids, drop);
 			const rawPages = raw.pages as unknown[];
 			const at = Math.min(rawPages.length - 1, Math.max(0, first));
@@ -2020,7 +2089,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v24 → v25 only drops the `taperStart` and `taperEnd` keys of strokes (ignored page by page), so large v24 files are staged too.
 	// v25 → v26 only drops the `rotate` and `crop` keys of PDF backgrounds (ignored page by page), so large v25 files are staged too.
 	// v26 → v27 only refuses study tapes (checked page by page as they are read), so large v26 files are staged too.
-	if (pre.version === 26 || pre.version === 25 ||pre.version === 9 || pre.version === 10|| pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22 || pre.version === 23 || pre.version === 24) return StagedParse.create(pre.raw, first, pre.version);
+	// v27 → v28 only drops a stray `sections` key (applied by `StagedParse.create`), so large v27 files are staged too.
+	if (pre.version === 27 || pre.version === 26 || pre.version === 25 ||pre.version === 9 || pre.version === 10|| pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22 || pre.version === 23 || pre.version === 24) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }
@@ -2067,6 +2137,8 @@ function checkComments(page: Page, path: string): void {
 const checkedSlideRefs = new WeakSet<SlideRef>();
 /** v21: frozen saved views that already passed the writer's round-trip check. */
 const checkedViews = new WeakSet<SavedView>();
+/** v28: frozen sections that already passed the writer's round-trip check. */
+const checkedSections = new WeakSet<Section>();
 
 /** Elements that already passed `checkContent` (they are frozen, so they cannot change afterwards). */
 const checkedElements = new WeakSet<PageElement>();
@@ -2113,6 +2185,21 @@ export function checkContent(doc: NotebookDocument): string | null {
 			const line = viewLine(v);
 			if (viewLine(readView(JSON.parse(line), `view ${v.id}`, null)) !== line) return `view ${v.id}: round-trip mismatch`;
 			if (Object.isFrozen(v)) checkedViews.add(v);
+		}
+		// v28: the sections are checked as the writer would (a bad title or colour, a repeated id or page, or too many would fail every save).
+		const sections = doc.sections ?? [];
+		if (sections.length > SECTIONS_MAX) return `sections: more than ${SECTIONS_MAX} sections`;
+		const sectionIds = new Set<string>();
+		const sectionPages = new Set<string>();
+		for (const s of sections) {
+			if (sectionIds.has(s.id)) return `section ${s.id}: duplicate id`;
+			if (sectionPages.has(s.page)) return `section ${s.id}: another section starts at this page`;
+			sectionIds.add(s.id);
+			sectionPages.add(s.page);
+			if (checkedSections.has(s)) continue;
+			const line = sectionLine(s);
+			if (sectionLine(readSection(JSON.parse(line), `section ${s.id}`, null)) !== line) return `section ${s.id}: round-trip mismatch`;
+			if (Object.isFrozen(s)) checkedSections.add(s);
 		}
 		// 0.28 review (#98): the references into the notebook's shared tables are checked on EVERY call, not cached with the element: an out-of-order
 		// step must never leave a picture, a background or the cover pointing at a file record that is no longer there. (Ink whose slide is not in

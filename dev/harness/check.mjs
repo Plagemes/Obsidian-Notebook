@@ -193,10 +193,20 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "linehandle", theme, device, lowLatency: false });
 // 0.29 charts (#244): the chart dialog and a chart beside its table (dev/harness/charts-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "charts", theme, device, lowLatency: false });
+// 0.30 chartreg (#295): the trend line on a line chart (dev/harness/chartreg-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "chartreg", theme, device, lowLatency: false });
+// 0.30 figmarkers (#247): numbered markers on a figure with a legend (dev/harness/figmarkers-check.ts), tablet and phone, light and dark.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "figmarkers", theme, device, lowLatency: false });
+// 0.30 timeline (#148): the timeline dialog and a timeline on the page (dev/harness/timeline-check.ts), dist/shots/design/timeline-*.png.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "timeline", theme, device, lowLatency: false });
 // 0.29 stats (#295): the table statistics card (dev/harness/stats-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "stats", theme, device, lowLatency: false });
+// 0.30 tablecalc (#147): Compute table, formulas before and after (dev/harness/tablecalc-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tablecalc", theme, device, lowLatency: false });
 // 0.29 cardtemplates: the card template picker and manager (dev/harness/cardtemplates-check.ts), tablet and phone, light and dark.
 for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "cardtemplates", theme, device, lowLatency: false });
+// 0.30 linksuggest (Z5): link suggestions in the New card dialog (dev/harness/linksuggest-check.ts).
+for (const theme of ["light", "dark"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "linksuggest", theme, device, lowLatency: false });
 // 0.28 tables (#41): the insert dialog and a table with writing in it (dev/harness/tables-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tables", theme, device, lowLatency: false });
 // 0.26 tidy (#238): Tidy up (dev/harness/tidy-check.ts).
@@ -247,6 +257,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "geosuggest", theme, device, lowLatency: false });
 // 0.29 studytape (#10): study tape, hidden and revealed (dev/harness/studytape-check.ts), tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "studytape", theme, device, lowLatency: false });
+// 0.30 sections (#52): coloured sections of a notebook, navigator strip and dialogs (dev/harness/nbsections-check.ts), tablet and phone, light and dark.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "sections", theme, device, lowLatency: false });
 // 0.29 strikedelete (#96): struck words hidden in the view, the export switch (dev/harness/strikedelete-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "strikedelete", theme, device, lowLatency: false });
 // 0.25 baseline (#93): Align to baseline (dev/harness/baseline-check.ts).
@@ -328,6 +340,8 @@ for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"])
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "formulasheet", theme, device, lowLatency: false });
 // 0.29 hygiene: the Zettelkasten hygiene report (dev/harness/hygiene-check.ts).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "hygiene", theme, device, lowLatency: false });
+// 0.30 zsequence: the card sequence dialog (dev/harness/zsequence-check.ts).
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "zsequence", theme, device, lowLatency: false });
 // 0.28 boxnum: numbered boxes and the index of definitions and theorems (dev/harness/boxnum-check.ts).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "boxnum", theme, device, lowLatency: false });
 // 0.14 slides: ink linked to the slide beside it (badges) and the slide strip, tablet and phone, dark and light (dist/shots/slides-*.png).
@@ -363,6 +377,8 @@ for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"])
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "syncprov", theme, device, lowLatency: false });
 // 0.29 figcaptions (#248): figure captions, references and the reference picker (dev/harness/figcaptions-check.ts), tablet and phone, dark and light (dist/shots/figcaptions-*.png).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "figcaptions", theme, device, lowLatency: false });
+// 0.30 flowchart (#245): Tidy flowchart before / after (dev/harness/flowchart-check.ts), tablet and phone, dark and light (dist/shots/design/flowchart-*.png).
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "flowchart", theme, device, lowLatency: false });
 
 /** RGBA pixel reader for the 8-bit, non-interlaced PNGs Chrome produces. */
 function decodePng(buf) {
@@ -499,13 +515,19 @@ async function main() {
 				else if (s.doc === "calculator") report = await cdp.evaluate("window.harness.checkCalculator()", 120000); // 0.29 calculator
 				else if (s.doc === "geosuggest") report = await cdp.evaluate("window.harness.checkGeosuggest()", 90000); // 0.28 geosuggest
 				else if (s.doc === "studytape") report = await cdp.evaluate("window.harness.checkStudytape()", 90000); // 0.29 studytape
+				else if (s.doc === "sections") report = await cdp.evaluate("window.harness.checkNbSections()", 90000); // 0.30 sections
 				else if (s.doc === "strikedelete") report = await cdp.evaluate("window.harness.checkStrikedelete()", 90000); // 0.29 strikedelete
 				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
 				else if (s.doc === "macros") report = await cdp.evaluate("window.harness.checkMacros()", 120000); // 0.27 macros
 				else if (s.doc === "linehandle") report = await cdp.evaluate("window.harness.checkLinehandle()", 90000); // 0.28 linehandle
 				else if (s.doc === "tables") report = await cdp.evaluate("window.harness.checkTables()", 120000); // 0.28 tables
 				else if (s.doc === "charts") report = await cdp.evaluate("window.harness.checkCharts()", 120000); // 0.29 charts
+				else if (s.doc === "chartreg") report = await cdp.evaluate("window.harness.checkChartreg()", 120000); // 0.30 chartreg
+				else if (s.doc === "figmarkers") report = await cdp.evaluate("window.harness.checkFigmarkers()", 120000); // 0.30 figmarkers
+				else if (s.doc === "flowchart") report = await cdp.evaluate("window.harness.checkFlowchart()", 120000); // 0.30 flowchart
 				else if (s.doc === "stats") report = await cdp.evaluate("window.harness.checkStats()", 120000); // 0.29 stats
+				else if (s.doc === "tablecalc") report = await cdp.evaluate("window.harness.checkTablecalc()", 120000); // 0.30 tablecalc
+				else if (s.doc === "timeline") report = await cdp.evaluate("window.harness.checkTimeline()", 120000); // 0.30 timeline
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
 				else if (s.doc === "spread") report = await cdp.evaluate("window.harness.checkSpread()", 120000); // 0.27 spread
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
@@ -544,8 +566,9 @@ async function main() {
 				else if (s.doc === "syncprov") report = await cdp.evaluate("window.harness.checkSyncprov()", 60000); // 0.22 syncprov
 				else if (s.doc === "figcaptions") report = await cdp.evaluate("window.harness.checkFigcaptions()", 60000); // 0.29 figcaptions
 				else if (s.doc === "cardtemplates") report = await cdp.evaluate("window.harness.checkCardtemplates()", 60000); // 0.29 cardtemplates
+				else if (s.doc === "linksuggest") report = await cdp.evaluate("window.harness.checkLinksuggest()", 60000); // 0.30 linksuggest
 				else
-				report = await cdp.evaluate(s.doc === "dropfiles" ? "window.harness.checkDropFiles()" : s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "task" ? "window.harness.checkTask()" : s.doc === "lookup" ? "window.harness.checkLookUp()" : s.doc === "formulasheet" ? "window.harness.checkFormulaSheet()" : s.doc === "hygiene" ? "window.harness.checkHygiene()" : s.doc === "boxnum" ? "window.harness.checkBoxnum()" : s.doc === "bookindex" ? "window.harness.checkBookIndex()" :s.doc === "annotate" ? "window.harness.checkAnnotate()" : s.doc === "tplnote" ? "window.harness.checkTplNote()" : s.doc === "gallery" ? "window.harness.checkGallery()" :s.doc === "qr" ? "window.harness.checkQr()" : s.doc === "snapshot" ? "window.harness.checkSnapshot()" : s.doc === "vdiff" ? "window.harness.checkVdiff()" :s.doc === "backups" ? "window.harness.checkBackups()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "figures" ? "window.harness.checkFigures()" :s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "colours" ? "window.harness.checkColours()" : s.doc === "coloursedit" ? "window.harness.checkColours(true)" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "signstamp" ? "window.harness.checkSignstamp()" : s.doc === "refwindow" ? "window.harness.checkRefwindow()" : s.doc === "quicktabs" ? "window.harness.checkQuicktabs()" : s.doc === "bookmarks" ? "window.harness.checkBookmarks()" : s.doc === "sticky" ? "window.harness.checkSticky()" : s.doc === "comments" ? "window.harness.checkComments()" : s.doc === "checklists" ? "window.harness.checkChecklists()" : s.doc === "axes" ? "window.harness.checkAxes()" : s.doc === "chembal" ? "window.harness.checkChembal()" : s.doc === "groups" ? "window.harness.checkGroups()" : s.doc === "minimap" ? "window.harness.checkMinimap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "planner" ? "window.harness.checkPlanner()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
+				report = await cdp.evaluate(s.doc === "zsequence" ? "window.harness.checkZsequence()" : s.doc === "dropfiles" ? "window.harness.checkDropFiles()" : s.doc === "states" ? "window.harness.checkStates()" : s.doc === "hints" ? "window.harness.checkHints()" : s.doc === "slides" ? "window.harness.checkSlides()" : s.doc === "zettel" ? "window.harness.checkZettel()" : s.doc === "pdf" ? "window.harness.checkReading()" : s.doc === "practice" ? "window.harness.checkPractice()" : s.doc === "lecture" ? "window.harness.checkLecture()" : s.doc === "outline" ? "window.harness.checkOutline()" : s.doc === "smartadd" ? "window.harness.checkSmartAdd()" : s.doc === "header" ? "window.harness.checkHeader()" : s.doc === "pensets" ? "window.harness.checkPenSets()" : s.doc === "task" ? "window.harness.checkTask()" : s.doc === "lookup" ? "window.harness.checkLookUp()" : s.doc === "formulasheet" ? "window.harness.checkFormulaSheet()" : s.doc === "hygiene" ? "window.harness.checkHygiene()" : s.doc === "boxnum" ? "window.harness.checkBoxnum()" : s.doc === "bookindex" ? "window.harness.checkBookIndex()" :s.doc === "annotate" ? "window.harness.checkAnnotate()" : s.doc === "tplnote" ? "window.harness.checkTplNote()" : s.doc === "gallery" ? "window.harness.checkGallery()" :s.doc === "qr" ? "window.harness.checkQr()" : s.doc === "snapshot" ? "window.harness.checkSnapshot()" : s.doc === "vdiff" ? "window.harness.checkVdiff()" :s.doc === "backups" ? "window.harness.checkBackups()" : s.doc === "daily" ? "window.harness.checkDaily()" : s.doc === "nbmap" ? "window.harness.checkNbmap()" : s.doc === "figures" ? "window.harness.checkFigures()" :s.doc === "movesel" ? "window.harness.checkMovesel()" : s.doc === "present" ? "window.harness.checkPresent()" : s.doc === "digest" ? "window.harness.checkDigest()" : s.doc === "colours" ? "window.harness.checkColours()" : s.doc === "coloursedit" ? "window.harness.checkColours(true)" : s.doc === "lock" ? "window.harness.checkLock()" : s.doc === "signstamp" ? "window.harness.checkSignstamp()" : s.doc === "refwindow" ? "window.harness.checkRefwindow()" : s.doc === "quicktabs" ? "window.harness.checkQuicktabs()" : s.doc === "bookmarks" ? "window.harness.checkBookmarks()" : s.doc === "sticky" ? "window.harness.checkSticky()" : s.doc === "comments" ? "window.harness.checkComments()" : s.doc === "checklists" ? "window.harness.checkChecklists()" : s.doc === "axes" ? "window.harness.checkAxes()" : s.doc === "chembal" ? "window.harness.checkChembal()" : s.doc === "groups" ? "window.harness.checkGroups()" : s.doc === "minimap" ? "window.harness.checkMinimap()" : s.doc === "readonly" ? "window.harness.checkReadOnly()" : s.doc === "excerpt" ? "window.harness.checkExcerpt()" : s.doc === "settings" ? "window.harness.checkSettings()" : s.doc === "chrome" ? "window.harness.checkChrome()" : s.doc === "toolbar" || s.doc === "toolbar-pdf" ? "window.harness.checkAdaptiveToolbar()" : s.doc === "plugin" ? "window.harness.checkPlugin()" : s.doc === "create" ? "window.harness.checkCreate('notebook')" : s.doc === "modals" ? "window.harness.checkModals()" : s.doc === "templates" ? "window.harness.checkTemplates()" : s.doc === "planner" ? "window.harness.checkPlanner()" : s.doc === "library" ? "window.harness.checkLibrary()" : s.doc === "empty" ? (s.hostile ? "window.harness.checkHostile()" : "window.harness.checkEmpty()") : "window.harness.check()", 60000);
 			} catch (e) {
 				report = { ok: false, results: [], errors: [String(e.message ?? e)] };
 			}
@@ -781,6 +804,19 @@ async function main() {
 					}
 				}
 			}
+			// 0.30 sections: the navigator with three sections, the Sections dialog and the edit dialog.
+			if (s.doc === "sections") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["navigator", "list", "edit"]) {
+					try {
+						await cdp.evaluate(`window.harness.nbSectionsShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `sections-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`sections ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
 			// 0.29 strikedelete: struck words shown, hidden, and the export dialog with its switch.
 			if (s.doc === "strikedelete") {
 				const designDir = join(shots, "design");
@@ -820,6 +856,32 @@ async function main() {
 					}
 				}
 			}
+			// 0.30 figmarkers: screenshots of a figure with numbered markers and its legend, and with one marker selected.
+			if (s.doc === "figmarkers") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["figure", "selected"]) {
+					try {
+						await cdp.evaluate(`window.harness.figmarkersShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `figmarkers-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`figmarkers ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.30 flowchart: the crooked chart selected, and the tidied chart.
+			if (s.doc === "flowchart") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["before", "after"]) {
+					try {
+						await cdp.evaluate(`window.harness.flowchartShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `flowchart-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`flowchart ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
 			// 0.29 charts: screenshots of the chart dialog and of a chart beside its table.
 			if (s.doc === "charts") {
 				const designDir = join(shots, "design");
@@ -830,6 +892,32 @@ async function main() {
 						writeFileSync(join(designDir, `charts-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`charts ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.30 chartreg: the chart dialog with the trend line on, and the chart with its trend line.
+			if (s.doc === "chartreg") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["dialog", "chart"]) {
+					try {
+						await cdp.evaluate(`window.harness.chartregShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `chartreg-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`chartreg ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.30 timeline: screenshots of the dialog (new and edit) and of a timeline on the page.
+			if (s.doc === "timeline") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["dialog", "edit", "timeline"]) {
+					try {
+						await cdp.evaluate(`window.harness.timelineShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `timeline-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`timeline ${state} screenshot: ${e.message}`);
 					}
 				}
 			}
@@ -847,6 +935,20 @@ async function main() {
 				}
 				await cdp.evaluate("window.harness.closeCardtemplates()");
 			}
+			// 0.30 linksuggest: the New card dialog with link suggestions.
+			if (s.doc === "linksuggest") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of await cdp.evaluate("window.harness.linksuggestStates")) {
+					try {
+						await cdp.evaluate(`window.harness.linksuggestShot('${state}').then(() => true)`);
+						writeFileSync(join(designDir, `linksuggest-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`linksuggest ${state} screenshot: ${e.message}`);
+					}
+				}
+				await cdp.evaluate("window.harness.closeLinksuggest()");
+			}
 			// 0.29 stats: screenshots of the statistics card, summary only and with a fitted line.
 			if (s.doc === "stats") {
 				const designDir = join(shots, "design");
@@ -857,6 +959,19 @@ async function main() {
 						writeFileSync(join(designDir, `stats-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`stats ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.30 tablecalc: screenshots of the table with its formulas typed and computed.
+			if (s.doc === "tablecalc") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["before", "after"]) {
+					try {
+						await cdp.evaluate(`window.harness.tablecalcShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `tablecalc-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`tablecalc ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

@@ -46,7 +46,8 @@ import { LectureLogService } from "./library/lecture-log";
 import type { LectureSnapshot } from "./library/lecture-log-logic";
 import { TimetableService } from "./timetable/service";
 import { initPdfSync } from "./view/pdf-sync";
-import { inboxService, registerZettel } from "./zettel";
+import { inboxService, registerZettel, zettelService } from "./zettel";
+import { setLinkSuggestHost } from "./zettel/link-suggest-ui";
 import { HOME_VIEW_TYPE, HomeView } from "./library/home-view";
 import type { InboxPort } from "./library/inbox-bell";
 import type { LibraryPlace } from "./library/library-view";
@@ -355,6 +356,8 @@ export default class NotebookPlugin extends Plugin {
 		this.step("reference window", () => registerReferenceMenu(this));
 		// wave 0.6: zettelkasten (M15 Z1–Z3, Z11, Z12)
 		this.step("zettelkasten", () => registerZettel(this));
+		// 0.30 linksuggest (Z5): the card dialog reads the setting and the service through this
+		this.step("zettel link suggestions", () => setLinkSuggestHost({ settings: () => this.settings, service: () => zettelService(this) }));
 		// wave 0.8: quick textbook reference (roadmap 208): "p. 134" in a text box opens the textbook at that page
 		this.step("textbook references", () => registerTextbookRefs(this, () => this.settings.folder));
 
@@ -476,6 +479,7 @@ export default class NotebookPlugin extends Plugin {
 		stop("gallery", () => this.gallery?.dispose());
 		stop("library", () => this.host?.dispose());
 		stop("appearance", () => activeDocument.body.removeClass("notebook-style-obsidian"));
+		stop("zettel link suggestions", () => setLinkSuggestHost(null));
 	}
 
 	async saveSettings(): Promise<void> {

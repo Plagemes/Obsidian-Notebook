@@ -21,14 +21,18 @@ interface State {
 	title: string;
 	colour: number;
 	size: ChartSize;
+	trend: boolean;
 }
 
-let last: Omit<State, "title"> = { kind: "bar", colour: 1, size: "medium" };
+const TREND_LABEL: Record<"off" | "on", MessageKey> = { off: "chart.trend.off", on: "chart.trend.on" };
+
+let last: Omit<State, "title"> = { kind: "bar", colour: 1, size: "medium", trend: false };
 
 class ChartDialog extends Modal {
 	private shell!: ModalShell;
 	private s: State;
 	private preview!: HTMLElement;
+	private trendRow!: HTMLElement;
 	private notes!: HTMLElement;
 	private insertButton!: HTMLButtonElement;
 	private answered = false;
@@ -50,6 +54,9 @@ class ChartDialog extends Modal {
 		});
 		this.colours(body);
 		this.segmented(body, "chart.size", SIZES, SIZE_LABEL, () => this.s.size, (v) => (this.s.size = v));
+		// the trend line is for a line chart only; the row is hidden for the other types
+		this.trendRow = body.createDiv({ cls: "nb-chart-trend" });
+		this.segmented(this.trendRow, "chart.trend", ["off", "on"] as const, TREND_LABEL, () => (this.s.trend ? "on" : "off"), (v) => (this.s.trend = v === "on"));
 		this.preview = body.createDiv({ cls: "nb-chart-preview", attr: { role: "img", "aria-label": t("chart.preview") } });
 		this.notes = body.createDiv({ cls: "nb-chart-notes" });
 		shellButton(this.shell.foot, "secondary", t("transfer.cancel"), () => this.close());
@@ -65,9 +72,9 @@ class ChartDialog extends Modal {
 	private submit(): void {
 		if (countNumbers(this.data, this.s.kind) === 0) return;
 		this.answered = true;
-		last = { kind: this.s.kind, colour: this.s.colour, size: this.s.size };
+		last = { kind: this.s.kind, colour: this.s.colour, size: this.s.size, trend: this.s.trend };
 		this.close();
-		this.finish({ kind: this.s.kind, title: this.s.title.trim(), colour: this.s.colour, size: this.s.size });
+		this.finish({ kind: this.s.kind, title: this.s.title.trim(), colour: this.s.colour, size: this.s.size, trend: this.s.trend && this.s.kind === "line" });
 	}
 
 	private segmented<T extends string>(parent: HTMLElement, label: MessageKey, values: readonly T[], names: Record<T, MessageKey>, get: () => T, set: (v: T) => void): void {
@@ -121,7 +128,8 @@ class ChartDialog extends Modal {
 	private draw(): void {
 		const size = chartSize(this.s.size, 595);
 		const box = { x: 0, y: 0, width: size.width, height: size.height };
-		const layout = layoutFor({ kind: this.s.kind, colour: this.s.colour }, this.data, this.s.title.trim(), box, t("chart.other"));
+		this.trendRow.hidden = this.s.kind !== "line";
+		const layout = layoutFor({ kind: this.s.kind, colour: this.s.colour, trend: this.s.trend }, this.data, this.s.title.trim(), box, t("chart.other"));
 		this.preview.empty();
 		paintLayout(this.preview, layout, box.width, box.height);
 		this.notes.empty();

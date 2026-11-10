@@ -36,7 +36,10 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["selection that is a group (0.20, #39)", baseContext({ tool: "lasso", selection: { strokes: 2, elements: 1, images: 0, canGroup: false, grouped: 3 } })],
 	["selection that is a hand-drawn table (0.28, #41)", baseContext({ tool: "lasso", selection: { strokes: 9, elements: 0, images: 0, table: true } })],
 	["selection with a table to chart (0.29, #244)", baseContext({ tool: "lasso", selection: { strokes: 9, elements: 4, images: 0, chartable: true } })],
+	["selection with markers of a figure (0.30, #247)", baseContext({ tool: "lasso", selection: { strokes: 4, elements: 2, images: 0, markers: { kind: "set", stale: true } } })],
+	["selection with a picture to number (0.30, #247)", baseContext({ tool: "lasso", selection: { strokes: 0, elements: 1, images: 1, markers: { kind: "figure", stale: false } } })],
 	["selection that is a chart (0.29, #244)", baseContext({ tool: "lasso", selection: { strokes: 20, elements: 12, images: 0, chart: true } })],
+	["selection that is a timeline (0.30, #148)", baseContext({ tool: "lasso", selection: { strokes: 20, elements: 12, images: 0, timeline: true } })],
 	["selection of three strokes (0.26, tidy up)", baseContext({ tool: "lasso", selection: { strokes: 3, elements: 0, images: 0 } })],
 	["page with locked elements (0.20, #39)", baseContext({ page: { index: 1, count: 3, background: "none", infinite: false, bookmarked: false, lockedElements: 2 } })],
 	["lasso, nothing selected", baseContext({ tool: "lasso" })],
@@ -49,6 +52,7 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["two notebooks open", baseContext({ openNotebooks: 2 })],
 	["locked page (0.16, #124)", baseContext({ page: { index: 1, count: 3, background: "none", infinite: false, bookmarked: false, locked: true } })],
 	["notebook with study tapes, one revealed (0.29, #10)", baseContext({ tapes: { drawing: false, total: 2, revealed: 1 } })],
+	["notebook with sections, on the first page of one (0.30, #52)", baseContext({ sections: { count: 3, here: true, starts: true } })],
 ];
 const WIDTHS = [360, 800, 1280];
 

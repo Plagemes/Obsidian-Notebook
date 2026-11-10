@@ -349,7 +349,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 7888 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 8244 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -4790,6 +4790,20 @@ A line through the middle of a handwritten word marks it as deleted. The word st
 | Search / headings index / digest ignore struck words | no | | | | left out: not cheap without touching those readers |
 | Thumbnails, minimap and the zoomed-out levels hide struck words | no | | | | they draw the document as it is; only the page canvas and exports honour the switch |
 | Quick exports from a page's menu (without the dialog) | no | | | | they draw the page as it is; use the export dialog |
+### 0.30 — chartreg: trend line on line charts (roadmap #295; steps 3520-3539)
+
+Implemented, not verified on hardware. The line is fitted to the first series against the row position (1, 2, 3 ...), not to numeric labels.
+
+3520. **Choice.** Make a table with numbers (a header row, a month column and two number columns) and open *Chart from table*. With *Line* the dialog shows *Trend line* (None / Line of best fit); with *Bars* or *Pie* it is hidden.
+3521. **Preview.** Choose *Line of best fit*: the picture gets a dashed line and a label like `y = 2x + 1  R² = 0.98`. *None* removes both.
+3522. **Insert.** Insert the chart: the dashed line and the label are part of the chart (ordinary shapes and a text box); the title stays the title.
+3523. **Update keeps it.** Change a number in the table, select the chart, *Update chart*: the trend line and its equation are redrawn for the new numbers; undo brings the old chart back in one step.
+3524. **Old charts.** A chart made by 0.29 still updates and has no trend line.
+
+| Feature | Implemented | Automated test | Verified on hardware | Experimental | To do |
+|---|---|---|---|---|---|
+| Trend line (least squares) with equation and R² on line charts, kept by Update chart | yes | `tests/chart-regression.test.ts`, harness `doc=chartreg` | | | |
+
 ### 0.29 — charts: bar, line and pie charts from the numbers of a hand-drawn table (roadmap #244; steps 3340-3359)
 
 A chart is ordinary shape strokes and text boxes of one group; "Update chart" re-reads the table the chart was made from. The plugin does not read handwriting: the numbers are typed in text boxes placed in the cells (Text tool, tap in a cell).
@@ -4925,3 +4939,251 @@ Update to 0.29 and fully close and reopen Obsidian. Use a vault with a notebook 
 | A line only strikes ink written before it | yes | `tests/strikethrough.test.ts` | | | |
 | Groups complete with hidden struck members; very dense pages are skipped in the view | yes | `tests/strikethrough.test.ts` | | | |
 | Pictures of a selection into notes, copies, digests leave out struck words | no | | | | not covered; the setting text says which files are |
+
+### 0.30 — sections: coloured sections inside a notebook, tab dividers as in OneNote (roadmap #52; document format 28; steps 3500-3519)
+
+A section starts at a page and runs to the page before the next section; pages before the first section belong to none.
+
+3500. **Make a section.** Open a notebook of at least 8 pages, go to page 3. Page sheet (or *All actions*) > *New section…*: the dialog shows "Page 3", a title field with the cursor in it, eight colours (one already chosen that no section uses yet) and a preview of the tab. Type "Chemistry", pick a colour, *Create*: the page navigator shows a tab strip with "Chemistry" and, in the list, a coloured divider "Chemistry · 6 pages" above page 3, with a colour edge on pages 3 to 8. One undo removes it, redo brings it back.
+3501. **A second section.** Go to page 6, *New section…* "Physics": the strip shows two tabs in page order; the Chemistry divider now says 3 pages and Physics 3 pages. On page 6 the page sheet no longer offers *New section…* but *Rename section…*, *Change section colour…* and *Delete section*.
+3502. **Tabs follow the reading.** Scroll from page 1 to the end with the S Pen: the tab of the section in view becomes current (tinted, bold) and slides into view in the strip; on pages 1 and 2 no tab is current. A tap on a tab goes to the first page of its section.
+3503. **Sections dialog.** Tap the list button at the end of the strip (or *All actions* > *Sections…*): every section with its colour bar, title and "Pages 3–5 · 3 pages"; the one in view is highlighted. A tap on a row goes there and closes the dialog. The *New section at page N* button starts one at the page in view (on a page that already starts one it says so and opens that section's editor).
+3504. **Rename and recolour.** From a row's menu, or the page sheet: rename "Chemistry" to "Organic chemistry" (the strip, the divider and the dialog update); change its colour (the swatches update in place, the preview follows, *Save* applies it; in the title field Enter saves too). Each is one undo step, named in the history panel.
+3505. **Title rules.** A title of only spaces cannot be saved; a long title (60 characters) is cut in the field; extra spaces are collapsed. A title that is too long to show is shortened with an ellipsis on the tab and on the divider.
+3506. **Delete a section.** *Delete section* on a page of Physics: the tab and the divider go away and those pages join the section before them (Chemistry) in the list. Undo brings Physics back on the same page.
+3507. **Delete the first page of a section.** Delete page 6 (the first page of Physics) from the page sheet: Physics now starts at the next page and keeps its title and colour. Delete the only page of a one-page section that is followed by another section: that section is removed. Undo of the page delete brings back the page and the section exactly as before.
+3508. **Move pages.** In page selection mode move the first page of Chemistry after the last page of the notebook: Chemistry now starts at its second page; the moved page belongs to whatever section is at the end. Select all the pages of a section and move them together to the front: the section moves with them (pages that were in no section at the front now follow it and join it: the only way the notebook can show them). Make a one-page section between two sections and use the page panel's *Move up* once: the page above it keeps its section's title and colour (shown as a continuation of that section); *Move up* again: the section above is one section again. Drag all the pages of a section into the middle of another section: the pages after them keep the host section's title and colour. Undo puts pages and sections back each time.
+3509. **Add, insert, duplicate.** Add a page at the end, insert a page in the middle of Chemistry, duplicate the first page of Physics: no section moves; the inserted page belongs to Chemistry; the duplicate (placed after the original) belongs to Physics, which still starts at the original.
+3510. **Next / previous section.** *All actions* > *Next section* and *Previous section* (also as commands, so a hotkey can be bound): next goes to the first page of the next section; previous goes to the start of the section in view, then to the one before. With three or more sections the list and the jumps appear under *For this page*.
+3511. **Read-only and locked.** In read-only mode the strip, the dividers, the dialog (no *New section* button, rows without a menu) and the jumps work; nothing can be changed (a notice says so). On a locked page a section can still be made (sections are notebook-level, not page content).
+3512. **Older plugin.** Open a notebook with sections in 0.29 (format 27): it opens read-only with the "newer version" message and is never overwritten. A notebook of 0.29 opened here gains sections only when one is made.
+3513. **Conflicted copy.** Make a section on two devices while offline (different pages), sync: the merge dialog counts "n sections added"; after merging both sections are there. A section of the copy on a page where the main notebook already starts a section is not added, and the dialog says so ("n sections differ in the copy"). Rename a section on one device only, sync with a conflict: the dialog says the section differs (not "Nothing new"), and *Move only* keeps the copy in the backup folder.
+3514. **Template.** Save the notebook as a notebook template, then make a notebook from it: the sections are there, on the same pages, with the same titles and colours. Move or copy pages to another notebook: the other notebook's sections are not changed and no section comes along.
+3515. **Themes.** Look at the strip, the dividers and both dialogs in light, dark and with *Follow Obsidian theme* (try a community theme): the colours, tints and text read well and nothing uses a hard-coded background.
+3516. **Phone.** On a phone-width view open the page drawer: the strip scrolls sideways with a finger, every tab and the list button are easy to hit (at least 32 px high; dialog rows and swatches 44 px), the dialogs fit the screen.
+3517. **Long-press help and Italian.** Hold a finger on each sections action in *All actions*: one line of help. Switch Obsidian to Italian: the actions, the dialogs, the divider ("3 pagine"), the notices and the colour names are in Italian.
+3518. **Many sections.** Make 25 sections in a 100-page notebook: the strip scrolls and the current tab is always brought into view; the navigator scrolls without lag; writing on a page is not slowed down.
+3519. **Sync.** Sync a notebook with sections to another device (Obsidian Sync with "all other types", Syncthing): the sections are there and the strip and dividers match.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v28: optional `sections` list, migration 27→28, lenient read / strict write, history guard, staged load, repair, schema | yes | `tests/model-v28.test.ts`, `tests/format-schema.test.ts` | | | |
+| Section rules: resolution by page order, dormant sections, delete / move / reorder keep sections consistent (exact undo) | yes | `tests/model-v28.test.ts` | | | |
+| Moving pages never changes the section of a page that did not move (review S1): Move up / down of a one-page section, a whole section to the start, a section dropped into another (continuation section, joined again when it moves out, also after two splits), exact undo and redo; recurring sections with the same title and colour (Lecture / Homework) are never joined, nor a renamed continuation (review R1); pieces of a section renamed while split and renamed back rejoin, chains of continuations are followed (review T2) | yes | `tests/model-v28.test.ts` | | | pages in no section cannot stay so behind a moved section (the anchor model has no "none" after a section); with 200 sections there is no continuation; pieces copied by a notebook template, or made by a round-1 dev build, are not recognised and stay separate (review T3); two devices splitting one section offline pick the same continuation id, so a conflicted-copy merge keeps one piece and reports the other as differing (review T4) |
+| SetSections command (global per-page-undo class, history panel title) | yes | `tests/model-v28.test.ts` | | | |
+| Merge of a conflicted copy, templates, page transfer out of a closed notebook | yes | `tests/model-v28.test.ts` | | | |
+| Merge summary counts the copy's sections left out: differing ones (`sectionsDiffer`) and ones that did not fit (`sectionsFull`); neither is "Nothing new" (review S2, S8) | yes | `tests/model-v28.test.ts`, `tests/reliability-sections.test.ts` | | | |
+| Navigator tab strip, dividers, colour edges | yes | harness `doc=sections` | | | |
+| Sections dialog and new / edit dialog (title, eight colours, preview) | yes | harness `doc=sections` | | | |
+| Actions: list, new, rename, recolour, delete, next, previous; help; context ranking | yes | `tests/sections-logic.test.ts`, `tests/ui-registry.test.ts` | | | |
+| One count for the 200 limit: sections that show nowhere (page gone, or a second one on a page) count; the dialog says how many and offers *Remove sections without a page* (one undo step) (review S4) | yes | `tests/sections-tools.test.ts` | | | the removal row only appears with such sections, so the harness never shows it |
+| The *New section* dialog keeps the page id: a page list that changes while it is open does not move the new section; a page that is gone makes none, with a notice (review S6) | yes | `tests/sections-tools.test.ts` | | | |
+| Known limits (review S5, S7, S9) | | | | | a page inserted in front of a section's first page joins the section before it (anchor model); deleting or moving a section's first page when the next page has an id over 200 characters (only from another tool) is refused by the save check; every 0.30 save writes version 28, so a synced device still on 0.29 opens the notebook read-only (with a backup) |
+| Drag a section's tab to reorder, or drag a divider to move a section's start | no | | | | not planned for 0.30: a section is moved by moving its pages |
+| Sections in exports (PDF outline, Markdown headings) | no | | | | to do |
+
+### 0.30 — tablecalc: computable table (roadmap #147; steps 3540-3559)
+
+*Compute table* in the All actions sheet (and the command palette) while a hand-drawn table is selected. Implemented, not verified on hardware. Formulas are typed in TEXT BOXES inside the cells (handwriting is not read). A formula starts with `=`; `A1` is the top-left cell of the table (header row included). After computing, the box reads `=formula → result` (U+2192): the formula stays recoverable, and computing again after a change updates the result. One undo step. No format change.
+
+3540. **Offered.** Draw a table (Insert > Table, 5 rows, 3 columns). Type a header row (Item, Qty, Price) and under it text boxes: pen / 3 / 1,5 and ink / 2 / 4. Select the table: All actions lists *Compute table*; with nothing, or a non-table, selected it is not offered.
+3541. **Row cost.** Add a fourth column header Cost and in D2 a text box `=B2*C2`, in D3 `=B3*C3`. Choose *Compute table*: D2 reads `=B2*C2 → 4.5`, D3 reads `=B3*C3 → 8`; a notice says 2 formulas computed.
+3542. **Totals.** In B4 type `=SUM(B2:B3)` and in D4 `=SUM(D2:D3)`: after computing they show 5 and 12.5 (the header text in D1 is skipped). `=AVG(D2:D3)` gives 6.25; `=MIN`, `=MAX`, `=COUNT` over a range give the right values; `=D4*10%` gives 1.25.
+3543. **Update.** Change the quantity 3 to 4 (edit the text box) and choose *Compute table* again: D2 and the totals change. Choosing it again without a change says every formula already shows its result and changes nothing.
+3544. **Edit a formula.** Edit a computed box (`=B2*C2 → 4.5`) to `=B2*C2*2` (keep or delete the old result): computing replaces the result and the formula stays. Add your own words after the result (`=B2*C2 → 4.5 (checked by hand)`) or a second line under the formula (`(net of VAT)`): computing changes only the number after the arrow and keeps your words and the line break; computing again changes nothing.
+3545. **Errors.** `=1/0` shows `#DIV/0`; `=Z9` shows `#REF`; `=A1+1` typed in A1 shows `#CYCLE`; two cells that use each other both show `#CYCLE`; `=B1+1` where B1 is a word shows `#VALUE`; `=FOO(1)` shows `#NAME`; `=1+` shows `#ERR`. A formula that uses an error cell shows the same error. The notice counts the errors.
+3546. **Undo and redo.** One undo puts every box back to the formula as it was before; one redo brings the results back. History lists *Table computed*.
+3547. **Refused.** On a locked page the action is disabled. With a formula text box locked (lock it from the selection bar) the notice says it is locked and nothing changes. With a redaction box (Export > Redact) over any text box of the table the notice says nothing was changed; moving the redaction box away makes it work.
+3548. **Phone, dark, light, Italian.** The notice and the history title read in both themes and in Italian (Italian function names such as `=SOMMA(B2:B3)` and `=MEDIA(...)` work; `;` separates arguments); long-press help of the action explains what it does.
+3549. **Saved.** Close and reopen the notebook: the boxes keep the formula and the result.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Formula parser and evaluator, A1 references and ranges, functions, `%`, errors, cycles (`src/math/table-formula.ts`) | yes | `tests/table-formula.test.ts` | | | |
+| Reading formula cells from the text boxes of a table, writing results as one History step, locked / states / redaction refusals (`src/ink/table-compute.ts`) | yes | `tests/table-compute.test.ts` | | | |
+| Action, help, context rank, command, History title, en + it | yes | `tests/table-compute-actions.test.ts`, harness `doc=tablecalc` | | | |
+| Owned result and notes (review R2, R3): a result Compute wrote ends its line or meets a second arrow (or is an error code), so a number typed after one's own arrow with words after it is kept behind the new result; blank or text values show `-`; a line below starting with an operator continues the formula (a mistake there is an error), except a bullet note: `-`, `+` or `*`, a blank and a plain word of two or more letters that is not a cell reference or a function call (`- includes VAT`, `* see p. 4`) (review T1) | yes | `tests/table-formula.test.ts`, `tests/table-compute.test.ts` | | | ambiguity left: a bare number typed alone after one's own arrow (`=A1 → 3`) looks exactly like a result and is replaced; a bullet whose first word has one letter (`- è …`) is read as a continuation; words typed right after a computed result on the same line (`=B2*C2 → 120 (checked by hand)`) keep the old value behind the next result, once, so write notes on the line below or after a second arrow (help text says so) (review T5) |
+| Reading handwriting in cells | no | | | | needs recognition; type formulas in text boxes |
+| Updating by itself when a number changes | no | | | | explicit *Compute table* only |
+| Charts and statistics reading a computed cell as a number | no | | | | a computed box holds `=formula → result`, which is not a plain number |
+| Cell formats (currency, percent display), absolute / relative copying | no | | | | not in this wave |
+
+### 0.30 — figmarkers: numbered markers on a figure with a legend (roadmap #247; steps 3560-3579)
+
+A marker is a ring with its number (a shape stroke and a text box, one group); the legend is a text box with a rule above it (one group). Neither is in the document format: they are ordinary content that the plugin finds again by the id of their groups.
+
+3560. **A picture.** Place a photo on a page. Select it (lasso, tap it): *All actions* shows *Add numbered marker* near the top (and no *Renumber markers*). Tap it: a numbered ring "1" appears on the picture (top left) and a legend under it with a rule and the line "1.". A notice says to drag the marker to its place and type the description. The new marker is selected.
+3561. **Drag and describe.** Drag marker 1 onto the part it names (it moves as one piece, ring and number together). Tap the legend text, type `Cell wall` after "1.": the legend reads "1. Cell wall".
+3562. **More markers.** With the marker still selected, *Add numbered marker* again, twice: markers 2 and 3 appear on distinct spots of the picture (never on top of each other) and the legend gets the lines "2." and "3." without changing the words you typed. Each use is one undo step: undo removes the last marker and its legend line only; redo brings them back.
+3563. **A drawing.** Draw a simple figure with the pen (a few shapes), lasso it, *Add numbered marker*: markers appear on the drawing and the legend under it. Select the drawing again and add another: it joins the same legend (it does not start a second one).
+3564. **Two figures.** Do the same on a second picture or drawing on the same page: it has its own markers numbered from 1 and its own legend. Select markers of both figures at once and try *Add numbered marker*: refused with "The selection holds markers of more than one figure…".
+3565. **Delete and renumber.** Delete marker 2 (select it, Delete): the markers read 1, 3 and the legend still lists 2. Select marker 3: *All actions* shows *Renumber markers* near the top. Tap it: when the line of the deleted marker holds words, a dialog asks first and quotes them; *Cancel* changes nothing. Confirm: the marker 3 becomes 2, and the legend reads "1. …" and "2. …" with each description staying with its marker; the description of the deleted marker is gone. A notice says so. (With an empty line for the deleted marker, no dialog.) Undo: the old numbers and legend come back in one step. Choose it again when everything is in order: "already numbered".
+3566. **A marker without a line.** Delete a legend line by hand, then *Renumber markers*: the line comes back, empty, in its place. Type two lines of text for one marker (press Enter, indent with a few spaces and keep typing): they stay together under their marker after a renumber.
+3567. **Look.** The ring is a translucent tint with a solid outline in the pen colour; the number is centred in it and readable on a light picture, and (with a light pen colour) on a dark one. Change the pen colour before the first marker: all the markers of that figure share the colour of the first. Recolour or resize a marker with the selection bar: it works on that marker alone.
+3568. **Copies.** Select the picture with its markers and legend, copy and paste (or duplicate the page): the copy shows the same numbers and legend. Select a marker of the copy: *Renumber markers* is not offered (the copy is a picture, linked to nothing); change the original's markers and the copy does not change, and the other way round.
+3569. **Guards.** Lock the page: both actions are disabled. Lock the legend text box (Lock) and try *Add numbered marker* on that figure: refused with "The legend or a marker is locked…". Draw a redaction box over the spot where the next marker would go (grid of the picture's top left) and add: refused with the redaction message; move the box away and it works. Add 99 markers (or just trust the unit test): the 100th is refused.
+3570. **Exports and history.** Export the page as PDF, PNG and SVG: rings, numbers and legend are drawn. With redaction on, a box over a marker hides it. The history panel reads "Marker added" and "Markers renumbered" (Italian "Segnaposto aggiunto", "Segnaposto rinumerati"). With *Undo on this page only* on, undo of a marker step acts on that page only.
+3571. **Phone, light, dark, Italian.** The actions read well on a phone, in light, dark and *Follow Obsidian theme*, in Italian with the plugin in Italian; long-press the two actions in the sheet to see their help text.
+3572. **Real device.** On the tablet with the S Pen: the ring is a good size for the picture (not tiny, not huge), dragging a marker onto a small part is easy, and adding a marker is instant.
+3573. **Review: the legend keeps your text.** Type a legend with a heading, a blank line between entries, entries written `1)` and indented, and a note after a blank line at the end ("Source: textbook p.4"). Add a marker: exactly one line ("4)", written like the others) appears after the last entry; nothing else changes. Delete the last marker and renumber: its line goes (after the question), the note stays. Type the same number on two lines ("3. A" and "3. B"), delete marker 2 and renumber: both lines become "2." and keep their words; the notice says how many share a number.
+3574. **Review: redaction and tapes.** Draw a redaction box over the last line of a legend, delete marker 2 and renumber: refused with the redaction message, nothing changes (before, the shorter legend left the box and its words printed in clear). Do the same with *Add numbered marker*: refused. Put a study tape over a legend line or a marker number, then renumber or add: refused with "…lies under a study tape…"; move the tape away and it works.
+3575. **Review: edited markers, page bottom, legend only.** Type "3a" into marker 3 and renumber: refused ("…is not a plain number…"), nothing changes; *Add numbered marker* adds marker 4. Move a legend to the bottom of a fixed page and add a marker: refused ("…past the bottom of the page…"). Delete every marker of a figure whose picture is gone, select its legend and add: the marker appears just above the legend.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Group ids `nbm1.<m\|l>.<figure>.<random>`: build, parse, lenient reading, within the group id limit | yes | `tests/figure-markers.test.ts` | | | |
+| Legend text: entries, headings, continuation lines, add a line, reconcile after a renumber (descriptions follow their marker) | yes | `tests/figure-legend.test.ts` | | | |
+| Review I2/I3: legend rewritten line by line (blank lines, indentation, separators, notes, hand order kept); removed lines with words reported and asked first; duplicate numbers kept and reported; edited marker ("3a") refuses Renumber | yes | `tests/figure-legend.test.ts`, `tests/figure-markers.test.ts`, harness `doc=figmarkers` (the question, Cancel) | | | |
+| Review I1/I2/I6: Add and Renumber check every changed item before and after against redaction boxes (fail closed) and study tapes, and refuse; Add refuses a legend past a fixed page's bottom; a legend-only set places the marker above the legend | yes | `tests/figure-markers.test.ts` | | | |
+| Add marker on a picture or a drawing: next number, free spot, centred number, legend created or extended, one undo step, valid document | yes | `tests/figure-markers.test.ts`, harness `doc=figmarkers` | | | |
+| Renumber markers: closes gaps, legend follows, drops / adds lines, duplicates, refusals (locked, states, none, same), one undo step | yes | `tests/figure-markers.test.ts`, harness `doc=figmarkers` | | | |
+| Redaction fails closed for inserts; 99-marker limit; page-local steps for per-page undo | yes | `tests/figure-markers.test.ts` | | | |
+| Copies are plain pictures (fresh group ids), never linked to the original | yes | `tests/figure-markers.test.ts` | | | |
+| Actions, help, ranking, commands, history titles, en + it | yes | `tests/figure-marker-actions.test.ts` | | | |
+| Placing a marker by tapping the spot on the figure | no | | | | markers appear on a free spot and are dragged to place |
+| Renumbering by itself after a delete, or in reading order | no | | | | explicit *Renumber markers* in placement order only |
+| Leader lines from a marker to its legend text | no | | | | roadmap #246 |
+| Legend kept in numeric order after a renumber (review R8) | no | | | | known limit: only the digits of each line change, so the legend can read `1. A / 3. B / 2. C`; no *Sort legend* yet |
+
+### 0.30 — flowchart: hand-drawn flowcharts that tidy themselves (roadmap #245; steps 3580-3599)
+
+*All actions › Selection › Tidy flowchart* (and the command palette) on a selection of hand-drawn boxes and arrows. Implemented, not verified on hardware. It recognises rectangles, diamonds and ellipses (closed strokes) and arrows (one stroke, or a line with a small V drawn at one end) that start and end on two different boxes, lines the boxes up in rows and columns, evens out the gaps and draws the arrows again from outline to outline. The writing and text boxes inside a box move with it. The boxes keep their strokes (points, pressure, style); only the arrows are redrawn, as clean shape strokes in the same colour and width. One undo step; no format change.
+
+3580. **Draw and select.** On a grid page draw by hand, with the S Pen, a flowchart of five or six boxes (two rectangles, one diamond for a decision, one ellipse for start or end), a few words inside each box (writing or a text box) and an arrow between each pair, some of them slightly crooked. Lasso the whole thing: *All actions* shows *Tidy flowchart* in the Selection group (not with fewer than two strokes selected).
+3581. **Tidy.** Tap it. The boxes line up in columns and rows (boxes whose centres were roughly under each other now share one centre line), the gaps between neighbouring rows and between neighbouring columns are all equal, the first box sits on a grid line, and each arrow is a straight line that starts at the outline of one box and ends with its head just before the outline of the next (check on the diamond and the ellipse: the arrow touches the curve, not an invisible box around it). A notice says how many boxes and arrows.
+3582. **Labels travel.** Every word inside a box moved with its box and sits in the same place relative to it, so no label is left behind. A text box inside a box moved too. A "yes" or "no" written beside an arrow (within about 22 pt of it, outside every box) followed the middle of that arrow. Other writing, farther from any arrow and outside every box, stayed where it was.
+3583. **Boxes are not redrawn.** Zoom in on a box: its strokes are the ones you drew (same wobble, same line weight and pressure look), only moved. The arrows are now clean, in the colour and width you used.
+3584. **One undo.** Undo once: everything is back exactly as drawn, including the arrows and their heads. Redo does the tidy again. The history panel shows one step, *Flowchart tidied* (Italian *Diagramma riordinato*).
+3585. **Twice is nothing.** Tidy the tidied chart again: the notice says it is already tidy and nothing moves.
+3586. **Two-stroke arrows.** Draw an arrow as a line plus a small V at its end (two strokes). Tidy: it becomes one arrow stroke with a clean head; undo brings back the line and the V. A label that starts with a "V", "L", "<" or ">" written right at the end of a plain line, inside the box, is not taken for a head: after tidying the letter is still there (it moves with its box) and the line is a plain line.
+3587. **Plain lines and loose ends.** A plain line between two boxes stays a plain line (no head). An arrow that ends in the air is left exactly as drawn.
+3588. **Two arrows between the same boxes** (one each way) end up side by side, not on top of each other.
+3589. **Refusals say why.** With one box selected, or none: "Select a flowchart with at least two boxes". A box drawn inside another of a similar size: it says to select one level at a time and moves nothing. Boxes scattered with no rows or columns still tidy (or say they cannot) but never overlap.
+3590. **Redaction (fail closed).** Add a redaction box (Export… › Redact…) over one box of the chart, then tidy: nothing moves and the notice says why. Also try with a redaction box where a box would LAND after the tidy (the first run shows where boxes go): refused too. Remove the box and it works.
+3591. **Study tape.** With a study tape over part of the chart (tape covered or revealed): refused, nothing moves.
+3592. **Locked page and locked items.** On a locked page it refuses and nothing changes. A locked text box inside a box is not moved. Hidden (invisible) ink in the selection is not touched.
+3593. **Page edge.** On a small page, draw a chart that nearly fills it, tidy: when the even gaps would push something off the page, it is refused with a notice and nothing moves.
+3594. **Groups and pen types.** Boxes drawn with the fountain pen or the marker keep their pen type after the move; a redrawn arrow of such a pen becomes a plain shape stroke of the same colour and width. A group that contains the arrows keeps its other members.
+3595. **Per-page undo.** With *Undo on this page only* on, undo of the tidy acts on its page only, with other pages' steps after it left alone.
+3596. **Phone, light, dark, Italian.** The action reads in light and dark; with the plugin in Italian the name is *Riordina diagramma di flusso* and the help (long-press on the action in the sheet) and the notices are in Italian.
+3597. **Speed.** A chart of about 30 boxes and 40 arrows tidies in well under a second on the tablet.
+3598. **Real device.** On the tablet with the S Pen: draw a real flowchart quickly, as you would in a lecture, and tidy it: note any box that was not recognised (too sloppy, too small, a diamond read as an ellipse), any arrow that was not attached, and any label that was left outside its box. These are the limits of the recogniser, not of the layout.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Boxes read from strokes (rectangle, diamond, ellipse), small shapes and highlighter ignored, nested boxes refused | yes | `tests/flowchart.test.ts` | | | |
+| Arrows read (one stroke, line + V head), plain lines, ends attached within reach, loose arrows left alone | yes | `tests/flowchart.test.ts` | | | |
+| A handwritten V, L, < or > near a line end is not taken as an arrowhead and never deleted (tip inside a box, part of a word, lopsided, oversized, two candidates) | yes | `tests/flowchart.test.ts` | | | |
+| Labels (writing, text boxes, equations, small rings) follow their box | yes | `tests/flowchart.test.ts` | | | |
+| Layout: columns and rows, equal gaps, first box on the grid, idempotent, never overlapping | yes | `tests/flowchart.test.ts` | | | |
+| Connectors: outline to outline for rectangle, diamond, ellipse; straight and square when boxes line up; parallel ones set apart | yes | `tests/flowchart.test.ts` | | | |
+| One undo step of existing commands, strokes keep points / pressure / style, ids and order kept, saves and reads back | yes | `tests/flowchart.test.ts` | | | |
+| Refuses: redaction box before or after (and unreadable boxes), study tape, page edge, too few boxes, nested | yes | `tests/flowchart.test.ts` | | | |
+| Per-page undo scope (one page, not global) | yes | `tests/flowchart.test.ts` | | | |
+| Action in the sheet, help, ranking, command, en + it, history title | yes | `tests/flowchart-actions.test.ts`, `tests/ui-registry.test.ts` | | | |
+| Screens (before / after, tablet and phone, light and dark) | yes | harness `doc=flowchart` | | | |
+| Elbow (right-angle) connectors, swimlanes, boxes in more than one grid cell, triangles | no | | | | arrows are straight; a box nested in a box of similar size is refused |
+| Reading the text of a label | no | | | | the plugin has no handwriting recognition; labels are moved, not read |
+| Every real arrowhead moved with its line (review R4) | no | | | | known limit: a head the strict rules do not take (double-headed arrows, uneven wings, connectors under 24 pt, two heads within 3 pt) stays at the old line end when the boxes move; Undo restores, nothing is deleted |
+
+### 0.30 — timeline: dated events on an axis (roadmap #148; steps 3600-3619)
+
+*Timeline* in the All actions sheet (insert group) opens a dialog; the result is ordinary shape strokes and text boxes of one group, and *Edit timeline* (selection) reads it back from its text. Implemented, not verified on hardware. No format change. Needs a notebook page.
+
+3600. **Offered.** Open a page: All actions > *Timeline* is in the insert group. Select the timeline made below: *Edit timeline* appears (and under *For this page*); with nothing or other ink selected it is not there.
+3601. **Dialog.** Tap *Timeline*: a title field, a box for the events with an example in grey, eight colour dots, three sizes (Compact, Standard, Full width), a small picture and a line of help about the dates. *Insert timeline* is disabled and a line says to start with a date. Type `753 BC: Rome founded`, `44 BC: Caesar killed`, `5th century: Fall of Rome`, `1492: Columbus`, `1914-1918: Great War`: the picture grows one dot per line, "Events read: 5". Add a line with no date: it says which line is left out and why. Every control works; the picture is not a control.
+3602. **Insert.** Choose a colour and size, *Insert timeline*. The timeline appears at the centre of the view, inside the page: an axis with an arrow, round ticks (BC years say BC), a dot for each event and a label (the date on its first line, the text under it) to the right of a thin pole, above or below the axis. It is selected. One undo removes it whole; redo brings it back. The history panel reads "Timeline inserted" (Italian "Linea del tempo inserita").
+3603. **Spacing.** Events 100 years apart are twice as far apart as events 50 years apart. Add `1969` and `1970` next to each other: the dots are close and their labels stack in bands, none touching another and no pole running through a label.
+3604. **Long gap.** Type `3000 BC`, `1900`, `1914`, `1945`: the first gap is drawn as a dashed piece with a "//" break and "4900 years" under it; the three close events are no longer squeezed together. The dialog says a long gap is shortened. With three events 100 years apart there is no break.
+3605. **Dates.** Try `44 a.C.`, `-44`, `BC 44`, `V secolo a.C.`, `XV secolo`, `1960s`, `490-479 BC`, `14 July 1789`, `14/07/1789`, `c. 1500`: each is placed where it belongs (a century at its middle). `0`, `13/13/1492` and plain words are listed as not understood. 25 or more lines: only 24 are drawn and the dialog says so.
+3606. **Edit.** Select the timeline, *Edit timeline*: the dialog opens with the title, the colour and the events as lines (`44 BC: Caesar killed`). Add `1066: Hastings` and press *Update timeline*: it is redrawn in the same place (the axis starts where it started) with one more event. One undo brings the previous timeline back exactly; redo redraws it. *Edit timeline* again with nothing changed: "The timeline already shows these events."
+3607. **Edited label.** Edit a label's text on the page (select the text box, change `1492` into `1500`). Select the whole timeline and *Edit timeline*: the dialog shows `1500: …`; updating moves its dot.
+3608. **Colour, title, size.** In the edit dialog pick another colour, clear the title, choose Full width: the timeline is redrawn with the new colour, without the title and wider (moved sideways only as far as the page needs).
+3609. **Refusals.** Lock a text box of the timeline: *Edit timeline* says a part is locked. Resize the whole timeline with the selection handles, then *Edit timeline*: it says the text was resized and cannot be read back; nothing changes. Choose so many events that the timeline is taller than the page: the dialog says it does not fit and *Insert* is disabled. On a page with a redaction box over the place, inserting is refused with a notice and nothing is drawn. Put a study tape over a label: *Edit timeline* says some of it lies under a study tape and changes nothing. In the edit dialog type a line with no date: *Update timeline* is disabled and says to fix or delete the line; delete it and Update works. After an edit that moves a label, draw a redaction box over the label and Undo: it is refused with the redaction notice.
+3610. **Locked page / read-only.** Lock the page or switch to read-only: *Timeline* and *Edit timeline* are disabled and nothing changes.
+3611. **Group behaviour.** Move the timeline, change its colour with the selection bar, copy and paste it: the copy is a picture (*Edit timeline* is not offered for it, because its link was dropped); the original still edits. Move it to another page.
+3612. **Exports.** Export the page as PDF, PNG and SVG and print or share it: the timeline is drawn with its axis, dots and texts. With redaction on, a box over it hides it in the exports.
+3613. **Per-page undo.** With *Undo on this page only* on, undo of the insert or an edit acts on that page only.
+3614. **Phone, light, dark, Italian.** The dialog fits a phone, reads in light and dark and with *Follow Obsidian theme* (its picture sits on a light paper). All texts are in Italian with the plugin in Italian, BC reads "a.C." and the gap "N anni". Long-press *Timeline* / *Edit timeline* in the sheet: the help bubble explains each.
+3615. **Real device.** On the tablet with the S Pen: the dots and colour buttons are easy to hit, inserting is instant, the text of the labels is a similar size to written text, and the typed lines are comfortable with the on-screen keyboard.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Date reading: years, BC / AD spellings, centuries (Arabic and Roman), decades, ranges, calendar dates, no year 0 | yes | `tests/timeline.test.ts` | | | |
+| Event lines: longest date at the start, separators, limits, problems, round trip through a label box | yes | `tests/timeline.test.ts` | | | |
+| Proportional spacing, compressed long gap with its true length, ticks on proportional parts (BC labels) | yes | `tests/timeline.test.ts` | | | |
+| Labels never overlap, no pole crosses a label, everything inside the block, deterministic | yes | `tests/timeline.test.ts` | | | |
+| Timeline as shape strokes + text boxes of one group, valid document, one undo step, page-local for per-page undo | yes | `tests/timeline.test.ts`, harness `doc=timeline` | | | |
+| Refuses to leave the page or touch a redaction box (or unreadable boxes) | yes | `tests/timeline.test.ts` | | | |
+| Edit timeline: reads title, events and colour back, same place and z-order, one undo step, "same", refusals (gone, locked, states, unreadable, edge, redacted, tape) | yes | `tests/timeline.test.ts`, harness `doc=timeline` | | | |
+| Edit timeline never drops a line it could not read (Update held until fixed), keeps ids so Undo/Redo cannot slide a label out from under a redaction box, refuses under a study tape, axis found by shape (review 0.30 I4, I5, I6, I9) | yes | `tests/timeline.test.ts`, harness `doc=timeline` | | | |
+| Dialog (title, events, colour, size, live picture, what was read), actions, help, ranking, commands, en + it | yes | `tests/timeline-actions.test.ts`, harness `doc=timeline` | | | |
+| Dates with a time of day, several calendars, years before the present ("65 million years ago") | no | | | | not in this wave: dates are read as years, centuries, decades, ranges and calendar days |
+| Vertical timeline, spans drawn as bars, images on events | no | | | | not in this wave |
+| The timeline updating by itself | no | | | | explicit *Edit timeline* only (it is plain content) |
+
+### 0.30 — zsequence: card sequences and branches, roadmap Z7 (steps 3640-3659)
+
+Update to 0.30 and fully close and reopen Obsidian. Use a vault with a notebook that has a few pages with handwriting. Set *Settings → Study → Zettelkasten → Card ids* to *Luhmann numbering*. Reference screenshots after `HARNESS_DOC=zsequence npm run harness:check`: `dev/harness/dist/shots/zsequence-*.png` (tablet and phone, light and dark). Not verified on a device.
+
+3640. **Off by default.** With *Card ids* on *Timestamp*, the command palette has none of the sequence commands (*New follow-up card*, *New branch card*, *Show card sequence*, *Go to previous / next card in the sequence*, *Go to parent card*, *Go to child cards*) and the setting *Link new sequence cards to their origin* is hidden. Switch to *Luhmann numbering*: the setting appears.
+3641. **First card.** On page 1 run *Make card from this page* (no parent): card `1`. Go to page 2, *Make card from this page*: card `2`.
+3642. **Branch.** Go to page 3 (no card yet). *New branch card*: a list asks which card to continue (both are numbered); choose `1`. The normal card dialog opens without the *Parent card* field. Create it: the note is `1a …`, a notice says "Card 1a created, a branch of 1.", and both notes (`1` and `1a`) now list each other in `links`. Nothing else in either note changed.
+3643. **Follow-up.** Page 4, *New follow-up card*, choose `1a`: the id is `1b`. Again on page 5, choose `1a`: `1b` is taken, so the id is `1c`.
+3644. **Branch of a branch.** Page 6, *New branch card*, choose `1a`: `1a1`. Page 7, again: `1a2`.
+3645. **A gap.** Delete the note `1b` in Obsidian, then make a follow-up of `1a` on a new page: it takes `1b` (the free place right after `1a`). A branch of `1` after that is `1d` (one past the last branch, deleted ids are not reused while later ones exist).
+3646. **A page that is already a card.** On page 1 (card `1`) run *New follow-up card* without a selection: the normal card dialog opens; press *Create* and a new page is added right after page 1, with the new card on it (`2`, or the next free id), linked with `1`. Cancel instead: no page is added. Press *Undo*: the added page goes away in one step. Select an area of the page with the lasso and run it again: the card is made from the selection (no new page) and continues `1`. In a slip-box the new page does not also get a card of its own.
+3647. **A note with the id's name.** In the card folder make a plain note named `1a3 Ideas` (no properties). A branch of `1a` is `1a4`, not `1a3`: the name counts as taken.
+3648. **No card to continue.** In a notebook with no numbered card, *New branch card* says there is nothing to continue yet and creates nothing.
+3649. **Sequence dialog.** Open the note of card `1a` (or its notebook page) and run *Show card sequence*: sections Parent (`1`), Previous (None), Next (`1b`), Children (`1a1`, `1a2`). Each card is a row; tapping it opens that note and closes the dialog. From a notebook page the footer also has *New follow-up card* and *New branch card*; from a note it does not.
+3650. **Go to.** With a card note open, *Go to next card in the sequence* from `1a` opens `1b`; from the last card of a line, a notice says there is none. *Go to previous card…* from `1b` opens `1a`. *Go to parent card* from `1a1` opens `1a`; from `1` a notice says it has none. *Go to child cards* from `1a` shows a list (search by id or title); from a card with one child opens it directly.
+3651. **Order.** Make cards `2`, `10` and `1z`, `1aa` by hand (edit `zettel-id`). The order of *Next* is `1a < 1b < … < 1z < 1aa < 2 < 10`.
+3652. **A missing parent.** Delete the note `1a` but keep `1a1`: *Go to parent card* from `1a1` opens `1`; `1` lists `1a1` among its children.
+3653. **Renamed card.** Rename the file of `1b` in Obsidian (the id in its properties is unchanged): the sequence and the commands still find it. Edit its `zettel-id` to `5`: it becomes a top-level card and leaves the children of `1`.
+3654. **Link off.** Switch *Link new sequence cards to their origin* off: a new follow-up card is made as before but neither note gets a link.
+3658. **An id above a card that exists.** With `1a` and `1b1` (no `1b`): *New follow-up card* of `1a` gives `1c`, not `1b`. With `1` and `1a1` only: *New branch card* of `1` gives `1b`, not `1a`.
+3659. **No second card for a page.** In a slip-box, run *New follow-up card* on a card page, keep the dialog open for more than ten seconds while typing the title, then *Create*: the notebook gets one new page with one card; no page has two cards. Make a card from a card-less page of a slip-box and wait in the dialog: the page still has exactly one card afterwards.
+3655. **Never overwritten.** Make two cards quickly one after the other from the same card: they get different ids and different files; no existing note is changed except `links`.
+3656. **Menu.** In the notebook tab's ⋯ menu, *Show card sequence* appears only when the page in view is a numbered card.
+3657. **Phone and tablet, light, dark, Italian.** The dialog fits, rows are at least 44 px tall, nothing scrolls sideways; strings are Italian with the plugin in Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Sequence order, parent, previous / next sibling, children (missing parents skipped), pure | yes | `tests/zettel-sequence.test.ts` | | | |
+| Next free id of a follow-up or branch card (gaps, taken ids, notes named like an id, case) | yes | `tests/zettel-sequence.test.ts` | | | |
+| Commands: new follow-up / branch card, go to previous / next / parent / children, show sequence (Luhmann numbering only) | yes | | | | |
+| Card sequence dialog | yes | harness `doc=zsequence` | | | |
+| Link with the origin card through `links` (setting); the origin is found again by id after a rename | yes | | | | not covered outside Obsidian |
+| An id above a card that exists counts as taken (follow-up / branch never adopt a deleted card's descendants) | yes | `tests/zettel-sequence.test.ts` | | | |
+| Follow-up / branch on a page that is already a card adds a new page for the new card (on Create only) | yes | | | | needs the open notebook view; not checked outside Obsidian |
+| A page being given a card is held while its dialog is open and checked again before writing (no second page card) | yes | | | | not checked outside Obsidian |
+| The page added for a follow-up / branch card is found by id when the write runs, in the notebook as it is then ("page gone" notice otherwise, review T7); a failed write keeps it with a notice (Undo removes it) and leaves it new, so a slip-box gives it a card at the next save, which the notice says in a slip-box notebook (review T6); own notice for a failed origin link (review R5, R6) | yes | `tests/zettel-link-suggest.test.ts` (texts only) | | | the service path is not covered by an automated test (it needs Obsidian's vault and an open notebook view) |
+| On-page sequence strip | no | | | | not built; the dialog and commands cover navigation |
+
+### 0.30 — linksuggest: link suggestions while creating a card, roadmap Z5 (steps 3620-3639)
+
+Update to 0.30 and fully close and reopen Obsidian. Use a vault with at least six cards that share a few tags and title words, and a notebook with handwriting. Reference screenshots after `HARNESS_DOC=linksuggest npm run harness:check`: `dev/harness/dist/shots/design/linksuggest-*.png` (empty, typed, chosen; tablet and phone, light and dark). Not verified on a device.
+
+3620. **Field.** On a notebook page choose *Make card from this page*. Under *Tags* the dialog has *Cards to link*. With nothing typed it says there are no related cards yet.
+3621. **By tags.** Type a tag that two of your cards use. About a quarter of a second after you stop typing, those cards are listed, the most recently changed first among equals, each with the reason (*Shared tags: #x*).
+3622. **By title.** Clear the tag and type a title that shares a word with an existing card title (accents and capitals do not matter): that card is listed with *Shared words*. A title containing or contained in another title shows *Similar title*.
+3623. **Ranking.** A card sharing two tags comes before one sharing a single word. Unrelated cards never appear, however few cards match.
+3624. **One tap.** Tap a suggestion: it turns accented with a check and *Will link*; tap it again to take it back. Choose two cards, *Create card*.
+3625. **Links written.** Right after the note is made, a notice says *Linked to 2 cards* (*Linked to 1 card.* for one; *The chosen cards were already linked.* when nothing new was added). Open the new note and one of the chosen notes: each has the other in its `links` property (the same two-way link as a drawn arrow). Obsidian's graph shows the edge.
+3626. **Nothing chosen.** Create a card without tapping any suggestion: no links are added and no notice appears.
+3627. **Cancel.** Choose a card and press *Cancel*: nothing is linked and the chosen note is untouched.
+3628. **From the Inbox.** *Make card* on an Inbox item shows the same field and links the same way.
+3629. **Setting off.** *Settings → Study → Zettelkasten → Suggest cards to link* off: the dialog has no *Cards to link* field. On again: it is back.
+3630. **Count.** *Suggestions shown* (visible while the setting is on) set to 1: only the best match is listed; set to 8: up to eight.
+3631. **Cheap.** In a vault with hundreds of cards, typing in the title keeps up with the pen or keyboard (no stutter); the list updates after you pause. No note file is read (only the metadata cache).
+3632. **Pen, finger, mouse.** The rows work with the S Pen, a finger and the mouse and are 44 px high.
+3633. **Phone width, light, dark.** Rows wrap their text on one line with an ellipsis, nothing scrolls sideways, and the field reads in light, dark and *Follow Obsidian theme*; in Italian the texts are Italian.
+3634. **Links go to the right note (review).** Choose a card in the dialog, press *Create card*, and at the same moment let another card appear (sync from another device, or a slip-box page that gets its card): only the note made from the dialog is linked. From the Inbox, with the page gone (*Make card* then delete the page elsewhere), nothing is linked and no notice about links appears. Wait over a minute after *Cancel*: still nothing linked. Disable the plugin right after *Create card*: nothing is written later.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure ranking of link suggestions (shared tags, title words, contained title, recency tie-break, bounded candidates) | yes | `tests/zettel-link-suggest.test.ts` | | | |
+| Cards to link in the New card dialog (debounced, one tap to choose) | yes | harness `doc=linksuggest` | | | |
+| Chosen cards linked two-way with the zettel writer, inside the task that makes the note (the answer carries them; no watcher); chosen cards deleted meanwhile are named as gone, not as already linked (review R6) | yes | `tests/zettel-link-suggest.test.ts` (which cards, which notice), harness `doc=linksuggest` (the answer carries them) | | | the real vault write is not checked outside Obsidian |
+| Settings: suggest on/off and how many (1-8) | yes | `tests/zettel-link-suggest.test.ts` | | | |
+| Text of the card pages (text boxes) as a similarity signal | no | | | | titles, tags and source only |

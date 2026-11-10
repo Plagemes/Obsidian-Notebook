@@ -56,6 +56,8 @@ export interface UiContext {
 		/** 0.28 (#41): the selection is exactly one hand-drawn table (optional, false when absent). */ table?: boolean;
 		/** 0.29 (#244): the selection holds one hand-drawn table a chart can be made from, other items allowed (optional, false when absent). */ chartable?: boolean;
 		/** 0.29 (#244): the selection is exactly one chart made from a table (optional, false when absent). */ chart?: boolean;
+		/** 0.30 (#247): what the selection is for numbered markers on a figure ("figure": one picture; "region": ink or other drawn items; "set": markers or a legend, `stale` when a renumber would change something); optional, none when absent. */ markers?: { kind: "figure" | "region" | "set"; stale: boolean } | null;
+		/** 0.30 timeline (#148): the selection is exactly one timeline (optional, false when absent). */ timeline?: boolean;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -93,6 +95,8 @@ export interface UiContext {
 	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
 	/** 0.29 (#10): the "Study tape" mode is on, how many study tapes the notebook has and how many are revealed (view-only). Optional (absent: none). */
 	tapes?: { drawing: boolean; total: number; revealed: number };
+	/** 0.30 (#52): how many coloured sections show, whether the page is in one and whether it starts one. Optional (absent: none). */
+	sections?: { count: number; here: boolean; starts: boolean };
 	/** wave 0.9: view-only night mode (367) and cropped PDF margins (376). Optional (both off when absent). */
 	display?: { night: boolean; crop: boolean };
 	/** 0.15 (241): the state strip is open. Optional (closed when absent). */
@@ -277,6 +281,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.26 (#66): smooth the jitter out of selected handwriting / straighten almost-straight lines, each one undo step. In the sheet (and the command palette) only: the bar's rows are full.
 	{ id: "selection-smooth", label: "smooth.action", icon: "waves", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 56, scope: "view", command: "command.smooth", when: hasInk, keywords: "smooth jitter wobble shaky tremor handwriting soften levigare leviga tremolio mano tremante liscia" },
 	{ id: "selection-straighten", label: "straighten.action", icon: "ruler", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 56, scope: "view", command: "command.straighten", when: hasInk, keywords: "straighten straight line underline ruler clean raddrizza dritta linea sottolinea righello pulita" },
+	// 0.30 flowchart
+	// 0.30 (#245): hand-drawn boxes and arrows in the selection are lined up, evenly spaced and joined again, in one undo step. In the sheet (and the command palette) only: the bar's rows are full.
+	{ id: "selection-flowchart", label: "flowchart.action", icon: "workflow", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 55, scope: "view", command: "command.flowchart", when: (c) => (c.selection?.strokes ?? 0) >= 2, enabled: pageOpen, keywords: "flowchart flow chart diagram boxes arrows connect align tidy scheme diagramma flusso riquadri scatole frecce collega allinea riordina schema" },
 	// 0.15 states (#241): the selected ink becomes a part of the drawing, which the states of the page move together (view/states-tools.ts).
 	{ id: "selection-part", label: "states.makePart", icon: "group", group: "selection", surfaces: ["sheet"], priority: 38, scope: "view", command: "command.makePart", when: hasInk, keywords: "states part group figure physics stati parte gruppo" },
 	{ id: "select-same-colour", label: "select.sameColour", icon: "palette", group: "selection", surfaces: ["sheet"], priority: 48, scope: "view", command: "command.selectSameColour", when: hasInk, keywords: "similar color all" },
@@ -344,6 +351,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "chart-update", label: "chart.update", icon: "refresh-cw", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 51, scope: "view", command: "chart.command.update", when: (c) => c.selection?.chart === true, enabled: pageOpen, keywords: "chart graph update refresh table numbers change grafico aggiorna tabella numeri cambiati" },
 	{ id: "table-even", label: "table.even", icon: "layout-grid", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 46, scope: "view", command: "table.command.even", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table cells even equal resize same size tabella celle uniformi uguali dimensione" },
 	{ id: "table-stats", label: "table.stats", icon: "sigma", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 45, scope: "view", command: "table.command.stats", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table statistics mean average median deviation regression slope min max count numbers column tabella statistiche media mediana deviazione standard regressione colonna" },
+	// 0.30 tablecalc (#147): works out the formulas typed in the cells of a selected table.
+	{ id: "table-compute", label: "tablecalc.action", icon: "calculator", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 44, scope: "view", command: "tablecalc.command", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table compute calculate formula formulas sum average percent spreadsheet cell tabella calcola formula formule somma media percentuale foglio cella" },
+	// 0.30 timeline (#148): a timeline from typed dated events, and the same timeline edited from its text.
+	{ id: "insert-timeline", label: "timeline.insert", icon: "move-horizontal", group: "insert", surfaces: ["sheet"], priority: 54, scope: "view", command: "timeline.command.insert", enabled: pageOpen, keywords: "timeline time line history dates events years century chronology linea del tempo cronologia storia date eventi anni secolo" },
+	{ id: "timeline-edit", label: "timeline.edit", icon: "pencil-ruler", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 50, scope: "view", command: "timeline.command.edit", when: (c) => c.selection?.timeline === true, enabled: pageOpen, keywords: "timeline edit change events dates linea del tempo modifica cambia eventi date" },
 	{ id: "checkbox-toggle", label: "checklist.toggle", icon: "square-check", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 93, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) > 0, enabled: pageOpen, keywords: "checkbox tick untick casella spunta" },
 	{ id: "checkbox-select-label", label: "checklist.selectLabel", icon: "text-select", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, keywords: "checkbox label text select casella testo seleziona" },
 	{ id: "checkbox-label", label: "checklist.editLabel", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 89, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, enabled: pageOpen, keywords: "checkbox label name casella etichetta nome" },
@@ -518,6 +530,15 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.23 (#264): saved views: a named page region with a zoom, recalled in one step. Saving needs an editable notebook; going to one works on a read-only one too.
 	{ id: "saved-view-save", label: "views.save.menu", icon: "frame", group: "view", surfaces: ["sheet", "notebook"], priority: 33, scope: "view", command: "command.savedViewSave", keywords: "saved views place zoom region name save viste salvate zona salva" },
 	{ id: "saved-view-go", label: "views.go.menu", icon: "scan-eye", group: "view", surfaces: ["sheet", "notebook"], priority: 32, scope: "view", command: "command.savedViewGo", readOnly: true, keywords: "saved views go recall place zoom region viste salvate vai richiama zona" },
+	// 0.30 sections (#52): coloured sections inside a notebook (tab dividers). Making, renaming, recolouring and removing one needs an editable
+	// notebook and acts on the page of the page sheet (default: the page in view); the list and the jumps work on a read-only one too.
+	{ id: "sections-list", label: "sections.action.list", icon: "layers", group: "navigate", surfaces: ["sheet", "notebook"], priority: 34, scope: "view", command: true, readOnly: true, keywords: "sections tabs dividers chapters jump go colour sezioni schede divisori capitoli vai colore" },
+	{ id: "section-new", label: "sections.action.new", icon: "folder-plus", group: "page", surfaces: ["page", "sheet"], priority: 46, scope: "view", command: true, when: (c) => !c.sections?.starts, keywords: "section tab divider chapter start new colour sezione scheda divisore capitolo nuova inizia" },
+	{ id: "section-rename", label: "sections.action.rename", icon: "pencil", group: "page", surfaces: ["page", "sheet"], priority: 38, scope: "view", command: true, when: (c) => !!c.sections?.here, keywords: "section rename title name sezione rinomina titolo nome" },
+	{ id: "section-recolour", label: "sections.action.recolour", icon: "palette", group: "page", surfaces: ["page", "sheet"], priority: 37, scope: "view", command: true, when: (c) => !!c.sections?.here, keywords: "section colour color recolour sezione colore ricolora" },
+	{ id: "section-delete", label: "sections.action.delete", icon: "folder-minus", group: "page", surfaces: ["page", "sheet"], priority: 30, scope: "view", command: true, when: (c) => !!c.sections?.here, keywords: "section remove delete divider sezione rimuovi elimina divisore" },
+	{ id: "section-next", label: "sections.action.next", icon: "chevrons-down", group: "navigate", surfaces: ["sheet"], priority: 31, scope: "view", command: true, readOnly: true, when: (c) => (c.sections?.count ?? 0) > 0, keywords: "next section jump tab sezione successiva vai scheda" },
+	{ id: "section-previous", label: "sections.action.previous", icon: "chevrons-up", group: "navigate", surfaces: ["sheet"], priority: 30, scope: "view", command: true, readOnly: true, when: (c) => (c.sections?.count ?? 0) > 0, keywords: "previous section jump tab sezione precedente vai scheda" },
 
 	// --- export and share.
 	{ id: "share-copy-link", label: "share.copyLink", icon: "link", group: "share", surfaces: ["page"], priority: 40, scope: "view", readOnly: true },
@@ -653,6 +674,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.29 (#248): figure captions ("Fig. 3 — text") numbered by reading order, and references that always show the current number.
 	{ id: "figure-caption", label: "figcap.caption.menu", icon: "quote", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.1, scope: "view", command: "command.figureCaption", when: isOneFigure, enabled: pageOpen, keywords: "figure caption number picture photo label legenda didascalia numero figura immagine" },
 	{ id: "figure-ref", label: "figcap.refs.menu", icon: "link", group: "insert", surfaces: ["sheet", "palette"], priority: 44, scope: "view", command: "command.figureRef", enabled: pageOpen, keywords: "figure reference cross-reference see fig number link riferimento figura rimando numero collegamento" },
+	// 0.30 figmarkers (#247): numbered markers (1, 2, 3) on a picture or a drawing with a legend under it; renumbering is explicit (it closes the gaps and updates the legend).
+	{ id: "figure-marker-add", label: "fm.add", icon: "map-pin", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.2, scope: "view", command: "fm.command.add", when: (c) => !!c.selection?.markers, enabled: pageOpen, keywords: "figure marker number numbered legend annotate label pin circle diagram anatomy segnaposto numero numerato legenda annota etichetta cerchio figura schema anatomia" },
+	{ id: "figure-markers-renumber", label: "fm.renumber", icon: "list-ordered", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.15, scope: "view", command: "fm.command.renumber", when: (c) => c.selection?.markers?.kind === "set", enabled: pageOpen, keywords: "figure marker renumber legend update gaps order segnaposto rinumera legenda aggiorna numeri buchi ordine" },
 	// 0.18 (#86): margin comments: a comment anchored to the selection's region, or to a rectangle drawn on the page; the side panel lists them.
 	{ id: "comment-selection", label: "comments.action", icon: "message-square-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40, scope: "view", command: "comments.command.selection", when: hasSelection, enabled: pageOpen, keywords: "comment note margin review annotation commento nota margine revisione" },
 	{ id: "comment-region", label: "comments.region", icon: "square-dashed", group: "insert", surfaces: ["sheet", "palette"], priority: 46, scope: "view", command: true, enabled: pageOpen, keywords: "comment region rectangle margin note review commento regione rettangolo margine" },

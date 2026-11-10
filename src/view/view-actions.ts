@@ -200,6 +200,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"toggle-hide-struck": (v) => v.strikeTools?.toggle(),
 	"selection-smooth": (v) => v.selectionTools?.reshape("smooth"),
 	"selection-straighten": (v) => v.selectionTools?.reshape("straighten"),
+	// 0.30 (#245): tidy the hand-drawn flowchart in the selection
+	"selection-flowchart": (v) => v.flowchartTools?.tidy(),
 	// 0.15 (241): drawings with states
 	"selection-part": (v) => v.stateTools?.makePartFromSelection(),
 	"states-toggle": (v) => v.stateTools?.toggle(),
@@ -257,7 +259,14 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.29 (#244): charts from table data
 	"chart-from-table": (v) => void v.chartTools?.create(),
 	"chart-update": (v) => v.chartTools?.update(),
+	// 0.30 (#247): numbered markers on a figure
+	"figure-marker-add": (v) => v.figMarkerTools?.add(),
+	"figure-markers-renumber": (v) => v.figMarkerTools?.renumber(),
 	"table-stats": (v) => v.tableTools?.showStats(),
+	"table-compute": (v) => v.tableTools?.compute(),
+	// 0.30 timeline (#148)
+	"insert-timeline": (v) => void v.timelineTools?.insert(),
+	"timeline-edit": (v) => void v.timelineTools?.edit(),
 	"checkbox-toggle": (v) => v.checklistTools?.toggleSelected(),
 	"checkbox-select-label": (v) => v.checklistTools?.selectWithLabel(),
 	"checkbox-label": (v) => v.checklistTools?.editLabel(),
@@ -490,6 +499,14 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.23 (#264): saved views
 	"saved-view-save": (v) => v.openSavedViews(true),
 	"saved-view-go": (v) => v.openSavedViews(),
+	// 0.30 sections (#52): page actions act on the page of the page sheet (default: the page in view)
+	"sections-list": (v) => v.sectionTools.openList(),
+	"section-new": onPage((v, _p, i) => v.sectionTools.create(i)),
+	"section-rename": onPage((v, _p, i) => v.sectionTools.renameAt(i)),
+	"section-recolour": onPage((v, _p, i) => v.sectionTools.recolourAt(i)),
+	"section-delete": onPage((v, _p, i) => v.sectionTools.removeAt(i)),
+	"section-next": (v) => v.sectionTools.step(1),
+	"section-previous": (v) => v.sectionTools.step(-1),
 	// 0.18 mentions (O7): the notes that link to this page
 	"mentions": (v) => v.openMentions(),
 	// 0.19 (#228): the Figures gallery

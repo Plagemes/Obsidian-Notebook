@@ -94,6 +94,8 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.26 (#66): reshaping handwriting fits a selection of strokes; a long wobbly line (underline, ruler line) on grid or plain paper is likelier meant straight.
 	if (a.id === "selection-smooth" && hasSelection) boost += 4;
 	if (a.id === "selection-straighten" && hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 6;
+	// 0.30 (#245): tidying a flowchart fits a selection of a good many strokes (boxes, arrows and their writing), on any paper without lines to write on.
+	if (a.id === "selection-flowchart" && hasSelection) boost += (c.selection?.strokes ?? 0) >= 6 ? (c.page?.kind === "ruled" ? 3 : 7) : 2;
 	// 0.27 (#170): a macro fits where its first step can start: one that starts on the selection comes first when something is selected (enough for "For this page");
 	// one that starts somewhere it cannot (nothing selected, a locked page) steps back; any other leans forward a little.
 	// 0.28 (#41): the table actions fit a selected table above all (enough for "For this page"); inserting one leans forward a little on grid and plain paper.
@@ -105,7 +107,17 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.29 (#244): "Chart from table" fits a selected table and "Update chart" a selected chart (both enough for "For this page"; the actions only show then).
 	if (a.id === "chart-from-table" && c.selection?.chartable === true) boost += HERE_MIN_BOOST + 5;
 	if (a.id === "chart-update" && c.selection?.chart === true) boost += HERE_MIN_BOOST + 6;
+	// 0.30 (#147): "Compute table" fits a selected table a little more than its other actions (it is what typing a formula leads to).
+	if (a.id === "table-compute" && c.selection?.table === true) boost += 2;
+	// 0.30 (#247): numbered markers fit a selected picture above all (enough for "For this page"); on any other drawn selection the action only leans
+	// forward; renumbering fits the markers of a figure that was changed since (one was deleted, a legend line is missing or left over).
+	if (a.id === "figure-marker-add") boost += isOneFigure(c) ? HERE_MIN_BOOST + 1 : c.selection?.markers?.kind === "set" ? 6 : c.selection?.markers?.kind === "region" ? 3 : 0;
+	if (a.id === "figure-markers-renumber" && c.selection?.markers?.kind === "set") boost += c.selection.markers.stale ? HERE_MIN_BOOST + 7 : 2;
 	if (a.id === "insert-table" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 4;
+	// 0.30 timeline (#148): "Edit timeline" fits a selected timeline above all (enough for "For this page"; it only shows then); inserting one leans
+	// forward a little on grid and plain paper, like a table, but never reaches "For this page" on its own.
+	if (a.id === "timeline-edit" && c.selection?.timeline === true) boost += HERE_MIN_BOOST + 5;
+	if (a.id === "insert-timeline" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 3;
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
 	// 0.29 (#182): the calculator fits where numbers are being worked on: a selected text box, equation or graph (the expression to work out,
 	// or the formula to check) and the text tool in hand (enough for "For this page" when a text or an equation is selected); otherwise it
@@ -121,6 +133,12 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// tapes (enough for "For this page"); laying one leans forward a little on a PDF page (slides to learn from) when the mode is off.
 	if (a.id === "study-tape") boost += c.tapes?.drawing ? HERE_MIN_BOOST + 6 : c.page?.background === "pdf" ? 4 : 0;
 	if ((a.id === "tapes-reveal-all" || a.id === "tapes-hide-all") && (c.tapes?.total ?? 0) > 0) boost += HERE_MIN_BOOST + 2;
+	// 0.30 (#52): the sections list and the jumps fit a notebook divided into two or more sections (enough for "For this page" with three or
+	// more); a new section leans forward in a long notebook that has none yet; editing one leans forward a little on the page that starts it.
+	const sections = c.sections?.count ?? 0;
+	if (a.id === "sections-list" || a.id === "section-next" || a.id === "section-previous") boost += sections >= 3 ? HERE_MIN_BOOST + 1 : sections >= 2 ? 10 : 0;
+	if (a.id === "section-new") boost += sections === 0 && (c.page?.count ?? 0) >= 12 ? 8 : 0;
+	if ((a.id === "section-rename" || a.id === "section-recolour") && c.sections?.starts) boost += 6;
 	return boost;
 }
 

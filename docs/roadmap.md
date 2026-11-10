@@ -155,7 +155,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 49. **P2** 🧪 Two-page spread view (landscape tablets): pages in pairs like an open book (first page alone or not), scrolled pair by pair; writing on both pages; page sheet button, settings and an optional automatic spread in landscape; a phone keeps one column.
 50. **P2** 🧪 Fast scrollbar with a page preview while dragging.
 51. **P2** 🧪 Read-only mode to read without accidental marks.
-52. **P2** Coloured sections inside a notebook (tab dividers, as in OneNote).
+52. **P2** 🧪 Coloured sections inside a notebook (tab dividers, as in OneNote).
 
 ### Library
 53. **P2** 🧪 Custom covers (image or template).
@@ -321,8 +321,8 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 144. **P2** Parametric 3D solids (cube, cylinder, cone, prism) with editable dimensions and perspective.
 145. **P2** Automatic geometric constraints while drawing shapes: snap to parallels, perpendiculars, tangents and midpoints of existing shapes.
 146. **P3** Symmetric drawing: mirror or radial axis.
-147. **P2** Computable table: typed cells with spreadsheet-like formulas (sums, averages, percentages).
-148. **P2** Timeline element: dated events with automatic spacing.
+147. **P2** 🧪 Computable table: typed cells with spreadsheet-like formulas (sums, averages, percentages).
+148. **P2** 🧪 Timeline element: dated events with automatic spacing.
 149. **P1** 🧪 Ink attached to objects: ink written over an image, table, graph or formula moves and scales with it.
 150. **P2** Free page rotation with two fingers, like turning real paper.
 151. **P1** 🧪 Configurable edge rejection zones: a palm resting on the screen edge does nothing.
@@ -478,9 +478,9 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 242. **P2** Dynamic geometry: points and figures linked by constraints that update when you drag one (a lightweight GeoGebra inside the page).
 243. **P2** Scale drawing with dimensions: set the scale (1 cm = 1 m) and measurements and dimension lines show real sizes.
 244. **P2** 🧪 Charts from table data (bar, line, pie), updated when the numbers change. (0.29: *Chart from table* on a selected hand-drawn table, then *Update chart* on the selected chart redraws it in place in one undo step; the chart is ordinary shape strokes and text boxes, no format change; the numbers are read from text boxes typed in the cells, handwriting is not read; the update is explicit, not automatic.)
-245. **P2** Hand-drawn flowcharts that tidy themselves: boxes and arrows recognised, aligned and connected.
+245. **P2** 🧪 Hand-drawn flowcharts that tidy themselves: boxes and arrows recognised, aligned and connected. (0.30: *Tidy flowchart* on a selection reads closed strokes as rectangles, diamonds and ellipses and arrows between them, lines the boxes up in rows and columns with equal gaps, moves the writing inside each box along and draws the arrows again from outline to outline in one undo step; boxes keep their strokes, connectors are straight, text is moved not read, no format change.)
 246. **P2** Leader-line labels, auto-aligned, for annotated figures (anatomy, diagrams).
-247. **P2** Numbered markers on a figure (1, 2, 3) with an automatically generated legend.
+247. **P2** 🧪 Numbered markers on a figure (1, 2, 3) with an automatically generated legend. (0.30: *Add numbered marker* on a selected picture, drawing or marker puts the next numbered circle on it and its line in a legend under it, one undo step; numbering is by placement order and *Renumber markers* closes gaps and updates the legend in one step; markers and legend are ordinary shapes and text boxes of `nbm1.` groups, no format change; copies are plain pictures.)
 248. **P2** 🧪 Figure captions and numbering ("Fig. 3") with references that update themselves.
 249. **P2** 🧪 Automatic course formula sheet: collects every formula element (#110) into one page.
 250. **P3** Pattern fills (hatching, dots).
@@ -546,9 +546,9 @@ A complete Zettelkasten workflow where handwriting is first-class. Everything go
 - **Z2 P1** 🧪 Slip-box notebook type: every page is a Zettel; a new page creates its note automatically.
 - **Z3 P1** 🧪 Drawn links: draw an arrow between two cards (or regions) and a two-way link is created between their notes; visible in Obsidian's graph.
 - **Z4 P1** 🧪 Processing flow: fleeting notes (loose sheet #176, markers, questions) go to an "to process" inbox; PDF excerpts (#105, #155) become literature notes with their source; a guided view lets you discard each one, turn it into a permanent card, or link it to an existing one.
-- **Z5 P2** Link suggestions while creating a card: related cards by tags, title and text-box text (MiniSearch), so no card stays isolated.
+- **Z5 P2** 🧪 Link suggestions while creating a card: related cards by tags and title (the in-house text folding, no MiniSearch; text-box text is not used yet), so no card stays isolated.
 - **Z6 P2** Drawn maps of content: a page where cards are placed as live transclusions and relations are drawn; it also generates a Markdown MOC.
-- **Z7 P2** Sequences and branches (Luhmann style 1, 1a, 1a1), optional, with previous/next/children navigation.
+- **Z7 P2** 🧪 Sequences and branches (Luhmann style 1, 1a, 1a1), optional, with previous/next/children navigation. (0.30: with Luhmann numbering, the commands *New follow-up card* and *New branch card* make a card from the selection or the page in view with the next free id after the card it continues (the id is the structure; the two notes are linked through `links`, setting), and *Show card sequence*, *Go to previous / next card in the sequence*, *Go to parent card* and *Go to child cards* walk the numbering from a card note or a notebook page. Missing parents are skipped, ids already used by note names are never taken. No format change. `src/zettel/sequence.ts`, `sequence-view.ts`.)
 - **Z8 P2** Slip-box view in the library: browse cards like index cards, filter by tag, "draw a random card" to rediscover ideas.
 - **Z10 P2** 🧪 System hygiene: orphan cards (no links), duplicates, cards without a typed title. (0.29: command *Check Zettelkasten hygiene* opens a read-only report on the modal shell: unlinked cards (no link to or from another note), likely duplicates (same title, same page and region, or nearly the same text) and cards without a title, each with *Open*; scanning runs in idle slices and writes nothing. Fixes (*Add title…*, *Link…*, *Move to trash*) each ask first and go through the card writer or `fileManager.trashFile`. No format change; waiting for hardware verification.)
 - **Z9 P2** 🧪 Card templates: concept, question, quote, definition (and your own, in the card dialog and Settings → Zettelkasten).
@@ -563,7 +563,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 292. ~~**P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.~~ — dropped (user decision, 2026-10-29)
 293. **P2** 🧪 Dimensional analysis of formulas: flags inconsistent units. (0.23: pure engine `src/math/dimensions.ts` reads SI units, prefixes and common derived units written in an equation (`5\,\mathrm{m}`), propagates dimensions through + − × ÷ ^, roots, functions, fractions, derivatives, integrals and sums, and compares both sides of `=`; symbols take their dimension from a value or a `[v] = m/s` line. The equation editor shows a quiet hint under the preview (setting *Check units in equations*, Writing); no format change.)
 294. **P2** 🧪 Balancing of typed chemical reactions. (0.23: `src/math/chem-balance.ts`, "Balance reaction" in the selection bar; waiting for hardware verification.)
-295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart. (0.29, partial: a statistics card for a selected table with mean, median, deviation, extremes, count and a fitted line, inserted as text or copied; numbers are read from text boxes in the cells; the line drawn on a chart waits for the table charts.)
+295. **P2** 🧪 Statistics from table data: mean, deviation, regression, with the line drawn on the chart. (0.29: a statistics card for a selected table with mean, median, deviation, extremes, count and a fitted line, inserted as text or copied; numbers are read from text boxes in the cells; 0.30: the chart dialog has a *Trend line* choice for line charts, a dashed least-squares line through the first series (x = row position) with its equation and R² as a small label; the choice is a trailing `r` in the chart group id, so Update chart keeps it and 0.29 ids read as before; `src/math/chart-regression.ts`.)
 296. **P3** Step-by-step linear systems and matrices shown on the page.
 297. ~~**P3** Basic vector maps as backgrounds for geography and history (public-domain data).~~ — dropped (user decision, 2026-10-29)
 298. ~~**P3** Truth tables and simulated logic circuits.~~ — dropped (user decision, 2026-10-29)

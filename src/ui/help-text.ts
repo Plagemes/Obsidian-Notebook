@@ -87,6 +87,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	// 0.26 smooth (#66)
 	"selection-smooth": "help.smooth",
 	"selection-straighten": "help.straighten",
+	// 0.30 flowchart (#245)
+	"selection-flowchart": "help.flowchart",
 	// 0.28 geosuggest (#403)
 	"selection-highlight": "help.geoHighlight",
 	"selection-insert-note": "help.geoNote",
@@ -104,11 +106,27 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"study-tape": "tape.help.draw",
 	"tapes-reveal-all": "tape.help.revealAll",
 	"tapes-hide-all": "tape.help.hideAll",
+	// 0.30 sections (#52)
+	"sections-list": "sections.help.list",
+	"section-new": "sections.help.new",
+	"section-rename": "sections.help.rename",
+	"section-recolour": "sections.help.recolour",
+	"section-delete": "sections.help.delete",
+	"section-next": "sections.help.next",
+	"section-previous": "sections.help.previous",
 	// 0.29 charts (#244)
 	"chart-from-table": "help.chart.fromTable",
 	"chart-update": "help.chart.update",
 	// 0.29 stats (#295)
 	"table-stats": "help.table.stats",
+	// 0.30 tablecalc (#147)
+	"table-compute": "help.tablecalc",
+	// 0.30 figmarkers (#247)
+	"figure-marker-add": "help.fm.add",
+	"figure-markers-renumber": "help.fm.renumber",
+	// 0.30 timeline (#148)
+	"insert-timeline": "help.timeline.insert",
+	"timeline-edit": "help.timeline.edit",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */
