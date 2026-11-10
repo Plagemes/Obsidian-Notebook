@@ -105,7 +105,7 @@ export async function checkCardtemplates(api: CardtemplatesApi): Promise<{ ok: b
 		const tiles = [...el.querySelectorAll<HTMLElement>(".nb-zk-templates .nb-zk-type")];
 		add("the picker has a blank tile, the four built-in templates and the custom ones", tiles.map((x) => x.dataset.id).join() === "blank,concept,question,quote,definition,custom-1,custom-2", tiles.map((x) => x.dataset.id).join());
 		add("it is a radio group with blank selected", el.querySelector(".nb-zk-templates")?.getAttribute("role") === "radiogroup" && tiles[0]?.getAttribute("aria-checked") === "true");
-		add("the dialog still has its title, type, source and tag fields", el.querySelectorAll(".nb-zk-input").length === 3 && el.querySelectorAll(".nb-zk-types .nb-zk-type").length === 6);
+		add("the dialog still has its title, type, source and tag fields", el.querySelectorAll(".nb-zk-input").length === 3 && el.querySelectorAll(".nb-zk-types:not(.nb-zk-templates) .nb-zk-type").length === 3, `${el.querySelectorAll(".nb-zk-input").length} inputs, ${el.querySelectorAll(".nb-zk-types:not(.nb-zk-templates) .nb-zk-type").length} type tiles`);
 		const small = [...el.querySelectorAll<HTMLElement>("button")].filter((b) => {
 			const r = b.getBoundingClientRect();
 			return r.width > 0 && (r.height < 39.5 || r.width < 39.5);
@@ -127,9 +127,10 @@ export async function checkCardtemplates(api: CardtemplatesApi): Promise<{ ok: b
 		add("Create returns the template id and the chosen type", answer?.template === "quote" && answer.type === "fleeting", JSON.stringify(answer));
 		closeAll();
 
-		const plain = cardDialog(api, [], () => undefined);
+		const plain = new CardModal(api.app as never, { luhmann: false, preview: null }, () => undefined);
+		show(plain);
 		await frames(2);
-		add("with no templates passed there is no picker", plain.modalEl.querySelector(".nb-zk-templates") === null || plain.modalEl.querySelectorAll(".nb-zk-templates .nb-zk-type").length === 5);
+		add("with no templates passed there is no picker", plain.modalEl.querySelector(".nb-zk-templates") === null);
 		closeAll();
 
 		// --- manager ---
