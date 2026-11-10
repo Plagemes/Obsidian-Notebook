@@ -851,7 +851,7 @@ export class History {
 	constructor(
 		private readonly doc: () => NotebookDocument, readonly limit = 500,
 		/** `step`: set when an undo or a redo was refused (and dropped from the history), absent for a new edit. */
-		private readonly guard: ContentGuard | null = null, private readonly refused: ((message: string, step?: "undo" | "redo") => void) | null = null,
+		private readonly guard: ContentGuard | null = null, private readonly refused: ((message: string, step?: "undo" | "redo", kept?: boolean) => void) | null = null,
 		/** wave 0.10 (51): true while the document must not change (read-only mode): nothing is run, undone or redone. */
 		private readonly locked: (() => boolean) | null = null,
 		/**
@@ -979,7 +979,7 @@ export class History {
 	 * is not, the document is put back exactly as it was before the step (`snapshot`), the step is dropped from the history (doing it
 	 * again would do the same) and it is said. True when the step was refused.
 	 */
-	private refusedStep(doc: NotebookDocument, snapshot: Shot[] | null, step: "undo" | "redo", wasBad: boolean): boolean {
+	private refusedStep(doc: NotebookDocument, snapshot: Shot[] | null, step: "undo" | "redo", wasBad: boolean, cmd: Command, keepAt: number | null): boolean {
 		// A document that already failed the guard before the step (a change outside the history) is not the step's doing: it is kept.
 		if (!snapshot || !this.guard || wasBad) return false;
 		const problem = this.guard(doc);
@@ -987,25 +987,36 @@ export class History {
 			if (this.stepsRun) this.knownBad = false;
 			return false;
 		}
-		this.dropStep(snapshot, problem, step);
+		this.dropStep(snapshot, problem, step, cmd, keepAt);
 		return true;
 	}
 
-	/** The document back exactly as before the step, the rest of the redo steps (made on top of a redo that is dropped) gone, and it is said. */
-	private dropStep(snapshot: Shot[], problem: string, step: "undo" | "redo"): void {
+	/**
+	 * The document back exactly as before the step, and it is said. An ordinary step is dropped from the history, with the redo steps made on
+	 * top of a redo that is dropped (only those that depended on it when per-page undo is on). 0.28 (#98): a step taken out of order
+	 * (`keepAt`: where it was) is NOT dropped: the refusal may come from the state of other pages that a later step of the history changes,
+	 * so it goes back where it was, and nothing else in either stack changes.
+	 */
+	private dropStep(snapshot: Shot[], problem: string, step: "undo" | "redo", cmd: Command, keepAt: number | null): void {
 		for (const s of snapshot) restoreShot(s);
-		if (step === "redo") this.redoStack = [];
-		this.refused?.(problem, step);
+		if (keepAt !== null) {
+			const stack = step === "undo" ? this.undoStack : this.redoStack;
+			stack.splice(Math.min(keepAt, stack.length), 0, cmd);
+		} else if (step === "redo") {
+			const rules = this.rules;
+			this.redoStack = this.pagewise && rules ? this.redoStack.filter((r) => redoSurvives(rules.scope(r), rules.scope(cmd))) : [];
+		}
+		this.refused?.(problem, step, keepAt !== null);
 	}
 
-	/** Runs the step; an exception leaves the document as it was, drops the step and says so. True when it ran. */
-	private ran(run: () => void, snapshot: Shot[] | null, step: "undo" | "redo"): boolean {
+	/** Runs the step; an exception leaves the document as it was, drops (or, out of order, keeps) the step and says so. True when it ran. */
+	private ran(run: () => void, snapshot: Shot[] | null, step: "undo" | "redo", cmd: Command, keepAt: number | null): boolean {
 		try {
 			run();
 			return true;
 		} catch (e) {
 			if (!snapshot) throw e;
-			this.dropStep(snapshot, e instanceof Error ? e.message : String(e), step);
+			this.dropStep(snapshot, e instanceof Error ? e.message : String(e), step, cmd, keepAt);
 			return false;
 		}
 	}
@@ -1020,8 +1031,17 @@ export class History {
 		this.undoStack.push(cmd);
 		// 0.27 review (M3): inside a group the stack is trimmed once, when the group ends, so one group costs one entry like one step.
 		if (!this.grouping) this.trimUndo();
-		this.redoStack = this.keptRedo(cmd);
+		// 0.28 review (P5): inside a group with per-page undo on, the undone steps are filtered once, against the merged step, when the group ends.
+		if (!(this.grouping && this.isPagewise)) {
+			this.redoStack = this.keptRedo(cmd);
+			this.trimRedo();
+		}
 		this.grouping?.push(cmd);
+	}
+
+	/** 0.28 review (P6): the redo list has the depth limit of the undo list too (the undone steps farthest from the next Redo go first). */
+	private trimRedo(): void {
+		while (this.redoStack.length > this.limit) this.redoStack.shift();
 	}
 
 	/**
@@ -1083,21 +1103,28 @@ export class History {
 		} finally {
 			const made = this.grouping;
 			this.grouping = null;
-			this.merge(label, made);
+			const merged = this.merge(label, made);
 			this.trimUndo();
+			// 0.28 review (P5): the undone steps kept for other pages are filtered against what the group became: one global step when it wrote on
+			// several pages. Steps left separate (not merged) are filtered one by one.
+			if (this.isPagewise) {
+				for (const c of merged ? [merged] : made) this.redoStack = this.keptRedo(c);
+				this.trimRedo();
+			}
 		}
 	}
 
-	/** Replaces `made`, the last steps of the undo stack, by one `Batch` (only when they are exactly the top of the stack, in order). */
-	private merge(label: string, made: readonly Command[]): void {
-		if (made.length < 2) return;
+	/** Replaces `made`, the last steps of the undo stack, by one `Batch` (only when they are exactly the top of the stack, in order); the batch, or null. */
+	private merge(label: string, made: readonly Command[]): Batch | null {
+		if (made.length < 2) return null;
 		const top = this.undoStack.slice(this.undoStack.length - made.length);
-		if (top.length !== made.length || top.some((c, i) => c !== made[i])) return;
+		if (top.length !== made.length || top.some((c, i) => c !== made[i])) return null;
 		this.undoStack.length -= made.length;
 		const batch = new Batch(label, made, made.every((c) => c.lockExempt === true));
 		const at = this.madeAt.get(made[made.length - 1]!);
 		if (at !== undefined) this.madeAt.set(batch, at);
 		this.undoStack.push(batch);
+		return batch;
 	}
 
 	undo(): Command | null {
@@ -1114,12 +1141,14 @@ export class History {
 		const known = this.takeKnown();
 		const cmd = this.undoStack[at];
 		if (!cmd) return null;
+		// 0.28 review (P3): a step taken from the middle of the stack is kept where it was when the guard refuses it.
+		const keepAt = at !== this.undoStack.length - 1 ? at : null;
 		this.undoStack.splice(at, 1);
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		const snapshot = this.guard ? snapshotDocument(doc) : null;
 		const wasBad = this.badBefore(doc, snapshot, known);
-		if (!this.ran(() => cmd.revert(doc), snapshot, "undo")) return null;
+		if (!this.ran(() => cmd.revert(doc), snapshot, "undo", cmd, keepAt)) return null;
 		if (locks) {
 			// An older edit of a page that has been locked since (a synced change, a lock set later and left on): the undo
 			// is not done and stays on the stack for when the page is unlocked.
@@ -1132,8 +1161,9 @@ export class History {
 				return null;
 			}
 		}
-		if (this.refusedStep(doc, snapshot, "undo", wasBad)) return null;
+		if (this.refusedStep(doc, snapshot, "undo", wasBad, cmd, keepAt)) return null;
 		this.redoStack.push(cmd);
+		this.trimRedo();
 		return cmd;
 	}
 
@@ -1147,12 +1177,13 @@ export class History {
 		const known = this.takeKnown();
 		const cmd = this.redoStack[at];
 		if (!cmd) return null;
+		const keepAt = at !== this.redoStack.length - 1 ? at : null;
 		this.redoStack.splice(at, 1);
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		const snapshot = this.guard ? snapshotDocument(doc) : null;
 		const wasBad = this.badBefore(doc, snapshot, known);
-		if (!this.ran(() => cmd.apply(doc), snapshot, "redo")) return null;
+		if (!this.ran(() => cmd.apply(doc), snapshot, "redo", cmd, keepAt)) return null;
 		if (locks) {
 			const hit = lockedChanges(doc, locks);
 			if (hit.length > 0) {
@@ -1162,7 +1193,7 @@ export class History {
 				return null;
 			}
 		}
-		if (this.refusedStep(doc, snapshot, "redo", wasBad)) return null;
+		if (this.refusedStep(doc, snapshot, "redo", wasBad, cmd, keepAt)) return null;
 		this.undoStack.push(cmd);
 		return cmd;
 	}
@@ -1188,8 +1219,9 @@ export class History {
 		const cmd = this.undoStack[at]!;
 		const scope = rules.scope(cmd);
 		if (!scope.local) return { kind: "global", cmd };
-		// Taking away a file that another page (or the cover) still uses would leave a picture without its file: not out of order.
-		if (rules.sharedElsewhere(this.doc(), scope, pageId)) return { kind: "global", cmd, why: "shared" };
+		// 0.28 review (P1, P2): the file table, the slide table and the cover are shared by every page, and the content check cannot tell what
+		// the steps still in the history will put back. A step that ADDED an entry is only undone in order, as the newest step of all.
+		if (at !== this.undoStack.length - 1 && scope.registers.some((r) => r.adds())) return { kind: "global", cmd, why: "shared" };
 		const done = this.undoAt(at);
 		return done ? { kind: "done", cmd: done } : { kind: "refused" };
 	}
@@ -1204,6 +1236,12 @@ export class History {
 		if (!rules || at < 0) return { kind: "nothing" };
 		const cmd = this.redoStack[at]!;
 		if (!rules.scope(cmd).local) return { kind: "global", cmd };
+		// 0.28 review (P1, P2): never redo past an undone step that is global (the cover, a file removed, the page list) or that registers a file
+		// or a slide entry: this step may need what that one puts back first. In order it is the plain Redo.
+		for (let i = at + 1; i < this.redoStack.length; i++) {
+			const above = rules.scope(this.redoStack[i]!);
+			if (!above.local || above.registers.length > 0) return { kind: "global", cmd, why: "shared" };
+		}
 		const done = this.redoAt(at);
 		return done ? { kind: "done", cmd: done } : { kind: "refused" };
 	}

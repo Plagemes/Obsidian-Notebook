@@ -5,6 +5,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createDocument, createPage } from "../src/model/document";
 import { AddPage, AddStroke, Batch, History, ReplaceStroke } from "../src/model/history";
+import { SetPageContent } from "../src/model/page-content";
 import { pageRules } from "../src/model/page-undo";
 import { DEFAULT_SETTINGS, readSettings } from "../src/settings";
 import { line } from "./helpers";
@@ -20,6 +21,15 @@ function setup() {
 	history.setPageRules(pageRules);
 	return { doc, history, a: doc.pages[0]!.id, b: doc.pages[1]!.id };
 }
+
+describe("the page of a Move content step (review P8)", () => {
+	it("is shown only when per-page undo is on, so the panel is unchanged with the setting off", () => {
+		const { doc, history, a } = setup();
+		history.execute(new SetPageContent({ pageId: a, strokes: [], elements: undefined }));
+		expect(historyRows(history.entries(), doc, 0)[0]!.detail).not.toContain("p. 1");
+		expect(historyRows(history.entries(), doc, 0, { pageId: a })[0]!.detail).toContain("p. 1");
+	});
+});
 
 describe("history panel rows with per-page undo", () => {
 	it("marks the steps of the page in view, the steps of other pages and the global ones", () => {

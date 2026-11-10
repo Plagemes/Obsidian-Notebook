@@ -8,7 +8,11 @@
  * touches several pages, adds / deletes / moves / reorders pages, or changes the whole notebook (properties, saved views, files) is
  * "global": per-page undo never undoes it out of order. When the newest step of a page is global, nothing is undone and the person is told.
  *
- * A command class this file does not know is global (fail closed); tests/page-undo.test.ts scans the source for `implements Command`
+ * The shared tables (files, slide entries, the cover) are not covered by that rule, because every page's content points into them: a step that
+ * ADDED an entry is never undone out of order, a step is never redone past an undone step that registers one or is global, and `RemoveAsset`
+ * (the storage manager's repoint) blocks every page. `checkContent` also checks those references without its cache, as a backstop.
+ *
+ * A command class this file does not know is global and blocks every page (fail closed); tests/page-undo.test.ts scans the source for `implements Command`
  * classes and fails on one that is not classified, so a new command is decided on purpose.
  */
 import { RemoveAsset } from "./asset-ops";
@@ -30,9 +34,7 @@ import { SetPageTimes } from "./page-times";
 import { AddSlideRef } from "./slide-links";
 import { SetPageStates } from "./states";
 import { SetViews } from "./views";
-import { elementAssetId } from "./excerpts";
 import type { PageRules, Registered, ScopeFn, StepScope } from "./page-scope";
-import type { NotebookDocument } from "./types";
 
 export { redoSurvives, touchesPage, type PageRules, type PageStepResult, type ScopeFn, type StepScope } from "./page-scope";
 
@@ -75,7 +77,7 @@ export function computeScope(cmd: Command): StepScope {
 			pages.add(leaf.before.id);
 			pages.add(leaf.after.id);
 		} else if (leaf instanceof AddAsset) {
-			// names no page, and does not make the step global; a file another page uses is not taken away (`sharedElsewhere`)
+			// names no page and does not make the step global, but it is a shared table: see `Registered`
 			registers.push({ kind: "asset", id: leaf.asset.id, adds: () => leaf.adds });
 		} else if (leaf instanceof AddSlideRef) {
 			registers.push({ kind: "slide", id: leaf.ref.id, adds: () => leaf.adds });
@@ -91,45 +93,25 @@ export function computeScope(cmd: Command): StepScope {
 		} else if (leaf instanceof ReorderPages) {
 			all = true;
 			global = true;
-		} else if (leaf instanceof SetMeta || leaf instanceof SetViews || leaf instanceof RemoveAsset) {
+		} else if (leaf instanceof SetMeta || leaf instanceof SetViews) {
 			global = true;
+		} else if (leaf instanceof RemoveAsset) {
+			// Drops a record every page's pictures may point at (the storage manager's repoint): no page is undone or redone past it.
+			global = true;
+			all = true;
 		} else {
-			// A class nobody has classified: it may do anything, so it is never undone out of order, and it blocks every page it does not name.
+			// A class nobody has classified: it may do anything, so it is never undone out of order and it blocks every page.
 			global = true;
+			all = true;
 			const any = leaf as unknown as { pageId?: unknown };
 			if (typeof any.pageId === "string") pages.add(any.pageId);
-			else all = true;
 		}
 	}
 	return { pages, all, local: !global && !all && pages.size === 1, registers };
 }
 
-/**
- * Would undoing this step (of page `pageId`) take away a file or a slide entry it added that another page, or the cover, still uses? Then
- * the step is not undone out of order (the other page would be left with a picture whose file is gone).
- */
-export function sharedElsewhere(doc: NotebookDocument, scope: StepScope, pageId: string): boolean {
-	for (const r of scope.registers) {
-		if (!r.adds()) continue;
-		if (r.kind === "asset") {
-			const cover = doc.meta?.coverArt;
-			if (cover?.kind === "image" && cover.asset === r.id) return true;
-			for (const page of doc.pages) {
-				if (page.id === pageId) continue;
-				if (page.background?.asset === r.id) return true;
-				if ((page.elements ?? []).some((e) => elementAssetId(e) === r.id)) return true;
-			}
-		} else {
-			for (const page of doc.pages) {
-				if (page.id !== pageId && page.strokes.some((s) => s.slide === r.id)) return true;
-			}
-		}
-	}
-	return false;
-}
-
 /** The rules the view gives the History when per-page undo is available. */
-export const pageRules: PageRules = { scope: (cmd) => pageScope(cmd), sharedElsewhere };
+export const pageRules: PageRules = { scope: (cmd) => pageScope(cmd) };
 
 const memo = new WeakMap<Command, StepScope>();
 

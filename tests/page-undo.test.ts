@@ -5,7 +5,7 @@ import {
 } from "../src/model/history";
 import { ReorderPages } from "../src/model/page-ops";
 import { SetPageLocked } from "../src/model/page-lock";
-import { CLASSIFIED, pageRules, pageScope, sharedElsewhere } from "../src/model/page-undo";
+import { CLASSIFIED, pageRules, pageScope } from "../src/model/page-undo";
 import { checkContent } from "../src/model/serialize";
 import type { Asset, NotebookDocument, PageElement, Stroke } from "../src/model/types";
 import { line } from "./helpers";
@@ -437,7 +437,7 @@ describe("remap after an upkeep change swapped element objects", () => {
 });
 
 describe("the document guard and the unsavable step", () => {
-	it("an out-of-order undo the guard refuses leaves the document as it was, drops the step and says so; other pages keep working", () => {
+	it("an out-of-order undo the guard refuses leaves the document as it was, keeps the step and says so; other pages keep working", () => {
 		let armed = false;
 		const r = rig({ guard: (doc) => (armed && doc.pages[0]!.strokes.length === 0 ? "page 1 must not be empty" : null) });
 		const a = r.write(0);
@@ -448,13 +448,13 @@ describe("the document guard and the unsavable step", () => {
 		expect(res.kind).toBe("refused");
 		expect(r.ids(0)).toEqual([a.id]);
 		expect(r.refused).toEqual([{ message: "page 1 must not be empty", step: "undo" }]);
-		expect(r.history.depth()).toEqual({ undo: 2, redo: 0 }); // the refused step left the history
+		expect(r.history.depth()).toEqual({ undo: 3, redo: 0 }); // the refused step stays in the history, where it was
 		expect(r.history.undoOnPage(r.pages[2]).kind).toBe("done");
 		expect(r.ids(2)).toEqual([]);
 		void b;
 	});
 
-	it("an out-of-order redo the guard refuses is undone and dropped", () => {
+	it("a redo of the next step the guard refuses is undone and dropped, as an ordinary Redo", () => {
 		let armed = false;
 		const r = rig({ guard: (doc) => (armed && doc.pages[0]!.strokes.length > 0 ? "no ink on page 1" : null) });
 		r.write(0);
@@ -509,16 +509,6 @@ describe("files shared with another page", () => {
 		// now page 0 is the only user
 		expect(r.history.undoOnPage(r.pages[0]).kind).toBe("done");
 		expect(r.doc.assets?.[a.id]).toBeUndefined();
-	});
-
-	it("sharedElsewhere names a cover that uses the file", () => {
-		const r = rig();
-		const a = asset("c".repeat(8));
-		const step = new Batch("Insert image", [new AddAsset(a), new AddElement(r.pages[0], image("i1", a.id), 0)]);
-		r.history.execute(step);
-		expect(sharedElsewhere(r.doc, pageScope(step), r.pages[0])).toBe(false);
-		r.doc.meta = { ...r.doc.meta!, coverArt: { kind: "image", asset: a.id } };
-		expect(sharedElsewhere(r.doc, pageScope(step), r.pages[0])).toBe(true);
 	});
 });
 

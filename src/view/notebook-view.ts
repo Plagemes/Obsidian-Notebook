@@ -456,13 +456,14 @@ export class NotebookView extends FileView {
 	 * Every edit is checked strictly before it is kept (`checkContent`): an edit that the writer would refuse is undone
 	 * with a notice, so a bad element can never stop every later save.
 	 */
-	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message, step) => {
+	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message, step, kept) => {
 		console.error(`[notebook] ${step ?? "edit"} refused, the notebook could not be saved with it:`, message);
 		// 0.27 (#170): a macro counts the refusals and says it once itself, naming the step.
 		if (!step) this.refusalCount++;
 		if (!step && this.quietRefusals) return;
 		// 0.19: an undo or a redo that would leave a notebook the writer refuses is not done and leaves the history (the document is as before).
-		showNotice(step ? t("history.stepRefused", { message }) : t("history.refused", { message }), 10000);
+		// 0.28 review (P3): a step taken out of order by per-page undo stays in the history, so the notice says that instead.
+		showNotice(step ? t(kept ? "history.stepRefusedKept" : "history.stepRefused", { message }) : t("history.refused", { message }), 10000);
 		if (step) this.updateHistoryButtons();
 	},() => this.userReadOnly, (ids) => this.pagesLocked(ids), () => Date.now());
 	/**
@@ -1963,7 +1964,7 @@ export class NotebookView extends FileView {
 		const r = this.history.redoOnPage(id);
 		if (r.kind === "done") return r.cmd;
 		if (r.kind === "nothing") showNotice(t("pageundo.redo.nothing"), 3000);
-		else if (r.kind === "global") showNotice(t("pageundo.redo.global"), 5000);
+		else if (r.kind === "global") showNotice(t(r.why === "shared" ? "pageundo.redo.shared" : "pageundo.redo.global"), 5000);
 		else this.updateHistoryButtons();
 		return null;
 	}

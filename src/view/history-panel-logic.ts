@@ -76,9 +76,11 @@ export function scopeOfStep(cmd: Command, view: PageView): "global" | "here" | "
 function stepRow(entry: HistoryEntry, side: "undo" | "redo", current: boolean, doc: NotebookDocument | null, now: number, view?: PageView): HistoryRow {
 	const d = describeCommand(entry.cmd);
 	const scope = view ? scopeOfStep(entry.cmd, view) : undefined;
+	// With per-page undo on, the pages come from what the step touches (which also names the page of a "Move content" step); off: as before.
+	const pageIds = view ? [...new Set([...d.pageIds, ...pageScope(entry.cmd).pages])] : d.pageIds;
 	const detail = [
 		d.count > 1 ? t("histpanel.items.other", { n: String(d.count) }) : "",
-		pagesText(doc, d.pageIds),
+		pagesText(doc, pageIds),
 		scope === "global" ? t("histpanel.scope.global") : scope === "here" ? t("histpanel.scope.here") : "",
 		timeText(entry.at, now),
 	].filter((x) => x !== "").join(" · ");

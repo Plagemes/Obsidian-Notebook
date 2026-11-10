@@ -3,9 +3,11 @@
  * it back). Which pages a command touches is decided in page-undo.ts and handed to the History as a `ScopeFn`.
  */
 import type { Command } from "./history";
-import type { NotebookDocument } from "./types";
 
-/** A file or slide-table entry a step registered (and so would take away when undone), if it was the step that added it. */
+/**
+ * A file or slide-table entry a step registers. The tables (files, slides) and the cover are shared by every page, so a step that ADDED an
+ * entry is never undone out of order, and a step above one that registers is never redone past it (see `History.undoOnPage` / `redoOnPage`).
+ */
 export interface Registered {
 	readonly kind: "asset" | "slide";
 	readonly id: string;
@@ -24,18 +26,16 @@ export interface StepScope {
 	 * the notebook as a whole. False means "global".
 	 */
 	readonly local: boolean;
-	/** The files and slide entries the step registers (a picture, ink linked to a slide): undoing it must not take away one that another page uses. */
+	/** The files and slide entries the step registers (a picture, ink linked to a slide). */
 	readonly registers: readonly Registered[];
 }
 
 /** The scope of a step. */
 export type ScopeFn = (cmd: Command) => StepScope;
 
-/** What the History needs to undo out of order: which pages a step touches, and whether undoing it would take away something another page needs. */
+/** What the History needs to undo out of order: which pages a step touches. */
 export interface PageRules {
 	scope: ScopeFn;
-	/** True when undoing the step (of page `pageId`) would remove a file or slide entry that another page or the cover still uses. */
-	sharedElsewhere(doc: NotebookDocument, scope: StepScope, pageId: string): boolean;
 }
 
 /** The step names this page (or every page). */
@@ -59,7 +59,10 @@ export type PageStepResult =
 	| { kind: "done"; cmd: Command }
 	/** The page has no step to undo (or redo). */
 	| { kind: "nothing" }
-	/** The newest step of the page also touches other pages or the whole notebook (`why` "shared": it added a file another page uses): it is not taken out of order. */
+	/**
+	 * The newest step of the page also touches other pages or the whole notebook, so it is not taken out of order. `why` "shared": it added a
+	 * file or slide entry (undo), or an undone step that registers one sits above it (redo): the shared tables only change in order.
+	 */
 	| { kind: "global"; cmd: Command; why?: "shared" }
 	/** The history refused the step (a locked page, a change the writer would reject, read-only mode): it said why itself. */
 	| { kind: "refused" };
