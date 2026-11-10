@@ -5395,7 +5395,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.hideStruck": "Nascondi le parole barrate",
 	"settings.hideStruck.desc": "Una parola con una riga a metà altezza è nascosta nella vista; nulla si cancella.",
 	"settings.exportHideStruck": "Escludi le parole barrate dalle esportazioni",
-	"settings.exportHideStruck.desc": "I file PDF, PNG, SVG, HTML, stampa, Markdown, consegna e condivisione escludono le parole barrate (la finestra di esportazione parte con la spunta attiva). Le immagini di una selezione inserite nelle note, le copie e i riepiloghi le conservano. Il quaderno non cambia.",
+	"settings.exportHideStruck.desc": "Ogni esportazione e condivisione le salta; le immagini nelle note e le copie le tengono.",
 	"export.struck": "Escludi le parole barrate",
 	"export.struck.desc": "Le parole con una riga a metà altezza, e quelle righe, non vengono disegnate nel PDF, SVG, HTML, nelle immagini PNG o nella stampa. Il quaderno non cambia.",
 };
