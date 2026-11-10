@@ -118,6 +118,7 @@ import { redactApi } from "./redact-check"; // 0.26 redact
 import { shareApi } from "./share-check"; // 0.20 share
 import { templatesApi } from "./templates-check";
 import { cardtemplatesApi } from "./cardtemplates-check";
+import { linksuggestApi } from "./linksuggest-check"; // 0.30 linksuggest
 import { plannerApi } from "./planner-check";
 import { storageApi } from "./storage-check";
 import { coversApi } from "./covers-check";
@@ -2339,6 +2340,7 @@ Object.assign(harnessApi, redactApi({ app, errors, notices })); // 0.26 redact
 Object.assign(harnessApi, shareApi({ app, errors, notices })); // 0.20 share
 Object.assign(harnessApi, templatesApi({ app, errors, notices }));
 Object.assign(harnessApi, cardtemplatesApi({ app, errors, notices })); // 0.29 cardtemplates
+Object.assign(harnessApi, linksuggestApi({ app, errors, notices })); // 0.30 linksuggest
 // 0.20 planner (#118): the Planner tab of the creation dialog and the generated pages (doc=planner, planner-check.ts).
 Object.assign(harnessApi, plannerApi({ app, errors, notices }));
 // 0.15 storage: the Storage manager (doc=storage, storage-check.ts).

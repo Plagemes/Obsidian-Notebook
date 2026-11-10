@@ -635,6 +635,9 @@ const STUDY: SettingSpec[] = [
 		control: { type: "action", run: "card-templates", button: "settings.open" }, edits: ["zettelCardTemplates"],
 		keywords: "card templates concept question quote definition zettel modelli schede citazione definizione domanda",
 	},
+	// 0.30 linksuggest (Z5): related cards offered while a card is made
+	{ id: "zettelLinkSuggest", section: "study", group: "zettel", order: 50, name: "settings.zettelLinkSuggest", desc: "settings.zettelLinkSuggest.desc", control: { type: "toggle" }, keywords: "link suggestions related cards zettel collegamenti suggerimenti schede affini" },
+	{ id: "zettelLinkSuggestCount", section: "study", group: "zettel", order: 51, name: "settings.zettelLinkSuggestCount", desc: "settings.zettelLinkSuggestCount.desc", control: { type: "slider", min: 1, max: 8, step: 1 }, parent: "zettelLinkSuggest", visible: (s) => s.zettelLinkSuggest },
 ];
 
 const APPEARANCE: SettingSpec[] = [

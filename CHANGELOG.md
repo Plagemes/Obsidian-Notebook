@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### linksuggest
+- **Link suggestions while creating a card (Z5).** The *New card* dialog (also from the Inbox) has a *Cards to link* field: as you type the title, source and tags, the cards of your slip-box that share tags or title words with it are listed (best first, the most recently changed card breaks ties), each with the reason. Tap one to link it; the link is written both ways, like a drawn arrow, once the note exists. Settings > Study > Zettelkasten: *Suggest cards to link* (on by default) and *Suggestions shown* (1 to 8).
+- **Cheap.** The candidates come from the cards already indexed and the metadata cache (no note is read), are capped at the 600 most recent cards, and ranking runs a quarter of a second after the last key.
+- **No format change.** Code: pure `src/zettel/link-suggest.ts`, `src/zettel/link-suggest-ui.ts`. Tests `tests/zettel-link-suggest.test.ts`; harness `doc=linksuggest`. Not verified on Android hardware.
+
 ### sections
 - **Coloured sections inside a notebook (#52), as in OneNote.** *New section…* (page sheet, *All actions*, command) starts a section at a page with a title and one of the eight subject colours; it runs to the page before the next section. The page navigator shows a coloured tab strip (the section in view is current; a tap jumps to its first page), a divider with the title and page count before each section, and a colour edge on its pages. The *Sections* dialog lists them (tap to go; rename, recolour, delete from the row's menu). *Next section* and *Previous section* jump between them. Every change is one undo step, named in the history panel. Read-only notebooks show and navigate sections but do not change them.
 - **Sections stay consistent with the pages.** Sections are anchored to page ids. Deleting the first page of a section moves the section to the next page (or removes it if that page starts a section of its own); moving pages keeps a section with its pages, or starts it at the first page that stayed; adding, inserting and duplicating pages change nothing. Undo puts pages and sections back exactly.
