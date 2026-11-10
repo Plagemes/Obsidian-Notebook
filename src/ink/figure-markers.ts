@@ -3,11 +3,12 @@ import { freshLegend, MAX_MARKER_NUMBER, reconcileLegend, withEntry } from "../m
 import { collectFigures } from "../model/figures";
 import { isLockedElement } from "../model/groups";
 import { AddElement, AddStroke, Batch, ReplaceElement, type Command } from "../model/history";
-import { RENDER_FREEHAND, type Page, type PageElement, type Stroke, type TextElement } from "../model/types";
+import { RENDER_FREEHAND, type Page, type PageElement, type Stroke, type TapeElement, type TextElement } from "../model/types";
 import { elementBounds } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
-import { boxesTouching, type RedactGuard } from "./redact";
+import { movesUnderRedaction, type RedactGuard } from "./redact";
 import { ellipsePoints, linePoints } from "./shapes";
+import { elementTouchesTapes } from "./tape-guard";
 import { estimateMeasure, LINE_HEIGHT, type MeasureText } from "./text-layout";
 
 /**
@@ -24,11 +25,19 @@ import { estimateMeasure, LINE_HEIGHT, type MeasureText } from "./text-layout";
  *
  * NUMBERING is by placement order: a new marker takes the number after the highest one of its figure, so no earlier marker ever changes
  * number by itself (the numbers the person has already read, written about or referred to hold still) and one insert is one small step.
- * Deleting a marker leaves a gap; the explicit *Renumber markers* closes gaps (the markers keep their order, 1 2 4 becomes 1 2 3), drops the
- * legend lines of markers that are gone and adds an empty line for a marker without one, in ONE undo step. It is explicit on purpose: an
+ * Deleting a marker leaves a gap; the explicit *Renumber markers* closes gaps (the markers keep their order, 1 2 4 becomes 1 2 3), removes
+ * the legend lines of markers that are gone (the view asks first when they hold words) and adds an empty line for a marker without one, in
+ * ONE undo step; every other line of the legend stays as typed. It is explicit on purpose: an
  * automatic renumber after a delete would change numbers while the person is still working on the figure, with no way to tell it from an edit.
  *
  * Text boxes are drawn under the ink, so the disc of a marker is a translucent tint (never a solid fill that would hide its number).
+ *
+ * Review 0.30 (I1, I2, I6): both actions rewrite items the person already has (a marker's number, the legend), so each checks every item it
+ * changes BEFORE and AFTER the change: against the redaction boxes (`movesUnderRedaction`, fail closed when the boxes cannot be read: a
+ * legend that grows or shrinks can slide words out from under a box) and against the study tapes of the page (refused, like the flowchart
+ * tidy: rewriting a covered legend line would change an answer nobody can see; the person removes or moves the tape first). The new items
+ * of an insert are checked against the redaction boxes too. Renumber also refuses while a marker group of the figure is not whole (its
+ * number edited into "3a", its ring half erased): its legend line could not be told from the line of a deleted marker.
  */
 
 export const MARKER_PREFIX = "nbm1";
@@ -329,7 +338,13 @@ export type MarkerRefusal =
 	/** The set has no marker left (renumbering would empty its legend). */
 	| "none"
 	/** The target has no room (no spot on the page). */
-	| "nowhere";
+	| "nowhere"
+	/** A legend line or a marker that must change lies under a study tape. */
+	| "tape"
+	/** The legend would grow past the bottom of a page of fixed size. */
+	| "edge"
+	/** A marker of the figure is not whole (its number edited, its ring half erased): Renumber could not tell its legend line. */
+	| "stray";
 
 export interface MarkerAddPlan {
 	ok: true;
@@ -348,6 +363,12 @@ const inParts = (page: Pick<Page, "states">): Set<string> => {
 	for (const part of page.states?.parts ?? []) for (const id of part.items) out.add(id);
 	return out;
 };
+
+/** The strip just above a legend (where the markers of a figure that is gone start again when none is left). */
+function aboveLegend(b: BBox): Box {
+	const height = 56;
+	return { x: b.minX, y: Math.max(0, b.minY - height - LEGEND_GAP), width: Math.max(b.maxX - b.minX, 60), height };
+}
 
 function aroundMarkers(markers: readonly MarkerItem[]): Box | null {
 	const u = unionOf(markers.map((m) => ({ minX: m.cx - m.r, minY: m.cy - m.r, maxX: m.cx + m.r, maxY: m.cy + m.r })));
@@ -394,14 +415,41 @@ function captionedFigure(page: Items, set: string): boolean {
 	return (page.elements ?? []).some((e) => e.type === "text" && e.text.includes(`{{figcap:${set}}}`));
 }
 
-const redacts = (guard: RedactGuard | undefined, strokes: readonly Stroke[], elements: readonly PageElement[]): boolean =>
-	!!guard && (guard.unreadable === true || (guard.boxes.length > 0 && boxesTouching({ strokes, elements }, guard.boxes).length > 0));
+/** Review 0.30 (I1, I2): whether the items before and after a change touch a redaction box (fail closed when the boxes cannot be read). */
+const redacts = (guard: RedactGuard | undefined, before: readonly PageElement[], after: { strokes: readonly Stroke[]; elements: readonly PageElement[] }): boolean =>
+	!!guard && movesUnderRedaction(guard, { strokes: [], elements: before }, after);
+
+const tapesOf = (page: Items): TapeElement[] => (page.elements ?? []).filter((e): e is TapeElement => e.type === "tape");
+
+/** Review 0.30 (I6): whether one of `items` (before or after a rewrite) lies under a study tape of the page, even in part. */
+const underTape = (tapes: readonly TapeElement[], items: readonly PageElement[], measure: MeasureText): boolean =>
+	tapes.length > 0 && items.some((e) => elementTouchesTapes(e, tapes, measure));
+
+/**
+ * The number boxes of the marker groups of `set` that are not whole markers (a number edited into "3a", a ring half erased, two boxes in
+ * one group): `markerSets` leaves them out, but they still stand on the figure with a number the person reads.
+ */
+function strayMarkerTexts(page: Items, set: MarkerSet | null, setId: string): TextElement[] {
+	const whole = new Set((set?.markers ?? []).map((m) => m.group));
+	return (page.elements ?? []).filter((e): e is TextElement => {
+		if (e.type !== "text" || e.group === undefined || whole.has(e.group)) return false;
+		const g = parseMarkerGroup(e.group);
+		return g !== null && g.role === "m" && g.set === setId;
+	});
+}
+
+/** The number a stray marker box starts with (0 when none). */
+const strayNumber = (e: TextElement): number => {
+	const m = /^\s*(\d{1,3})/.exec(e.text);
+	return m ? Number(m[1]) : 0;
+};
 
 /**
  * "Add marker": the next numbered marker of the figure (a circle and its number, one group) and its line in the legend, ONE step. The legend
  * is created under the figure when the figure has none yet (with a line for every marker it has, so a legend deleted by hand comes back whole),
- * else the line is added to it in place and the words already typed stay as they are. Refused when the new items would lie under a redaction
- * box, when the legend is locked or part of a drawing with states, or when the figure already has the largest number.
+ * else ONE line is spliced into it and every other line stays exactly as typed. Refused when the new items or the legend (before or after)
+ * would touch a redaction box, when the rewritten legend touches a study tape, when it would grow past the bottom of a fixed page, when the
+ * legend is locked or part of a drawing with states, or when the figure already has the largest number.
  */
 export function planAddMarker(page: Page, target: MarkerTarget, opts: MarkerBuildOptions, guard?: RedactGuard): MarkerPlan {
 	const newId = opts.newId ?? createId;
@@ -409,10 +457,14 @@ export function planAddMarker(page: Page, target: MarkerTarget, opts: MarkerBuil
 	const measure = opts.measure ?? estimateMeasure;
 	const existing = markerSets(page).get(target.set) ?? null;
 	const markers = existing?.markers ?? [];
-	const number = markers.reduce((m, x) => Math.max(m, x.number), 0) + 1;
+	// A marker whose number the person edited ("3a") still shows its number: the next one comes after it (its legend line is not taken over).
+	const strays = strayMarkerTexts(page, existing, target.set).map(strayNumber);
+	const number = Math.max(markers.reduce((m, x) => Math.max(m, x.number), 0), ...strays) + 1;
 	if (number > MAX_MARKER_NUMBER) return { ok: false, reason: "full" };
-	// A figure that is gone (a set picked up through its markers alone): the markers' own neighbourhood, a little to the right and below.
-	const box = target.box ?? aroundMarkers(markers);
+	// A figure that is gone (a set picked up through its markers alone): the markers' own neighbourhood, a little to the right and below;
+	// with no marker left either (only the legend is selected), the strip just above the legend (review I12: never the page centre).
+	const legendBox = existing?.legend ? elementBounds(existing.legend.text, measure) : null;
+	const box = target.box ?? aroundMarkers(markers) ?? (legendBox ? aboveLegend(legendBox) : null);
 	const r = markers.length > 0 ? markers[markers.length - 1]!.r : markerRadius(box);
 	const color = markers.length > 0 ? markers[markers.length - 1]!.circle.color : opts.color;
 	const spot = opts.at && finite(opts.at.x) && finite(opts.at.y) ? { x: opts.at.x, y: opts.at.y } : nextSpot(box, page, markers, r);
@@ -427,11 +479,21 @@ export function planAddMarker(page: Page, target: MarkerTarget, opts: MarkerBuil
 	const legend = existing?.legend ?? null;
 	const commands: Command[] = [];
 	let legendCreated = false;
+	// the legend as it is and as it will be, when it is rewritten (review I2: both are checked)
+	const rewritten: { before: TextElement[]; after: TextElement[] } = { before: [], after: [] };
 	if (legend) {
 		if (isLockedElement(legend.text)) return { ok: false, reason: "locked" };
 		if (inParts(page).has(legend.text.id)) return { ok: false, reason: "states" };
 		const text = withEntry(legend.text.text, number);
-		if (text !== legend.text.text) commands.push(new ReplaceElement(page.id, legend.text, { ...legend.text, text }));
+		if (text !== legend.text.text) {
+			const next: TextElement = { ...legend.text, text };
+			rewritten.before.push(legend.text);
+			rewritten.after.push(next);
+			commands.push(new ReplaceElement(page.id, legend.text, next));
+			// Review I11: on a page of fixed size the longer legend must still end on the page.
+			const grown = elementBounds(next, measure).maxY;
+			if (!page.infinite && grown > page.height && grown > elementBounds(legend.text, measure).maxY) return { ok: false, reason: "edge" };
+		}
 	} else {
 		legendCreated = true;
 		const numbers = [...markers.map((m) => m.number), number];
@@ -444,7 +506,8 @@ export function planAddMarker(page: Page, target: MarkerTarget, opts: MarkerBuil
 		strokes.push(rule);
 		elements.push(box2);
 	}
-	if (redacts(guard, strokes, elements)) return { ok: false, reason: "redacted" };
+	if (redacts(guard, rewritten.before, { strokes, elements: [...elements, ...rewritten.after] })) return { ok: false, reason: "redacted" };
+	if (underTape(tapesOf(page), [...rewritten.before, ...rewritten.after], measure)) return { ok: false, reason: "tape" };
 	const e0 = page.elements?.length ?? 0;
 	commands.unshift(
 		...strokes.map((s, i) => new AddStroke(page.id, s, page.strokes.length + i)),
@@ -462,6 +525,10 @@ export interface RenumberPlan {
 	changed: number;
 	dropped: number;
 	added: number;
+	/** The text of each dropped legend line that holds words (the view asks before they go). */
+	removed: string[];
+	/** Legend lines that share their number with a line above them (kept, they follow the same marker). */
+	shared: number;
 }
 
 /** The number each marker should have: 1, 2, 3, ... in the order they have now. */
@@ -471,14 +538,19 @@ export function renumbered(markers: readonly MarkerItem[]): { marker: MarkerItem
 
 /**
  * "Renumber markers": the markers of the set numbered 1, 2, 3, ... in the order they have (a gap left by a deleted marker closes), the
- * legend following: each line keeps its words with its marker, a line whose marker is gone is dropped, a marker without a line gets an empty
- * one. ONE step. Refused when something that must change is locked or belongs to a part of a drawing with states, or when nothing changes.
+ * legend following in place (`reconcileLegend`): each entry keeps its words with its marker, the entry of a marker that is gone is removed
+ * (reported in `removed` when it holds words, so the view asks first), a marker without an entry gets an empty one, any other line stays as
+ * typed. ONE step. Refused when something that must change is locked or belongs to a part of a drawing with states, when a changed item
+ * (before or after) touches a redaction box (fail closed: `guard`) or a study tape, while a marker of the figure is not whole, or when
+ * nothing changes.
  */
-export function planRenumber(page: Page, set: MarkerSet, opts: { measure?: MeasureText } = {}): RenumberPlan | { ok: false; reason: MarkerRefusal } {
+export function planRenumber(page: Page, set: MarkerSet, opts: { measure?: MeasureText; guard?: RedactGuard } = {}): RenumberPlan | { ok: false; reason: MarkerRefusal } {
 	const measure = opts.measure ?? estimateMeasure;
 	if (set.markers.length === 0) return { ok: false, reason: "none" };
 	const parts = inParts(page);
 	const commands: Command[] = [];
+	const before: TextElement[] = [];
+	const after: TextElement[] = [];
 	let changed = 0;
 	const plan = renumbered(set.markers);
 	for (const { marker, to } of plan) {
@@ -487,24 +559,38 @@ export function planRenumber(page: Page, set: MarkerSet, opts: { measure?: Measu
 		if (parts.has(marker.text.id)) return { ok: false, reason: "states" };
 		const fresh = numberBox(to, marker.cx, marker.cy, marker.text.fontSize, marker.text.color, marker.group, marker.text.id, measure);
 		// the person's own font size, colour and any extra flags stay; only the number and its centring change
-		commands.push(new ReplaceElement(page.id, marker.text, { ...marker.text, text: fresh.text, x: fresh.x, y: fresh.y, width: fresh.width }));
+		const next: TextElement = { ...marker.text, text: fresh.text, x: fresh.x, y: fresh.y, width: fresh.width };
+		before.push(marker.text);
+		after.push(next);
+		commands.push(new ReplaceElement(page.id, marker.text, next));
 		changed++;
 	}
 	let dropped = 0;
 	let added = 0;
+	let shared = 0;
+	let removed: string[] = [];
 	const legend = set.legend;
 	if (legend) {
 		const l = reconcileLegend(legend.text.text, plan.map((p) => ({ from: p.marker.number, to: p.to })));
 		if (l.text !== legend.text.text) {
 			if (isLockedElement(legend.text)) return { ok: false, reason: "locked" };
 			if (parts.has(legend.text.id)) return { ok: false, reason: "states" };
-			commands.push(new ReplaceElement(page.id, legend.text, { ...legend.text, text: l.text }));
+			const next: TextElement = { ...legend.text, text: l.text };
+			before.push(legend.text);
+			after.push(next);
+			commands.push(new ReplaceElement(page.id, legend.text, next));
 		}
-		dropped = l.dropped;
-		added = l.added;
+		({ dropped, added, shared, removed } = l);
 	}
 	if (commands.length === 0) return { ok: false, reason: "same" };
-	return { ok: true, cmd: new Batch("Renumber markers", commands), changed, dropped, added };
+	// Review I3 (c): a marker the person edited ("3a") or half erased is not in the plan, so its legend line would look like the line of
+	// a deleted marker: nothing changes until it is fixed or deleted.
+	if (strayMarkerTexts(page, set, set.set).length > 0) return { ok: false, reason: "stray" };
+	// Review I1: a renumbered number box is re-centred and the legend can get shorter or narrower; both can slide out from under a box.
+	if (opts.guard && redacts(opts.guard, before, { strokes: [], elements: after })) return { ok: false, reason: "redacted" };
+	// Review I6: never rewrite a covered number or legend line (like the flowchart tidy, refused: the person moves the tape first).
+	if (underTape(tapesOf(page), [...before, ...after], measure)) return { ok: false, reason: "tape" };
+	return { ok: true, cmd: new Batch("Renumber markers", commands), changed, dropped, added, removed, shared };
 }
 
 /** Whether a renumber would change anything (the action is offered more eagerly then). */
