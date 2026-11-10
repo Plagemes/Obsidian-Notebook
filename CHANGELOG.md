@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### livelecture
-- **Live lecture bar (#132).** While a lecture runs, a small floating bar under the lecture chip shows the elapsed time and two quick buttons: *New page* (after the current page) and *Important moment*, which bookmarks the current page with a time stamp such as "★ 12:34" (several moments on a page are joined). The end-of-lecture panel lists the moments with their pages; tapping one jumps there. The bar folds to the timer, fades with the toolbar while writing, works in the two-page spread and can be switched off in *Settings > Study*. No format change: the stamps live in the page bookmark title.
+- **Live lecture bar (#132).** While a lecture runs, a small floating bar at the bottom left shows the elapsed time and two quick buttons: *New page* (after the current page) and *Important moment*, which bookmarks the current page with a time stamp such as "★ 12:34" (several moments on a page are joined). The end-of-lecture panel lists the moments with their pages; tapping one jumps there. The bar folds to the timer, fades with the toolbar while writing, works in the two-page spread and can be switched off in *Settings > Study*. No format change: the stamps live in the page bookmark title.
 
 ## 0.27.0 — 2026-11-09
 

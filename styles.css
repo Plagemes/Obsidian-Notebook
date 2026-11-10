@@ -18981,7 +18981,7 @@ body.notebook-style-obsidian {
 	transform: translateX(-50%);
 }
 
-.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-page-refs) > .notebook-welcome-back { top: calc(52px + var(--nb-top-shift, 0px)); }
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-page-refs) > .notebook-welcome-back { top: calc(66px + var(--nb-top-shift, 0px)); }
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-slide-back) > .notebook-welcome-back { top: calc(62px + var(--nb-top-shift, 0px)); }
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-symbol-strip:not(.notebook-hidden)) > .notebook-welcome-back { top: calc(68px + var(--nb-top-shift, 0px)); }
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-page-refs):has(> .notebook-slide-back) > .notebook-welcome-back { top: calc(100px + var(--nb-top-shift, 0px)); }
@@ -21200,10 +21200,10 @@ body.notebook-style-obsidian {
 }
 
 /* ===== 0.28 livelecture ===== */
-/* Live lecture bar (#132): timer + "New page" + "Important moment", under the lecture chip at the top left. */
+/* Live lecture bar (#132): timer + "New page" + "Important moment"; at the top left by default, moved to the bottom-left stack below. */
 .workspace-leaf-content .view-content.notebook-view .notebook-live-bar {
 	position: absolute;
-	top: calc(52px + var(--nb-top-shift, 0px));
+	top: calc(66px + var(--nb-top-shift, 0px));
 	left: 8px;
 	z-index: 5;
 	display: flex;
@@ -21292,4 +21292,24 @@ body.notebook-style-obsidian {
 
 .nb-ui .notebook-live-moment {
 	cursor: pointer;
+}
+
+/* Bottom left, in the stack of the minimap, the colour-filter pill and the lecture-header chip (the top has no room left on a phone). */
+.workspace-leaf-content .view-content.notebook-view .notebook-live-bar {
+	top: auto;
+	bottom: calc(16px + var(--nb-ctx-lift, 0px));
+	left: calc(8px + var(--nb-map-bl, 0px));
+	max-width: calc(100% - 16px - var(--nb-map-bl, 0px));
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-meaning-pill) > .notebook-live-bar {
+	bottom: calc(60px + var(--nb-ctx-lift, 0px));
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-lecture-header-offer) > .notebook-live-bar {
+	bottom: calc(72px + var(--nb-ctx-lift, 0px));
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-meaning-pill):has(> .notebook-lecture-header-offer) > .notebook-live-bar {
+	bottom: calc(116px + var(--nb-ctx-lift, 0px));
 }

@@ -4427,7 +4427,7 @@ Settings, Writing: *Tasks on planner pages* (on by default). Implemented, not ve
 
 ### 0.28 — livelecture (live lecture bar, #132, steps 3260-3279)
 
-3260. **Appears with the lecture.** Start a lecture (Start on the banner, the command, or an automatic lecture): a small bar appears under the lecture chip at the top left with a running timer (mm:ss, h:mm:ss after an hour) and two buttons, *New page* and *Important moment*.
+3260. **Appears with the lecture.** Start a lecture (Start on the banner, the command, or an automatic lecture): a small bar appears at the bottom left, above the contextual bar, with a running timer (mm:ss, h:mm:ss after an hour) and two buttons, *New page* and *Important moment*.
 3261. **Timer.** With a class that began 20 minutes ago the timer starts near 20:00 and counts up each second; with no class (manual start) it starts at 00:00. Put the app in the background and return: the time is right.
 3262. **New page.** Tap *New page*: a page with the same paper is added right after the page you are on and the view goes to it; Undo removes it (one step).
 3263. **Important moment.** Tap *Important moment*: a notice "Marked ★ 12:34 on page N"; the page now has a bookmark (page panel, outline, bookmarks list) titled "★ 12:34", in the "important" category.
@@ -4436,7 +4436,7 @@ Settings, Writing: *Tasks on planner pages* (on by default). Implemented, not ve
 3266. **Spread.** In the two-page spread, the mark and the new page use the page you last wrote on (the current page), not the left page of the pair.
 3267. **End of lecture list.** Open the end-of-lecture panel: an *Important moments* section lists every stamp with its page, in page then time order; tapping one closes the panel and goes to that page. The list is still there after closing and reopening the notebook.
 3268. **Fold.** Tap the chevron: only the timer stays; tap it again: the buttons return.
-3269. **Fades with the toolbar.** With *Toolbar fades while writing* on, the bar fades while the pen writes and returns when you lift it. The bar never sits over the writing area you use (top left, under the chip) and the pen never starts a stroke on it.
+3269. **Fades with the toolbar.** With *Toolbar fades while writing* on, the bar fades while the pen writes and returns when you lift it. The bar never sits over the writing area you use (bottom left, above the contextual bar) and the pen never starts a stroke on it.
 3270. **Setting.** *Settings > Study > Live lecture bar* off: the bar is gone during a lecture; on: it returns. Default on.
 3271. **Read-only.** In a read-only notebook the buttons do nothing but say the notebook is read-only.
 3272. **Stacking.** With the symbols strip, the *Back to slide* pill and the *Referenced on* chip on, nothing overlaps the bar, on a tablet and on a phone.
