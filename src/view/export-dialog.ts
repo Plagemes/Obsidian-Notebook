@@ -17,7 +17,7 @@ import { DEFAULT_PNG_SCALE, PNG_SCALES, isPngScale, scaleDpi, type PngScale } fr
 import { parsePageRange } from "../model/page-range";
 import { folderProblem } from "./export-markdown";
 import type { ExportRequest } from "./export";
-import type { CleanExportOptions } from "../model/clean-export";
+import { STRUCK_ONLY, type CleanExportOptions } from "../model/clean-export";
 import { rangeProblem } from "./range-text";
 import { modalShell, setShellButtonLabel, shellButton, shellNote } from "../ui/components/modal-shell";
 
@@ -346,7 +346,8 @@ export class ExportModal extends Modal {
 	/** The filter of the choice: the clean copy and/or the struck words (struck words alone leave the study layers in). */
 	private cleanOptions(): CleanExportOptions {
 		const struck = this.cleanStruck;
-		return this.cleanOn ? { openStickies: this.cleanOpenStickies, struck } : { markers: false, comments: false, collapsedStickies: false, openStickies: false, struck };
+		// Round-2 review (H3): struck words alone keep the study tapes too, like every other writer (`STRUCK_ONLY`).
+		return this.cleanOn ? { openStickies: this.cleanOpenStickies, struck } : { ...STRUCK_ONLY, struck };
 	}
 
 	// --- 0.18 (#178): split an infinite page into sheets of paper ---

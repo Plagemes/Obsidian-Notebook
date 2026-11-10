@@ -5409,6 +5409,9 @@ export const it: Partial<Record<MessageKey, string>> = {
 	// 0.29 redactundo (review R3-1): un annulla o un ripeti che sposterebbe la scrittura da sotto un riquadro di oscuramento (o sotto uno)
 	"redactundo.undo": "Annulla non eseguito: sposterebbe la scrittura da sotto un riquadro di oscuramento (o sotto uno) in questa pagina. Prima rimuovi o rifai i riquadri della pagina; il passo resta nella cronologia.",
 	"redactundo.redo": "Ripeti non eseguito: sposterebbe la scrittura da sotto un riquadro di oscuramento (o sotto uno) in questa pagina. Prima rimuovi o rifai i riquadri della pagina; il passo resta nella cronologia.",
+	// 0.29 redactfix (round-2 review H1, H4)
+	"redactundo.failed": "{step} non eseguito: il controllo che tiene coperto ciò che i riquadri di oscuramento coprono non è riuscito. Il passo resta nella cronologia; riprova, oppure prima rimuovi i riquadri di questa pagina.",
+	"redactmove.background": "Togli o rifai prima i riquadri di oscuramento di questa pagina: un nuovo margine sinistro sposterebbe la pagina e la sua scrittura da sotto i riquadri.",
 	// 0.29 figcaptions (#248): didascalie e riferimenti delle figure
 	"figcap.abbr": "Fig.",
 	"figcap.caption.menu": "Didascalia della figura…",

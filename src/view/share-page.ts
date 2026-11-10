@@ -4,7 +4,7 @@
 // naming rules as the exports and a notice offers to open it or copy the image. Closing the share sheet writes nothing. The document is only read.
 import { normalizePath, Modal, Setting, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
-import { cleanPagesForExport, resolveCleanOptions, type CleanExportOptions } from "../model/clean-export";
+import { cleanPagesForExport, resolveCleanOptions, STRUCK_ONLY, type CleanExportOptions } from "../model/clean-export";
 import { uniqueFileName } from "../model/export-markdown";
 import { DEFAULT_PNG_SCALE, planPageImages, scaleDpi } from "../model/export-pages";
 import { parsePageRange } from "../model/page-range";
@@ -166,7 +166,8 @@ async function prepareFiles(host: ShareHost, choice: ShareChoice, plan: Extract<
 	// 0.19 (#239): a clean copy draws filtered copies of the pages; the document is untouched.
 	// 0.29 (#96): the struck-out words setting works with or without the clean copy (without it, the study layers stay in).
 	const struck = host.struck === true;
-	const clean: CleanExportOptions | null = choice.clean ? { struck } : struck ? { markers: false, comments: false, collapsedStickies: false, struck } : null;
+	// Round-2 review (H3): struck words alone keep the study tapes too, like every other writer (`STRUCK_ONLY`).
+	const clean: CleanExportOptions | null = choice.clean ? { struck } : struck ? STRUCK_ONLY : null;
 	const all = host.pages();
 	const cleaned = clean ? cleanPagesForExport(all, clean) : all;
 	const base: ExportOptions = { ...host.options(), layers: "both" };

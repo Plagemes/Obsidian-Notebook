@@ -24,6 +24,7 @@ import { hiddenStickyInk } from "../model/sticky";
 import { EQUATION_NUMBER_GAP } from "../model/math-elements";
 import { backgroundRect } from "../model/margins";
 import { isCheckbox } from "../model/checklist";
+import { sourceInk } from "../model/clean-export";
 import { pageCopy } from "../model/states";
 import { countBoxes, rectsOverlap, type RedactBox, type Redactions, boxesOf } from "../model/redact";
 import { pieceTaper } from "../model/taper";
@@ -412,8 +413,9 @@ export function redactPage(page: Page, boxes: readonly RedactBox[], notebook?: R
 			continue;
 		}
 		// Review fix (P13): the typed label of a checkbox whose handwritten label (the ink on its row, to its right) a box touches is
-		// left out: it can say what the handwriting says.
-		if (el.type === "checkbox" && el.label !== undefined && overlaps(checkboxLabelBounds(el, page.strokes, checkboxes), all, ELEMENT_PAD)) {
+		// left out: it can say what the handwriting says. Round-2 review (H2): measured on the ink as it is on the page (`sourceInk`), not on a
+		// clean copy that left the struck words out: struck handwriting under a box still takes the typed label with it.
+		if (el.type === "checkbox" && el.label !== undefined && overlaps(checkboxLabelBounds(el, sourceInk(page), checkboxes), all, ELEMENT_PAD)) {
 			const { label: _label, ...rest } = el;
 			void _label;
 			keptEls.push(rest);

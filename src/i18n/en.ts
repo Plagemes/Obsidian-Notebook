@@ -5408,6 +5408,9 @@ export const en = {
 	// 0.29 redactundo (review R3-1): an undo or a redo that would move writing out from under, or under, a redaction box
 	"redactundo.undo": "Undo was not done: it would move writing out from under a redaction box (or under one) on this page. Remove or redo the boxes on this page first; the step stays in the history.",
 	"redactundo.redo": "Redo was not done: it would move writing out from under a redaction box (or under one) on this page. Remove or redo the boxes on this page first; the step stays in the history.",
+	// 0.29 redactfix (round-2 review H1, H4)
+	"redactundo.failed": "{step} was not done: the check that keeps the redaction boxes covering what they cover failed. The step stays in the history; try again, or remove the redaction boxes of this page first.",
+	"redactmove.background": "Remove or redo the redaction boxes on this page first: a new left margin would move the page and its writing out from under them.",
 	// 0.29 figcaptions (#248): figure captions and references
 	"figcap.abbr": "Fig.",
 	"figcap.caption.menu": "Caption figure…",

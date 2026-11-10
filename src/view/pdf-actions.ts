@@ -5,6 +5,7 @@
  */
 import { loadPdfJs, Modal, normalizePath, Setting, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
+import { backgroundShifts } from "../ink/redact-step";
 import { notebookUri } from "../integration/links";
 import { Batch, SetPageMargins, type Command } from "../model/history";
 import { backgroundRect, MAX_MARGIN_RATIO, marginsEqual, marginsOf, normalizeMargins, pagesWithSameBackground } from "../model/margins";
@@ -51,6 +52,16 @@ function marginCommand(target: Page, after: PageMargins | undefined): Command | 
 	return new SetPageMargins(target.id, target.margins, next);
 }
 
+/**
+ * Round-2 review (H1): true, after a notice, when `cmd` changes the left margin of a page with redaction boxes (or while the boxes cannot be
+ * read: `hasRedaction` says so too): the PDF and the ink would move out from under the boxes, which every export burns where they are.
+ */
+export function marginsRefused(host: Pick<PdfActionHost, "doc" | "hasRedaction">, cmd: Command): boolean {
+	if (!backgroundShifts(host.doc, cmd).some((id) => host.hasRedaction?.(id) === true)) return false;
+	showNotice(t("redactmove.background"), 9000);
+	return true;
+}
+
 /** Asks for the margins of a page (mm) and applies them, optionally to every page of the same PDF, as one undo step. */
 export function openMarginsModal(host: PdfActionHost, page: Page): void {
 	const modal = new Modal(host.app);
@@ -95,9 +106,18 @@ export function openMarginsModal(host: PdfActionHost, page: Page): void {
 			const cmd = marginCommand(p, margins);
 			if (cmd) commands.push(cmd);
 		}
+		const cmd = commands.length === 0 ? null : commands.length === 1 ? commands[0]! : new Batch("Change page margins", commands);
+		// Round-2 review (H1): a new left margin moves the PDF and the ink out from under the redaction boxes of the page (they stay in page
+		// coordinates), so it is refused on a page with boxes (or while they cannot be read), like a turn or a crop. The dialog stays open: the
+		// right and bottom margins can still change.
+		if (cmd && marginsRefused(host, cmd)) {
+			errorEl.setText(t("redactmove.background"));
+			errorEl.removeClass("notebook-hidden");
+			return;
+		}
 		modal.close();
-		if (commands.length === 0) return;
-		host.run(commands.length === 1 ? commands[0]! : new Batch("Change page margins", commands), host.doc.pages.indexOf(page));
+		if (!cmd) return;
+		host.run(cmd, host.doc.pages.indexOf(page));
 	};
 	const submit = () => {
 		const ok = (v: number, max: number) => Number.isFinite(v) && v >= 0 && v <= max;
