@@ -215,6 +215,13 @@ export function parseEventLines(text: string): { events: TimelineEvent[]; proble
 	return { events: events.map((e, i) => ({ e, i })).sort((a, b) => a.e.pos - b.e.pos || a.i - b.i).map(({ e }) => e), problems, dropped };
 }
 
+/**
+ * Review 0.30 (I4): whether the lines of an EDIT must be fixed first. A line that was not understood (or is too long, or comes past the
+ * limit) is left out of the new timeline, so the label box it came from would be removed from the page: an edit never does that silently,
+ * the person fixes or deletes the line in the dialog. A new timeline has nothing to lose, so its lines are just left out (and listed).
+ */
+export const editNeedsFixing = (read: Pick<ReturnType<typeof parseEventLines>, "problems" | "dropped">): boolean => read.problems.length > 0 || read.dropped > 0;
+
 /** The text of an event as it is written in its label box, and back. */
 export const eventText = (e: Pick<TimelineEvent, "dateText" | "label">): string => (e.label === "" ? e.dateText : `${e.dateText}\n${e.label}`);
 

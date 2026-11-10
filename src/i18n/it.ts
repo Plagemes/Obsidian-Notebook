@@ -5943,6 +5943,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"timeline.noRedacted": "La linea del tempo toccherebbe un riquadro di oscuramento di questa pagina, quindi non è stata disegnata. Sposta la vista o togli prima il riquadro (Esporta… › Oscura…).",
 	"timeline.locked": "Una parte di questa linea del tempo è bloccata. Sbloccala prima.",
 	"timeline.noStates": "Queste forme fanno parte di un disegno con stati, quindi la linea del tempo non si può modificare.",
+	"timeline.tape": "Non è stato cambiato nulla: una parte della linea del tempo sta sotto un nastro di studio. Rimuovi prima il nastro.",
+	"timeline.read.keep": "Correggi o elimina le righe elencate sopra per aggiornare: una riga esclusa toglierebbe dalla pagina il suo riquadro di testo.",
 	"timeline.gone": "La linea del tempo non è più tutta sulla pagina in vista. Selezionala di nuovo.",
 	"timeline.unreadable": "Il testo di questa linea del tempo è stato ridimensionato o cambiato troppo per essere riletto. Inserisci una nuova linea del tempo.",
 	"help.timeline.insert": "Disegna una linea del tempo dagli eventi che scrivi con le loro date: anni, anni a.C., secoli, decenni o date. L'asse è spaziato secondo il tempo, con tacche ed etichette che non si sovrappongono. Sono forme e testo normali che puoi spostare e ricolorare.",

@@ -25,6 +25,7 @@ const REFUSALS: Record<Exclude<TimelineRefusal, "same">, Parameters<typeof t>[0]
 	unreadable: "timeline.unreadable",
 	locked: "timeline.locked",
 	states: "timeline.noStates",
+	tape: "timeline.tape",
 };
 
 /** The words the layout needs in the language of the plugin. */

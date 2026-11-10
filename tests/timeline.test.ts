@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { detectTable } from "../src/ink/table";
+import { redactBounds } from "../src/ink/redact";
+import { redactStepCheck } from "../src/ink/redact-step";
+import type { RedactBox } from "../src/model/redact";
 import {
 	buildTimeline, nearestSize, parseTimelineGroup, planTimelineInsert, planTimelineUpdate, readTimeline, sameTimeline, timelineGroupId, timelineOfSelection,
 	timelineWidth, type TimelineChoice,
 } from "../src/ink/timeline";
 import {
-	BOX_W, compressedGaps, EVENT_SIZE, eventFromText, eventText, layoutTimeline, MAX_EVENTS, niceStep, parseEventLines, parseTimelineDate, romanValue,
+	BOX_W, compressedGaps, editNeedsFixing, EVENT_SIZE, eventFromText, eventText, layoutTimeline, MAX_EVENTS, niceStep, parseEventLines, parseTimelineDate, romanValue,
 	splitEventLine, yearLabel, type TimelineLabels,
 } from "../src/math/timeline-layout";
 import { createDocument } from "../src/model/document";
@@ -546,5 +549,95 @@ describe("edit timeline (#148)", () => {
 		expect(nearestSize(timelineWidth("compact", 595)!, 595)).toBe("compact");
 		expect(nearestSize(timelineWidth("wide", 595)!, 595)).toBe("wide");
 		expect(nearestSize(440, 595)).toBe("standard");
+	});
+
+	// --- review 0.30 ---
+
+	it("I4: an edit whose lines would be left out must be fixed first (nothing is dropped silently)", () => {
+		expect(editNeedsFixing(parseEventLines(EVENTS))).toBe(false);
+		expect(editNeedsFixing(parseEventLines(`${EVENTS}\nsoon: Columbus`))).toBe(true);
+		expect(editNeedsFixing(parseEventLines(`1492: ${"x".repeat(170)}`))).toBe(true);
+		expect(editNeedsFixing(parseEventLines(Array.from({ length: MAX_EVENTS + 1 }, (_, i) => `${1000 + i}: e`).join("\n")))).toBe(true);
+		// the draft of a box that was typed over keeps its line, so the dialog shows it and holds the button
+		const { page, tl } = made();
+		const box = page.elements!.find((e): e is TextElement => e.type === "text" && e.text.startsWith("1492"))!;
+		page.elements![page.elements!.indexOf(box)] = { ...box, text: "somewhere around then\nColumbus" };
+		const draft = readTimeline(tl());
+		if (typeof draft === "string") throw new Error(draft);
+		expect(editNeedsFixing(parseEventLines(draft.text))).toBe(true);
+	});
+
+	it("I5: the edit keeps the ids of what survives, as replacements", () => {
+		const { page, history, plan, tl } = made();
+		const upd = planTimelineUpdate(page, tl(), choiceOf(`${EVENTS}\n1066: Battle of Hastings`, { size: "keep" }), page.strokes, labels, undefined, ids);
+		if (!upd.ok) throw new Error(upd.reason);
+		// every old stroke and every event label lives on under its id (a tick label that is no longer needed may go)
+		const oldIds = [...plan.strokes, ...plan.elements.filter((e) => e.fontSize === EVENT_SIZE)].map((i) => i.id);
+		const newIds = [...upd.strokes, ...upd.elements].map((i) => i.id);
+		expect(oldIds.every((id) => newIds.includes(id))).toBe(true);
+		expect(new Set(newIds).size).toBe(newIds.length);
+		expect(history.execute(upd.cmd)).toBe(true);
+		expect(new Set([...page.strokes, ...page.elements!].map((i) => i.id)).size).toBe(page.strokes.length + page.elements!.length);
+	});
+
+	it("I5: a smaller edit and its Undo and Redo put every item back where it was", () => {
+		const { page, history, tl } = made();
+		const snap = () => JSON.stringify([page.strokes, page.elements]);
+		const before = snap();
+		const upd = planTimelineUpdate(page, tl(), choiceOf("44 BC: Caesar killed\n1492: Columbus", { size: "keep" }), page.strokes, labels, undefined, ids);
+		if (!upd.ok) throw new Error(upd.reason);
+		history.execute(upd.cmd);
+		const after = snap();
+		expect(after).not.toBe(before);
+		expect(history.undo()).not.toBeNull();
+		expect(snap()).toBe(before);
+		expect(history.redo()).not.toBeNull();
+		expect(snap()).toBe(after);
+	});
+
+	it("I5: after a box is drawn over a moved label, Undo cannot bring the label out from under it", () => {
+		const { page, history, plan, tl } = made();
+		const boxes: RedactBox[] = [];
+		const refused: string[] = [];
+		history.setStepCheck(redactStepCheck(() => ({ boxesOf: () => boxes, unreadable: false, any: boxes.length > 0 }), (step) => refused.push(step)));
+		const upd = planTimelineUpdate(page, tl(), choiceOf(`${EVENTS}\n1066: Battle of Hastings`, { size: "keep" }), page.strokes, labels, undefined, ids);
+		if (!upd.ok) throw new Error(upd.reason);
+		expect(history.execute(upd.cmd)).toBe(true);
+		// a label that moved by the edit (the same box, another place)
+		const moved = upd.elements.find((e) => {
+			const old = plan.elements.find((o) => o.id === e.id) as TextElement | undefined;
+			return old !== undefined && (Math.abs(old.x - e.x) > 4 || Math.abs(old.y - e.y) > 4);
+		});
+		expect(moved).toBeDefined();
+		const old = plan.elements.find((o) => o.id === moved!.id) as TextElement;
+		const r = redactBounds(moved!);
+		boxes.push({ x: r.minX, y: r.minY, width: r.maxX - r.minX, height: r.maxY - r.minY } as RedactBox);
+		const snap = JSON.stringify([page.strokes, page.elements]);
+		expect(history.undo()).toBeNull();
+		expect(refused).toEqual(["undo"]);
+		expect(JSON.stringify([page.strokes, page.elements])).toBe(snap);
+		expect(page.elements!.some((e) => e.id === old.id && (e as TextElement).x === moved!.x)).toBe(true);
+	});
+
+	it("I6: refuses to rewrite a timeline whose old or new items lie under a study tape", () => {
+		const { page, tl } = made();
+		const choice = choiceOf(`${EVENTS}\n1066: Hastings`, { size: "keep" });
+		const label = page.elements!.find((e): e is TextElement => e.type === "text" && e.fontSize === EVENT_SIZE)!;
+		const tape = { id: "tape1", type: "tape" as const, x: label.x - 2, y: label.y - 2, width: 40, height: 14, color: "#ffd54a" };
+		page.elements!.push(tape);
+		const before = JSON.stringify([page.strokes, page.elements]);
+		expect(planTimelineUpdate(page, tl(), choice, page.strokes, labels)).toEqual({ ok: false, reason: "tape" });
+		expect(JSON.stringify([page.strokes, page.elements])).toBe(before);
+		// a tape far away is no obstacle
+		page.elements![page.elements!.indexOf(tape)] = { ...tape, x: 5, y: 760, width: 20, height: 10 };
+		expect(planTimelineUpdate(page, tl(), choice, page.strokes, labels).ok).toBe(true);
+	});
+
+	it("I9: the place of an edit follows the axis, not the first stroke in page order", () => {
+		const { page, tl } = made();
+		const before = readTimeline(tl());
+		const [axis] = page.strokes.splice(0, 1);
+		page.strokes.push(axis!);
+		expect(readTimeline(tl())).toEqual(before);
 	});
 });

@@ -4,11 +4,12 @@ import {
 } from "../math/timeline-layout";
 import { createId } from "../model/document";
 import { isLockedElement } from "../model/groups";
-import { AddElement, AddStroke, Batch, RemoveElement, removeStrokes, type Command } from "../model/history";
-import { RENDER_FREEHAND, type Page, type PageElement, type Stroke, type TextElement } from "../model/types";
+import { AddElement, AddStroke, Batch, RemoveElement, ReplaceElement, ReplaceStroke, type Command } from "../model/history";
+import { RENDER_FREEHAND, type Page, type PageElement, type Point, type Stroke, type TapeElement, type TextElement } from "../model/types";
 import { SUBJECT_COLORS } from "../ui/palette";
 import { movesUnderRedaction, type RedactGuard } from "./redact";
 import { ellipsePoints, polygonPoints } from "./shapes";
+import { selectionHoldsCovered } from "./tape-guard";
 
 /**
  * Timeline element (0.30, roadmap #148). A timeline is ordinary content, nothing is added to the document format: vector shape strokes (the
@@ -142,7 +143,15 @@ export interface TimelineDraft {
 export type ReadRefusal = "unreadable" | "gone";
 
 export function readTimeline(tl: DetectedTimeline): TimelineDraft | ReadRefusal {
-	const first = tl.strokes[0]?.points[0];
+	// Review 0.30 (I9): the axis is found by its shape (the leftmost horizontal line), not by being first in the page order: "Bring to front"
+	// on one member must not move where an edit puts the timeline.
+	let first: Point | undefined;
+	for (const s of tl.strokes) {
+		const p = s.points[0];
+		if (!p || s.fill !== undefined || s.points.length < 2 || s.points.some((q) => Math.abs(q[1] - p[1]) > 0.01) || s.points.every((q) => Math.abs(q[0] - p[0]) < 0.01)) continue;
+		if (!first || Math.min(...s.points.map((q) => q[0])) < first[0]) first = [Math.min(...s.points.map((q) => q[0])), p[1], p[2]];
+	}
+	first ??= tl.strokes[0]?.points[0];
 	if (!first) return "gone";
 	let maxX = -Infinity;
 	for (const s of tl.strokes) for (const [x] of s.points) if (x > maxX) maxX = x;
@@ -188,6 +197,8 @@ export type TimelineRefusal =
 	| "locked"
 	/** A shape of the timeline belongs to a part of a drawing with states. */
 	| "states"
+	/** Review 0.30 (I6): the old or the new timeline lies, even in part, under a study tape (an answer would come out from under it). */
+	| "tape"
 	/** The dialog gives the very timeline that is there. */
 	| "same";
 
@@ -275,16 +286,75 @@ export function planTimelineUpdate(
 	const built = buildTimeline(layout, group, origin, newId);
 	if (sameTimeline(tl.strokes, tl.elements, built.strokes, built.elements)) return { ok: false, reason: "same" };
 	if (guard && movesUnderRedaction(guard, { strokes: tl.strokes, elements: tl.elements }, built)) return { ok: false, reason: "redacted" };
-	const removedStrokes = removeStrokes(page.id, page.strokes, tl.strokes, "Update timeline");
-	if (!removedStrokes) return { ok: false, reason: "gone" };
-	// the new timeline takes the z-order slot of the old one (ink written over it stays over it)
-	const sBase = Math.max(0, Math.min(...tl.strokes.map((s) => page.strokes.indexOf(s))));
-	const eBase = Math.max(0, Math.min(...tl.elements.map((e) => elements.indexOf(e))));
-	const cmd = new Batch("Update timeline", [
-		removedStrokes,
-		...tl.elements.map((e) => new RemoveElement(page.id, e)),
-		...built.strokes.map((s, i) => new AddStroke(page.id, s, sBase + i)),
-		...built.elements.map((e, i) => new AddElement(page.id, e, eBase + i)),
-	]);
-	return { ok: true, cmd, strokes: built.strokes, elements: built.elements, group };
+	// Review 0.30 (I6): as the flowchart tidy, refuse when anything old or new lies under a study tape (hidden or not: revealing is a view state)
+	const tapes = elements.filter((e): e is TapeElement => e.type === "tape");
+	if (tapes.length > 0 && (selectionHoldsCovered(tl.strokes, tl.elements, tapes) || selectionHoldsCovered(built.strokes, built.elements, tapes))) return { ok: false, reason: "tape" };
+	return { ok: true, ...updateCommand(page, tl, built, group) };
+}
+
+/** `items` that are in `list`, in the order of `list`. */
+const inOrder = <T>(items: readonly T[], list: readonly T[]): T[] => items.filter((i) => list.includes(i)).sort((a, b) => list.indexOf(a) - list.indexOf(b));
+
+/**
+ * Review 0.30 (I5): the step of an edit keeps the identity of what survives. A stroke or text box of the new timeline takes the id of an old one
+ * and REPLACES it in its slot (ReplaceStroke / ReplaceElement); only the surplus is removed or added. The Undo and Redo redaction check
+ * (`ink/redact-step.ts`) matches items by id: with fresh ids a label that moved would be one that disappears and another that appears, which it
+ * does not count as a move, and an Undo could bring a label out from under a box drawn after the edit. Text boxes are matched by their exact
+ * text first (the same event is the same label wherever it moved), then the rest by order among boxes of the same size; strokes by order.
+ * The new timeline keeps the z-order slots of the old one (ink written over it stays over it).
+ */
+function updateCommand(page: Page, tl: DetectedTimeline, built: { strokes: Stroke[]; elements: TextElement[] }, group: string): { cmd: Command; strokes: Stroke[]; elements: TextElement[]; group: string } {
+	const elements = page.elements ?? [];
+	const oldStrokes = inOrder(tl.strokes, page.strokes);
+	const oldElements = inOrder(tl.elements, elements);
+	// strokes: by order
+	const strokes: Stroke[] = built.strokes.map((s, i) => (oldStrokes[i] ? { ...s, id: oldStrokes[i]!.id } : s));
+	const keptStrokes = Math.min(oldStrokes.length, strokes.length);
+	// text boxes: exact text and size first, then what is left by order among the boxes of one size
+	const twin = new Map<TextElement, PageElement>();
+	const used = new Set<PageElement>();
+	const pair = (accept: (o: PageElement, n: TextElement) => boolean): void => {
+		for (const n of built.elements) {
+			if (twin.has(n)) continue;
+			const o = oldElements.find((e) => !used.has(e) && accept(e, n));
+			if (o) {
+				twin.set(n, o);
+				used.add(o);
+			}
+		}
+	};
+	pair((o, n) => o.type === "text" && o.fontSize === n.fontSize && o.text === n.text);
+	pair((o, n) => o.type === "text" && o.fontSize === n.fontSize);
+	const texts: TextElement[] = built.elements.map((n) => (twin.has(n) ? { ...n, id: twin.get(n)!.id } : n));
+	const cmds: Command[] = [];
+	const sList = [...page.strokes];
+	oldStrokes.slice(0, keptStrokes).forEach((o, i) => {
+		cmds.push(new ReplaceStroke(page.id, o, [strokes[i]!], sList.indexOf(o)));
+		sList[sList.indexOf(o)] = strokes[i]!;
+	});
+	// surplus old strokes out (last index first, so Undo puts each back in place)
+	for (const o of oldStrokes.slice(keptStrokes).map((s) => ({ s, i: sList.indexOf(s) })).sort((a, b) => b.i - a.i)) {
+		cmds.push(new ReplaceStroke(page.id, o.s, [], o.i));
+		sList.splice(o.i, 1);
+	}
+	// surplus new strokes in, right after the last one that stayed
+	const sAt = sList.indexOf(strokes[keptStrokes - 1]!) + 1;
+	strokes.slice(keptStrokes).forEach((s, i) => cmds.push(new AddStroke(page.id, s, sAt + i)));
+	const eList = [...elements];
+	built.elements.forEach((n, i) => {
+		const o = twin.get(n);
+		if (!o) return;
+		cmds.push(new ReplaceElement(page.id, o, texts[i]!));
+		eList[eList.indexOf(o)] = texts[i]!;
+	});
+	for (const o of oldElements.filter((e) => !used.has(e))) {
+		cmds.push(new RemoveElement(page.id, o));
+		eList.splice(eList.indexOf(o), 1);
+	}
+	let eAt = Math.max(0, ...texts.filter((e, i) => twin.has(built.elements[i]!)).map((e) => eList.indexOf(e) + 1));
+	if (eAt === 0) eAt = Math.max(0, Math.min(eList.length, ...oldElements.map((e) => elements.indexOf(e))));
+	texts.forEach((e, i) => {
+		if (!twin.has(built.elements[i]!)) cmds.push(new AddElement(page.id, e, eAt++));
+	});
+	return { cmd: new Batch("Update timeline", cmds), strokes, elements: texts, group };
 }
