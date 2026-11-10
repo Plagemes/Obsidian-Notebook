@@ -6,6 +6,7 @@
 import { drawPageRaster } from "../ink/page-raster";
 import type { OutlineItem } from "../model/outline-builder";
 import type { Page, Stroke } from "../model/types";
+import { tapesOf } from "../model/tape";
 
 /** Widest picture, CSS px (the page panel is about 150 px wide). */
 export const HEADING_THUMB_WIDTH = 132;
@@ -75,7 +76,8 @@ export function headingDataUrl(page: Page, strokes: Stroke[], rect: HeadingRect,
 		canvas.height = Math.max(1, Math.round(rect.height * scale));
 		const ctx = canvas.getContext("2d");
 		if (!ctx) return null;
-		const sheet: Page = { id: page.id, width: page.width, height: page.height, paper: { kind: "blank", spacing: page.paper.spacing }, strokes, elements: [] };
+		// 0.29 (#10, review fix T6): the page's study tapes go over the heading, covering what they cover on the page.
+		const sheet: Page = { id: page.id, width: page.width, height: page.height, paper: { kind: "blank", spacing: page.paper.spacing }, strokes, elements: tapesOf(page) };
 		drawPageRaster(ctx, sheet, scale, { background: null, images: new Map(), region: rect });
 		return canvas.toDataURL("image/png");
 	} catch (e) {

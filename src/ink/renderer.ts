@@ -1114,8 +1114,9 @@ export class Renderer {
 				}
 				// v8 marker badges go above the ink, so they stay visible and tappable.
 				if (!bare && page.elements?.length) this.drawMarkers(ctx, page);
-				// v27 (#10): study tapes above everything else on the page.
-				if (!bare && page.elements?.length) this.drawTapes(ctx, page);
+				// v27 (#10): study tapes above everything else on the page. Review fix (T5): also with the annotations hidden on a PDF page (reading
+				// mode), where they cover answers on the slide itself.
+				if (page.elements?.length) this.drawTapes(ctx, page);
 			} finally {
 				ctx.restore();
 			}
@@ -1328,10 +1329,10 @@ export class Renderer {
 			const box = boxes[sel.pageIndex]!;
 			// A selection across pages floats over the gaps between them, so nothing is clipped to its page.
 			const clip = !sel.parts || sel.parts.length === 0;
-			this.drawSelectedItems(ctx, box, sel.strokes, sel.elements, sel.matrix, clip);
+			this.drawSelectedItems(ctx, box, sel.pageIndex, sel.strokes, sel.elements, sel.matrix, clip);
 			for (const part of sel.parts ?? []) {
 				const partBox = boxes[part.pageIndex];
-				if (partBox) this.drawSelectedItems(ctx, partBox, part.strokes, part.elements, partMatrix(sel.matrix, part.offset[0], part.offset[1]), false);
+				if (partBox) this.drawSelectedItems(ctx, partBox, part.pageIndex, part.strokes, part.elements, partMatrix(sel.matrix, part.offset[0], part.offset[1]), false);
 			}
 			this.drawSelectionFrame(ctx, box, sel);
 		});
@@ -1342,10 +1343,12 @@ export class Renderer {
 			for (const e of preview) {
 				const box = boxes[e.pageIndex];
 				if (!box) continue;
-				if (e.elements.length > 0) {
+				const m = translate(0, e.dy);
+				// v27 (#10, review fix T6): study tapes go last (drawTapesOver below), above the shifted ink.
+				const others = e.elements.filter((el) => el.type !== "tape");
+				if (others.length > 0) {
 					this.beginPage(ctx, box);
-					const m = translate(0, e.dy);
-					for (const el of e.elements) {
+					for (const el of others) {
 						const moved = transformElement(el, m, measureText);
 						drawElement(ctx, moved, this.elementImage(moved), this.boxLabel, this.equationNumbers());
 					}
@@ -1365,6 +1368,7 @@ export class Renderer {
 					this.fillStroke(ctx, stroke);
 				}
 				ctx.restore();
+				this.drawTapesOver(ctx, box, true, e.pageIndex, e.elements, m, e.strokes.length > 0 || others.length > 0);
 			}
 		});
 
@@ -1506,17 +1510,19 @@ export class Renderer {
 		ctx.restore();
 	}
 
-	/** Selected elements (under the ink, as they will be once committed: a text box cannot rotate) and strokes, with `matrix` applied. */
+	/**
+	 * Selected elements (under the ink, as they will be once committed: a text box cannot rotate) and strokes, with `matrix` applied. v27 (#10):
+	 * then the study tapes over them (see drawTapesOver), so covered ink in a selection stays covered.
+	 */
 	private drawSelectedItems(
-		ctx: CanvasRenderingContext2D, box: PageBox, strokes: readonly Stroke[], elements: readonly PageElement[], matrix: Matrix, clip: boolean,
+		ctx: CanvasRenderingContext2D, box: PageBox, pageIndex: number, strokes: readonly Stroke[], elements: readonly PageElement[], matrix: Matrix, clip: boolean,
 	): void {
-		if (elements.length > 0) {
+		const others = elements.filter((el) => el.type !== "tape");
+		if (others.length > 0) {
 			this.beginPage(ctx, box, clip);
-			for (const el of elements) {
+			for (const el of others) {
 				const moved = transformElement(el, matrix, measureText);
-				// v27 (#10): a selected study tape keeps the look it has in the view (hidden or revealed).
-				if (moved.type === "tape") this.guarded(ctx, "tape element", () => drawTape(ctx, moved, { revealed: this.tapeReveal?.isRevealed(moved.id) ?? false, night: this.night, scale: this.viewport.scale }));
-				else drawElement(ctx, moved, this.elementImage(moved), this.boxLabel, this.equationNumbers());
+				drawElement(ctx, moved, this.elementImage(moved), this.boxLabel, this.equationNumbers());
 			}
 			ctx.restore();
 		}
@@ -1524,6 +1530,29 @@ export class Renderer {
 		const [a, b, c, d, e, f] = matrix;
 		ctx.transform(a, b, c, d, e, f);
 		for (const stroke of strokes) this.fillStroke(ctx, stroke);
+		ctx.restore();
+		this.drawTapesOver(ctx, box, clip, pageIndex, elements, matrix, strokes.length > 0 || others.length > 0);
+	}
+
+	/**
+	 * v27 (#10, review fix T6): study tapes on the live layer, above ink and elements that left the static layer (a selection, the space preview):
+	 * the `moving` tapes with `m`, in the look they have on this screen, then (when `under` says something moved below them) the page's other
+	 * hidden tapes where they are, so nothing a tape hides shows above it while it moves.
+	 */
+	private drawTapesOver(
+		ctx: CanvasRenderingContext2D, box: PageBox, clip: boolean, pageIndex: number, moving: readonly PageElement[], m: Matrix, under: boolean,
+	): void {
+		const mine = moving.filter((el): el is TapeElement => el.type === "tape");
+		const still = under
+			? (this.pages[pageIndex]?.elements ?? []).filter((el): el is TapeElement => el.type === "tape" && !moving.includes(el) && !this.tapeReveal?.isRevealed(el.id))
+			: [];
+		if (mine.length === 0 && still.length === 0) return;
+		this.beginPage(ctx, box, clip);
+		for (const el of mine) {
+			const moved = transformElement(el, m, measureText);
+			if (moved.type === "tape") this.guarded(ctx, "tape element", () => drawTape(ctx, moved, { revealed: this.tapeReveal?.isRevealed(moved.id) ?? false, night: this.night, scale: this.viewport.scale }));
+		}
+		for (const el of still) this.guarded(ctx, "tape element", () => drawTape(ctx, el, { night: this.night, scale: this.viewport.scale }));
 		ctx.restore();
 	}
 
