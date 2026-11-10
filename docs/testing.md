@@ -5157,7 +5157,7 @@ Update to 0.30 and fully close and reopen Obsidian. Use a vault with a notebook 
 | An id above a card that exists counts as taken (follow-up / branch never adopt a deleted card's descendants) | yes | `tests/zettel-sequence.test.ts` | | | |
 | Follow-up / branch on a page that is already a card adds a new page for the new card (on Create only) | yes | | | | needs the open notebook view; not checked outside Obsidian |
 | A page being given a card is held while its dialog is open and checked again before writing (no second page card) | yes | | | | not checked outside Obsidian |
-| The page added for a follow-up / branch card is found by id when the write runs; a failed write keeps it with a notice (Undo removes it) and leaves it new, so a slip-box gives it a card at the next save; own notice for a failed origin link (review R5, R6) | yes | `tests/zettel-link-suggest.test.ts` (texts only) | | | the service path is not covered by an automated test (it needs Obsidian's vault and an open notebook view) |
+| The page added for a follow-up / branch card is found by id when the write runs, in the notebook as it is then ("page gone" notice otherwise, review T7); a failed write keeps it with a notice (Undo removes it) and leaves it new, so a slip-box gives it a card at the next save, which the notice says in a slip-box notebook (review T6); own notice for a failed origin link (review R5, R6) | yes | `tests/zettel-link-suggest.test.ts` (texts only) | | | the service path is not covered by an automated test (it needs Obsidian's vault and an open notebook view) |
 | On-page sequence strip | no | | | | not built; the dialog and commands cover navigation |
 
 ### 0.30 — linksuggest: link suggestions while creating a card, roadmap Z5 (steps 3620-3639)

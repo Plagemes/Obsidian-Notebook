@@ -6007,6 +6007,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"sequence.cannotAddPage": "Questo quaderno non può essere modificato ora, quindi non è stato possibile aggiungere una pagina per la nuova scheda.",
 	"sequence.linkFailed": "La scheda è stata creata, ma non è stato possibile collegarla alla scheda {origin} (forse è stata eliminata nel frattempo).",
 	"sequence.pageKept": "Non è stato possibile scrivere la scheda ({error}). La pagina aggiunta per lei è rimasta: Annulla la rimuove.",
+	"sequence.pageKeptSlipBox": "Non è stato possibile scrivere la scheda ({error}). La pagina aggiunta per lei è rimasta e riceverà una scheda semplice al prossimo salvataggio: Annulla la rimuove.",
 	"sequence.pageHasCard": "Questa pagina è già la scheda {id}.",
 	"sequence.noOrigin": "Questo quaderno non ha ancora una scheda numerata da continuare. Prima crea una scheda da questa pagina.",
 	"sequence.kind.followUp": "seguito",

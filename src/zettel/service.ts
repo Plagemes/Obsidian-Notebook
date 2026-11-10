@@ -532,31 +532,36 @@ export class ZettelService implements OverlaySource {
 			}
 			void this.enqueue(async () => {
 				try {
-					// Review R5: the page is found by its id when the task runs (the pages may have moved while it waited in the queue).
-					const index = pageId === undefined ? -1 : targetDoc.pages.findIndex((p) => p.id === pageId);
-					const pageNow = targetDoc.pages[index];
+					// Review R5, T7: the page is found by its id when the task runs, in the document as it is now (the pages may have
+					// moved, and the view may have reloaded the notebook, while the dialog was open or the task waited in the queue).
+					const current = await this.readDocument(file).catch(() => null);
+					const docNow = current ?? targetDoc;
+					const index = pageId === undefined || docNow.id !== targetDoc.id ? -1 : docNow.pages.findIndex((p) => p.id === pageId);
+					const pageNow = docNow.pages[index];
 					if (!pageNow) {
 						new Notice(t("zettel.pageGone"));
 						return;
 					}
 					// Review Z2: the page may have got its card while the dialog was open (sync, another dialog).
-					const existing = !region ? this.cardsOfFile(file, targetDoc.id).find((c) => c.pageId === pageNow.id && !c.region) : undefined;
+					const existing = !region ? this.cardsOfFile(file, docNow.id).find((c) => c.pageId === pageNow.id && !c.region) : undefined;
 					if (existing) {
 						new Notice(t("sequence.pageHasCard", { id: existing.id }));
 						return;
 					}
 					let note: TFile;
 					try {
-						note = await this.writeCard(file, targetDoc, index, region, answer, undefined, sequence);
+						note = await this.writeCard(file, docNow, index, region, answer, undefined, sequence);
 					} catch (e) {
 						if (addedId === null) throw e;
 						// Review R5: the page added for the card stays (nothing is deleted behind the person's back) and stays "new", so in a
-						// slip-box notebook the next save gives it a card of its own; Undo removes it. Said once, with the reason.
-						new Notice(t("sequence.pageKept", { error: e instanceof Error ? e.message : String(e) }), 8000);
+						// slip-box notebook the next save gives it a card of its own (review T6: the notice says so); Undo removes it. Said
+						// once, with the reason.
+						const kept = this.settings.zettelSlipBoxes.includes(docNow.id) ? "sequence.pageKeptSlipBox" : "sequence.pageKept";
+						new Notice(t(kept, { error: e instanceof Error ? e.message : String(e) }), 8000);
 						return;
 					}
 					// Only now is the added page done: the slip-box leaves it alone from here on.
-					if (addedId !== null) this.localPages.know(targetDoc.id, [addedId]);
+					if (addedId !== null) this.localPages.know(docNow.id, [addedId]);
 					if (!sequence) {
 						new Notice(t("zettel.created", { name: note.basename }));
 						await this.linkChosen(note, answer.links);

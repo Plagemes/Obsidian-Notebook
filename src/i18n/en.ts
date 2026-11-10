@@ -6006,6 +6006,7 @@ export const en = {
 	"sequence.cannotAddPage": "This notebook cannot be edited now, so no page could be added for the new card.",
 	"sequence.linkFailed": "The card was created, but it could not be linked to card {origin} (it may have been deleted meanwhile).",
 	"sequence.pageKept": "The card could not be written ({error}). The page added for it was kept: Undo removes it.",
+	"sequence.pageKeptSlipBox": "The card could not be written ({error}). The page added for it was kept and gets a plain card at the next save: Undo removes it.",
 	"sequence.pageHasCard": "This page is already card {id}.",
 	"sequence.noOrigin": "This notebook has no numbered card to continue yet. Make a card from this page first.",
 	"sequence.kind.followUp": "follow-up",
