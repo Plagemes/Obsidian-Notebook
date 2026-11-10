@@ -128,7 +128,8 @@ export async function checkCharts(api: ChartsCheckApi): Promise<{ ok: boolean; r
 	const dlg = await waitFor(".nb-chart-dialog");
 	add("Chart from table opens the dialog", !!dlg);
 	if (!dlg) return { ok: false, results, errors: api.errors, notices: api.notices, env: {} };
-	add("it asks the type, a title, the first colour and the size", dlg.querySelectorAll(".nb-chart-seg").length === 2 && dlg.querySelectorAll(".nb-chart-seg")[0]!.querySelectorAll("button").length === 3 && dlg.querySelectorAll(".nb-chart-swatch").length === 8 && !!dlg.querySelector("#nb-chart-title"));
+	// 0.30 chartreg adds a third segmented control (the trend line, inside .nb-chart-trend, shown for line charts only): not counted here
+	add("it asks the type, a title, the first colour and the size", Array.from(dlg.querySelectorAll(".nb-chart-seg")).filter((e) => !e.closest(".nb-chart-trend")).length === 2 &&dlg.querySelectorAll(".nb-chart-seg")[0]!.querySelectorAll("button").length === 3 && dlg.querySelectorAll(".nb-chart-swatch").length === 8 && !!dlg.querySelector("#nb-chart-title"));
 	add("it shows a picture of the chart and what was read", dlg.querySelectorAll(".nb-chart-preview-svg polygon").length >= 5 && /: 6 /.test(dlg.querySelector(".nb-chart-notes")?.textContent ?? ""), dlg.querySelector(".nb-chart-notes")?.textContent ?? "");
 	const kinds = dlg.querySelectorAll<HTMLElement>(".nb-chart-seg")[0]!.querySelectorAll("button");
 	const bars = dlg.querySelectorAll(".nb-chart-preview-svg polygon").length;
