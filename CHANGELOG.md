@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### flowchart
+- **Hand-drawn flowcharts that tidy themselves (#245).** *Tidy flowchart* (All actions › Selection, command palette) on a selection of hand-drawn boxes and arrows: closed strokes are read as rectangles, diamonds and ellipses, arrows (one stroke, or a line with a small V at its end) that start and end on two different boxes become connectors. The boxes are lined up in columns and rows, the gaps between neighbours are evened out, the first box lands on the grid, and every connector is drawn again, straight, from outline to outline (touching the curve of an ellipse or the point of a diamond, not an invisible box around it). The writing, text boxes and equations inside a box move with it; writing within about 22 pt of an arrow and outside every box (a "yes" or a "no") follows the middle of that arrow; any other writing stays.
+- **Boxes keep their ink.** A box is only moved: its strokes keep their points, pressure, pen and style. Only a connector is replaced, by a clean shape stroke with the same colour, width and group; one already clean and untouched stays. Tidying a tidy chart does nothing.
+- **One undo step, nothing new in the file.** The step is made of the existing stroke and element commands (`src/ink/flowchart.ts`, `src/ink/flowchart-layout.ts`, `src/view/flowchart-tools.ts`), so there is no format change and per-page undo treats it as a single-page step.
+- **Fails closed.** It moves nothing when a moved or redrawn item touches a redaction box before or after the move (or the boxes cannot be read), touches a study tape, would leave the page, or when the boxes are too tangled to place (a box inside a box of a similar size, two boxes in one cell). Hidden ink, locked text boxes and ink of drawing-state parts are never touched. A selection across pages is not tidied.
+- **Limits.** Connectors are straight (no right-angle elbows); text is moved, not read (there is no handwriting recognition); a box has to be one closed stroke.
+
 ## 0.29.0 — 2026-11-11
 
 Seven roadmap features: study tape (#10), charts from table data (#244), figure captions and numbering (#248), an advanced calculator (#182), strike-through as logical deletion (#96), Zettelkasten card templates (Z9) and Zettelkasten hygiene (Z10), plus table statistics (part of #295, still partial: no chart regression line) and redaction hardening for undo and redo, page geometry and merges. The notebook format moves to version 27 (study tape): the migration from version 26 is automatic, and Notebook 0.28 and older open a v27 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).

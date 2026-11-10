@@ -478,7 +478,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 242. **P2** Dynamic geometry: points and figures linked by constraints that update when you drag one (a lightweight GeoGebra inside the page).
 243. **P2** Scale drawing with dimensions: set the scale (1 cm = 1 m) and measurements and dimension lines show real sizes.
 244. **P2** 🧪 Charts from table data (bar, line, pie), updated when the numbers change. (0.29: *Chart from table* on a selected hand-drawn table, then *Update chart* on the selected chart redraws it in place in one undo step; the chart is ordinary shape strokes and text boxes, no format change; the numbers are read from text boxes typed in the cells, handwriting is not read; the update is explicit, not automatic.)
-245. **P2** Hand-drawn flowcharts that tidy themselves: boxes and arrows recognised, aligned and connected.
+245. **P2** 🧪 Hand-drawn flowcharts that tidy themselves: boxes and arrows recognised, aligned and connected. (0.30: *Tidy flowchart* on a selection reads closed strokes as rectangles, diamonds and ellipses and arrows between them, lines the boxes up in rows and columns with equal gaps, moves the writing inside each box along and draws the arrows again from outline to outline in one undo step; boxes keep their strokes, connectors are straight, text is moved not read, no format change.)
 246. **P2** Leader-line labels, auto-aligned, for annotated figures (anatomy, diagrams).
 247. **P2** Numbered markers on a figure (1, 2, 3) with an automatically generated legend.
 248. **P2** 🧪 Figure captions and numbering ("Fig. 3") with references that update themselves.
