@@ -24,6 +24,12 @@ export interface SectionsApi {
 	remove(id: string): boolean;
 	/** Shows the first page of a section. */
 	go(id: string): boolean;
+	/** The list holds the most sections it can (those that show nowhere count too). */
+	isFull(): boolean;
+	/** How many sections show nowhere (their page is gone). */
+	hiddenCount(): number;
+	/** Removes the sections that show nowhere, as one undo step. */
+	removeHidden(): boolean;
 }
 
 const COLOUR_NAMES: Readonly<Record<SubjectColor["name"], MessageKey>> = {
@@ -62,9 +68,18 @@ export class SectionsModal extends Modal {
 			const add = shellButton(shell.body, "primary", t("sections.new.button", { page: String(index + 1) }), () => {
 				this.close();
 				this.api.create(index);
-			}, { icon: "plus", disabled: starts || rows.length >= SECTIONS_MAX });
+			}, { icon: "plus", disabled: starts || this.api.isFull() });
 			add.addClass("nb-sections-new");
 			if (starts) shellNote(shell.body, t("sections.new.already", { title: here.section.title }));
+			else if (this.api.isFull()) shellNote(shell.body, t("sections.notice.full", { max: String(SECTIONS_MAX) }));
+			// Review S4: sections whose page is gone show nowhere but count toward the limit: say so and offer to remove them.
+			const hidden = this.api.hiddenCount();
+			if (hidden > 0) {
+				shellNote(shell.body, t("sections.hidden.note", { count: String(hidden) }));
+				shellButton(shell.body, "secondary", t("sections.hidden.remove", { count: String(hidden) }), () => {
+					if (this.api.removeHidden()) this.render();
+				}, { icon: "eraser" }).addClass("nb-sections-hidden-remove");
+			}
 		} else {
 			shellNote(shell.body, t("sections.readOnly"));
 		}

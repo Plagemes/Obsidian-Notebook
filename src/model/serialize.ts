@@ -789,7 +789,7 @@ function readView(v: unknown, path: string, drop: Dropped | null): SavedView {
 /**
  * v28 sections: an array of { id, title, color, page }. Read leniently, an invalid entry (a repeated id, a bad colour, a second section on a
  * page that already starts one, an entry past the limit) is dropped and counted, a title that is not in its stored form is kept in that form
- * and counted, and unknown keys of an entry are ignored; the other sections stay. A section that names a page the notebook does not have is
+ * and counted, and unknown keys of an entry are left out and counted (review S3: the writer does not keep them); the other sections stay. A section that names a page the notebook does not have is
  * valid (it is dormant). Strict (`drop` null): any of those fails.
  */
 export function readSections(v: unknown, drop: Dropped | null): Section[] {
@@ -833,8 +833,14 @@ function readSection(v: unknown, path: string, drop: Dropped | null): Section {
 	}
 	const color = colour(v.color, `${path}.color`);
 	const page = boundedId(v.page, `${path}.page`, SECTION_PAGE_ID_MAX);
+	// Review S3: the writer does not keep keys it does not know; read leniently they are counted as dropped, so a backup of the file is
+	// kept before the first save loses them (a strict read ignores them: the in-memory section never has any).
+	if (drop && Object.keys(v).some((k) => !SECTION_KEYS.has(k))) drop.count++;
 	return Object.freeze({ id, title, color, page });
 }
+
+/** The keys of a stored section (v28). */
+const SECTION_KEYS: ReadonlySet<string> = new Set(["id", "title", "color", "page"]);
 
 /** v13: a number of a pose, finite and within `[lo, hi]`. */
 function poseNumber(v: unknown, path: string, lo: number, hi: number): number {

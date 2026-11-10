@@ -4474,6 +4474,8 @@ export const en = {
 	"merge.summary.viewsFull": "{count} saved views of the copy were not added: this notebook already keeps the most. The copy stays where it is",
 	// 0.30 sections
 	"merge.summary.sections": "{count} sections added",
+	"merge.summary.sectionsDiffer": "{count} sections differ in the copy (renamed, recoloured or on a page where this notebook already starts one): this notebook's are kept; the copy's versions stay in the copy",
+	"merge.summary.sectionsFull": "{count} sections of the copy were not added: this notebook already has the most. The copy stays where it is",
 	"histpanel.t.sections": "Sections changed",
 	"sections.title": "Sections",
 	"sections.subtitle": "Coloured dividers that split the notebook, like the tabs of a binder.",
@@ -4532,6 +4534,11 @@ export const en = {
 	"sections.notice.last": "This is the last section.",
 	"sections.notice.first": "This is the first section.",
 	"sections.notice.readOnly": "This notebook is read-only: sections cannot be changed now.",
+	"sections.notice.fullHidden": "This notebook already has {max} sections, the most it can keep; {count} of them start at pages it no longer has. Remove those from the Sections list to make room.",
+	"sections.notice.hiddenRemoved": "{count} sections without a page removed. Undo brings them back.",
+	"sections.notice.pageGone": "That page is no longer in the notebook: no section was made.",
+	"sections.hidden.note": "{count} sections start at pages this notebook no longer has: they show nowhere but still count toward the limit.",
+	"sections.hidden.remove": "Remove sections without a page ({count})",
 	// 0.23 exportarea
 	"exportArea.menu": "Export written area…",
 	"command.exportArea": "Export the written area as a transparent picture…",

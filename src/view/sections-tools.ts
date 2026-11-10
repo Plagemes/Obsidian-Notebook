@@ -5,7 +5,7 @@ import { setIcon, type App } from "obsidian";
 import { t } from "../i18n";
 import type { Command } from "../model/history";
 import {
-	makeSection, resolveSections, sectionAtIndex, sectionsOf, sectionStartingAt, setSections, withSectionAdded, withSectionRecoloured, withSectionRemoved,
+	hiddenSections, makeSection, resolveSections, sectionAtIndex, sectionsOf, sectionStartingAt, setSections, withSectionAdded, withSectionRecoloured, withSectionRemoved,
 	withSectionRenamed, type ResolvedSection,
 } from "../model/sections";
 import { SECTIONS_MAX, type NotebookDocument, type Section } from "../model/types";
@@ -110,6 +110,32 @@ export class SectionTools implements SectionsApi, NavigatorSections {
 		new SectionsModal(this.host.app, this).open();
 	}
 
+	/**
+	 * Whether the list is full (review S4): every stored section counts, those that show nowhere included, because the file keeps them all.
+	 * The *New section* button and `create` use this one count.
+	 */
+	isFull(): boolean {
+		const doc = this.host.doc();
+		return !!doc && sectionsOf(doc).length >= SECTIONS_MAX;
+	}
+
+	/** How many sections show nowhere (their page is gone, or another section starts at it): they still count toward the limit. */
+	hiddenCount(): number {
+		const doc = this.host.doc();
+		return doc ? hiddenSections(doc.pages, sectionsOf(doc)).length : 0;
+	}
+
+	/** Removes every section that shows nowhere, as one undo step (review S4). */
+	removeHidden(): boolean {
+		const doc = this.edit();
+		if (!doc) return false;
+		const hidden = new Set(hiddenSections(doc.pages, sectionsOf(doc)));
+		if (hidden.size === 0) return false;
+		if (!this.run(doc, sectionsOf(doc).filter((s) => !hidden.has(s)), "Remove hidden sections")) return false;
+		showNotice(t("sections.notice.hiddenRemoved", { count: String(hidden.size) }), 4000);
+		return true;
+	}
+
 	/** Starts a new section at page `index` (asks for the title and colour first). */
 	create(index: number = this.host.current()): void {
 		const doc = this.edit();
@@ -122,25 +148,36 @@ export class SectionTools implements SectionsApi, NavigatorSections {
 			this.editSection(there.id, "title");
 			return;
 		}
-		if (sectionsOf(doc).length >= SECTIONS_MAX) {
-			showNotice(t("sections.notice.full", { max: String(SECTIONS_MAX) }), 6000);
+		if (this.isFull()) {
+			const hidden = this.hiddenCount();
+			showNotice(hidden > 0 ? t("sections.notice.fullHidden", { max: String(SECTIONS_MAX), count: String(hidden) }) : t("sections.notice.full", { max: String(SECTIONS_MAX) }), 6000);
 			return;
 		}
 		const list = sectionsOf(doc);
+		// Review S6: the dialog keeps the page id, not its index (the page list may change while it is open).
+		const pageId = page.id;
 		new SectionEditModal(this.host.app, {
 			mode: "new",
 			title: t("sections.defaultTitle", { n: String(this.resolved().length + 1) }),
 			color: nextSectionColor(list),
 			page: index + 1,
 			focus: "title",
-		}, (title, color) => this.add(index, title, color)).open();
+		}, (title, color) => this.add(pageId, title, color)).open();
 	}
 
-	/** Adds a section at page `index` now (the dialog's save). */
-	add(index: number, title: string, color: string): boolean {
+	/**
+	 * Adds a section at the page with id `pageId` now (the dialog's save). When the notebook no longer has that page (a sync reload, a merge
+	 * or a move from another pane while the dialog was open), it says so and makes nothing; true closes the dialog all the same.
+	 */
+	add(pageId: string, title: string, color: string): boolean {
 		const doc = this.edit();
-		const page = doc?.pages[index];
-		if (!doc || !page) return false;
+		if (!doc) return false;
+		const index = doc.pages.findIndex((p) => p.id === pageId);
+		const page = doc.pages[index];
+		if (!page) {
+			showNotice(t("sections.notice.pageGone"), 5000);
+			return true;
+		}
 		const list = sectionsOf(doc);
 		const made = makeSection({ title, color, page: page.id }, new Set(list.map((s) => s.id)));
 		if (!made) {

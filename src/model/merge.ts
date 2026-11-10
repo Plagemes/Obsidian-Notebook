@@ -67,7 +67,7 @@ import { exemptFromLocks, SetPageLocked } from "./page-lock";
 import { mergedTimes, pageTimes, putPageTimes, sameTimes, SetPageTimes } from "./page-times";
 import { slideMerger } from "./slide-links";
 import { mergedViews, SetViews, viewsMergeReport, viewsOf } from "./views";
-import { mergedSections, sectionsOf, SetSections } from "./sections";
+import { mergedSections, sectionsMergeReport, sectionsOf, SetSections } from "./sections";
 import { remapStates, SetPageStates } from "./states";
 import { boxBounds, markerBounds } from "./markers";
 import { stableStringify } from "./math-elements";
@@ -130,6 +130,13 @@ export interface MergeSummary {
 	viewsFull: number;
 	/** v28: sections of the copy the main notebook does not have (by id) whose page the result has and starts no section of the main notebook, added. */
 	sectionsAdded: number;
+	/**
+	 * v28 (review S2): sections of the copy on pages the result has that the main notebook keeps its own version of (the same id with another
+	 * title, colour or page, or another section where the main notebook already starts one; the copy's are only in the copy). Not a change to merge.
+	 */
+	sectionsDiffer: number;
+	/** v28 (review S8): sections of the copy that were not added because the main notebook already has the most (the copy stays in place). Not a change to merge. */
+	sectionsFull: number;
 }
 
 export interface MergePlan {
@@ -347,7 +354,7 @@ function carriedInk(e: PageElement, strokeMap: ReadonlyMap<string, string>, adde
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0, timesUpdated: 0, viewsAdded: 0, viewsDiffer: 0, viewsFull: 0, sectionsAdded: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0, timesUpdated: 0, viewsAdded: 0, viewsDiffer: 0, viewsFull: 0, sectionsAdded: 0, sectionsDiffer: 0, sectionsFull: 0,
 	};
 	const commands: Command[] = [];
 	// v12: the copy's slide ids in the main notebook's table.
@@ -715,6 +722,9 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 	// v28: the sections of the copy the main notebook lacks (by id), on pages the result has that start no section of the main notebook.
 	const mainSections = sectionsOf(main);
 	const unitedSections = mergedSections(mainSections, sectionsOf(other), viewPages);
+	const sectionReport = sectionsMergeReport(mainSections, sectionsOf(other), unitedSections, viewPages);
+	summary.sectionsDiffer = sectionReport.differ;
+	summary.sectionsFull = sectionReport.full;
 	if (unitedSections !== mainSections) {
 		summary.sectionsAdded = unitedSections.length - mainSections.length;
 		commands.push(new SetSections(mainSections, unitedSections, "Merge sections"));
