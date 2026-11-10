@@ -20,7 +20,7 @@ import type { EditContext } from "../view/edit-context";
 import { collectPageImages, freePath } from "../view/export";
 import { withRedaction } from "../view/export-redact";
 import { loadRedactState } from "../ui/redact-store";
-import { isArmed } from "../model/redact";
+import { isArmed, staleRedactionPages } from "../model/redact";
 import { NotebookMedia, storeAsset } from "../view/media";
 import { t } from "../i18n";
 import { validPageId } from "../zettel/subpath";
@@ -469,6 +469,10 @@ class NotebookApiImpl implements NotebookApi {
 		const stored = loadRedactState(this.app, doc.id);
 		if (stored.unreadable) {
 			throw new NotebookApiError("export-failed", `The redaction boxes of "${f.path}" could not be read on this device, so no PDF was written. Open the notebook, Export… › Redact… and press Done to set them again.`, { path: f.path });
+		}
+		// 0.28 (#76): boxes drawn before a page was turned or cropped are in the wrong place: no PDF is written.
+		if (isArmed(stored) && staleRedactionPages(doc.pages, stored.boxes).length > 0) {
+			throw new NotebookApiError("export-failed", `A page of "${f.path}" was turned or cropped after its redaction boxes were drawn, so no PDF was written. Open the notebook, Export… › Redact… and draw those boxes again.`, { path: f.path });
 		}
 		// Review fix (U1): the set knows the notebook's id, so every excerpt of it (also of a page since deleted) is left out.
 		const { pages } = withRedaction(doc.pages, isArmed(stored) ? { redact: withExcerptChains(doc.pages, stored.boxes, doc.id) ?? stored.boxes } : {});

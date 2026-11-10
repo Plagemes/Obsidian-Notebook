@@ -110,10 +110,10 @@ import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
 import { SharePageModal, type ShareHost } from "./share-page"; // 0.20 (#30)
 import { exportPdf, runExport, type ExportOptions } from "./export";
-import { announceRedactionOff, redactionRefused, withRedaction } from "./export-redact"; // 0.26 redact (#285)
+import { announceRedactionOff, redactBlockedMessage, redactionRefused, withRedaction } from "./export-redact"; // 0.26 redact (#285)
 import { RedactModal } from "./redact-dialog";
 import { loadRedactState, resetRedactStorage, saveRedactState, takeRedactStoreNotice } from "../ui/redact-store";
-import { countBoxes, isArmed, type RedactState } from "../model/redact";
+import { boxesOf, countBoxes, isArmed, staleRedactionPages, tagNewBoxes, type RedactState } from "../model/redact";
 import { elementKept, headerAfterRedaction, withExcerptChains } from "../ink/redact";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
@@ -2672,7 +2672,8 @@ export class NotebookView extends FileView {
 			// Review fix (R3): boxes drawn again after an unreadable state are applied (the switch was not readable either).
 			commit: (boxes) => {
 				const now = this.redactState();
-				this.saveRedact({ on: now.unreadable === true ? countBoxes(boxes) > 0 : now.on, boxes });
+				// 0.28 (#76): the boxes drawn now remember the turn and crop of their page (see model/redact.ts).
+				this.saveRedact({ on: now.unreadable === true ? countBoxes(boxes) > 0 : now.on, boxes: tagNewBoxes(boxes, opened.boxes, this.renderPagesOf(doc)) });
 			},
 			...(opened.unreadable ? { unreadable: true, reset: () => this.resetRedactStorage() } : {}),
 			closed,
@@ -2876,7 +2877,7 @@ export class NotebookView extends FileView {
 			},
 			copyRefused: (entry) => {
 				const options = this.redactOptions();
-				if (options.redactBlocked) return t("redact.unreadable");
+				if (options.redactBlocked) return redactBlockedMessage(options);
 				if (!options.redact) return null;
 				// Review fix (R1): refused unless the figure is still there on the page as an export draws it (a picture under or near a
 				// box, an excerpt whose source region is covered on any page, at any depth). A page that cannot be found is refused.
@@ -3115,7 +3116,7 @@ export class NotebookView extends FileView {
 	 * 0.26 (#285): the redaction part of the export options: the boxes of this notebook when the reader has them switched on (every writer
 	 * applies them to its pages). Review fixes: boxes that cannot be read make every writer refuse (P4); boxes kept switched off give a hint (P10).
 	 */
-	private redactOptions(): Pick<ExportOptions, "redact" | "redactBlocked" | "redactOff"> {
+	private redactOptions(): Pick<ExportOptions, "redact" | "redactBlocked" | "redactStale" | "redactOff"> {
 		const stored = this.redactState();
 		if (stored.unreadable) {
 			// Review fix (R3): the first time in a session, one notice says what happened and what to do (the refusals point there too).
@@ -3126,6 +3127,9 @@ export class NotebookView extends FileView {
 		}
 		// Review fix (R5): the chains of excerpts are found over the whole notebook once, so a writer given one page still knows them.
 		const doc = this.session?.doc;
+		// 0.28 (#76), fail closed: a page turned or cropped after its boxes were drawn (an undo of a turn, a copy from another device) has its
+		// boxes in the wrong place: every writer refuses until the boxes are drawn again.
+		if (isArmed(stored) && doc && staleRedactionPages(doc.pages, stored.boxes).length > 0) return { redactBlocked: true, redactStale: true };
 		if (isArmed(stored)) return { redact: (doc ? withExcerptChains(doc.pages, stored.boxes, doc.id) : undefined) ?? stored.boxes };
 		const off = countBoxes(stored.boxes);
 		return off > 0 ? { redactOff: off } : {};
@@ -4634,6 +4638,11 @@ export class NotebookView extends FileView {
 		return {
 			app: this.app, file, doc, media, folder: this.host.settings.folder,
 			editable: () => this.stillHere(session) && session.doc === doc,
+			// 0.28 (#76): a page with redaction boxes (switched on or off; or boxes that cannot be read) is never turned or cropped: its boxes would stay where the old page was.
+			hasRedaction: (pageId) => {
+				const stored = this.redactState();
+				return stored.unreadable === true || boxesOf(stored.boxes, pageId).length > 0;
+			},
 			run: (cmd, scrollTo) => {
 				if (!this.stillHere(session) || session.doc !== doc) return false;
 				this.commitText();

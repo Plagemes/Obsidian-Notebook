@@ -10,7 +10,7 @@ import { apply, isIdentity, translate, type Matrix } from "../ink/transform";
 import { findPage } from "./document";
 import { transformComments } from "./comments";
 import { swapItem, type Command, type ElementSwap } from "./history";
-import { planPdfView, type ContentBox, type PdfView, type PdfViewPlan } from "./pdf-view";
+import { planPdfView, type ContentBox, type PdfView, type PdfViewPlan, type PlacedItem } from "./pdf-view";
 import { freezeElement, freezeStroke } from "./serialize";
 import { transformStates } from "./states";
 import type { NotebookDocument, Page, PageBackground, PageComment, PageElement, PageMargins, PageStates, Stroke } from "./types";
@@ -32,7 +32,31 @@ export function pageContentBoxes(page: Page, measure: MeasureText = estimateMeas
 
 /** The plan of showing `next` of the PDF page (`source` pt) on `page`, with the page's items counted; null when the page has no PDF background. */
 export function planPageView(page: Page, source: { width: number; height: number }, next: PdfView | undefined, measure: MeasureText = estimateMeasure): PdfViewPlan | null {
-	return planPdfView(page, source, next, pageContentBoxes(page, measure));
+	// Two passes (review Q2): the first gives the matrix of the change, the second measures every item AS THE COMMAND WILL PLACE IT with that
+	// matrix (an item that keeps its orientation is not turned, so its turned bounds would be the wrong ones), then grows or refuses.
+	const first = planPdfView(page, source, next, []);
+	if (!first) return null;
+	return planPdfView(page, source, next, placedItems(page, first.matrix, measure));
+}
+
+/** Elements with no rotated form (and the excerpt, which shows a region of another page upright): they keep their size and orientation and only move. */
+const keepsOrientation = (e: PageElement): boolean => rotationKeepsOrientation(e) || e.type === "excerpt";
+
+/** Every stroke and element of `page` with the bounds it has now and the bounds it has once `m` is applied the way the command does. */
+export function placedItems(page: Page, m: Matrix, measure: MeasureText = estimateMeasure): PlacedItem[] {
+	const placement = pdfViewPlacement(page, m, measure);
+	const out: PlacedItem[] = [];
+	const box = (b: { minX: number; minY: number; maxX: number; maxY: number }): ContentBox => ({ minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY });
+	for (const [s, mat] of placement.strokes) {
+		if (s.points.length === 0) continue;
+		const old = box(strokeBounds(s));
+		out.push({ old, now: isIdentity(mat) ? old : box(strokeBounds(transformStroke(s, mat))) });
+	}
+	for (const [e, mat] of placement.elements) {
+		const old = box(elementBounds(e, measure));
+		out.push({ old, now: isIdentity(mat) ? old : box(elementBounds(transformElement(e, mat, measure), measure)) });
+	}
+	return out;
 }
 
 /**
@@ -46,7 +70,7 @@ export function pdfViewPlacement(page: Page, m: Matrix, measure: MeasureText = e
 	const owned = inkOwnership(page, [], elements, measure, true);
 	const moves = new Map<PageElement, Matrix>();
 	for (const e of elements) {
-		if (!rotationKeepsOrientation(e)) {
+		if (!keepsOrientation(e)) {
 			p.elements.set(e, m);
 			continue;
 		}
@@ -73,6 +97,8 @@ export class SetPdfView implements Command {
 	readonly label = "Rotate or crop PDF page";
 	private readonly moved = new Map<Stroke | PageElement, Stroke | PageElement>();
 	private readonly original = new Map<Stroke | PageElement, Stroke | PageElement>();
+	/** The matrix each stroke (by id) was carried by. */
+	private readonly strokeMatrix = new Map<string, Matrix>();
 	private previous: {
 		background: PageBackground | undefined; width: number; height: number; margins: PageMargins | undefined;
 		states: PageStates | undefined; comments: PageComment[] | undefined;
@@ -107,7 +133,8 @@ export class SetPdfView implements Command {
 		else delete page.margins;
 		if (!isIdentity(plan.matrix)) {
 			if (this.after === null) {
-				const states = page.states ? transformStates(page.states, plan.matrix) : undefined;
+				// A part's pivot and shifts move the way its strokes did (the ink written on a text box only moves with it: review Q11).
+				const states = page.states ? transformStates(page.states, plan.matrix, (part) => part.items.map((id) => this.strokeMatrix.get(id)).find((mat) => mat !== undefined)) : undefined;
 				const comments = page.comments ? transformComments(page.comments, plan.matrix, { width: plan.width, height: plan.height }) : undefined;
 				this.after = { states, comments };
 			}
@@ -119,6 +146,7 @@ export class SetPdfView implements Command {
 	private compute(page: Page): void {
 		const placement = pdfViewPlacement(page, this.plan.matrix, this.measure);
 		for (const [s, m] of placement.strokes) {
+			this.strokeMatrix.set(s.id, m);
 			if (isIdentity(m)) continue;
 			const next = freezeStroke(transformStroke(s, m));
 			this.moved.set(s, next);

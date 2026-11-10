@@ -337,19 +337,22 @@ export function shiftPivots(states: PageStates | undefined, dx: number, dy = 0):
  * every pivot goes where its strokes went and every pose's shift (`dx`, `dy`) turns with the page. A turn of the part about its pivot and its scale
  * are unchanged by a quarter turn of the whole page.
  */
-export function transformStates(states: PageStates | undefined, m: Matrix): PageStates | undefined {
-	if (!states || isIdentity(m) || (states.parts.length === 0 && states.list.length === 0)) return states;
-	const turn = (dx: number, dy: number): [number, number] => [round(m[0] * dx + m[2] * dy, 2), round(m[1] * dx + m[3] * dy, 2)];
+export function transformStates(states: PageStates | undefined, m: Matrix, matrixOf?: (part: StatePart) => Matrix | undefined): PageStates | undefined {
+	if (!states || (isIdentity(m) && !matrixOf) || (states.parts.length === 0 && states.list.length === 0)) return states;
+	// A part whose strokes were carried by another matrix than the page's (ink written on a text box only moves with the box: review Q11) takes that one.
+	const own = new Map<string, Matrix>();
+	for (const p of states.parts) own.set(p.id, matrixOf?.(p) ?? m);
+	const turn = (mat: Matrix, dx: number, dy: number): [number, number] => [round(mat[0] * dx + mat[2] * dy, 2), round(mat[1] * dx + mat[3] * dy, 2)];
 	return freeze({
 		parts: states.parts.map((p) => {
-			const [x, y] = apply(m, p.pivot[0], p.pivot[1]);
+			const [x, y] = apply(own.get(p.id) ?? m, p.pivot[0], p.pivot[1]);
 			return { ...p, pivot: [round(x, 2), round(y, 2)] as [number, number] };
 		}),
 		list: states.list.map((st) => ({
 			...st,
 			poses: st.poses.map((pose) => {
 				if (pose.dx === undefined && pose.dy === undefined) return pose;
-				const [dx, dy] = turn(pose.dx ?? 0, pose.dy ?? 0);
+				const [dx, dy] = turn(own.get(pose.part) ?? m, pose.dx ?? 0, pose.dy ?? 0);
 				const next: PartPose = { ...pose };
 				delete next.dx;
 				delete next.dy;

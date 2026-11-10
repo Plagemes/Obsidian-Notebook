@@ -91,6 +91,13 @@ export function effectiveCrop(view: PdfView | undefined, source: Size): PdfCrop 
 	return { x, y, width, height };
 }
 
+/** Whether a point of the PDF page (pt, scale 1) is part of what the view shows (always, without a crop). */
+export function pointInView(view: PdfView | undefined, source: Size, p: { x: number; y: number }): boolean {
+	if (!view?.crop) return true;
+	const c = effectiveCrop(view, source);
+	return p.x >= c.x && p.x <= c.x + c.width && p.y >= c.y && p.y <= c.y + c.height;
+}
+
 /** The size, pt at scale 1, of what the view shows (the crop turned: the sides swap for a quarter turn). */
 export function viewSize(view: PdfView | undefined, source: Size): Size {
 	const c = effectiveCrop(view, source);
@@ -178,7 +185,18 @@ export interface ContentBox {
 	maxY: number;
 }
 
-const roundMatrix = (m: Matrix): Matrix => [Math.round(m[0]), Math.round(m[1]), Math.round(m[2]), Math.round(m[3]), round2(m[4]), round2(m[5])];
+/**
+ * 0.28 review (Q2): an item with the bounds it has now and the bounds it will have once the change is made. The caller measures the second
+ * with the very placement the command uses (text, equations, graphs, sticky notes, checkboxes and excerpts keep their size and orientation
+ * and only move; ink turns; the ink written on them moves with them), so a plan never differs from what happens.
+ */
+export interface PlacedItem {
+	old: ContentBox;
+	now: ContentBox;
+}
+
+const round4 = (n: number): number => Math.round(n * 10000) / 10000;
+const roundMatrix = (m: Matrix): Matrix => [Math.round(m[0]), Math.round(m[1]), Math.round(m[2]), Math.round(m[3]), round4(m[4]), round4(m[5])];
 
 function applyBox(m: Matrix, b: ContentBox): ContentBox {
 	const r = mapRect(m, { x: b.minX, y: b.minY, width: b.maxX - b.minX, height: b.maxY - b.minY });
@@ -198,21 +216,26 @@ function applyBox(m: Matrix, b: ContentBox): ContentBox {
  * Items that would end up above the top edge cannot be kept (a page has no top margin): `above` counts them and the caller refuses the
  * change. Items that were wholly outside the page before are left alone. Null when `page` has no PDF background.
  */
-export function planPdfView(page: Pick<Page, "width" | "height" | "margins" | "background">, source: Size, next: PdfView | undefined, items: readonly ContentBox[] = []): PdfViewPlan | null {
+export function planPdfView(page: Pick<Page, "width" | "height" | "margins" | "background">, source: Size, next: PdfView | undefined, items: ReadonlyArray<ContentBox | PlacedItem> = []): PdfViewPlan | null {
 	const bg = page.background;
 	if (bg?.kind !== "pdf" || !(source.width > 0) || !(source.height > 0)) return null;
 	const current = viewOf(bg);
 	const before = viewSize(current, source);
 	const box = backgroundRect(page);
-	const k = box.width / before.width;
+	let k = box.width / before.width;
 	if (!(k > 0) || !Number.isFinite(k)) return null;
+	// A page made from the PDF is exactly as large as the shown part (one PDF point is one page point): a ratio that is only rounding is 1, so
+	// turning a page of 595.276 pt four times gives back 595.276 and not 595.28 (review Q7).
+	const natural = Math.abs(k - 1) < 1e-3;
+	if (natural) k = 1;
 	const after = viewSize(next, source);
 	const toLocal = multiply(scaleAbout(1 / k, 1 / k, 0, 0), translate(-box.x, -box.y));
 	const toPage = multiply(translate(box.x, box.y), scaleAbout(k, k, 0, 0));
 	const base = roundMatrix(multiply(toPage, multiply(sourceToView(next, source), multiply(viewToSource(current, source), toLocal))));
 	const m = normalizeMargins(page.margins) ?? { left: 0, right: 0, bottom: 0 };
-	const width = round2(after.width * k + m.left + m.right);
-	const height = round2(after.height * k + m.bottom);
+	const size = (n: number): number => (natural ? round4(n) : round2(n));
+	const width = size(after.width * k + m.left + m.right);
+	const height = size(after.height * k + m.bottom);
 	const background = withView(bg, next);
 
 	// Where the items go, and how far beyond the new page they stray.
@@ -220,9 +243,11 @@ export function planPdfView(page: Pick<Page, "width" | "height" | "margins" | "b
 	const oldW = page.width, oldH = page.height;
 	const eps = 0.5;
 	for (const item of items) {
-		if (item.maxX < 0 || item.maxY < 0 || item.minX > oldW || item.minY > oldH) continue;
-		const b = applyBox(base, item);
-		if (b.minY < -eps) above++;
+		const old = "old" in item ? item.old : item;
+		if (old.maxX < 0 || old.maxY < 0 || old.minX > oldW || old.minY > oldH) continue;
+		const b = "now" in item ? item.now : applyBox(base, item);
+		// Above the top edge, and higher than it was: ink that already touches the edge (its width reaches over it) is not "above" (review Q8).
+		if (b.minY < -eps && b.minY < old.minY - eps) above++;
 		left = Math.max(left, -b.minX);
 		right = Math.max(right, b.maxX - width);
 		bottom = Math.max(bottom, b.maxY - height);
@@ -233,8 +258,8 @@ export function planPdfView(page: Pick<Page, "width" | "height" | "margins" | "b
 	const matrix: Matrix = grown.left ? roundMatrix(multiply(translate(grown.left, 0), base)) : base;
 	return {
 		background, margins, matrix, grown, above,
-		width: round2(width + grown.left + grown.right),
-		height: round2(height + grown.bottom),
+		width: size(width + grown.left + grown.right),
+		height: size(height + grown.bottom),
 	};
 }
 
