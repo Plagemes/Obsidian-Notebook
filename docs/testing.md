@@ -4811,3 +4811,24 @@ A chart is ordinary shape strokes and text boxes of one group; "Update chart" re
 | Reading the numbers from handwriting | no | | | | the plugin has no handwriting recognition: numbers are typed in text boxes |
 | Updating by itself when a number changes | no | | | | explicit *Update chart* only (a chart is plain content; nothing watches the table) |
 | Axis titles, stacked or horizontal bars, a secondary axis | no | | | | not in this wave |
+### 0.29 — stats: statistics from table data (roadmap #295; steps 3380-3399)
+
+*Table statistics* in the All actions sheet while a hand-drawn table is selected. Implemented, not verified on hardware. The numbers are read from TEXT BOXES written inside the cells (handwriting is not recognised); no format change. Needs a notebook page.
+
+3380. **Offered.** Draw a table (Insert > Table, 4 rows, 3 columns). Add a text box in each cell: a header row (x, y, note) and under it numbers (1, 2,5, 4) and (3, 6, 9). Select the table: All actions > *Table statistics*. With nothing or other ink selected it is not offered.
+3381. **Summary.** The card lists the columns by header name; for x it shows the count, mean, median, standard deviation, minimum, maximum and sum, correct for the numbers typed (check one by hand).
+3382. **Decimal comma and non-numbers.** "2,5" counts as 2.5. Write a word (n/a) in a numeric column: it is skipped, and the count line says how many were skipped. Empty cells are not counted.
+3383. **Line.** Choose a second column under *Fit a line against column*: the card shows `y = ...x + ...`, slope, intercept and R squared. With fewer than two rows or all equal x it says why there is no line.
+3384. **Insert as text.** The text box appears to the right of the table (under it when there is no room), in the pen colour, with the same text as the card. One undo removes it; redo brings it back; the history panel shows *Element added*.
+3385. **Copy.** *Copy* then paste in a note: the same text.
+3386. **No numbers.** A table with no text boxes: the card says no numbers were found and that handwriting is not read.
+3387. **Locked page / read-only.** The card still opens; *Insert as text* adds nothing on a locked page.
+3388. **Dark, light, phone, Italian.** The card reads in both themes, fits a phone, 44 px targets, is in Italian with the plugin in Italian; long-press help of the action explains what it does.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Number parsing, summary, regression (`src/math/stats.ts`) | yes | `tests/table-stats.test.ts` | | | |
+| Reading text boxes into cells, report text, box placement | yes | `tests/table-stats.test.ts` | | | |
+| Statistics card, Insert as text (one undo step), Copy, action, help, context rank | yes | harness `doc=stats` | | | |
+| Reading handwriting in cells | no | | | | needs recognition; type numbers in text boxes |
+| Regression line drawn on a chart | no | | | | with the table charts |

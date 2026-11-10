@@ -193,6 +193,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "linehandle", theme, device, lowLatency: false });
 // 0.29 charts (#244): the chart dialog and a chart beside its table (dev/harness/charts-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "charts", theme, device, lowLatency: false });
+// 0.29 stats (#295): the table statistics card (dev/harness/stats-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "stats", theme, device, lowLatency: false });
 // 0.28 tables (#41): the insert dialog and a table with writing in it (dev/harness/tables-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tables", theme, device, lowLatency: false });
 // 0.26 tidy (#238): Tidy up (dev/harness/tidy-check.ts).
@@ -496,6 +498,7 @@ async function main() {
 				else if (s.doc === "linehandle") report = await cdp.evaluate("window.harness.checkLinehandle()", 90000); // 0.28 linehandle
 				else if (s.doc === "tables") report = await cdp.evaluate("window.harness.checkTables()", 120000); // 0.28 tables
 				else if (s.doc === "charts") report = await cdp.evaluate("window.harness.checkCharts()", 120000); // 0.29 charts
+				else if (s.doc === "stats") report = await cdp.evaluate("window.harness.checkStats()", 120000); // 0.29 stats
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
 				else if (s.doc === "spread") report = await cdp.evaluate("window.harness.checkSpread()", 120000); // 0.27 spread
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
@@ -806,6 +809,19 @@ async function main() {
 						writeFileSync(join(designDir, `charts-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`charts ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.29 stats: screenshots of the statistics card, summary only and with a fitted line.
+			if (s.doc === "stats") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["summary", "line"]) {
+					try {
+						await cdp.evaluate(`window.harness.statsShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `stats-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`stats ${state} screenshot: ${e.message}`);
 					}
 				}
 			}
