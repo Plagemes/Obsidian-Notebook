@@ -185,6 +185,15 @@ describe("Compute keeps the words it did not write (review 0.30 I7)", () => {
 		expect(r.after).toContain("(discount)");
 	});
 
+	it("review T1: bullet notes under a formula keep its result, and a second Compute changes nothing", () => {
+		const r = computeOne("=A1*2\n- includes VAT\n* see p. 4");
+		expect(r.after).toBe(`=A1*2 ${RESULT_MARK} 20\n- includes VAT\n* see p. 4`);
+		expect(r.again).toBe("same");
+		const c = computeOne("=A1*2\n+ B1");
+		expect(c.after).toBe(`=A1*2\n+ B1 ${RESULT_MARK} 32`);
+		expect(c.again).toBe("same");
+	});
+
 	it("keeps the box's line breaks and a note on a line below the formula", () => {
 		const r = computeOne("=A1+B1\n(net of VAT)");
 		expect(r.after).toBe(`=A1+B1 ${RESULT_MARK} 22\n(net of VAT)`);

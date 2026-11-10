@@ -5873,7 +5873,7 @@ export const en = {
 	// 0.30 tablecalc
 	"tablecalc.action": "Compute table",
 	"tablecalc.command": "Table: compute formulas",
-	"help.tablecalc": "Works out the formulas typed in the cells of the selected table, such as =SUM(B1:B4), =AVG(B1:B4), =A2*B2 or =C2*15%, and writes each result after its formula. A1 is the top-left cell. Type the formulas in text boxes inside the cells; handwriting is not read. One undo step.",
+	"help.tablecalc": "Works out the formulas typed in the cells of the selected table, such as =SUM(B1:B4), =AVG(B1:B4), =A2*B2 or =C2*15%, and writes each result after its formula. A1 is the top-left cell. Type the formulas in text boxes inside the cells; handwriting is not read. Write notes on the line below the formula, or after a second arrow. One undo step.",
 	"histpanel.t.tableCompute": "Table computed",
 	"tablecalc.done": "{formulas} formulas computed.",
 	"tablecalc.doneErrors": "{formulas} formulas computed, {errors} with an error (#REF, #CYCLE, #DIV/0...).",

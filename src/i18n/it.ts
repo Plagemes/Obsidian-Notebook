@@ -5874,7 +5874,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	// 0.30 tablecalc
 	"tablecalc.action": "Calcola tabella",
 	"tablecalc.command": "Tabella: calcola le formule",
-	"help.tablecalc": "Calcola le formule scritte nelle celle della tabella selezionata, come =SOMMA(B1:B4), =MEDIA(B1:B4), =A2*B2 o =C2*15%, e scrive ogni risultato dopo la sua formula. A1 è la cella in alto a sinistra. Scrivi le formule in caselle di testo dentro le celle; la scrittura a mano non viene letta. Un solo passo di annullamento.",
+	"help.tablecalc": "Calcola le formule scritte nelle celle della tabella selezionata, come =SOMMA(B1:B4), =MEDIA(B1:B4), =A2*B2 o =C2*15%, e scrive ogni risultato dopo la sua formula. A1 è la cella in alto a sinistra. Scrivi le formule in caselle di testo dentro le celle; la scrittura a mano non viene letta. Scrivi le note sulla riga sotto la formula, o dopo una seconda freccia. Un solo passo di annullamento.",
 	"histpanel.t.tableCompute": "Tabella calcolata",
 	"tablecalc.done": "{formulas} formule calcolate.",
 	"tablecalc.doneErrors": "{formulas} formule calcolate, {errors} con un errore (#REF, #CYCLE, #DIV/0...).",

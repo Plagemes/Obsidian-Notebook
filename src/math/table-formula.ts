@@ -297,8 +297,17 @@ const parses = (formulaText: string): boolean => parseFormula(flatFormula(formul
 const RESULT_TOKEN = new RegExp(`^[ \\t]*(?:#[A-Z]+(?:\\/0)?(?=\\s|$)|(?:-?\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?|-)(?=[ \\t]*(?:$|\\n|${RESULT_MARK})))`);
 /** What a box shows as the result when the value is blank or text: the result slot is never empty, so the token rule stays exact. */
 export const NO_VALUE = "-";
-/** A line that continues a formula from the line above (it starts with an operator, a separator or a closing bracket). */
-const CONTINUES = /^\s*[-+*/^&,;)]/;
+/**
+ * A Markdown-style bullet note (review T1): `-`, `+` or `*`, a blank, then a plain word of two or more letters that is not a cell reference
+ * (`B3`, `AB12`) and not a function call (`SUM(`). A bare word is never valid in a formula (there are no named ranges), so such a line is a
+ * note: `- includes VAT`, `* see p. 4`.
+ */
+const BULLET_NOTE = /^\s*[-+*]\s+(?![A-Za-z]{1,3}\d)\p{L}{2,}(?![\p{L}\d_.]*\s*\()/u;
+/**
+ * Whether a line continues a formula from the line above: it starts with an operator, a separator or a closing bracket (`-D2`, `+ B3`,
+ * `* 2`, `/ (A1+A2)`, `)`) and is not a bullet note.
+ */
+const continues = (line: string): boolean => /^\s*[-+*/^&,;)]/.test(line) && !BULLET_NOTE.test(line);
 /** Most leading lines tried as the formula of a box that holds notes below it. */
 const NOTE_PREFIX_TRIES = 12;
 
@@ -333,7 +342,7 @@ function splitFormulaBox(text: string): FormulaBox | null {
 		for (let k = Math.min(lines.length - 1, NOTE_PREFIX_TRIES); k >= 1; k--) {
 			// Review R2: a line that continues the formula (it starts with an operator) is part of it, not a note: then the whole text is
 			// the formula and a mistake in it shows #ERR instead of a plausible result of the lines above.
-			if (CONTINUES.test(lines[k]!) || !parses(lines.slice(0, k).join("\n"))) continue;
+			if (continues(lines[k]!) || !parses(lines.slice(0, k).join("\n"))) continue;
 			head = lines.slice(0, k).join("\n");
 			rest = text.slice(head.length);
 			arrow = false;
