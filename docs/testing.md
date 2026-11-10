@@ -4702,3 +4702,24 @@ Whether a tape is revealed is never saved: every tape is covered again when the 
 | Clean copy and hand-in leave tapes out; redaction cuts tapes (fail-closed) | yes | `tests/model-v27.test.ts` | | | |
 | A tape's own colour picker in the selection bar | no | | | | the colour is chosen in the settings for new tapes |
 | Remembering revealed tapes across reopen | no | | | | by design: tapes cover again each time |
+### 0.29 — redactundo: Undo and Redo never move writing out from under a redaction box; table inserts and drawing states (review R3-1, R3-2, R2-3; steps 3480-3499)
+
+Hardening from the 0.28 reviews, not a roadmap item. Implemented, not verified on hardware. Needs a notebook page with handwriting, the Redact dialog (Export > *Redact…*) and the S Pen.
+
+3480. **Reorder, box, Undo.** Write three lines; the first one "SSN 123". *Reorder lines*: drag the first line below the second. Open the Redact dialog and draw a box over the SSN line where it is now; close. Press Undo: nothing moves, a notice says Undo was not done because it would move writing out from under a redaction box (or under one), and to remove or redo the boxes on the page first. Export the page as PDF: the SSN line is covered.
+3481. **The step stays.** Open the history panel: *Line moved* is still the latest step. Remove the box (Redact dialog), press Undo: the lines go back. Redo: they move again.
+3482. **Redo refused.** After 3481, Undo (lines back), draw a box over the SSN line at the top, Redo: refused with the Redo notice; the history panel still offers the step as the next Redo; remove the box and Redo works.
+3483. **Table row.** Insert a table, write in its last row, *Add row* above it (the writing moves down one row). Draw a box over the writing where it is now. Undo: refused with the notice; the table and the writing stay; export: covered.
+3484. **Lasso move.** Lasso a word and move it; draw a box over it; Undo: refused. Change the colour of the boxed word and Undo the colour change: allowed (a restyle is not a move).
+3485. **Not refused.** With a box on the page: write under the box and Undo, erase under the box and Undo, then Redo: all allowed. A box only on another page, or a move far from every box: Undo and Redo work as before. A notebook with no boxes: nothing changes.
+3486. **Per-page undo.** Settings > Pages > *Undo on this page only* on. Reorder lines on page 1, write on page 2, box the moved line on page 1, go back to page 1 and Undo: refused with the notice; go to page 2 and Undo: your page 2 writing goes. Turn the setting off afterwards.
+3487. **History panel jump.** With a refused move in the history, tap the first entry of the history panel: the jump stops at the move (the steps after it are undone), the notice says why; the move and the steps before it are still listed.
+3488. **Move to another page.** Select writing, move it to another page, Undo it (it is back), draw a box over it on the first page, Redo: refused.
+3489. **Drawing states and tables.** Make a drawing with states whose ink sits in the last row of a table (state part over that ink). Select the table, *Add row* above that row: refused with "These lines, or the writing the change would push, belong to a part of a drawing with states…"; nothing moves. *Add row* below the part's ink still works.
+3490. **Italian.** With the plugin in Italian the two notices read in Italian ("Annulla non eseguito…", "Ripeti non eseguito…").
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Undo / Redo refused when they move writing out from under (or under) a redaction box; step kept in place (also per page, groups, jumps; unreadable boxes refuse any move) | yes | `tests/redact-undo.test.ts` | | | |
+| Table row / column insert refuses pushed ink of a drawing-state part (R3-2) | yes | `tests/redact-undo.test.ts` | | | |
+| Excerpts in other notebooks marked stale after a PDF turn or crop; reading position remapped (R2-3) | no | | | | needs a view key in the excerpt source (format change); documented in `docs/architecture.md` |

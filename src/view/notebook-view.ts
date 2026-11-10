@@ -66,8 +66,9 @@ import { backgroundRect } from "../model/margins";
 import { viewKey, viewOf, type PdfView } from "../model/pdf-view";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
-	ReplaceStroke, SetMeta, SetPageSize, type Command,
+	ReplaceStroke, SetMeta, SetPageSize, type Command, type StepCheck,
 } from "../model/history";
+import { redactStepCheck } from "../ink/redact-step"; // 0.29 redactundo (R3-1)
 import { pageContentCommand } from "../model/page-content";
 import { pageRules } from "../model/page-undo";
 import { checkContent, freezeStroke } from "../model/serialize";
@@ -1864,6 +1865,8 @@ export class NotebookView extends FileView {
 		// 0.28 (#98): per-page undo. The history is told how pages are told apart, and whether a new edit keeps the other pages' undone steps.
 		this.history.setPageRules(pageRules);
 		this.history.setPagewise(settings.pageUndo);
+		// 0.29 (review R3-1): an undo or a redo that would move ink out from under (or under) a redaction box is refused and stays in the history.
+		this.history.setStepCheck(this.redactStepCheck());
 		if (this.toolbar) {
 			this.toolbar.setPageUndo(settings.pageUndo);
 			this.updateHistoryButtons();
@@ -3389,6 +3392,21 @@ export class NotebookView extends FileView {
 	private redactGuard(pageId: string): RedactGuard {
 		const stored = this.redactState();
 		return { boxes: boxesOf(stored.boxes, pageId), unreadable: stored.unreadable === true };
+	}
+
+	/**
+	 * 0.29 (review R3-1): the History check of every Undo and Redo (also per page, from the history panel and in a macro): a step that moves
+	 * ink out from under, or under, a redaction box of its page is refused with a notice and stays in the history (ink/redact-step.ts).
+	 */
+	private redactStepCheck(): StepCheck {
+		return redactStepCheck(
+			() => {
+				const stored = this.redactState();
+				return { boxesOf: (pageId) => boxesOf(stored.boxes, pageId), unreadable: stored.unreadable === true, any: countBoxes(stored.boxes) > 0 };
+			},
+			// Nothing changed (the step is back where it was), so the buttons are already right.
+			(step) => void showNotice(t(step === "undo" ? "redactundo.undo" : "redactundo.redo"), 8000),
+		);
 	}
 
 	/** What the comment tools need from the view. */

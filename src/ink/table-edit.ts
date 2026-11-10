@@ -34,7 +34,10 @@ export function insertTableCommand(page: Pick<Page, "id" | "strokes">, grid: Tab
 export type TableEditRefusal =
 	/** The lines of the table are no longer all on the page (a stale selection, a posed copy). */
 	| "gone"
-	/** A line of the table belongs to a part of a drawing with states: fresh line ids would drop it from the part. */
+	/**
+	 * A line of the table belongs to a part of a drawing with states: fresh line ids would drop it from the part. 0.29 (R3-2): or ink the
+	 * insert would push does (the part's pivot would stay behind).
+	 */
 	| "states"
 	/** The grown table, or the ink the insert pushes along, would end up outside the page. */
 	| "edge"
@@ -79,6 +82,8 @@ export function planTableEdit(
 		const mine = new Set(table.strokes.map((s) => s.id));
 		const ids = new Set(inkToShift(table.grid, edit.shift, ink.filter((s) => !mine.has(s.id)).map(inkBox)));
 		pushed = ink.filter((s) => ids.has(s.id) && !mine.has(s.id));
+		// 0.29 (review R3-2): ink of a drawing-state part would move while the part's pivot stays, so its poses would turn about the old point.
+		if (pushed.some((s) => inPart.has(s.id))) return { ok: false, reason: "states" };
 		const box = tableBox(edit.grid);
 		if (!insidePage(page, box.minX, box.minY, box.maxX, box.maxY)) return { ok: false, reason: "edge" };
 		const { axis, by } = edit.shift;

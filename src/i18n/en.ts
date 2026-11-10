@@ -5259,7 +5259,7 @@ export const en = {
 	"linehandle.refused.background": "Writing on a PDF or picture page stays on what it annotates, so its lines cannot be reordered.",
 	"linehandle.refused.redacted": "This page has redaction boxes, and moving the line would change what lies under them. Remove or redo the boxes first.",
 	"table.noRoom": "The table would reach beyond the page edge. Make the cells smaller or move the table first.",
-	"table.noStates": "These lines belong to a part of a drawing with states, so the table cannot be edited.",
+	"table.noStates": "These lines, or the writing the change would push, belong to a part of a drawing with states, so the table cannot be edited.",
 	"table.noRedacted": "This page has redaction boxes, and the insert would move ink under or out from under them. Remove or redo the boxes first.",
 	"linehandle.cancelled": "The page changed, so the move was cancelled.",
 	"histpanel.t.moveLine": "Line moved",
@@ -5405,6 +5405,9 @@ export const en = {
 	"tape.color.rose": "Rose",
 	"tape.color.sand": "Sand",
 	"tape.color.slate": "Slate",
+	// 0.29 redactundo (review R3-1): an undo or a redo that would move writing out from under, or under, a redaction box
+	"redactundo.undo": "Undo was not done: it would move writing out from under a redaction box (or under one) on this page. Remove or redo the boxes on this page first; the step stays in the history.",
+	"redactundo.redo": "Redo was not done: it would move writing out from under a redaction box (or under one) on this page. Remove or redo the boxes on this page first; the step stays in the history.",
 } as const;
 
 export type MessageKey = keyof typeof en;
