@@ -5779,8 +5779,8 @@ export const en = {
 	"redactmove.unreadable": "This change was not made: the redaction boxes stored on this device cannot be read, so a change that moves or stretches the background of a page cannot be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done).",
 	"table.noTapeLocked": "Ink this insert would push lies under a locked study tape, which stays where it is: the answer would come out from under it. Unlock the tape first.",
 	// 0.30 zsequence
-	"settings.zettelSequenceLink": "Link follow-up and branch cards to their origin",
-	"settings.zettelSequenceLink.desc": "With Luhmann numbering, a follow-up or branch card and the card it continues get a link to each other. Off: only the id shows how they belong together.",
+	"settings.zettelSequenceLink": "Link new sequence cards to their origin",
+	"settings.zettelSequenceLink.desc": "Both notes get a link to each other. Off: only the id shows how the cards belong.",
 	"sequence.command.followUp": "New follow-up card",
 	"sequence.command.branch": "New branch card",
 	"sequence.command.show": "Show card sequence",

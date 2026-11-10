@@ -5780,8 +5780,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"redactmove.unreadable": "Modifica non eseguita: i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi una modifica che sposta o allunga lo sfondo di una pagina non può essere verificata. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto).",
 	"table.noTapeLocked": "L'inserimento sposterebbe inchiostro che sta sotto un nastro di studio bloccato, che resta dov'è: la risposta uscirebbe da sotto il nastro. Prima sblocca il nastro.",
 	// 0.30 zsequence
-	"settings.zettelSequenceLink": "Collega le schede di seguito e di ramo alla scheda di origine",
-	"settings.zettelSequenceLink.desc": "Con la numerazione Luhmann, una scheda di seguito o di ramo e la scheda che continua si collegano a vicenda. Disattivato: solo l'id mostra che stanno insieme.",
+	"settings.zettelSequenceLink": "Collega le nuove schede di sequenza all'origine",
+	"settings.zettelSequenceLink.desc": "Le due note si collegano a vicenda. Disattivato: solo l'id mostra il legame.",
 	"sequence.command.followUp": "Nuova scheda di seguito",
 	"sequence.command.branch": "Nuova scheda di ramo",
 	"sequence.command.show": "Mostra la sequenza della scheda",
