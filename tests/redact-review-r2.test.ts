@@ -141,7 +141,7 @@ function strike(id: string, x0: number, x1: number, y: number): Stroke {
 }
 
 /** A checkbox with a typed label, the same words handwritten to its right, the last word (the IBAN) struck through, and a box over it. */
-function ibanPage(): { page: Page; box: RedactBox; struckIds: Set<string> } {
+function ibanPage(): { page: Page; box: RedactBox; struckIds: ReadonlySet<string> } {
 	const text = writeLine("a", "pay to iban", { x: 40, baseY: BASE });
 	const word = text.filter((s) => s.id.split(":")[1] === "2");
 	const xs = word.flatMap((s) => s.points.map((p) => p[0]));
