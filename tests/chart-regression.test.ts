@@ -7,7 +7,7 @@ import { chartDataFromCells, layoutChart } from "../src/math/chart-layout";
 import { dashedSegment, fitTrend, trendLabel } from "../src/math/chart-regression";
 import { createDocument } from "../src/model/document";
 import { History } from "../src/model/history";
-import type { Stroke, TextElement } from "../src/model/types";
+import type { TextElement } from "../src/model/types";
 
 describe("fitTrend", () => {
 	it("fits an exact line with R² 1", () => {
@@ -137,7 +137,7 @@ describe("a trend survives Update chart", () => {
 		SERIES.forEach((row, i) => row.forEach((text, j) => {
 			const x = (t.grid.xs[j]! + t.grid.xs[j + 1]!) / 2;
 			const y = (t.grid.ys[i]! + t.grid.ys[i + 1]!) / 2;
-			(page.elements ??= []).push({ id: ids(), type: "text", x: x - 20, y: y - 6, width: 40, text, fontSize: 10, color: "#000000" } as TextElement);
+			(page.elements ??= []).push({ id: ids(), type: "text", x: x - 20, y: y - 6, width: 40, text, fontSize: 10, color: "#000000" });
 		}));
 		const table = tableOfSelection(page.strokes.filter((s) => s.tool === "shape"), 0)!;
 		const plan = planChartInsert(page, table, chartDataFromCells(readCells(table.grid, page.elements!)), { ...choice, trend: withTrend }, { x: 0, y: 0 }, undefined, ids);
@@ -161,7 +161,7 @@ describe("a trend survives Update chart", () => {
 		const edited = w.page.elements!.find((e) => e.type === "text" && e.text === "19" && e.group === undefined) as TextElement;
 		w.page.elements![w.page.elements!.indexOf(edited)] = { ...edited, text: "30" };
 		const chart = w.chart();
-		const plan = planChartUpdate(w.doc.pages, w.page, chart, w.page.strokes as readonly Stroke[], undefined, ids);
+		const plan = planChartUpdate(w.doc.pages, w.page, chart, w.page.strokes, undefined, ids);
 		expect(plan.ok).toBe(true);
 		if (!plan.ok) return;
 		expect(w.history.execute(plan.cmd)).toBe(true);
@@ -173,6 +173,6 @@ describe("a trend survives Update chart", () => {
 		expect(label.text).not.toBe((chart.elements.find((e) => e.type === "text" && e.text.startsWith("y = ")) as TextElement).text);
 		expect(after.elements.some((e) => e.type === "text" && e.text === "Sales")).toBe(true);
 		// unchanged afterwards
-		expect(planChartUpdate(w.doc.pages, w.page, after, w.page.strokes as readonly Stroke[], undefined, ids)).toEqual({ ok: false, reason: "same" });
+		expect(planChartUpdate(w.doc.pages, w.page, after, w.page.strokes, undefined, ids)).toEqual({ ok: false, reason: "same" });
 	});
 });
