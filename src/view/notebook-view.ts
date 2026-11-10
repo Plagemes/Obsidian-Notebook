@@ -63,11 +63,13 @@ import { cloneMeta, createId, createPage, createStroke } from "../model/document
 import { newShapeStyle } from "../ink/shape-style";
 import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
 import { backgroundRect } from "../model/margins";
+import { viewKey, viewOf, type PdfView } from "../model/pdf-view";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
 	ReplaceStroke, SetMeta, SetPageSize, type Command,
 } from "../model/history";
 import { pageContentCommand } from "../model/page-content";
+import { pageRules } from "../model/page-undo";
 import { checkContent, freezeStroke } from "../model/serialize";
 import { normaliseOpacity } from "../model/opacity";
 import { newStrokeTaper, strokeTaper } from "../model/taper";
@@ -109,11 +111,11 @@ import type { ExportFormat } from "../ink/export-layers";
 import { ExportModal, MarkdownExportModal } from "./export-dialog";
 import { SharePageModal, type ShareHost } from "./share-page"; // 0.20 (#30)
 import { exportPdf, runExport, type ExportOptions } from "./export";
-import { announceRedactionOff, redactionRefused, withRedaction } from "./export-redact"; // 0.26 redact (#285)
+import { announceRedactionOff, redactBlockedMessage, redactionRefused, withRedaction } from "./export-redact"; // 0.26 redact (#285)
 import { RedactModal } from "./redact-dialog";
 import { loadRedactState, resetRedactStorage, saveRedactState, takeRedactStoreNotice } from "../ui/redact-store";
-import { countBoxes, isArmed, type RedactState } from "../model/redact";
-import { elementKept, headerAfterRedaction, withExcerptChains } from "../ink/redact";
+import { boxesOf, countBoxes, isArmed, staleRedactionPages, tagNewBoxes, type RedactState } from "../model/redact";
+import { elementKept, headerAfterRedaction, withExcerptChains, type RedactGuard } from "../ink/redact";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
@@ -172,7 +174,10 @@ import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { pdfSideState, referencePane, referenceSlideOf, runPdfSideAction, type PageSyncHooks } from "./pdf-sync";
 import { attachSlideBadges, linkToSlide, refreshSlideBadges } from "./slide-ink";
-import { MarkerTools, translatedBoxLabel } from "./markers";
+import { MarkerTools } from "./markers";
+import { BoxNumbers } from "./box-numbers";
+import { BoxIndexModal } from "./box-index";
+import type { NumberedBox } from "../model/box-numbering";
 import { ExcerptTools } from "./excerpts";
 import { PdfTextTools } from "./pdf-text";
 import { PdfLinks } from "./pdf-links";
@@ -185,6 +190,8 @@ import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
 import { SlideBack } from "./slide-back";
+import { LiveBar } from "./live-bar";
+import { addMarkToTitle, markLabel } from "../timetable/live-lecture";
 import { InputLayout } from "./input-layout-view";
 import { effectiveToolbarSize } from "../ui/input-layout";
 import { ToolFade } from "./tool-fade";
@@ -219,10 +226,13 @@ import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
 import { AxesTools, type AxesHost } from "./axes-tools";
+import { TableTools, type TableHost } from "./table-tools";
+import { tableOfSelection } from "../ink/table";
 import { ChemTools, holdsReaction } from "./chem-tools";
 import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
+import { LineHandleTools, type LineHandleHost } from "./line-handles";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
@@ -237,6 +247,8 @@ import { NotebookTabs } from "./notebook-tabs";
 import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
 import { hasBackgrounds, hasPdfPages } from "./reading-logic";
 import { ColourTools, type PageColourContext, type PageInk } from "./colour-tools";
+import { PaintBucket, type BucketTarget } from "./paint-bucket";
+import { currentColour } from "../ink/colour";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
 import { pageKindOf } from "../ui/page-kind";
@@ -248,6 +260,7 @@ import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { kindTool, strokeNib } from "../ink/pen-kinds";
 import { hint } from "../ui/hints";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
+import { suggestForSelection } from "../ui/selection-suggest";
 import { actionLabel } from "../ui/action-sheet";
 import { cloneMacro, isMacroActionId, macroById, setMacros } from "../ui/macros";
 import { runMacroOn } from "./macro-run";
@@ -455,13 +468,14 @@ export class NotebookView extends FileView {
 	 * Every edit is checked strictly before it is kept (`checkContent`): an edit that the writer would refuse is undone
 	 * with a notice, so a bad element can never stop every later save.
 	 */
-	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message, step) => {
+	private readonly history = new History(() => this.requireDoc(), 500, checkContent, (message, step, kept) => {
 		console.error(`[notebook] ${step ?? "edit"} refused, the notebook could not be saved with it:`, message);
 		// 0.27 (#170): a macro counts the refusals and says it once itself, naming the step.
 		if (!step) this.refusalCount++;
 		if (!step && this.quietRefusals) return;
 		// 0.19: an undo or a redo that would leave a notebook the writer refuses is not done and leaves the history (the document is as before).
-		showNotice(step ? t("history.stepRefused", { message }) : t("history.refused", { message }), 10000);
+		// 0.28 review (P3): a step taken out of order by per-page undo stays in the history, so the notice says that instead.
+		showNotice(step ? t(kept ? "history.stepRefusedKept" : "history.stepRefused", { message }) : t("history.refused", { message }), 10000);
 		if (step) this.updateHistoryButtons();
 	},() => this.userReadOnly, (ids) => this.pagesLocked(ids), () => Date.now());
 	/**
@@ -505,6 +519,14 @@ export class NotebookView extends FileView {
 	private readonly headingThumbs = new HeadingThumbs();
 	/** 0.20 (#102): headings are looked for in the background (idle), not when the outline or the map opens. */
 	private readonly headingWarm = new HeadingWarmer(this.outlineBuilder, () => this.session?.doc?.pages ?? [], () => this.host.settings.outlineHeadings);
+	/** 0.28 (#205): the derived numbers of the structured boxes ("Def. 3.2"); never stored. */
+	private readonly boxNumbers = new BoxNumbers({
+		pages: () => this.shownDoc()?.pages ?? [],
+		settings: () => this.host.settings,
+		headingIndex: () => this.outlineBuilder.headingIndex(),
+		tick: () => this.editTick,
+		redraw: () => this.renderer?.invalidate(),
+	});
 	/** Roadmap 50: the fast scrollbar with a page preview (view/scrollbar.ts). */
 	private scrollbar: FastScrollbar | null = null;
 	/** 0.17 (#173): the floating overview of the page in view (view/minimap.ts). */
@@ -536,15 +558,21 @@ export class NotebookView extends FileView {
 	private checklist: ChecklistTools | null = null;
 	/** 0.22 (#206): instant axes (an L or a + drawn by hand, the insert). */
 	private axes: AxesTools | null = null;
+	/** 0.28 (#41): hand-drawn tables (insert, add / remove rows and columns, even cells). */
+	private tables: TableTools | null = null;
 	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
 	private chem: ChemTools | null = null;
 	/** 0.20 (#39): groups and locked elements (Group, Ungroup, Lock, the Unlock chip, the list of locked elements). */
 	private groups: GroupTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
 	private comments: CommentTools | null = null;
+	/** 0.28 (#256): the "Reorder lines" mode (a handle at the left of every handwritten line of the page in view). */
+	private lineHandles: LineHandleTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
 	private colour: ColourTools | null = null;
+	/** 0.28 (#184): the paint bucket (null before the view is open). */
+	private bucket: PaintBucket | null = null;
 	/** Pen gestures (roadmap 139, view/pen-gestures.ts): gesture mode and the gesture in progress. */
 	private penGestures: PenGestureLayer | null = null;
 	/** Long-press trigger: the ink stroke that may turn into a gesture if the pen rests, and its timer. */
@@ -591,6 +619,8 @@ export class NotebookView extends FileView {
 	private pageOffer: PageOffer | null = null;
 	/** 0.21 (#225): the pill back to the place last written during a lecture (view/slide-back.ts). */
 	slideBack: SlideBack | null = null;
+	/** 0.28 livelecture (#132): the floating timer bar with the quick buttons during a lecture (view/live-bar.ts). */
+	liveBar: LiveBar | null = null;
 	/** 0.23 (#420): the card offered when a notebook is reopened after a while (view/welcome-back.ts). */
 	welcomeBack: WelcomeBack | null = null;
 	pageRefs: PageRefs | null = null;
@@ -848,6 +878,7 @@ export class NotebookView extends FileView {
 			entries: () => this.history.entries(),
 			editable: () => !!this.session?.doc && this.editable(),
 			limit: this.history.limit,
+			pageView: () => (this.pageUndoOn() ? { pageId: this.pageUndoTarget() } : null),
 			jump: (target, progress) => this.jumpHistoryTo(target, progress),
 		});
 		this.workspaceTools = new WorkspaceTools(this.workspaceHost());
@@ -890,9 +921,11 @@ export class NotebookView extends FileView {
 		this.sticky = new StickyTools(this.stickyHost());
 		this.checklist = new ChecklistTools(this.checklistHost());
 		this.axes = new AxesTools(this.axesHost());
+		this.tables = new TableTools(this.tableHost());
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
+		this.lineHandles = new LineHandleTools(this.lineHandleHost());
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
 			body: this.body,
@@ -976,7 +1009,10 @@ export class NotebookView extends FileView {
 				const i = findLecturePage(this.session?.doc?.pages ?? [], course, date);
 				if (i >= 0) this.scrollToPage(i);
 			},
-			changed: () => this.refreshUi(),
+			changed: () => {
+				this.refreshUi();
+				this.liveBar?.sync();
+			},
 			ended: (end) => this.onLectureEnd(end),
 			started: (cls, pageAdded) => {
 				this.lectureHeader?.lectureStarted(cls, pageAdded);
@@ -989,6 +1025,13 @@ export class NotebookView extends FileView {
 		this.pageOffer = new PageOffer({
 			parent: () => this.body,
 			insertAfter: (pageId) => this.insertPageAfterId(pageId),
+		});
+		this.liveBar = new LiveBar({
+			parent: () => this.body,
+			enabled: () => this.host.settings.liveBar && (this.lectureMode?.on ?? false) && this.layout !== null,
+			startedAt: () => this.lectureMode?.startedAt ?? null,
+			newPage: () => this.addPage(),
+			mark: (seconds) => this.markLiveMoment(seconds),
 		});
 		this.slideBack = new SlideBack({
 			parent: () => this.body,
@@ -1090,10 +1133,10 @@ export class NotebookView extends FileView {
 			editable: () => this.editable() && !this.controller?.drawing,
 			tools: () => this.tools,
 			apply: (patch) => this.toolbar.apply(patch),
-			canUndo: () => this.history.canUndo(),
+			canUndo: () => this.historyAvailable().undo,
 			undo: () => this.runAction("undo"),
 			// ui redesign: the dial's redo, favourites, save-as-favourite, ruler and eyedropper hint.
-			canRedo: () => this.history.canRedo(),
+			canRedo: () => this.historyAvailable().redo,
 			redo: () => this.runAction("redo"),
 			favourites: () => this.penStore().favourites(),
 			applyFavourite: (i) => this.runAction(`favourite-${i + 1}`),
@@ -1119,6 +1162,19 @@ export class NotebookView extends FileView {
 			notify: (text) => showNotice(text, 2500),
 			inkAt: (x, y) => this.inkAtPoint(x, y),
 			pageContext: () => this.paletteContext(), // 0.26 ctxpalette (#394)
+		});
+		this.bucket = new PaintBucket({
+			stage: this.stage,
+			editable: () => this.editable() && !this.controller?.drawing,
+			tool: () => this.tools.tool,
+			notify: (text) => showNotice(text, 3500),
+			target: (x, y) => this.bucketTarget(x, y),
+			look: () => ({
+				colour: currentColour(this.tools),
+				tint: this.host.settings.bucketTint,
+				opacity: normaliseOpacity(this.tools.tool === "highlighter" ? this.tools.highlighterOpacity : this.tools.penOpacity),
+			}),
+			add: (target, stroke, index) => this.addBucketFill(target, stroke, index),
 		});
 		this.lastTool.note(this.tools.tool);
 		this.gestures = new GestureInput(this.stage, {
@@ -1264,6 +1320,7 @@ export class NotebookView extends FileView {
 		this.mentions?.destroy();
 		this.mentions = null;
 		this.headingWarm.dispose();
+		this.boxNumbers.dispose();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer, this.heavyTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
 		this.pens?.destroy();
@@ -1300,6 +1357,8 @@ export class NotebookView extends FileView {
 		this.radial = null;
 		this.colour?.destroy();
 		this.colour = null;
+		this.bucket?.destroy();
+		this.bucket = null;
 		this.gestures?.destroy();
 		this.gestures = null;
 		this.rulerGesture?.destroy();
@@ -1314,6 +1373,8 @@ export class NotebookView extends FileView {
 		this.minimap = null;
 		this.comments?.destroy();
 		this.comments = null;
+		this.lineHandles?.destroy();
+		this.lineHandles = null;
 		this.stopNav?.();
 		this.stopNav = null;
 		this.stopMarks?.();
@@ -1328,6 +1389,7 @@ export class NotebookView extends FileView {
 		this.checklist?.destroy();
 		this.axes?.destroy();
 		this.axes = null;
+		this.tables = null;
 		this.chem = null;
 		this.checklist = null;
 		this.groups?.destroy();
@@ -1346,6 +1408,8 @@ export class NotebookView extends FileView {
 		this.toolFade?.destroy();
 		this.toolFade = null;
 		this.inputLayout = null;
+		this.liveBar?.destroy();
+		this.liveBar = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
 		this.pageRefs?.destroy();
@@ -1689,6 +1753,8 @@ export class NotebookView extends FileView {
 		// 0.20 (#107): a reference that shows this very notebook reads its open document: it goes with it.
 		if (this.refWindow?.file === file) this.refWindow.close();
 		this.lectureMode?.closing();
+		// 0.28 (#256): the "Reorder lines" mode belongs to the notebook being edited.
+		this.lineHandles?.stop();
 		await this.closeSession();
 		const pending = this.snapshotAfterClose;
 		this.snapshotAfterClose = null;
@@ -1787,7 +1853,15 @@ export class NotebookView extends FileView {
 	}
 
 	applySettings(settings: NotebookSettings): void {
+		// 0.28 (#98): per-page undo. The history is told how pages are told apart, and whether a new edit keeps the other pages' undone steps.
+		this.history.setPageRules(pageRules);
+		this.history.setPagewise(settings.pageUndo);
+		if (this.toolbar) {
+			this.toolbar.setPageUndo(settings.pageUndo);
+			this.updateHistoryButtons();
+		}
 		this.meaningTools?.refresh();
+		this.renderer?.invalidate(); // 0.28 (#205): the box numbering settings change the labels
 		this.applyInput(settings);
 		refreshSlideBadges(this); // 0.14 slides: the badges setting
 		this.pressure.mode = settings.pressureMode;
@@ -1813,6 +1887,7 @@ export class NotebookView extends FileView {
 		this.reading?.settingsChanged();
 		this.lectureMode?.settingsChanged();
 		this.slideBack?.settingsChanged();
+		this.liveBar?.sync();
 		this.toolFade?.settingsChanged();
 		this.inputLayout?.settingsChanged();
 		this.pageRefs?.reset();
@@ -1917,11 +1992,54 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		this.penLinks?.hideChip();
 		this.pageOffer?.cancel();
-		const undone = this.history.undo();
+		const undone = this.pageUndoOn() ? this.undoOnThisPage() : this.history.undo();
 		if (!undone) return;
 		this.afterHistoryChange();
 		// 0.23 (#314): the first Undo after a hook was trimmed at pen-up only gives the hook back; say so, so it does not look like nothing happened.
 		if (isTrimStep(undone)) showNotice(t("trim.undone"), 3000);
+	}
+
+	/** 0.28 (#98): the "Per-page undo" setting is on: Undo and Redo act on the page in view (`currentPageIndex`, the page last touched in a spread). */
+	private pageUndoOn(): boolean {
+		return this.host.settings.pageUndo === true;
+	}
+
+	/** 0.28 (#98): the id of the page Undo / Redo act on, or null when per-page undo is off or there is no page. */
+	private pageUndoTarget(): string | null {
+		if (!this.pageUndoOn()) return null;
+		return this.shownDoc()?.pages[this.currentPageIndex()]?.id ?? null;
+	}
+
+	/** 0.28 (#98): Undo on the page in view; says why when nothing was undone (the history says the rest: a locked page, a refused step). */
+	private undoOnThisPage(): Command | null {
+		const id = this.pageUndoTarget();
+		if (id === null) return this.history.undo();
+		const r = this.history.undoOnPage(id);
+		if (r.kind === "done") return r.cmd;
+		if (r.kind === "nothing") showNotice(t(this.history.canUndo() ? "pageundo.nothing.elsewhere" : "pageundo.nothing"), 3000);
+		else if (r.kind === "global") showNotice(t(r.why === "shared" ? "pageundo.shared" : "pageundo.global"), 5000);
+		else this.updateHistoryButtons();
+		return null;
+	}
+
+	/** 0.28 (#98): Redo on the page in view. */
+	private redoOnThisPage(): Command | null {
+		const id = this.pageUndoTarget();
+		if (id === null) return this.history.redo();
+		const r = this.history.redoOnPage(id);
+		if (r.kind === "done") return r.cmd;
+		if (r.kind === "nothing") showNotice(t("pageundo.redo.nothing"), 3000);
+		else if (r.kind === "global") showNotice(t(r.why === "shared" ? "pageundo.redo.shared" : "pageundo.redo.global"), 5000);
+		else this.updateHistoryButtons();
+		return null;
+	}
+
+	/** 0.28 (#98): the buttons of Undo / Redo: on this page when per-page undo is on. A step that cannot be taken out of order still enables the button (a tap says why). */
+	private historyAvailable(): { undo: boolean; redo: boolean } {
+		const id = this.pageUndoTarget();
+		if (id === null) return { undo: this.history.canUndo(), redo: this.history.canRedo() };
+		const peek = this.history.peekOnPage(id);
+		return { undo: peek.undo !== "none", redo: peek.redo !== "none" };
 	}
 
 	/**
@@ -1951,7 +2069,7 @@ export class NotebookView extends FileView {
 		this.clearSelection();
 		this.penLinks?.hideChip();
 		this.pageOffer?.cancel();
-		if (this.history.redo()) this.afterHistoryChange();
+		if (this.pageUndoOn() ? this.redoOnThisPage() : this.history.redo()) this.afterHistoryChange();
 	}
 
 	/** 0.25 (#84): how many steps can be taken back and brought back (for the ranking of the All actions sheet). */
@@ -2671,7 +2789,8 @@ export class NotebookView extends FileView {
 			// Review fix (R3): boxes drawn again after an unreadable state are applied (the switch was not readable either).
 			commit: (boxes) => {
 				const now = this.redactState();
-				this.saveRedact({ on: now.unreadable === true ? countBoxes(boxes) > 0 : now.on, boxes });
+				// 0.28 (#76): the boxes drawn now remember the turn and crop of their page (see model/redact.ts).
+				this.saveRedact({ on: now.unreadable === true ? countBoxes(boxes) > 0 : now.on, boxes: tagNewBoxes(boxes, opened.boxes, this.renderPagesOf(doc)) });
 			},
 			...(opened.unreadable ? { unreadable: true, reset: () => this.resetRedactStorage() } : {}),
 			closed,
@@ -2875,7 +2994,7 @@ export class NotebookView extends FileView {
 			},
 			copyRefused: (entry) => {
 				const options = this.redactOptions();
-				if (options.redactBlocked) return t("redact.unreadable");
+				if (options.redactBlocked) return redactBlockedMessage(options);
 				if (!options.redact) return null;
 				// Review fix (R1): refused unless the figure is still there on the page as an export draws it (a picture under or near a
 				// box, an excerpt whose source region is covered on any page, at any depth). A page that cannot be found is refused.
@@ -2891,6 +3010,21 @@ export class NotebookView extends FileView {
 				return true;
 			},
 		}).open();
+	}
+
+	/** 0.28 (#403): an area highlighter behind the selection (padded a little), as one undo step through the history; the selection stays. */
+	highlightSelection(): void {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		if (!sel || !doc || !this.editable() || sel.others?.length || this.statesTools?.ownsSelection(sel)) return;
+		const page = doc.pages[sel.pageIndex];
+		const bounds = page ? itemsBounds(withoutPinnedInk(sel.strokes, sel.elements), sel.elements, measureText) : null;
+		if (!page || !bounds) return;
+		const pad = 4;
+		const area = createArea([bounds.minX - pad, bounds.minY - pad], [bounds.maxX + pad, bounds.maxY + pad], page, this.tools.highlighterColor, this.tools.highlighterOpacity);
+		if (!area || !this.history.execute(new AddElement(page.id, area, page.elements?.length ?? 0))) return;
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
 	}
 
 	/** 0.19 (#213): "Look up later" from the selection: an optional typed word, then a picture of the region and a link to the page are appended to the list note. */
@@ -2975,6 +3109,25 @@ export class NotebookView extends FileView {
 			app: this.app, file, docId: this.shownDoc()?.id,
 			pages: () => this.redactedPages(this.shownDoc()?.pages ?? [], true) ?? [], goTo: (index, y) => this.scrollToPage(index, y),
 		}).open();
+	}
+
+	/** 0.28 (#205): the index of the numbered definitions and theorems (dialog, and a plugin-owned note next to the notebook). */
+	openBoxIndex(): void {
+		const file = this.file;
+		if (!this.shownDoc() || !file) return;
+		// A box under a redaction box is not listed or written; nothing is offered when the boxes cannot be read.
+		if (!this.redactedPages([])) return;
+		const items = (): readonly NumberedBox[] => {
+			const all = this.boxNumbers.itemsAlways();
+			const kept = this.redactedPages(this.shownDoc()?.pages ?? [], true);
+			if (!kept) return [];
+			const ids = new Set<string>();
+			for (const p of kept) for (const e of p.elements ?? []) if (e.type === "box") ids.add(e.id);
+			return all.filter((i) => ids.has(i.id));
+		};
+		new BoxIndexModal({
+			app: this.app, file, docId: this.shownDoc()?.id, items, goTo: (index, y) => this.scrollToPage(index, y),
+		}, this.host.settings.boxNumbering).open();
 	}
 
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */
@@ -3095,7 +3248,7 @@ export class NotebookView extends FileView {
 		const doc = this.session?.doc;
 		const header = this.exportHeader();
 		return {
-			hiddenInk: (page) => this.markers?.isRevealed(page) ?? false, boxLabel: translatedBoxLabel,
+			hiddenInk: (page) => this.markers?.isRevealed(page) ?? false, boxLabel: this.boxNumbers.label,
 			// v9: equations without a cached outline are typeset first; numbers count over the whole notebook.
 			prepare: (pages) => this.math?.prepareExport(pages) ?? Promise.resolve(),
 			...(doc ? { equationNumbers: equationNumbers(doc.pages) } : {}),
@@ -3114,7 +3267,7 @@ export class NotebookView extends FileView {
 	 * 0.26 (#285): the redaction part of the export options: the boxes of this notebook when the reader has them switched on (every writer
 	 * applies them to its pages). Review fixes: boxes that cannot be read make every writer refuse (P4); boxes kept switched off give a hint (P10).
 	 */
-	private redactOptions(): Pick<ExportOptions, "redact" | "redactBlocked" | "redactOff"> {
+	private redactOptions(): Pick<ExportOptions, "redact" | "redactBlocked" | "redactStale" | "redactOff"> {
 		const stored = this.redactState();
 		if (stored.unreadable) {
 			// Review fix (R3): the first time in a session, one notice says what happened and what to do (the refusals point there too).
@@ -3125,6 +3278,9 @@ export class NotebookView extends FileView {
 		}
 		// Review fix (R5): the chains of excerpts are found over the whole notebook once, so a writer given one page still knows them.
 		const doc = this.session?.doc;
+		// 0.28 (#76), fail closed: a page turned or cropped after its boxes were drawn (an undo of a turn, a copy from another device) has its
+		// boxes in the wrong place: every writer refuses until the boxes are drawn again.
+		if (isArmed(stored) && doc && staleRedactionPages(doc.pages, stored.boxes).length > 0) return { redactBlocked: true, redactStale: true };
 		if (isArmed(stored)) return { redact: (doc ? withExcerptChains(doc.pages, stored.boxes, doc.id) : undefined) ?? stored.boxes };
 		const off = countBoxes(stored.boxes);
 		return off > 0 ? { redactOff: off } : {};
@@ -3196,6 +3352,34 @@ export class NotebookView extends FileView {
 	/** 0.18 (#86): margin comments of this view (null before the view is open). */
 	get commentTools(): CommentTools | null {
 		return this.comments;
+	}
+
+	/** 0.28 (#256): the "Reorder lines" mode of this view (null before the view is open). */
+	get lineHandleTools(): LineHandleTools | null {
+		return this.lineHandles;
+	}
+
+	/** What the line handles need from the view. */
+	private lineHandleHost(): LineHandleHost {
+		return {
+			body: this.body,
+			doc: () => this.session?.doc ?? null,
+			editable: () => !!this.editableDocument(),
+			execute: (cmd) => this.applyCommand(cmd),
+			geometry: () => this.overlayGeometry(),
+			addOverlayListener: (fn) => this.addOverlayListener(fn),
+			currentPage: () => this.currentPageIndex(),
+			measure: measureText,
+			redactGuard: (pageId) => this.redactGuard(pageId),
+			notify: (message) => void showNotice(message, 3500),
+			refreshUi: () => this.refreshUi(),
+		};
+	}
+
+	/** Review fix (R2-4): the redaction boxes of a page, for the bulk moves (reorder lines, table inserts) that must not change what lies under them. */
+	private redactGuard(pageId: string): RedactGuard {
+		const stored = this.redactState();
+		return { boxes: boxesOf(stored.boxes, pageId), unreadable: stored.unreadable === true };
 	}
 
 	/** What the comment tools need from the view. */
@@ -3325,6 +3509,22 @@ export class NotebookView extends FileView {
 		};
 	}
 
+	/** What the table tools need from the view (0.28, #41). */
+	private tableHost(): TableHost {
+		const c = this.checklistHost();
+		return {
+			app: this.app, doc: () => c.doc(), editable: () => c.editable(), execute: (cmd) => c.execute(cmd), insertTarget: () => c.insertTarget(),
+			selection: () => (this.selection ? this.selectionParts(this.selection) : null),
+			select: (p, s, e) => c.select(p, s, e), penColor: () => c.penColor(), inkOf: (page) => c.inkOf(page), refresh: () => c.refresh(),
+			redactGuard: (pageId) => this.redactGuard(pageId),
+		};
+	}
+
+	/** 0.28 (#41): hand-drawn tables of this view (null before the view is open). */
+	get tableTools(): TableTools | null {
+		return this.tables;
+	}
+
 	/** 0.22 (#206): instant axes of this view (null before the view is open). */
 	get axesTools(): AxesTools | null {
 		return this.axes;
@@ -3368,6 +3568,35 @@ export class NotebookView extends FileView {
 		return this.colour;
 	}
 
+	/** The paint bucket of this view (null before the view is open). */
+	get paintBucket(): PaintBucket | null {
+		return this.bucket;
+	}
+
+	/** 0.28 (#184): the page under a screen point with the ink the bucket treats as walls; null off the pages. */
+	private bucketTarget(clientX: number, clientY: number): BucketTarget | null {
+		const layout = this.layout;
+		if (!layout) return null;
+		const r = this.stage.getBoundingClientRect();
+		const [dx, dy] = screenToPage(this.viewport, clientX - r.left, clientY - r.top);
+		const index = pageAt(layout, dx, dy, PAGE_TOLERANCE);
+		const page = index < 0 ? null : this.pageAtIndex(index);
+		const box = index < 0 ? null : layout.boxes[index];
+		if (!page || !box) return null;
+		const [x, y] = toPageLocal(box, dx, dy);
+		if (x < 0 || y < 0 || x > page.width || y > page.height) return null;
+		return { page, pageIndex: index, ink: this.inkInView(page), x, y };
+	}
+
+	/** 0.28 (#184): puts a fill at the back of the page's ink as one undo step ("Fill area"). */
+	private addBucketFill(target: BucketTarget, stroke: Stroke, index: number): boolean {
+		const cmd = new Batch("Fill area", [new AddStroke(target.page.id, freezeStroke(stroke), index)]);
+		if (!this.history.execute(cmd)) return false;
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+		return true;
+	}
+
 	/** 0.26 ctxpalette (#394): the page in view and its background for the colour picker's context rows (nothing is rendered for it). */
 	private paletteContext(): PageColourContext | null {
 		const page = this.session?.doc?.pages[this.currentPageIndex()];
@@ -3378,11 +3607,11 @@ export class NotebookView extends FileView {
 		const tolerance = TOLERANCES[this.host.settings.meaningTolerance] ?? MATCH_TOLERANCE;
 		return {
 			usage: page,
-			slideKey: bg ? `${bg.kind}:${bg.asset}:${bg.kind === "pdf" ? bg.page : 0}` : null,
+			slideKey: bg ? `${bg.kind}:${bg.asset}:${bg.kind === "pdf" ? bg.page : 0}${bg.kind === "pdf" ? `:${viewKey(viewOf(bg))}` : ""}` : null,
 			slide: () => {
 				if (!bg || !media) return null;
 				if (bg.kind === "image") return media.image(bg.asset);
-				return (media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null;
+				return (media.pdf.peek(bg.asset, bg.page, undefined, viewOf(bg))?.canvas as CanvasImageSource | undefined) ?? null;
 			},
 			labelOf: (hex) => {
 				const i = matchMeaning(hex, legend, tolerance);
@@ -3617,7 +3846,7 @@ export class NotebookView extends FileView {
 			scale: () => this.viewport.scale,
 		});
 		this.renderer?.setHiddenInk((page) => this.markers?.isRevealed(page) ?? false);
-		this.renderer?.setBoxLabel(translatedBoxLabel);
+		this.renderer?.setBoxLabel(this.boxNumbers.label);
 	}
 
 	private pageCommand(cmd: Command, scrollTo: number, page: Page): void {
@@ -3633,6 +3862,27 @@ export class NotebookView extends FileView {
 	private movePage(from: number, to: number): void {
 		const page = this.session?.doc?.pages[from];
 		if (page && to >= 0 && to < (this.session?.doc?.pages.length ?? 0)) this.pageCommand(new MovePage(page.id, from, to), to, page);
+	}
+
+	/** 0.28 livelecture (#132): "Important moment": a stamped bookmark ("★ 12:34") on the current page, one undo step. */
+	private markLiveMoment(seconds: number): void {
+		const doc = this.session?.doc;
+		const index = this.currentPageIndex();
+		const page = doc?.pages[index];
+		if (!doc || !page) return;
+		if (!this.editable() || this.controller?.drawing) {
+			showNotice(t("liveBar.readOnly"), 3000);
+			return;
+		}
+		const label = markLabel(seconds);
+		const before = doc.meta ?? cloneMeta(DEFAULT_META);
+		const info = { ...(before.bookmarkInfo ?? {}) };
+		const old = info[page.id];
+		info[page.id] = { ...old, title: addMarkToTitle(old?.title, label), category: old?.category ?? "important" };
+		const bookmarks = before.bookmarks.includes(page.id) ? before.bookmarks : [...before.bookmarks, page.id];
+		this.history.execute(new SetMeta(before, mergeMeta(before, { bookmarks, bookmarkInfo: info })));
+		this.afterHistoryChange();
+		showNotice(t("liveBar.marked", { label, n: String(index + 1) }), 2000);
 	}
 
 	private toggleBookmarkOf(pageId: string): void {
@@ -4496,7 +4746,7 @@ export class NotebookView extends FileView {
 			states: { open: !!this.statesTools?.open },
 			comments: { panel: this.comments?.panelOpen ?? false, total: this.comments?.counts.total ?? 0, open: this.comments?.counts.open ?? 0, drawing: this.comments?.drawing ?? false },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, spread: this.spreadOn, spreadRoom: canSpread(this.viewSize) || this.spreadOn, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", highlighterArea: this.tools.highlighterArea, readOnly: this.userReadOnly,
-				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused },
+				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused, lineHandles: this.lineHandles?.active === true },
 			canPrint: canPrint(),
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
@@ -4507,6 +4757,19 @@ export class NotebookView extends FileView {
 			narrow: this.body?.hasClass("is-narrow") ?? false,
 			openNotebooks: this.tabs?.count ?? 0,
 		};
+	}
+
+	private readonly suggestCache = new WeakMap<Selection, string[]>();
+
+	/** 0.28 (#403): action ids suggested by the geometry of the selection (cached per selection: the rules run once, not on every refresh). */
+	private suggestionsFor(sel: Selection): string[] {
+		if (!this.host.settings.suggestSelection || sel.others?.length || !this.editable()) return [];
+		let ids = this.suggestCache.get(sel);
+		if (!ids) {
+			ids = suggestForSelection(withoutPinnedInk(sel.strokes, sel.elements), sel.elements);
+			this.suggestCache.set(sel, ids);
+		}
+		return ids;
 	}
 
 	/** What the UI knows about the selection (wave 0.10: the items of every page of a selection across pages count). */
@@ -4536,6 +4799,10 @@ export class NotebookView extends FileView {
 			// 0.20 (#39): Group works within one page (a group never spans pages); Ungroup and Lock work on every page of the selection.
 			canGroup: !sel.others?.length && canGroup({ strokes: sel.strokes, elements: sel.elements }),
 			grouped: parts.reduce((n, p) => n + p.strokes.filter((s) => s.group !== undefined).length + p.elements.filter((e) => e.group !== undefined).length, 0),
+			// 0.28 (#41): the selection is exactly one hand-drawn table (the table actions show then).
+			table: parts.length === 1 && !!parts[0] && tableOfSelection(parts[0].strokes, parts[0].elements.length) !== null,
+			// 0.28 (#403): the chips the shape of the selection suggests (one page, ink only; empty when the setting is off).
+			suggest: this.suggestionsFor(sel),
 		};
 	}
 
@@ -4633,6 +4900,11 @@ export class NotebookView extends FileView {
 		return {
 			app: this.app, file, doc, media, folder: this.host.settings.folder,
 			editable: () => this.stillHere(session) && session.doc === doc,
+			// 0.28 (#76): a page with redaction boxes (switched on or off; or boxes that cannot be read) is never turned or cropped: its boxes would stay where the old page was.
+			hasRedaction: (pageId) => {
+				const stored = this.redactState();
+				return stored.unreadable === true || boxesOf(stored.boxes, pageId).length > 0;
+			},
 			run: (cmd, scrollTo) => {
 				if (!this.stillHere(session) || session.doc !== doc) return false;
 				this.commitText();
@@ -4967,6 +5239,7 @@ export class NotebookView extends FileView {
 
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
 		this.headingWarm.touch(8000);
+		this.boxNumbers.reset();
 		this.active = null;
 		this.jumping = null;
 		this.erasing = null;
@@ -5022,6 +5295,7 @@ export class NotebookView extends FileView {
 			this.syncHooks?.loaded();
 			this.practiceHooks?.loaded();
 			this.lectureMode?.opened();
+			this.liveBar?.sync();
 			this.lectureHeader?.opened();
 			this.lectureHeader?.pagesChanged();
 		} else {
@@ -5103,7 +5377,7 @@ export class NotebookView extends FileView {
 		const header = this.exportHeader();
 		return {
 			file, doc, pages: [...this.renderPagesOf(doc)],
-			options: { boxLabel: translatedBoxLabel, equationNumbers: equationNumbers(doc.pages), ...(header ? { header } : {}) },
+			options: { boxLabel: this.boxNumbers.label, equationNumbers: equationNumbers(doc.pages), ...(header ? { header } : {}) },
 			stamp: () => this.editTick,
 			unsaved: () => from.dirty,
 		};
@@ -5182,7 +5456,8 @@ export class NotebookView extends FileView {
 	}
 
 	private updateHistoryButtons(): void {
-		this.toolbar.setHistory(this.editable() && this.history.canUndo(), this.editable() && this.history.canRedo());
+		const available = this.historyAvailable();
+		this.toolbar.setHistory(this.editable() && available.undo, this.editable() && available.redo);
 	}
 
 	private updatePageIndicator(): void {
@@ -5210,6 +5485,7 @@ export class NotebookView extends FileView {
 			this.axes?.cancelOffer();
 			this.smartAdd?.hide();
 			this.refreshUi(); // the contextual bar follows the kind of page in view
+			if (this.pageUndoOn()) this.updateHistoryButtons(); // 0.28 (#98): Undo / Redo belong to the page in view
 			if (n && this.file && this.pendingPage === null) this.location.note(this.file.path, current + 1, this.currentPosition());
 			this.syncHooks?.page(current);
 		} else if (n && this.file && this.pendingPage === null) {
@@ -5225,6 +5501,7 @@ export class NotebookView extends FileView {
 		this.syncZoomHint();
 		this.radial?.noteTools(state);
 		this.colour?.noteTools(state);
+		this.bucket?.noteTool(state.tool);
 		this.lastTool.note(state.tool);
 		// v10: an armed excerpt region is for the tool it was armed with.
 		if (state.tool !== before.tool) this.excerpts?.disarm();
@@ -5286,7 +5563,7 @@ export class NotebookView extends FileView {
 		let pdfCanvas: CanvasImageSource | undefined;
 		if (bg && bg.kind === "pdf" && this.media) {
 			try {
-				pdfCanvas = await this.media.pdf.render(bg.asset, bg.page, widthPx / Math.max(1, page.width));
+				pdfCanvas = await this.media.pdf.render(bg.asset, bg.page, widthPx / Math.max(1, page.width), viewOf(bg));
 			} catch (e) {
 				console.error("[notebook] presentation: rendering the PDF page failed", e);
 			}
@@ -5396,8 +5673,8 @@ export class NotebookView extends FileView {
 			else if (bg.kind === "image") img = media.image(bg.asset);
 			else {
 				// Never ask for another scale of a page the main view is drawing: a render in flight would be cancelled.
-				img = (media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null;
-				if (!img && !this.isPageVisible(page)) this.renderThumbPdf(bg.asset, bg.page);
+				img = (media.pdf.peek(bg.asset, bg.page, undefined, viewOf(bg))?.canvas as CanvasImageSource | undefined) ?? null;
+				if (!img && !this.isPageVisible(page)) this.renderThumbPdf(bg.asset, bg.page, viewOf(bg));
 			}
 			const r = backgroundRect(page);
 			if (img) ctx.drawImage(img, r.x, r.y, r.width, r.height);
@@ -5425,12 +5702,12 @@ export class NotebookView extends FileView {
 		if (incomplete) this.thumbPending.add(page.id);
 	}
 
-	private renderThumbPdf(asset: string, pageNumber: number): void {
+	private renderThumbPdf(asset: string, pageNumber: number, view?: PdfView): void {
 		const media = this.media;
-		const key = `${asset}|${pageNumber}`;
+		const key = `${asset}|${pageNumber}|${viewKey(view)}`;
 		if (!media || this.thumbRendering.has(key)) return;
 		this.thumbRendering.add(key);
-		media.pdf.render(asset, pageNumber, THUMB_PDF_SCALE).then(() => this.onMediaChanged(), () => undefined)
+		media.pdf.render(asset, pageNumber, THUMB_PDF_SCALE, view).then(() => this.onMediaChanged(), () => undefined)
 			.finally(() => this.thumbRendering.delete(key));
 	}
 

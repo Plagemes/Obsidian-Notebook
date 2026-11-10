@@ -17,6 +17,7 @@ import { GotoPageModal } from "./goto-page";
 import type { NotebookView } from "./notebook-view";
 import { editBookmark, editPageTags } from "./outline";
 import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./pdf-actions";
+import { openPdfCropModal, rotatePdfPage } from "./pdf-view-actions";
 import { openSlideStripOf, pdfSideState, runPdfSideAction, type PdfSideAction } from "./pdf-sync";
 import { saveNotebookAsTemplate } from "./notebook-templates";
 import { ReferencePickerModal } from "./ref-window-picker";
@@ -127,6 +128,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"colour-picker": (v) => v.colourTools?.togglePicker(),
 	"colour-eyedropper": (v) => v.colourTools?.armEyedropper("colour"),
 	"style-eyedropper": (v) => v.colourTools?.armEyedropper("style"),
+	// 0.28 (#184): the paint bucket fills the area under the next tap
+	"paint-bucket": (v) => v.paintBucket?.arm(),
 	"undo": (v) => v.undo(),
 	"redo": (v) => v.redo(),
 	"history-panel": (v) => v.openHistoryPanel(),
@@ -149,12 +152,14 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"comment-next": (v) => void v.commentTools?.step(1),
 	// 0.17 (#57): a task from the selection
 	"selection-make-task": (v) => v.makeTaskFromSelection(),
+	"selection-highlight": (v) => v.highlightSelection(),
 	// 0.19 (#213): look up later
 	"selection-look-up": (v) => v.lookUpFromSelection(),
 	"look-up-list": (v) => v.openLookUpList(),
 	"selection-add-to-index": (v) => v.addToIndexFromSelection(),
 	"book-index": (v) => v.openBookIndex(),
 	"formula-sheet": (v) => v.openFormulaSheet(),
+	"box-index": (v) => v.openBoxIndex(),
 	// 0.18 (#59): the selection as a picture in a note
 	"selection-insert-note": (v) => v.insertSelectionIntoNote("png"),
 	"selection-insert-note-svg": (v) => v.insertSelectionIntoNote("svg"),
@@ -184,6 +189,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.26 (#238): tidy up the selection, or the page (the page in view, or the one the page sheet was opened from)
 	"selection-tidy": (v) => v.selectionTools?.tidy(),
 	"page-tidy": (v, arg) => v.selectionTools?.tidy(arg.page),
+	// 0.28 (#256): handles to drag whole handwritten lines (a toggle)
+	"page-reorder-lines": (v) => v.lineHandleTools?.toggle(),
 	"selection-smooth": (v) => v.selectionTools?.reshape("smooth"),
 	"selection-straighten": (v) => v.selectionTools?.reshape("straighten"),
 	// 0.15 (241): drawings with states
@@ -231,6 +238,13 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.19 (#103): handwritten checklists
 	"insert-checkbox": (v) => v.checklistTools?.insert(),
 	"insert-axes": (v) => v.axesTools?.insert(),
+	// 0.28 (#41): hand-drawn tables
+	"insert-table": (v) => void v.tableTools?.insert(),
+	"table-add-row": (v) => v.tableTools?.addRow(),
+	"table-add-col": (v) => v.tableTools?.addColumn(),
+	"table-remove-row": (v) => v.tableTools?.removeRow(),
+	"table-remove-col": (v) => v.tableTools?.removeColumn(),
+	"table-even": (v) => v.tableTools?.evenOut(),
 	"checkbox-toggle": (v) => v.checklistTools?.toggleSelected(),
 	"checkbox-select-label": (v) => v.checklistTools?.selectWithLabel(),
 	"checkbox-label": (v) => v.checklistTools?.editLabel(),
@@ -349,6 +363,22 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 		const host = v.pdfActionHost();
 		if (!host || !p.background || !host.editable()) showNotice(t("pdf.noPdfPage"));
 		else openMarginsModal(host, p);
+	}),
+	// 0.28 (#76): rotate and crop the PDF page.
+	"pdf-rotate-right": onPage((v, p) => {
+		const host = v.pdfActionHost();
+		if (!host || p.background?.kind !== "pdf") showNotice(t("pdf.noPdfPage"));
+		else void rotatePdfPage(host, p, 1);
+	}),
+	"pdf-rotate-left": onPage((v, p) => {
+		const host = v.pdfActionHost();
+		if (!host || p.background?.kind !== "pdf") showNotice(t("pdf.noPdfPage"));
+		else void rotatePdfPage(host, p, -1);
+	}),
+	"pdf-crop": onPage((v, p) => {
+		const host = v.pdfActionHost();
+		if (!host || p.background?.kind !== "pdf") showNotice(t("pdf.noPdfPage"));
+		else void openPdfCropModal(host, p);
 	}),
 	"pdf-update": onPage((v, _p, i) => {
 		const host = v.pdfActionHost();

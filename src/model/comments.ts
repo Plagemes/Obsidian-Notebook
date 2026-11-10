@@ -4,6 +4,8 @@
 // travel with a copied region (see docs/architecture.md, *Margin comments, format v16*). Every change is a `SetPageComments`
 // command: one undo step, refused on a locked page by the history's one guard.
 import type { BBox } from "../ink/hit-test";
+import type { Matrix } from "../ink/transform";
+import { mapRect } from "./pdf-view";
 import { cleanCommentAuthor, cleanCommentText, clampRegion, normalizeSketch, readComments } from "./comments-format";
 import { createId } from "./document";
 import type { Command } from "./history";
@@ -17,6 +19,15 @@ export function shiftComments(list: readonly PageComment[], dx: number): PageCom
 	if (dx === 0) return list as PageComment[];
 	const round = (v: number) => Math.round(v * 10) / 10;
 	return freezeList(list.map((c) => (isNote(c) ? freezeComment({ ...c, region: { ...c.region, x: round(c.region.x + dx) } }) : c)));
+}
+
+/**
+ * 0.28 (#76): the comments after the page was turned or cropped: every region is the rectangle `m` (a quarter turn and a translation) carries it
+ * to, kept inside the page that is now `size` (a comment is never dropped: one that falls outside is moved to the nearest edge and may shrink).
+ * The sketches live in the comment's own frame and do not turn. A new frozen list.
+ */
+export function transformComments(list: readonly PageComment[], m: Matrix, size: { width: number; height: number }): PageComment[] {
+	return freezeList(list.map((c) => (isNote(c) ? freezeComment({ ...c, region: clampRegion(mapRect(m, c.region), size) }) : c)));
 }
 
 /** The padding added around a selection when it becomes the region of a comment (pt). */

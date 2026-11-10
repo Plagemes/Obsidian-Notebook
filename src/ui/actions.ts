@@ -51,7 +51,9 @@ export interface UiContext {
 		/** 0.23 (#294): selected text boxes and equations that hold a typed chemical reaction (optional, 0 when absent). */ reactions?: number;
 		/** 0.17 (#20): selected sticky notes, and how many of them are collapsed (optional, 0 when absent). */ stickies?: number; stickiesCollapsed?: number;
 		/** 0.19 (#103): selected checkboxes, and how many of them are linked to a task (optional, 0 when absent). */ checkboxes?: number; checkboxesLinked?: number;
+		/** 0.28 (#403): action ids the geometry of the selection suggests (chips at the front of the selection bar; optional, none when absent). */ suggest?: readonly string[];
 		/** 0.20 (#39): the selected items can be made one group (two or more, not already exactly one group), and how many of them are in a group now (optional, false and 0 when absent). */ canGroup?: boolean; grouped?: number;
+		/** 0.28 (#41): the selection is exactly one hand-drawn table (optional, false when absent). */ table?: boolean;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -80,6 +82,7 @@ export interface UiContext {
 		/** 0.25 (#99): the highlighter marks rectangles (area highlighter) instead of strokes. */ highlighterArea?: boolean;
 		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
 		/** 0.17 (#71): snap is available (the setting is not "off") and whether it is on now (not paused in this view). Optional (absent: available, on). */ snapAvailable?: boolean; snap?: boolean;
+		/** 0.28 (#256): the "Reorder lines" mode (handles at the left of the handwritten lines) is on. Optional (off when absent). */ lineHandles?: boolean;
 	};
 	/** wave 0.10 (81): the device can print (desktop with a print dialog); false or absent on a phone or tablet. */
 	canPrint?: boolean;
@@ -210,6 +213,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "colour-picker", label: "command.colourPicker", icon: "palette", group: "tool", surfaces: ["options", "radial", "palette"], priority: 45, scope: "view", command: true, keywords: "colour color custom hex hue recent" },
 	{ id: "colour-eyedropper", label: "command.colourEyedropper", icon: "pipette", group: "tool", surfaces: ["options", "radial", "palette"], priority: 44, scope: "view", command: true, keywords: "colour color pick sample" },
 	{ id: "style-eyedropper", label: "command.styleEyedropper", icon: "droplets", group: "tool", surfaces: ["options", "palette"], priority: 43, scope: "view", command: true, keywords: "style pen width tool copy format stroke" },
+	// 0.28 (#184): the paint bucket (view/paint-bucket.ts): a tap inside an area closed by ink fills it behind the ink; last button of the colour row.
+	{ id: "paint-bucket", label: "command.paintBucket", icon: "paint-bucket", group: "tool", surfaces: ["options", "palette"], priority: 42, scope: "view", command: true, keywords: "fill area colour color flood bucket closed shape diagram map riempi area secchiello" },
 	...[1, 2, 3, 4, 5, 6].map(favourite),
 
 	// --- history: fixed in the toolbar, also in the radial menu and as gestures.
@@ -320,6 +325,12 @@ export const ACTIONS: readonly ActionDef[] = [
 	// send to tasks from the selection bar. Tapping a checkbox with the pen or a finger ticks it without selecting it.
 	{ id: "insert-checkbox", label: "checklist.insert", icon: "square-check", group: "insert", surfaces: ["sheet"], priority: 57, scope: "view", command: "checklist.command.insert", enabled: pageOpen, keywords: "checkbox checklist todo tick task list casella spunta elenco attivita lista" },
 	{ id: "insert-axes", label: "axes.insert", icon: "axis-3d", group: "insert", surfaces: ["sheet"], priority: 56, scope: "view", command: "axes.command.insert", enabled: pageOpen, keywords: "axes axis graph cartesian plot ticks assi grafico cartesiano piano" },
+	{ id: "insert-table", label: "table.insert", icon: "table", group: "insert", surfaces: ["sheet"], priority: 55, scope: "view", command: "table.command.insert", enabled: pageOpen, keywords: "table grid cells rows columns insert draw tabella griglia celle righe colonne inserisci" },
+	{ id: "table-add-row", label: "table.addRow", icon: "between-horizontal-end", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 54, scope: "view", command: "table.command.addRow", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table row add insert tabella riga aggiungi" },
+	{ id: "table-add-col", label: "table.addCol", icon: "between-vertical-end", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 53, scope: "view", command: "table.command.addCol", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table column add insert tabella colonna aggiungi" },
+	{ id: "table-remove-row", label: "table.removeRow", icon: "rows-3", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 48, scope: "view", command: "table.command.removeRow", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table row remove delete last tabella riga rimuovi ultima" },
+	{ id: "table-remove-col", label: "table.removeCol", icon: "columns-3", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 47, scope: "view", command: "table.command.removeCol", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table column remove delete last tabella colonna rimuovi ultima" },
+	{ id: "table-even", label: "table.even", icon: "layout-grid", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 46, scope: "view", command: "table.command.even", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table cells even equal resize same size tabella celle uniformi uguali dimensione" },
 	{ id: "checkbox-toggle", label: "checklist.toggle", icon: "square-check", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 93, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) > 0, enabled: pageOpen, keywords: "checkbox tick untick casella spunta" },
 	{ id: "checkbox-select-label", label: "checklist.selectLabel", icon: "text-select", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, keywords: "checkbox label text select casella testo seleziona" },
 	{ id: "checkbox-label", label: "checklist.editLabel", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 89, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, enabled: pageOpen, keywords: "checkbox label name casella etichetta nome" },
@@ -366,6 +377,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "page-unlock", label: "page.unlock", icon: "lock-open", group: "page", surfaces: ["page", "sheet"], priority: 49, scope: "view", when: (c) => !!c.page?.locked, keywords: "unlock edit sblocca" },
 	{ id: "page-lock-toggle", label: "command.lockPage", icon: "lock", group: "page", surfaces: ["palette"], priority: 10, scope: "view", command: true },
 	// 0.26 (#238): the same tidy-up for the whole page (the selection, when there is one, in the palette).
+	// 0.28 (#256): a handle at the left of every handwritten line: drag it to move the whole line between the others (a toggle; also up and down buttons).
+	{ id: "page-reorder-lines", label: "linehandle.action", icon: "grip-vertical", group: "page", surfaces: ["page", "sheet"], priority: 43, scope: "view", command: "command.reorderLines", enabled: (c) => c.editable && (!c.page?.locked || !!c.toggles.lineHandles), checked: (c) => !!c.toggles.lineHandles, keywords: "reorder lines line handle drag move swap up down handwriting riordina righe riga maniglia trascina sposta scrittura" },
 	{ id: "page-tidy", label: "tidy.pageAction", icon: "align-left", group: "page", surfaces: ["page", "sheet"], priority: 44, scope: "view", command: "command.tidyPage", enabled: pageOpen, keywords: "tidy up clean straighten align margin gap space spacing handwriting selection riordina allinea raddrizza margine spazio scrittura" },
 	// 0.20 (#39): the elements locked on the page (a background picture that must not move): listed, shown and unlocked from here.
 	{ id: "locked-elements", label: "groups.lockedElements", icon: "lock", group: "page", surfaces: ["page", "sheet"], priority: 47, scope: "view", command: "groups.command.lockedElements", when: (c) => (c.page?.lockedElements ?? 0) > 0, keywords: "locked lock fixed background element unlock bloccati sblocca sfondo" },
@@ -404,6 +417,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "toggle-annotations", label: "reading.annotations.hide", icon: "eye-off", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 60, scope: "view", command: "command.annotationsToggle", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => c.reading.annotationsHidden },
 	{ id: "toggle-dim-background", label: "reading.dim", icon: "sun-dim", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf", "image"], priority: 50, scope: "view", command: "command.dimToggle", readOnly: true, when: (c) => c.notebook.backgrounds, checked: (c) => c.reading.dim },
 	{ id: "pdf-margins", label: "pdf.margins.menu", icon: "move-horizontal", group: "reading", surfaces: ["context", "page"], contexts: ["pdf", "image"], priority: 40, scope: "view", enabled: pageOpen, command: "command.pdfMargins", when: backgroundPage },
+	// 0.28 (#76): turn and crop the PDF page (stored on the page's background, format v26; the ink and notes on the page turn with it).
+	{ id: "pdf-rotate-right", label: "pdfView.rotateRight", icon: "rotate-cw", group: "reading", surfaces: ["page", "sheet"], priority: 38, scope: "view", enabled: pageOpen, command: "command.pdfRotateRight", when: pdfPage, keywords: "rotate turn pdf page clockwise landscape portrait ruota gira pagina orario orizzontale verticale" },
+	{ id: "pdf-rotate-left", label: "pdfView.rotateLeft", icon: "rotate-ccw", group: "reading", surfaces: ["page", "sheet"], priority: 37, scope: "view", enabled: pageOpen, command: "command.pdfRotateLeft", when: pdfPage, keywords: "rotate turn pdf page anticlockwise landscape portrait ruota gira pagina antiorario orizzontale verticale" },
+	{ id: "pdf-crop", label: "pdfView.crop", icon: "crop", group: "reading", surfaces: ["page", "sheet"], priority: 39, scope: "view", enabled: pageOpen, command: "command.pdfCrop", when: pdfPage, keywords: "crop trim cut margins pdf page ritaglia taglia margini pagina" },
 	// wave 0.9 (376): the white margins of PDF pages fall off screen (view-only; the notebook, the ink and the exports are unchanged).
 	{ id: "crop-margins", label: "display.crop", icon: "crop", group: "reading", surfaces: ["context", "sheet"], contexts: ["pdf"], priority: 42, scope: "view", command: "command.cropMargins", readOnly: true, when: (c) => c.notebook.pdfPages, checked: (c) => !!c.display?.crop, keywords: "margins zoom small screen phone content ritaglia margini" },
 	{ id: "pdf-update", label: "pdf.update.menu", icon: "refresh-cw", group: "reading", surfaces: ["page", "sheet"], priority: 20, scope: "view", enabled: pageOpen, command: "command.pdfUpdate", when: pdfPage },
@@ -600,6 +617,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-copy-page", label: "movePage.copy", icon: "copy", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 42, scope: "view", command: true, when: hasSelection, keywords: "copy duplicate page another copia pagina selezione" },
 	// 0.17 (#57): the selection becomes a task in a note (the daily note, a tasks note or a chosen one), linked back to the page.
 	{ id: "selection-make-task", label: "task.action", icon: "list-checks", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 41, scope: "view", command: true, when: hasSelection, keywords: "task todo checkbox daily note attivita compito" },
+	// 0.28 geosuggest (#403): an area highlighter behind the selection (the chip a row of words offers; always in the sheet and the command palette).
+	{ id: "selection-highlight", label: "geosuggest.highlight", icon: "highlighter", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.2, scope: "view", command: "command.selectionHighlight", when: hasSelection, enabled: pageOpen, keywords: "highlight area rectangle behind selection words evidenzia area rettangolo selezione" },
 	// 0.19 (#213): the circled word goes to the "Look up later" list, with its picture; the sheet lists this notebook's entries.
 	{ id: "selection-look-up", label: "lookup.action", icon: "book-search", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 39, scope: "view", command: true, when: hasSelection, keywords: "look up later word dictionary list circle cerca dopo parola elenco" },
 	{ id: "look-up-list", label: "lookup.sheet.menu", icon: "book-search", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 23, scope: "view", command: "command.lookUpList", readOnly: true, keywords: "look up later list words dictionary cerca dopo elenco parole" },
@@ -607,6 +626,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-add-to-index", label: "bookindex.action", icon: "book-a", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 38, scope: "view", command: true, when: hasSelection, keywords: "index back of book term glossary indice analitico termine" },
 	{ id: "book-index", label: "bookindex.menu", icon: "book-a", group: "share", surfaces: ["sheet", "notebook"], priority: 22, scope: "view", command: "command.bookIndex", readOnly: true, keywords: "index back of book terms pages glossary indice analitico termini pagine" },
 	{ id: "formula-sheet", label: "formulasheet.menu", icon: "sigma", group: "share", surfaces: ["sheet", "notebook"], priority: 21, scope: "view", command: "command.formulaSheet", readOnly: true, keywords: "formula sheet equations latex maths collect formulario formule equazioni raccolta" },
+	// 0.28 (#205): index of the numbered definitions and theorems.
+	{ id: "box-index", label: "boxindex.menu", icon: "list-ordered", group: "share", surfaces: ["sheet", "notebook"], priority: 20, scope: "view", command: "command.boxIndex", readOnly: true, keywords: "definitions theorems index numbered boxes list definizioni teoremi indice numerati riquadri elenco" },
 	// 0.18 (#86): margin comments: a comment anchored to the selection's region, or to a rectangle drawn on the page; the side panel lists them.
 	{ id: "comment-selection", label: "comments.action", icon: "message-square-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40, scope: "view", command: "comments.command.selection", when: hasSelection, enabled: pageOpen, keywords: "comment note margin review annotation commento nota margine revisione" },
 	{ id: "comment-region", label: "comments.region", icon: "square-dashed", group: "insert", surfaces: ["sheet", "palette"], priority: 46, scope: "view", command: true, enabled: pageOpen, keywords: "comment region rectangle margin note review commento regione rettangolo margine" },

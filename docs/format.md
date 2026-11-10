@@ -1,6 +1,6 @@
-# The `.notebook` file format (version 25)
+# The `.notebook` file format (version 26)
 
-This guide is for people who write tools that read (or carefully write) Notebook files: converters, search indexes, viewers, backup scripts. The machine-readable contract is the JSON Schema [`docs/schema/notebook-v25.schema.json`](schema/notebook-v25.schema.json) (draft 2020-12). The reasoning behind the format and the full history of every field is in [architecture.md](architecture.md), section 2.
+This guide is for people who write tools that read (or carefully write) Notebook files: converters, search indexes, viewers, backup scripts. The machine-readable contract is the JSON Schema [`docs/schema/notebook-v26.schema.json`](schema/notebook-v26.schema.json) (draft 2020-12). The reasoning behind the format and the full history of every field is in [architecture.md](architecture.md), section 2.
 
 A schema file is also kept in the test suite: `tests/format-schema.test.ts` validates real serializer output (a document that uses every element type and every optional field) against it, and checks that invalid documents are refused. If the plugin changes the format, that test fails until the schema is updated.
 
@@ -16,7 +16,7 @@ Top level:
 | Field | Meaning |
 |---|---|
 | `format` | always `"obsidian-notebook"` |
-| `version` | integer, currently `25` |
+| `version` | integer, currently `26` |
 | `id` | document id; survives renames and "Make a copy" |
 | `createdAt`, `modifiedAt` | ISO times |
 | `meta` | `tags`, `favorite`, `cover` (colour), `bookmarks` (page ids), optional `bookmarkInfo`, `description`, `coverArt` |
@@ -47,6 +47,14 @@ A **stroke** is vector ink: `id`, `tool` (`pen`, `highlighter`, `shape`, and fro
 
 Every element may also carry `group`, `locked` and `lockAt` (v18).
 
+A **PDF background** is `{ "kind": "pdf", "asset", "page" }` and, from v26, optionally `rotate` and `crop`: the page shows a turned and/or cropped part of the PDF page.
+
+- `rotate` is `90`, `180` or `270`: degrees **clockwise**, on top of the rotation the PDF page already has (its own `/Rotate`, which every PDF reader applies). Absent means upright; the plugin never writes `0`.
+- `crop` is `{ "x", "y", "width", "height" }` in PDF points of the page as a reader draws it upright at scale 1 (origin top-left, y down; the page's size is `PdfStore.pageSizes`, not stored in the file). Sides are at least 16 and no value is above 14400. The crop is applied first and the rotation second: the page shows the cropped rectangle, turned. Absent means the whole PDF page. A reader clamps a crop to the PDF page it is applied to (a crop kept for another version of the PDF never shows nothing: if what is left is a sliver, the whole page is shown).
+- The page keeps its own `width`/`height`/`margins` as before: the background box (`margins.left`, 0, `width - left - right`, `height - bottom`) holds the *shown* part, scaled to fill it; a page made from a PDF is exactly as large as the shown part (in pt), so one PDF point is one page point. The ink, elements, areas, comment regions and the pivots and poses of states are in page coordinates and are carried with the PDF when the view changes (a quarter turn and a translation: the writer does this in one undo step, a reader never has to), so they stay on the same part of the PDF. Text boxes, equations, graphs, sticky notes and checkboxes (which have no rotated form) keep their orientation and size and only their centre goes where it would go.
+- Ink that would end up beyond the left, right or bottom edge of the new page is **kept visible**: the margins grow to hold it. Ink that would end up above the top edge (a page has no top margin) stops the change (nothing is changed, nothing is lost). Comment regions are kept inside the page (moved to the nearest edge).
+- A *view-only* option of the plugin ("Crop PDF margins": the white margins of the PDF fall off screen) is separate and writes nothing: it finds the white margins **inside** what the page shows, so it combines with a stored crop (the stored crop first, the view-only fit within it).
+
 Rules a JSON Schema cannot say (the plugin enforces them when it writes and checks them when it reads):
 
 - Ids of strokes and elements are **unique across the whole document**; page ids are unique; comment ids are unique within their page.
@@ -62,8 +70,8 @@ Rules a JSON Schema cannot say (the plugin enforces them when it writes and chec
 ## Versioning and migrations
 
 - `version` is an integer that grows with every schema change. Every change adds a tested migration (`src/model/migrations.ts`), and every older valid document stays valid after migration (most steps are "the identity plus the new version number").
-- Newer fields are always **optional** and written only when used; the version of a file is the version of the plugin that last saved it. v25 added the optional `taperStart` and `taperEnd` of a pen, fountain pen or brush stroke; v24 added the optional `opacity` of a stroke, an image and an area; v23 added the area highlighter (the element type `area`); v22 added the fill and the line style of shapes (`fill`, `fillTint`, `dash` of a stroke); v21 added the saved views (the notebook-level `views` list); v20 added the fountain pen, the brush and the marker (three more `tool` values) and the nib angle of a stroke; v19 added the start and end time of a page; v18 groups and locks; v17 checkboxes; v16 margin comments; v15 sticky notes; v14 page lock; v13 states; v12 slides; v11 description and cover art; v10 excerpts; v9 equations and graphs; v8 markers, boxes and hidden ink; v7 bookmark details, page tags, reading position and more paper kinds; v6 margins; v5 the per-stroke `render`; v4 metadata, assets, backgrounds and elements. The table of what each version added is in architecture.md.
-- **This schema describes version 25 only.** A file with another `version` is not valid against it. The schema file name carries the version (`notebook-v25.schema.json`); a future format version ships its own schema next to this one, and older schemas stay available in the repository history.
+- Newer fields are always **optional** and written only when used; the version of a file is the version of the plugin that last saved it. v26 added the optional `rotate` and `crop` of a PDF page background; v25 added the optional `taperStart` and `taperEnd` of a pen, fountain pen or brush stroke; v24 added the optional `opacity` of a stroke, an image and an area; v23 added the area highlighter (the element type `area`); v22 added the fill and the line style of shapes (`fill`, `fillTint`, `dash` of a stroke); v21 added the saved views (the notebook-level `views` list); v20 added the fountain pen, the brush and the marker (three more `tool` values) and the nib angle of a stroke; v19 added the start and end time of a page; v18 groups and locks; v17 checkboxes; v16 margin comments; v15 sticky notes; v14 page lock; v13 states; v12 slides; v11 description and cover art; v10 excerpts; v9 equations and graphs; v8 markers, boxes and hidden ink; v7 bookmark details, page tags, reading position and more paper kinds; v6 margins; v5 the per-stroke `render`; v4 metadata, assets, backgrounds and elements. The table of what each version added is in architecture.md.
+- **This schema describes version 26 only.** A file with another `version` is not valid against it. The schema file name carries the version (`notebook-v26.schema.json`); a future format version ships its own schema next to this one, and older schemas stay available in the repository history.
 - A plugin never rewrites a file of a **newer** version than it understands: it opens it read-only and keeps a backup copy in `<notebooks folder>/_backup/`. A tool that writes notebooks should follow the same rule: never save a file whose `version` it does not know.
 
 ## Reading leniently
@@ -72,7 +80,7 @@ The plugin itself reads in two modes, and a third-party reader should do the sam
 
 1. **Parse and check `format` and `version`.** Not `"obsidian-notebook"` means "not a notebook". A higher `version` than you support means "newer notebook": show it read-only or refuse it, never edit it.
 2. **Ignore unknown fields.** Objects are open: fields you do not know (from a newer version of the plugin, or another tool) must be skipped on read and, if you write, kept.
-3. **Treat optional details as optional.** A marker with a bad due date, a graph function that does not parse, a bookmark with a strange colour or a comment outside the page should lose that detail only, not make the whole notebook unreadable. The plugin counts such things as "dropped" and keeps a backup before it overwrites them. Required data (a stroke's points, an element's frame) that is invalid means that object is skipped. A stroke whose `tool` name this version does not know is read as a `pen` and counted the same way (the ink is kept and a backup is made); the strict write never accepts such a name, and the next save writes `pen`. An `opacity` outside 0.05 to 1 is clamped to that range, and one that is not a number is dropped (the item is then drawn at full strength), each counted the same way; the strict write refuses both. A `taperStart` or `taperEnd` outside 0.05 to 1 (0 included), one that is not a number, and one on a stroke that cannot taper (a highlighter, a marker, a shape, or a pen of `render: 1`) is dropped and counted the same way (that end is then not tapered; the stroke and every other field stay); the strict write refuses all of them. An `opacity` of exactly 1 is valid and kept: it is read and written back as it is, means full strength like an absent one and is not counted as dropped (the plugin itself never writes it, so it appears only in files written by hand or by another tool).
+3. **Treat optional details as optional.** A marker with a bad due date, a graph function that does not parse, a bookmark with a strange colour or a comment outside the page should lose that detail only, not make the whole notebook unreadable. The plugin counts such things as "dropped" and keeps a backup before it overwrites them. Required data (a stroke's points, an element's frame) that is invalid means that object is skipped. A stroke whose `tool` name this version does not know is read as a `pen` and counted the same way (the ink is kept and a backup is made); the strict write never accepts such a name, and the next save writes `pen`. An `opacity` outside 0.05 to 1 is clamped to that range, and one that is not a number is dropped (the item is then drawn at full strength), each counted the same way; the strict write refuses both. A `taperStart` or `taperEnd` outside 0.05 to 1 (0 included), one that is not a number, and one on a stroke that cannot taper (a highlighter, a marker, a shape, or a pen of `render: 1`) is dropped and counted the same way (that end is then not tapered; the stroke and every other field stay); the strict write refuses all of them. A background `rotate` that is not `90`, `180` or `270` (`0` included) and a `crop` that is not four finite numbers (`x`, `y` from 0; `width`, `height` from 16; none above 14400) are dropped and counted the same way (the PDF page is then shown as before; the background itself stays); the strict write refuses both. An `opacity` of exactly 1 is valid and kept: it is read and written back as it is, means full strength like an absent one and is not counted as dropped (the plugin itself never writes it, so it appears only in files written by hand or by another tool).
 4. **Do not trust references.** An asset id may point at a file that has not synced yet, a `slide` may name no entry, a group may have one member. Draw what you can.
 5. **Old files:** if you want to read older versions, the fields only get added; an absent optional field simply means "not used". Stroke `render` is absent before v5 and means `1`.
 
@@ -95,7 +103,7 @@ All of these live under the notebooks folder (a setting, `Notebooks` by default)
 ```json
 {
 	"format": "obsidian-notebook",
-	"version": 25,
+	"version": 26,
 	"id": "6f1c2d3e-0000-4000-8000-000000000001",
 	"createdAt": "2026-11-05T09:00:00.000Z",
 	"modifiedAt": "2026-11-05T09:05:00.000Z",
@@ -126,7 +134,7 @@ Any draft 2020-12 validator works, for example with Python:
 
 ```python
 import json, jsonschema
-schema = json.load(open("docs/schema/notebook-v25.schema.json"))
+schema = json.load(open("docs/schema/notebook-v26.schema.json"))
 doc = json.load(open("Physics.notebook"))
 jsonschema.Draft202012Validator(schema).validate(doc)
 ```

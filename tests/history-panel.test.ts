@@ -21,6 +21,7 @@ import { SetPageContent } from "../src/model/page-content";
 import { exemptFromLocks, SetPageLocked } from "../src/model/page-lock";
 import { ReorderPages } from "../src/model/page-ops";
 import { ReplacePage } from "../src/model/page-restore";
+import { SetPdfView } from "../src/model/pdf-view-command";
 import { SetPageTags } from "../src/model/page-tags";
 import { SetPageTimes } from "../src/model/page-times";
 import { freezeStroke } from "../src/model/serialize";
@@ -65,6 +66,8 @@ function everyClass(): Array<[string, Command, string]> {
 		["SetPaper", new SetPaper(page.id, paper, paper), "histpanel.t.paper"],
 		["SetPageSize", new SetPageSize(page.id, { width: 1, height: 1 }, { width: 2, height: 2 }), "histpanel.t.pageSize"],
 		["SetPageMargins", new SetPageMargins(page.id, undefined, { left: 1, right: 1, bottom: 1 }), "histpanel.t.margins"],
+		["SetPdfView rotate", new SetPdfView(page.id, { background: { kind: "pdf", asset: "a", page: 1, rotate: 90 }, width: 2, height: 1, margins: undefined, matrix: [0, 1, -1, 0, 2, 0] }), "histpanel.t.pdfRotate"],
+		["SetPdfView crop", new SetPdfView(page.id, { background: { kind: "pdf", asset: "a", page: 1 }, width: 2, height: 1, margins: undefined, matrix: [1, 0, 0, 1, 0, 0] }, "crop"), "histpanel.t.pdfCrop"],
 		["SetPageBackground", new SetPageBackground(page.id, { kind: "image", asset: "a1" } as never, { width: 1, height: 1 }), "histpanel.t.background"],
 		["AddElement", new AddElement(page.id, el, 0), "histpanel.t.added"],
 		["RemoveElement", new RemoveElement(page.id, el), "histpanel.t.removed"],

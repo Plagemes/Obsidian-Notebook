@@ -13,6 +13,8 @@ export interface HistoryPanelApi {
 	rows(): HistoryRow[];
 	/** How many steps the Undo and the Redo stack hold, and how many the history keeps at most. */
 	counts(): { undo: number; redo: number; max: number };
+	/** 0.28 (#98): per-page undo is on (the panel marks the steps of the page in view and the steps that touch the whole notebook, and says so once). */
+	perPage?(): boolean;
 	/** The notebook can go to a step (false: read-only mode, a document still loading). The list can always be read. */
 	canJump(): boolean;
 	/** A long jump that is going on (steps taken, steps wanted), or null. */
@@ -54,6 +56,7 @@ export class HistoryPanelModal extends Modal {
 		const shell = modalShell(this, { title: t("histpanel.title"), subtitle: t("histpanel.subtitle"), icon: "history", size: "narrow", cls: "nb-hist-modal" });
 		this.workingEl = working ? shellNote(shell.body, this.workingText(working)) : null;
 		if (!can && !working) shellNote(shell.body, t("histpanel.readOnly"));
+		if (this.api.perPage?.()) shellNote(shell.body, t("histpanel.pageundo.note"));
 		if (rows.length === 0) {
 			shellNote(shell.body, t("histpanel.empty"));
 		} else {
@@ -80,7 +83,7 @@ export class HistoryPanelModal extends Modal {
 	}
 
 	private renderRow(list: HTMLElement, row: HistoryRow, can: boolean): void {
-		const cls = ["nb-hist-row", row.side === "redo" ? "is-undone" : "", row.current ? "is-current" : "", row.kind === "start" ? "is-start" : ""].filter((c) => c !== "");
+		const cls = ["nb-hist-row", row.side === "redo" ? "is-undone" : "", row.current ? "is-current" : "", row.kind === "start" ? "is-start" : "", row.scope === "here" ? "is-here" : "", row.scope === "global" ? "is-global" : ""].filter((c) => c !== "");
 		const el = list.createDiv({ cls: cls.join(" "), attr: { role: "listitem" } });
 		const target = targetOf(row);
 		const button = el.createEl("button", {

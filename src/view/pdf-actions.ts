@@ -8,6 +8,7 @@ import { t } from "../i18n";
 import { notebookUri } from "../integration/links";
 import { Batch, SetPageMargins, type Command } from "../model/history";
 import { backgroundRect, MAX_MARGIN_RATIO, marginsEqual, marginsOf, normalizeMargins, pagesWithSameBackground } from "../model/margins";
+import { viewOf } from "../model/pdf-view";
 import { MM, type NotebookDocument, type Page, type PageMargins } from "../model/types";
 import { annotationsMarkdown, collectAnnotations, hasPdfAnnotations, pagesNeedingText, uniquePath } from "../pdf/annotations";
 import { assetIdFromHash, sha256Hex } from "../pdf/hash";
@@ -32,6 +33,8 @@ export interface PdfActionHost {
 	folder: string;
 	/** True while the view still shows this document and it can be edited. */
 	editable(): boolean;
+	/** 0.28 (#76): whether a page has redaction boxes (or the boxes cannot be read): such a page is never turned or cropped. Optional (none when absent). */
+	hasRedaction?(pageId: string): boolean;
 	/** Runs `cmd` as one undo step and refreshes the view; false when the document can no longer be edited. */
 	run(cmd: Command, scrollTo?: number): boolean;
 }
@@ -306,7 +309,7 @@ export async function exportPdfAnnotations(host: PdfActionHost): Promise<void> {
 				contents.set(key, content);
 			}
 			const c = await content;
-			texts.set(page, c ? boxesOnPage(c, backgroundRect(page)) : null);
+			texts.set(page, c ? boxesOnPage(c, backgroundRect(page), viewOf(bg)) : null);
 		}
 		const items = collectAnnotations(doc, (p) => texts.get(p) ?? null);
 		const vault = app.vault.getName();

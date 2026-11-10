@@ -71,6 +71,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	lowLatencyInk: boolean;
 	/** 0.26 (#350): new strokes look the chosen width on screen at any zoom (stored width = chosen / zoom). Off = the width is in page units. */
 	penWidthFollowsZoom: boolean;
+	/** 0.28 (#184): the paint bucket fills with a translucent tint of the colour (on) or with the solid colour (off). */
+	bucketTint: boolean;
 	/** 0–10: strength of the adaptive position filter (one-euro.ts); 0 turns it off. */
 	stabilization: number;
 	/** Touch contacts larger than this (CSS px) are ignored as palms; 0 = off. */
@@ -101,6 +103,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	outlineSlides: boolean;
 	outlineHeadings: boolean;
 	outlineMarkers: boolean;
+	/** 0.28 (#205): structured boxes are numbered ("Def. 3.2"); the chapter prefix; one counter for all kinds. Derived, never stored in the notebook. */
+	boxNumbering: boolean;
+	boxNumberChapter: boolean;
+	boxNumberShared: boolean;
 	/** 0.16 (#46): the outline of a PDF in the notebook outline: mixed into the list (merged), its own section, or not listed. */
 	outlinePdf: "merged" | "section" | "off";
 	/** 0.16 (#46): a tap on a link of a PDF page follows it (another page of the notebook, or a web address after a question). */
@@ -147,6 +153,7 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	refWindowSnap: boolean;
 	/** 0.21 slideback (#225): a pill "Back to slide N" while scrolled away from where you last wrote during a lecture. */
 	slideBack: boolean;
+	liveBar: boolean; // 0.28 livelecture
 	/** 0.22 pagerefs (#179): a chip on a page that other pages link to. */
 	pageRefs: boolean;
 	/** 0.25 papersuggest (#409): the "+" strip highlights the paper the history and the course suggest, with the reason. */
@@ -259,6 +266,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	adaptLearn: boolean;
 	/** The selection bar follows what is selected: ink, picture, text, mixed (402). */
 	adaptSelection: boolean;
+	/** 0.28 (#403): chips at the front of the selection bar for what the selection's shape suggests (a row of words, an arrow between two clusters, a loop). */
+	suggestSelection: boolean;
 	// 0.25 (#399): the toolbar and floating pills fade while the pen writes and return on the first touch.
 	toolFade: ToolFadeMode;
 	/** Seconds of writing before the bars fade, and of rest before they return. */
@@ -284,6 +293,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	autoLineBreak: boolean;
 	/** 0.23 (#314): when the pen lifts, a tiny hook at the start or the end of the line is cut off the saved stroke (ink/hook-clean.ts). Off by default. */
 	trimHooks: boolean;
+	/** 0.28 (#98): Undo and Redo act on the page in view only (the newest step that touched just that page); the history panel stays global. Off by default. */
+	pageUndo: boolean;
 	// 0.15 (#75): automatic page header / footer
 	// 0.16 (#90): highlights digest
 	/** How the digest note of the highlights is grouped: by page or by colour. */
@@ -365,6 +376,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	inkPrediction: false,
 	lowLatencyInk: false,
 	penWidthFollowsZoom: false,
+	bucketTint: true,
 	stabilization: 2,
 	palmContactPx: 0,
 	perfOverlay: false,
@@ -383,6 +395,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	outlineSlides: true,
 	outlineHeadings: true,
 	outlineMarkers: true,
+	boxNumbering: true,
+	boxNumberChapter: true,
+	boxNumberShared: false,
 	outlinePdf: "merged",
 	pdfLinks: true,
 	favouritePens: DEFAULT_FAVOURITES.map((f) => ({ ...f })),
@@ -406,6 +421,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	lectureLogHeading: "## Lectures",
 	refWindowSnap: true, // 0.20 refwindow
 	slideBack: true, // 0.21 slideback
+	liveBar: true, // 0.28 livelecture
 	pageRefs: true, // 0.22 pagerefs
 	paperSuggest: true, // 0.25 papersuggest
 	welcomeBack: true, // 0.23 welcomeback
@@ -458,6 +474,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	adaptPageType: true,
 	adaptLearn: true,
 	adaptSelection: true,
+	suggestSelection: true,
 	toolFade: DEFAULT_TOOL_FADE_MODE,
 	toolFadeSeconds: DEFAULT_TOOL_FADE_SECONDS,
 	toolFadeFirstTouch: true,
@@ -470,6 +487,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	notebookTabs: false,
 	autoLineBreak: false,
 	trimHooks: false,
+	pageUndo: false,
 	digestGroup: "page",
 	colourMeanings: [],
 	meaningTolerance: "normal",
@@ -545,6 +563,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.inkPrediction === "boolean") s.inkPrediction = d.inkPrediction;
 	if (typeof d.lowLatencyInk === "boolean") s.lowLatencyInk = d.lowLatencyInk;
 	if (typeof d.penWidthFollowsZoom === "boolean") s.penWidthFollowsZoom = d.penWidthFollowsZoom;
+	if (typeof d.bucketTint === "boolean") s.bucketTint = d.bucketTint;
 	if (typeof d.stabilization === "number" && d.stabilization >= 0 && d.stabilization <= 10) s.stabilization = d.stabilization;
 	if (typeof d.palmContactPx === "number" && d.palmContactPx >= 0 && d.palmContactPx <= 200) s.palmContactPx = d.palmContactPx;
 	if (typeof d.perfOverlay === "boolean") s.perfOverlay = d.perfOverlay;
@@ -563,6 +582,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.outlineSlides === "boolean") s.outlineSlides = d.outlineSlides;
 	if (typeof d.outlineHeadings === "boolean") s.outlineHeadings = d.outlineHeadings;
 	if (typeof d.outlineMarkers === "boolean") s.outlineMarkers = d.outlineMarkers;
+	if (typeof d.boxNumbering === "boolean") s.boxNumbering = d.boxNumbering;
+	if (typeof d.boxNumberChapter === "boolean") s.boxNumberChapter = d.boxNumberChapter;
+	if (typeof d.boxNumberShared === "boolean") s.boxNumberShared = d.boxNumberShared;
 	if (d.outlinePdf === "merged" || d.outlinePdf === "section" || d.outlinePdf === "off") s.outlinePdf = d.outlinePdf;
 	if (typeof d.pdfLinks === "boolean") s.pdfLinks = d.pdfLinks;
 	s.favouritePens = normaliseFavourites(d.favouritePens);
@@ -586,6 +608,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.lectureLogHeading === "string") s.lectureLogHeading = d.lectureLogHeading.trim().slice(0, 80); // normalised where it is used (an empty one means the default)
 	if (typeof d.refWindowSnap === "boolean") s.refWindowSnap = d.refWindowSnap; // 0.20 refwindow
 	if (typeof d.slideBack === "boolean") s.slideBack = d.slideBack; // 0.21 slideback
+	if (typeof d.liveBar === "boolean") s.liveBar = d.liveBar; // 0.28 livelecture
 	if (typeof d.pageRefs === "boolean") s.pageRefs = d.pageRefs; // 0.22 pagerefs
 	if (typeof d.paperSuggest === "boolean") s.paperSuggest = d.paperSuggest; // 0.25 papersuggest
 	if (typeof d.welcomeBack === "boolean") s.welcomeBack = d.welcomeBack; // 0.23 welcomeback
@@ -642,6 +665,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.adaptPageType === "boolean") s.adaptPageType = d.adaptPageType;
 	if (typeof d.adaptLearn === "boolean") s.adaptLearn = d.adaptLearn;
 	if (typeof d.adaptSelection === "boolean") s.adaptSelection = d.adaptSelection;
+	if (typeof d.suggestSelection === "boolean") s.suggestSelection = d.suggestSelection;
 	if (isToolFadeMode(d.toolFade)) s.toolFade = d.toolFade;
 	s.toolFadeSeconds = cleanFadeSeconds(d.toolFadeSeconds);
 	if (typeof d.toolFadeFirstTouch === "boolean") s.toolFadeFirstTouch = d.toolFadeFirstTouch;
@@ -666,6 +690,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
 	if (typeof d.trimHooks === "boolean") s.trimHooks = d.trimHooks;
+	if (typeof d.pageUndo === "boolean") s.pageUndo = d.pageUndo;
 	if (d.digestGroup === "page" || d.digestGroup === "colour") s.digestGroup = d.digestGroup;
 	s.colourMeanings = parseLegend(d.colourMeanings);
 	if (isToleranceName(d.meaningTolerance)) s.meaningTolerance = d.meaningTolerance;

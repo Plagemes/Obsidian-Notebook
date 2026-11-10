@@ -12,6 +12,7 @@ import {
 } from "../model/highlight-digest";
 import { MARKDOWN_DPI, DEFAULT_MARKDOWN_DPI, isMarkdownDpi, type MarkdownDpi } from "../model/export-markdown";
 import { backgroundRect } from "../model/margins";
+import { viewOf } from "../model/pdf-view";
 import type { Page } from "../model/types";
 import { textUnderBands } from "../pdf/region-text";
 import { redactionOf } from "../ink/redact";
@@ -164,7 +165,7 @@ export async function runHighlightsDigest(host: DigestHost, request: DigestReque
 					texts.set(key, content);
 				}
 				const c = await content;
-				boxes = c ? boxesOnPage(c, backgroundRect(page)).filter((b) => b.str.length > 0) : null;
+				boxes = c ? boxesOnPage(c, backgroundRect(page), viewOf(page.background)).filter((b) => b.str.length > 0) : null;
 			}
 			for (let k = 0; k < list.length; k++) {
 				const region = list[k]!;

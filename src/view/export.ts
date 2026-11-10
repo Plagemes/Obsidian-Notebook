@@ -10,6 +10,7 @@ import type { HeaderLayout } from "../ink/page-header";
 import { DEFAULT_PNG_SCALE } from "../model/export-pages";
 import { cleanPagesForExport, resolveCleanOptions, type CleanExportOptions } from "../model/clean-export";
 import { backgroundRect } from "../model/margins";
+import { viewKey, viewOf } from "../model/pdf-view";
 import { burnKey, burnPlan, withExcerptChains } from "../ink/redact";
 import { countBoxes, type Redactions } from "../model/redact";
 import { announceRedaction, withRedaction } from "./export-redact";
@@ -70,7 +71,8 @@ export async function collectPageImages(media: NotebookMedia | null, pages: read
 			const burn = burnPlan(page);
 			const burnTag = burn ? `:burn:${burnKey(burn.boxes)}` : "";
 			const jpeg = bg.kind === "pdf"
-				? await load(`pdf:${bg.asset}:${bg.page}${burnTag}`, () => media.pdfPageJpeg(bg.asset, bg.page, PDF_DPI, burn ?? undefined))
+				// 0.28 (#76): the picture is the part of the PDF page the background shows, turned: the PDF is re-embedded as the page shows it.
+				? await load(`pdf:${bg.asset}:${bg.page}:${viewKey(viewOf(bg))}${burnTag}`, () => media.pdfPageJpeg(bg.asset, bg.page, PDF_DPI, burn ?? undefined, viewOf(bg)))
 				: await load(`img:${bg.asset}${burnTag}`, () => media.imageJpeg(bg.asset, burn ?? undefined));
 			if (jpeg) list.push({ ...jpeg, ...backgroundRect(page), layer: "background" });
 			else out.skipped++;
@@ -133,6 +135,8 @@ export interface ExportOptions {
 	 * refuses to write (`withRedaction` throws), whatever the boxes would have covered: it is never known that nothing was covered.
 	 */
 	redactBlocked?: true;
+	/** 0.28 (#76): with `redactBlocked`, the reason is not an unreadable store but a page turned or cropped after its boxes were drawn (the message says so). */
+	redactStale?: true;
 	/** Review fix (P10): how many boxes the notebook keeps switched off; non-dialog exports say once that they are off. */
 	redactOff?: number;
 	/**
@@ -330,6 +334,7 @@ export async function runExport(app: App, notebook: TFile, allPages: readonly Pa
 		// Review fix (R5): excerpt chains over every page of the notebook, also when only a range is exported.
 		base.redact = withExcerptChains(allPages, request.redact, options.redactDoc) ?? request.redact;
 		delete base.redactBlocked;
+		delete base.redactStale;
 	} else delete base.redact;
 	const opts: ExportOptions = { ...base, layers: request.layers, ...(splits ? { split: request.split! } : {}) };
 	if (jobs.length === 0) return;

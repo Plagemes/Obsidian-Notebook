@@ -379,6 +379,20 @@ export class Toolbar {
 		releaseSwallowed();
 	}
 
+	/**
+	 * 0.28 (#98): with per-page undo on, the two buttons say they act on the page in view: the name (tooltip and the title of the long-press
+	 * bubble) and the one-line help change. Off: the plain Undo / Redo again.
+	 */
+	setPageUndo(on: boolean): void {
+		for (const [button, key, help] of [
+			[this.undoButton, on ? "tool.undo.page" : "tool.undo", on ? "help.undoPage" : "help.undo"],
+			[this.redoButton, on ? "tool.redo.page" : "tool.redo", on ? "help.redoPage" : "help.redo"],
+		] as const) {
+			button.setAttribute("aria-label", t(key));
+			button.dataset.help = help;
+		}
+	}
+
 	setHistory(canUndo: boolean, canRedo: boolean): void {
 		this.undoButton.disabled = !this.editable || !canUndo;
 		this.redoButton.disabled = !this.editable || !canRedo;
@@ -694,6 +708,11 @@ export class Toolbar {
 				const style = this.button(this.colorGroup, t("command.styleEyedropper"), () => this.runColourAction("style-eyedropper"));
 				setIcon(style, "droplets");
 				style.disabled = !this.editable;
+				// 0.28 (#184): the paint bucket fills the area under the next tap with the colour in use.
+				const bucket = this.button(this.colorGroup, t("command.paintBucket"), () => this.runColourAction("paint-bucket"));
+				setIcon(bucket, "paint-bucket");
+				bucket.dataset.help = "help.paintBucket";
+				bucket.disabled = !this.editable;
 			}
 		}
 

@@ -349,7 +349,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 7181 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 7478 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -3982,6 +3982,36 @@ Manual steps (real Obsidian; nothing here is verified on Android).
 | Per-notebook choice in bounded device-local storage (corrupt falls back to all pages) | yes | `tests/nav-marked.test.ts`; harness `doc=markedview` | | | |
 | Marked-only list with badges, sub-filters by kind, empty message, long-press help | yes | harness `doc=markedview` | | | |
 
+### 0.28 — linehandle: drag whole handwritten lines to reorder them (roadmap #256; steps 3240-3259)
+
+Manual steps (real Obsidian; nothing here is verified on Android or with a real hand). Use a page with five or six lines of your own handwriting (different heights: some with tall and descending letters, some low), then: a line with a highlighter area behind it, a line with a text box or checkbox at its right end, a line with a locked element on it, a collapsed sticky note with ink beside a line, a grouped line, and a page with a drawing next to the lines.
+
+3240. **Turn it on.** Page menu (page indicator, or a thumbnail's menu) or *All actions* > *Reorder lines*. A small handle (a grip) appears at the left of every handwritten line of the page in view; a bar at the bottom centre says *Drag a handle to move a line* with Up, Down and *Done*. Long-press the entry, a handle and each bar button: the explanation appears (English and Italian). The entry shows as switched on; the command palette entry toggles it.
+3241. **Handles follow the page.** Scroll and zoom: the handles stay level with their lines. Write a new line with the pen: after you lift, its handle appears. Undo/redo and page changes keep them right. Scroll to another page: the handles are those of the page in view only (in two pages side by side, the page the page actions use).
+3242. **Drag.** Drag the first handle down past two lines. While you drag, the line's outline follows your finger or pen, the lines it passes shift in their outlines to show where they go, and a dashed outline marks where it lands. Lift: the whole line (all its words, dots and accents) is at the new place, the lines in between moved up by the height of the moved line and the spacing between lines is as before. Nothing else on the page moved.
+3243. **One undo.** Undo once: everything is back exactly. Redo does it again. The history panel shows one step, *Line moved*. The pages' times (the page info) do not change.
+3244. **Up and down.** Tap a handle: the line is outlined and the Up and Down buttons switch on. Down moves the line one place; Up moves it back. Both are one undo step each; the chosen line stays chosen at its new place. Tap the handle again to unchoose it. With a keyboard: Tab to a handle, Arrow up/Arrow down move it.
+3245. **Uneven heights.** Drag a tall line (ascenders and descenders) below a low line and the other way: the lines never touch or overlap, and each line keeps the gap that followed it.
+3246. **Things that move with a line.** A highlighter *area* behind the line, a text box, a checkbox or a picture that sits wholly inside the line's strip, and a collapsed sticky note with its hidden ink, move with it, rigidly (same shape, size, pressure, colour). Ink hidden with *invisible ink* inside the line moves too.
+3247. **Refused: locked element.** A line with a locked element on it has a dimmed handle; tapping it says that a locked element is on the line. Dragging another line onto it, or Up/Down onto it, is refused with the same message and nothing moves.
+3248. **Refused: group.** A group wholly inside one line moves whole. A group that reaches into another line (or to an element elsewhere) makes the line refuse, with a message.
+3249. **Refused: in the way.** A line with a drawing, a shape or a highlighter *stroke* across it is refused (*Something other than handwriting is on that line*). A line that would land on a drawing that stays put is refused (*would land on something that stays where it is*).
+3250. **Locked page and read-only.** Lock the page: the handles are dimmed, a drag or the buttons say *This page is locked* and nothing moves. A read-only notebook does not start the mode (*This notebook is read-only*).
+3251. **Leaving.** *Done*, the Escape key and the entry in *All actions* all leave the mode: no handles, no bar. Nothing is written by turning the mode on or off.
+3252. **Writing alongside.** With the mode on, write with the pen between the handles: ink works as usual; the handles only take touches on themselves. The S Pen button rules (tap with the button held: radial menu; drag with the button held: eraser) are not affected.
+3253. **Looks.** Light and dark theme, phone and tablet width, Italian (*Riordina le righe*, *Fatto*), the bar clear of the minimap, the contextual bar and the other pills.
+3254. **Margin comments.** Add a margin comment on a line (a region around its words). Move that line: the comment region and its marker move with it and still point at the same words; one undo puts the line and the comment back. A comment whose region covers parts of two lines makes both lines refuse (*Something other than handwriting is on that line*).
+3255. **Notes and hidden ink.** A collapsed sticky note beside a line, with ink that lies far below it: moving the line so that this ink would leave the page is refused (*would end up outside the page*); moving it elsewhere takes the note and its ink along. A highlighter stroke drawn across a text box or picture on a line makes that line refuse.
+3256. **PDF and picture pages.** On a PDF or picture page the handles are dimmed and say that writing there stays on what it annotates; nothing moves.
+3257. **The page changes under the drag.** Hold a handle, then (with another finger, or a keyboard on desktop) undo or write a stroke: letting go cancels the move with a notice and adds no history step.
+3258. **Closing.** Turn the mode on, then open another notebook in the same tab: the handles and the bar are gone.
+3259. **Long pages.** On a page with a hundred lines or so, scrolling with the mode on stays smooth and a drag follows the pen without lag.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Line planner: lines from the baseline analysis (pieces joined, same-row columns one line), bands, what moves with a line (line-pen ink, invisible line-pen ink, underline-like strokes, elements wholly in the band, a sticky note with its hidden ink, graph-bound ink), group/locked/busy/conflict refusals, locked page, crowding and page edge, pitch layout (spacing kept, uneven heights), rigid moves in one `UpdateItems` step, no page-time change, no format change; reach and extent checks, comments move with their line, states parts, PDF/picture pages and in-range overlaps refused | yes | `tests/line-reorder.test.ts`, `tests/line-reorder-review.test.ts` | | yes | |
+| Handles layer (DOM over the canvas): handle per line, outlines and a landing slot while dragging, tap to choose, Up/Down buttons, keyboard, refusal messages, Escape/Done, bar, long-press help, registry action (page sheet and All actions), command, context ranking, history title | yes | `tests/line-reorder.test.ts` (registry, texts, ranking, history title); harness `doc=linehandle` | | yes | no auto-scroll while dragging near the page edge; not tried on Android; ruled paper is not snapped to the rules (pitches already are multiples when the lines sit on them) |
+
 ### 0.27 — macros: a sequence of actions on one button (roadmap #170; steps 3060-3079)
 
 Manual steps (real Obsidian; nothing here is verified on Android or with a real hand). Use a notebook with two or three pages, one of them on plain paper.
@@ -4424,3 +4454,213 @@ Settings, Writing: *Tasks on planner pages* (on by default). Implemented, not ve
 | Chip, list, open at line, incremental updates, setting, stacking | yes | harness `doc=plannertasks` and `doc=pillstack` | | | |
 | Tick a task from the chip | no | | | | read only by design (no safe block-id writer for ordinary notes) |
 | Overlay in exports | no | | | | left out in this wave |
+
+### 0.28 — pdfrotate: rotate and crop imported PDF pages, document format 26 (roadmap #76; steps 3160-3179)
+
+Manual steps (real Obsidian; nothing here is verified on Android). You need a notebook with several pages of one PDF (a slide deck), some ink and a text box on the first one, and a second notebook with a locked PDF page. **New data format v26:** a page's PDF background may carry `rotate` and `crop`; a notebook that uses them is not readable by 0.27 and older (it opens read-only there). Keep a copy of the notebook you try this on.
+
+3160. **Rotate right.** On a PDF page open the page sheet (or *All actions*): *Rotate PDF page right*. The PDF turns a quarter turn clockwise, the page becomes landscape, and your ink, highlights and boxes stay on the same words (the ink turns with the page; a text box keeps its orientation and only its centre moves).
+3161. **Rotate left, undo, redo.** *Rotate PDF page left* from the turned page brings it back upright exactly. *Undo* after a turn puts back the same page; *Redo* turns it again. The history panel names the step *PDF page rotated* (*Pagina PDF ruotata*).
+3162. **Four turns.** Four turns right in a row end where they began (ink, highlights, page size).
+3163. **Crop dialog.** *Crop PDF page…* opens a dialog with the whole page and a frame. Drag a corner, an edge, or inside the frame (finger, S Pen, mouse); the frame cannot leave the page or get thinner than a few millimetres. Tap *Whole page* to reset. The size kept is shown in millimetres.
+3164. **Apply a crop.** *Apply*: the page shrinks to the frame, the PDF shows only that part, and your ink stays on the same words. *Undo* brings the whole page and every stroke back; the history panel says *PDF page cropped*.
+3165. **Rotate inside the dialog.** In the dialog the two turn buttons turn the preview and the frame together; *Apply* does both in one undo step.
+3166. **All pages of this PDF.** With several pages of the same PDF the dialog offers *All N pages of this PDF*: the same crop is applied to every page (each keeps its own turn plus the one you added), as ONE undo step. A locked page, a page with redaction boxes, or a page whose change would put ink above it is skipped, and one notice lists how many and why; the rest change. Excerpts of the page on other pages of this notebook and saved views of it follow the change in the same undo step.
+3167. **Ink outside the crop.** Write in the margin of the PDF, then crop that margin away: the page still shows your ink (the page margins grow to hold it, next to the PDF) and a notice says so. Nothing is deleted.
+3168. **Ink above the crop.** Write above the top edge area and crop below it, or turn a page that has notes in a side margin the wrong way: a notice says some pages were left as they are (ink or notes would end above the page). Move the notes and try again.
+3169. **Margins.** On a page with margins (notes beside a slide) rotate: the PDF and its notes turn together and the margins stay on the same sides of the page.
+3170. **Locked page.** A locked PDF page refuses both actions (the actions are greyed in the page sheet).
+3171. **Text.** After a turn or a crop, *Search PDF text* highlights the right words, selecting text and following a link work on the turned page, and the highlighter that follows text lines snaps to the lines. After a crop that removes a header with a web link: search does not find the header words, a drag from the top of the cropped page does not select hidden text, and a tap in the margin beside the page does not open the hidden link.
+3172. **Exports and redaction.** Export the turned and cropped page as PDF, PNG, SVG and interactive HTML, print it, hand it in and present it: each shows the same turned, cropped page with the ink in the same places. **Redaction (fail closed):** draw a redaction box (Export… › Redact…) over a line of a PDF page, then try *Rotate PDF page right* and *Crop PDF page…* on it: both refuse with *Remove or redo the redaction boxes on this page first* (with *All N pages* the page is skipped and the notice says why). Turn a page first, then draw the box on it: exports cover it. Undo the turn: every export now refuses (*A page was turned or cropped after its redaction boxes were drawn…*) until you delete and redraw that page's boxes; the secret is never written.
+3173. **Thumbnails and zoomed out.** The page navigator, the page grid, the zoomed-out view and the hover preview show the turned, cropped page.
+3174. **Crop PDF margins (view only).** The existing *Crop PDF margins* display option still works on a cropped page: it fits the white margins that are left inside the stored crop and writes nothing.
+3175. **Re-published slides.** *Update PDF from a new version* on a deck whose pages were turned keeps each page's turn and crop.
+3176. **Old versions.** Open the notebook in 0.27 (or tell the app to ignore the new keys): it opens read-only, and the turned pages are untouched.
+3177. **Phone and tablet.** The dialog fits a phone (the frame handles are finger-sized) and a tablet, in light and dark, and the help bubbles of the three actions (long-press) read in English and Italian.
+3178. **Big PDF.** Turning a page of a 300-page PDF is instant and does not slow scrolling (only the bitmap of the turned page is made again).
+3179. **Nothing fake.** Every control in the dialog works; the shaded area and the frame outline are decoration around the real handles.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v26: optional `rotate` and `crop` on a PDF page background; migration v25 to v26; lenient read (dropped and counted), strict write; schema v26 | yes | `tests/model-v26.test.ts`, `tests/format-schema.test.ts` | | | |
+| View geometry and plan (turn, crop, size, rigid matrix, margins that grow, ink that would end above the page is refused) | yes | `tests/model-v26.test.ts` | | | |
+| `SetPdfView`: ink, elements, areas, comments, states carried in one undo step; locks, groups, hidden ink, page times | yes | `tests/model-v26.test.ts`, `tests/history-panel.test.ts` | | | |
+| PDF store renders a view (whole rotation, offset), cached apart; every render path asks for the page's view | yes | `tests/model-v26.test.ts` | | | pdf.js `getViewport` rotation/offset on a real device |
+| Text boxes, links, selection and search highlights mapped through the view | yes | `tests/model-v26.test.ts` | | | |
+| Export parity (PDF re-embeds the turned, cropped picture; PNG, SVG, HTML, hand-in, presentation, redaction burn use the same page) | yes | `tests/model-v26.test.ts` (SVG and PDF sizes), harness `doc=pdfrotate` | | | |
+| Page sheet actions *Rotate PDF page right / left*, *Crop PDF page…* (dialog with handles, reset, this page or all pages), en + it, help, context rule, history titles | yes | `tests/ui-registry.test.ts`, `tests/model-v26.test.ts`, harness `doc=pdfrotate` | | | |
+| Rotating text selection by character on a turned page | partly | | | | selecting by dragging works through the turn; the caret inside a vertical run follows its box |
+
+### 0.28 — pageundo: per-page undo (roadmap #98; steps 3180-3199)
+
+Manual steps (real Obsidian; nothing here is verified on Android hardware). Use a notebook of at least three pages. No document format change.
+
+3180. **Off by default.** Settings > Pages > *Undo on this page only* is off. Write on pages 1, 2 and 3, then tap Undo: the newest step of the notebook goes back, whatever its page (as before). The undo button reads *Undo*.
+3181. **Turn it on.** Switch the setting on: the undo and redo buttons now read *Undo on this page* / *Redo on this page* (hover tooltip with a mouse; hold a finger on the icon for the explanation bubble, which says the last change on this page is taken back and the other pages keep theirs).
+3182. **Interleaved pages.** Write a stroke on page 1, one on page 2, one on page 3, another on page 1, another on page 2. Go to page 1 and tap Undo: only page 1's newest stroke goes. Go to page 2 and Undo: page 2's newest goes. Page 3 and the older strokes are untouched.
+3183. **Button state follows the page.** Go to a page you never wrote on: Undo is disabled. Go to one you did: it is enabled. Redo likewise after an undo on that page.
+3184. **Redo on a page.** On page 1 undo twice, then Redo once: the older of the two strokes comes back first (the order is the page's own). Redo again: the newer one.
+3185. **Other pages do not clear it.** Undo a stroke on page 1, write on page 3, go back to page 1: Redo is still available and brings the stroke back. Undo it again, write on page 1 itself: Redo on page 1 is now disabled (a new edit on a page drops that page's redo steps).
+3186. **A step on two pages.** Select ink on page 1 and move it to page 2 (*Move selection to page*). On page 1 tap Undo: nothing is undone and one notice says that the last change also touched other pages and points to the history panel. The same on page 2. Older steps of those pages are NOT undone behind its back.
+3187. **Past the global step.** Open *Action history* and tap the step just before the move: everything after it is undone in order (the panel stays global). Per-page Undo works again afterwards.
+3188. **Page structure.** Add a page and write on it: Undo twice on the new page takes back the stroke, then says the page change is global (the page is not removed by a per-page Undo). Deleting or reordering pages behaves the same; Undo on a page that the deleted page was not is unaffected.
+3189. **Pictures and slide links (review fix).** Insert a picture on page 1, then write on page 2. On page 1 Undo: a notice says the step added a picture file (or slide link) the whole notebook shares, so it is only undone in order, and nothing is undone; the history panel goes back past it. Undo on page 2 first, then page 1 works. A picture pasted on page 2 from the one on page 1 (no new file) is undone on page 2 at any time. After the global Undo of the page-1 picture from the panel, Redo on page 2's paste is refused with a notice until the picture is redone first (in order). The notebook never shows a missing-picture error and the save indicator never sticks on unsaved.
+3190. **Macros.** Run a macro whose steps write on one page: one Undo on that page takes the whole run back. A macro that writes on two pages is one global step (notice).
+3191. **Locked pages.** Lock page 2 after writing on it (or let a synced lock arrive): Undo on page 2 does nothing and says the page is locked; page 1 still undoes. Unlock page 2: its Undo works again.
+3192. **Read-only.** In read-only mode neither button does anything and the history is intact afterwards.
+3193. **Two pages side by side.** In a spread, write on the left then the right page and tap Undo: it acts on the page you touched last; touch the other page and Undo acts on that one.
+3194. **History panel.** With the setting on the panel opens with a note about per-page undo; steps of the page in view show an accent edge and *this page*; steps that touch several pages or the notebook show *whole notebook* in a muted title. The order and the *Now* tile are the global ones; with the setting off nothing is marked.
+3195. **Panel after a page undo.** Undo on page 1 although page 2 was written later: in the panel the undone step of page 1 sits in the *Undone steps* group at the top while page 2's step is still the current point. Tapping the undone step brings it back.
+3196. **Switch it off again.** Switch the setting off: the buttons read *Undo* / *Redo* again, Undo takes back the newest step of the notebook, and a new edit clears the whole redo list as it always did.
+3197. **Text boxes and settings.** Edit a text box on page 1, write on page 2, Undo on page 1: the text edit goes back, page 2 is untouched. Edit a page property (paper, margins) on page 3: it is a step of page 3 and is undone there.
+3198. **Looks.** Light and dark, English and Italian (the setting, the buttons' names, the notices, the panel note and marks); the setting sits in Pages and its description is one line.
+3199. **S Pen button after a page undo (known limit).** Undo on page 1, then write on page 2 and replay a contact with the side button held late: the replay as an eraser may not happen while a step undone on another page waits for redo (the stroke stays as ink and one Undo on page 2 takes it back).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Which pages a step touches (batches, groups, lock-exempt wrapper), local versus global, every command class classified (pure) | yes | `tests/page-undo.test.ts` | | | |
+| Undo / Redo on one page: newest step of the page, own inverse, interleaved pages, out-of-order redo, order inside a page | yes | `tests/page-undo.test.ts`, harness `doc=pageundo` | | | |
+| Dependency refusal: a step that touched several pages, page structure, notebook-wide and unknown steps are never undone out of order | yes | `tests/page-undo.test.ts` | | | |
+| A step that added a file or slide entry is only undone in order; no redo past an undone global or registering step; removing a file blocks every page; the content check validates file, cover and background references on every call (review P1, P2) | yes | `tests/page-undo-review.test.ts` | | | |
+| A step the guard refuses out of order stays in the history; a refused redo clears no other page's redo steps; macro groups filtered as one step; the redo list is bounded by the limit (review P3-P6) | yes | `tests/page-undo-review.test.ts` | | | |
+| Redo list kept for other pages, dropped by an edit on the same page or a global one; unchanged with the setting off | yes | `tests/page-undo.test.ts` | | | |
+| Groups, locked pages, remap after an upkeep swap, the document guard, read-only | yes | `tests/page-undo.test.ts` | | | |
+| History panel marks (this page, whole notebook), global list and jumps unchanged | yes | `tests/page-undo-panel.test.ts`, harness `doc=pageundo` | | | |
+| Every command the other 0.28 features add is classified for per-page undo (PDF rotate / crop, Move line, Insert / Edit table, Fill area, bookmark, selection highlight); table edits keep opacity, line moves keep taper and opacity | yes | `tests/page-undo-wave28.test.ts` | | | |
+| Setting *Undo on this page only* (default off), button names and help in en and it | yes | `tests/page-undo-panel.test.ts`, `tests/settings-schema.test.ts`, harness `doc=pageundo` | | | |
+| Undo on the page last touched in a two-page spread | yes | uses `currentPageIndex` (not run in the harness) | | | |
+| S Pen side-button replay while a page-undone step waits for redo | no | | | | `retractStroke` still needs an empty redo list |
+
+### 0.28 — tables: hand-drawn tables (roadmap #41; steps 3200-3219)
+
+*Table* in the insert sheet, and *Add row*, *Add column*, *Remove last row*, *Remove last column* and *Even out cells* in the All actions sheet while a table is selected (on a phone they are in the sheet, not on the selection bar). Implemented, not verified on hardware. A table is plain vector ink: straight shape lines of one group (no new element kind, no format change). Needs a notebook page and the S Pen.
+
+3200. **Insert.** Insert sheet > *Table*: a dialog with Rows, Columns, Cell size, Line width, Line style, Line colour and *Thicker line under the first row*, and a small picture of the grid that follows every choice. Choose 4 rows, 3 columns, Medium, Insert: the grid appears at the centre of the view, selected, as one group (one tap on a line selects all of it).
+3201. **One step.** Undo once: the whole table goes. Redo: it is back. Open the history panel: one entry, *Table inserted*.
+3202. **Look.** Insert one dashed, thick and red, with the header line on: every line is dashed and red, the line under the first row is clearly thicker. With the header off all lines are alike. On a narrow page with 12 columns the cells shrink to fit the page; the dialog never makes a table wider than the page.
+3203. **Write in it.** With the pen write a word in each cell: it is ordinary ink (it does not select the table, it is not part of its group). Move the table with the lasso: the table moves, the writing stays (select both to move both).
+3204. **Add row.** Select the table (tap a line), All actions > *Add row*: a row as tall as its neighbour appears under the row at the centre of the view (at the bottom when the centre is not over the table). Writing below the new line moves down with the table lines; writing above it and writing outside the table do not move. One undo puts everything back, including the writing.
+3205. **Add column.** The same with *Add column*: writing to the right of the new line moves right.
+3206. **Remove.** *Remove last row* and *Remove last column* take the last line away; writing is left where it is (even if it now lies outside the table). A one-row or one-column table says it keeps at least one.
+3207. **Even out.** Scale the table with the lasso handles so that the cells are no longer even (or add a row, which is as tall as its neighbour, to a table whose rows differ), then *Even out cells*: every row is as tall and every column as wide as the others, the outer frame is unchanged. On an already even table it says so and changes nothing.
+3208. **Limits.** Keep adding rows until a notice says the table cannot have more rows (30); the same for columns (16).
+3209. **Not offered.** Select a table together with other ink, or only some of its lines: the table actions are not in the sheet. With nothing selected they are not either.
+3210. **Locks.** On a locked page *Table* and the table actions do nothing (the page's lock notice). A table inside a sticky note that is collapsed: ink the note hides is not moved.
+3211. **Snap.** With snap on (Settings > Writing), drag a text box or a drawing near the table: the dragged box snaps to the row and column lines of the table, not only to the table's outline.
+3212. **Exports.** Export the page as PDF, PNG, SVG and interactive HTML: the table is drawn like any shape (dashes included); the line width is the same everywhere.
+3213. **Copy and move.** Copy the table to another page and to another notebook: it arrives as one group of its own (fresh ids) and is still a table (the actions are offered when it is selected).
+3214. **Dark, light, phone, Italian.** The dialog reads in both themes with 44 px targets, fits a phone, and is in Italian with the plugin in Italian; the long-press help of *Table* and each table action says what it does.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Table geometry, build / detect / edit grid, ink shift on row and column insert | yes | `tests/table.test.ts` | | | |
+| Insert and edit commands (one undo step, locked page refuses) | yes | `tests/table.test.ts` | | | |
+| Insert dialog, table actions in the sheet, context rule, help, history titles | yes | harness `doc=tables` | | | |
+| Snap to cell lines | yes | `tests/table.test.ts` | | | |
+| Dragging a single line to resize a row or column | no | | | | use the lasso handles then *Even out cells* |
+| Writing moves with the cells on resize (merged cells, per-cell text) | no | | | | left out in this wave |
+
+### 0.28 — bucket: paint bucket, fill a closed area (roadmap #184; steps 3220-3239)
+
+*Paint bucket* is the last button of the colour row of the pen, highlighter and shape options (also in the command palette and the All actions sheet). Settings, Writing: *Paint bucket fills as a tint* (on by default). Implemented, not verified on hardware. Needs a page with a few closed outlines drawn by hand (a box, a circle, a map outline) and one with a gap. No format change: the fill is an ordinary filled shape stroke (format 22) with a hairline.
+
+3220. **Fill a box.** Draw a closed box with the pen, pick a colour, open the pen options and tap *Paint bucket*; a notice says to tap inside an area. Tap inside the box: it fills with a light tint of the colour in use, behind your lines (the lines stay crisp on top). The button is one-shot: the mode ends with the fill.
+3221. **One step.** Undo once: the fill goes and nothing else; redo brings it back. The history panel calls the step *Area filled*.
+3222. **Gap.** Draw a box and leave a small gap (about the width of the pen) in one side. Fill it: the fill stays inside the box. Open a gap of a finger's width: the tap says the area is not closed (or too large) and adds nothing; the mode stays on so you can close the gap and tap again; Escape (or any other tool or button) ends it.
+3223. **On a line.** Tap exactly on a line: a notice tells you to tap inside the area. Tap a very small pocket (a couple of millimetres wide): "too small".
+3224. **Round and nested.** Fill a hand-drawn circle: the fill follows it (a few dozen points, no staircase). Draw a box with a smaller box inside it: tapping between them fills the outer area, tapping inside the inner one fills that with its own colour on top.
+3225. **Holes (known limit).** A shape inside the area that is itself closed (a ring, an island) gets coloured inside too: the fill is one polygon and a filled shape has no holes. Tap the ring's inside afterwards to give it its own colour. Text and strokes inside the area are drawn over the fill, as usual.
+3226. **Solid or tint.** Turn *Paint bucket fills as a tint* off: new fills are the solid colour (still behind the ink). Turn the pen *Opacity* down before filling: the fill is lighter.
+3227. **Behind everything.** Fill an area, then write across it: the new ink is on top. Select the fill with the lasso (tap inside it) and move or recolour it like any filled shape; the stroke eraser removes the fill (tap inside) without touching your lines.
+3228. **Large page, heavy page.** On an infinite page or a page with a lot of ink the fill still answers within about a second; if the page has too much ink it says so and adds nothing. Nothing freezes the pen.
+3229. **Page edge.** On a page with an outline that touches the page edge, tapping outside it says "not closed". A frame around the whole page says the area is as large as the page.
+3230. **Exports and reopening.** Export the page as PDF, PNG and SVG: the fill is there, under the lines. Close and reopen the notebook: the fills are still there and look the same.
+3231. **Locked page and read-only.** On a locked page, in read-only mode: the button is disabled or the step is refused with the usual notice.
+3232. **Long press and Italian.** A finger held on the button explains it; with the plugin in Italian the button, the notices, the setting and the history title are in Italian.
+3233. **Light, dark, phone.** The button sits in the colour row and fits on a phone; a fill reads on light and dark paper.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Paint bucket: low-resolution mask of the page ink (2 to 4 cells per pt, capped at 2 million cells; a window around the tap on a huge page), gap tolerance 1.5 pt, scanline flood with time budget, outline traced to a simplified polygon (at most 400 corners, resampled every 3 pt like any shape) in page coordinates | yes | `tests/paint-bucket.test.ts`, timing `tests/paint-bucket.perf.ts` | | | |
+| Stored as a filled shape stroke (tool `shape`, `fill`, optional `fillTint` and `opacity`), hairline, inserted after the earlier fills and before all ink; one History step "Fill area" | yes | `tests/paint-bucket.test.ts`, harness `doc=bucket` | | | |
+| Refusals: not closed / too large, on a line, too small, as large as the page, too much ink; one notice, nothing added | yes | `tests/paint-bucket.test.ts`, harness `doc=bucket` | | | |
+| Action, colour-row button, command, long-press help, context rule, setting (tint or solid), en + it | yes | `tests/long-press-help.test.ts`, `tests/ui-registry.test.ts`, `tests/i18n.test.ts` | | | |
+| Holes: an inner closed shape is not left unfilled | no | | | | a shape fill is one nonzero polygon (no holes); documented limit |
+| Stay armed for several fills | no | | | | one-shot like the eyedroppers |
+
+### 0.28 — livelecture (live lecture bar, #132, steps 3260-3279)
+
+3260. **Appears with the lecture.** Start a lecture (Start on the banner, the command, or an automatic lecture): a small bar appears at the bottom left, above the contextual bar, with a running timer (mm:ss, h:mm:ss after an hour) and two buttons, *New page* and *Important moment*.
+3261. **Timer.** With a class that began 20 minutes ago the timer starts near 20:00 and counts up each second; with no class (manual start) it starts at 00:00. Put the app in the background and return: the time is right.
+3262. **New page.** Tap *New page*: a page with the same paper is added right after the page you are on and the view goes to it; Undo removes it (one step).
+3263. **Important moment.** Tap *Important moment*: a notice "Marked ★ 12:34 on page N"; the page now has a bookmark (page panel, outline, bookmarks list) titled "★ 12:34", in the "important" category.
+3264. **Two marks on a page.** Tap it again on the same page a few seconds later: the title becomes "★ 12:34 · ★ 12:41". A bookmark you titled yourself keeps its text in front of the stamps.
+3265. **Undo.** Undo takes the last mark back as one step.
+3266. **Spread.** In the two-page spread, the mark and the new page use the page you last wrote on (the current page), not the left page of the pair.
+3267. **End of lecture list.** Open the end-of-lecture panel: an *Important moments* section lists every stamp with its page, in page then time order; tapping one closes the panel and goes to that page. The list is still there after closing and reopening the notebook.
+3268. **Fold.** Tap the chevron: only the timer stays; tap it again: the buttons return.
+3269. **Fades with the toolbar.** With *Toolbar fades while writing* on, the bar fades while the pen writes and returns when you lift it. The bar never sits over the writing area you use (bottom left, above the contextual bar) and the pen never starts a stroke on it.
+3270. **Setting.** *Settings > Study > Live lecture bar* off: the bar is gone during a lecture; on: it returns. Default on.
+3271. **Read-only.** In a read-only notebook the buttons do nothing but say the notebook is read-only.
+3272. **Stacking.** With the symbols strip, the *Back to slide* pill and the *Referenced on* chip on, nothing overlaps the bar, on a tablet and on a phone.
+3273. **Long press.** Hold a finger on each of the three buttons: a bubble explains it. A pen does not trigger the bubble.
+3274. **Italian, light, dark, phone.** The strings are in Italian with the plugin in Italian; the bar reads in light and dark and fits a phone; touch targets are at least 44 px.
+3275. **No format change.** Marks are only the title of the page bookmark; the notebook still opens in older 0.27 builds.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Elapsed timer formatting, mark stamps, joining stamps, reading them back by page | yes | `tests/live-lecture.test.ts` | | | |
+| Live bar: timer, New page, Important moment (stamped bookmark), fold, setting, stacking | yes | harness `doc=livelecture` and `doc=pillstack` | | | |
+| Moments list in the end-of-lecture panel, tap to jump | yes | `collectLiveMarks` in `tests/live-lecture.test.ts`; harness `doc=livelecture` | | | |
+| Timer after a restart of a manual lecture | no | | | | a manual lecture without a class restarts at 00:00 when the notebook is reopened; a class lecture keeps the class start |
+| Marks in the lecture log (daily note) | no | | | | left out: the log line is unchanged |
+
+### 0.28 — boxnum: numbered boxes and an index of definitions and theorems (roadmap #205; steps 3280-3299)
+
+Settings, Pages: *Number definitions and theorems* (on), *Chapter prefix* (on), *One counter for all kinds* (off). Implemented, not verified on hardware. The numbers are worked out from the document each time and are never stored (no format change). All actions, Share group (or the command palette): *Definitions and theorems…*.
+
+3280. **Label.** Place a Definition box, then a second one lower on the page: their tabs read "Def. 1" and "Def. 2" (Italian: "Def."; Theorem "Thm." / "Teor.", Example "Ex." / "Es.", Remark "Rem." / "Oss."). A box with a title reads "Def. 2 · Title". Proof boxes keep the plain name "Proof".
+3281. **Order.** Drag the lower definition above the upper one: the numbers swap straight away. Delete the first definition: the second becomes "Def. 1". Undo: they come back. Numbers follow page order, then position on the page.
+3282. **Chapters.** Write two large underlined or oversized titles on different pages with boxes below each: the boxes under the second title read "Def. 2.1", "Def. 2.2"; those above the first title have no prefix. (Chapters are the large level-1 headings the outline already finds.)
+3283. **Settings.** Turn *Chapter prefix* off: plain numbers. Turn *One counter for all kinds* on: definitions, theorems, examples and remarks share one sequence. Turn *Number definitions and theorems* off: tabs go back to "Definition", "Theorem"… and the other two settings disappear.
+3284. **Exports.** Export a page with boxes as PDF, PNG and SVG, and print it: every box tab carries the same number as on screen. With redaction on, the numbers are still those of the whole notebook.
+3285. **Index.** Open *Definitions and theorems…*: every numbered box in reading order, each row with a colour bar, number, title and page chip. Tap a row: the dialog closes and the page scrolls to the box. Rows are at least 44 px tall.
+3286. **Index note.** Tap *Write index note*: "<Notebook> — Definitions.md" appears next to the notebook with one bullet per box and a link to its page. Write your own text above and below the generated part, change a box, write again: only the part between the markers changes.
+3287. **Safe note.** Rename a note of yours to the same name (no markers): the index goes to "… — Definitions (2).md" and your note is untouched.
+3288. **Redaction.** Put a redaction box over a titled definition: it is not listed or written in the index.
+3289. **Big notebook.** In a notebook with 100+ pages and many boxes scrolling stays smooth; chapter prefixes appear a moment after opening (headings are analysed in short slices).
+3290. **Phone, light, dark.** The dialog and the tabs read in light and dark and fit a phone; texts are in Italian with the plugin in Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Derived numbers: per kind or shared counter, chapter prefix, proofs unnumbered, order across pages and by position, renumbering on move/delete | yes | `tests/box-numbering.test.ts` | | | |
+| Labels on the page and in every export that draws box labels (screen, PDF, SVG, PNG, print, share) | yes | `tests/box-numbering.test.ts` (labels), harness `doc=boxnum` | | | |
+| Index dialog with jump-to; plugin-owned index note (owner markers, only the region rewritten, note of the user's never touched, recorded in plugin-written) | yes | `tests/box-numbering.test.ts`, harness `doc=boxnum` | | | |
+| Settings (on/off, chapter prefix, shared counter) en + it | yes | `tests/settings-schema.test.ts` | | | |
+| Thumbnail of each box in the index | no | | | | the box title (when typed) is shown instead |
+| Numbers in the companion note's callouts and in the markers panel | no | | | | left out in this wave |
+
+### 0.28 — geosuggest: actions suggested by the selection's shape (roadmap #403; steps 3300-3319)
+
+Rules only, no AI. Chips appear in a row above the selection bar; they run existing actions.
+
+3300. **Row of words.** Write a line of a few words and lasso it: two chips appear above the bar, *Highlight* and *Insert into note*. The rows of the bar below do not move (compare with the setting off).
+3301. **Highlight.** Tap *Highlight*: a translucent rectangle in the highlighter colour sits behind the words, under the ink; the selection stays. One undo removes it; redo brings it back. On a locked page nothing is added.
+3302. **Insert into note.** Tap that chip: the same flow as *Insert into note* in the bar (note picker, picture and link).
+3303. **Paragraph.** Write three lines and lasso them: no chips. A single long stroke, an underline alone: no chips.
+3304. **Arrow between two groups.** Write two words far apart, draw an arrow from one to the other (the arrow tool or by hand), lasso everything: chips *Link to a note…* and *Group*. Each does what its bar button does.
+3305. **Loop.** Write two lines and draw a closed loop around them; select all: chip *Group*. Tap it: the items become one group, one undo step.
+3306. **Mixed.** Select a row of words together with a picture or a text box: no chips.
+3307. **Setting.** Settings, Appearance, *Suggest actions from the selection*: off, the chips go at once; on, they return on the next selection.
+3308. **Phone.** On a phone-width view the chips sit above the bar in their own row, the five slots of each row of the bar are where they were, and the pieces above (pills) move up rather than overlap.
+3309. **Long-press help.** Hold a finger on a chip: the bubble shows its name and one line, in English and Italian.
+3310. **All actions.** *Highlight* is in the All actions sheet and the command palette; with a row of words selected it comes first under *For this page*.
+3311. **Italian, light, dark.** Texts read in Italian; chips read in light and dark and with *Follow Obsidian theme*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Geometry rules: row of words, arrow between two clusters, loop around ink (pure) | yes | `tests/selection-geo-suggest.test.ts` | | | |
+| Chips above the selection bar (no slot moves), setting, help, ranking | yes | `tests/selection-geo-suggest.test.ts`, harness `doc=geosuggest` | | | |
+| *Highlight* action (area behind the selection, one undo step) | yes | harness `doc=geosuggest` | | | |
+| Flashcards / a "Make card" action | no | | | | none exists in the plugin: the row offers *Insert into note* instead |
+| Region-to-region link | no | | | | the plugin has links from a selection to a note only: the arrow offers *Link to a note…* |

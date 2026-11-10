@@ -1,5 +1,6 @@
 /** Pure helpers of the notebook view (no DOM, no 'obsidian'): testable in Node. */
 import { stableStringify } from "../model/math-elements";
+import { viewKey, viewOf } from "../model/pdf-view";
 import { elementBounds, type MeasureText } from "../ink/elements";
 import { strokeBounds, type BBox } from "../ink/hit-test";
 import { projectToRuler, type Ruler } from "../ink/ruler";
@@ -84,7 +85,8 @@ export function pageSignature(page: Page): string {
 		else parts.push(el.id, el.x, el.y, el.kind, el.done ? 1 : 0);
 	}
 	const bg = page.background;
-	if (bg) parts.push(bg.kind, bg.asset, bg.kind === "pdf" ? bg.page : 0);
+	// 0.28 (#76): a turn or a crop is part of what the page looks like (a half turn, or a crop moved by "move", keeps the size).
+	if (bg) parts.push(bg.kind, bg.asset, bg.kind === "pdf" ? bg.page : 0, viewKey(viewOf(bg)));
 	return parts.join("|");
 }
 

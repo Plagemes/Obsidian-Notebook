@@ -13,6 +13,7 @@ import type { BBox } from "../ink/hit-test";
 import { visiblePages, type Layout } from "../ink/layout";
 import type { Size, Viewport } from "../ink/viewport";
 import { backgroundRect } from "../model/margins";
+import { viewOf, type PdfView } from "../model/pdf-view";
 import type { NotebookDocument } from "../model/types";
 import { PageTextCache, type CachedPage } from "../pdf/text-index";
 import type { PdfPageLinks } from "../pdf/pdf-outline";
@@ -236,7 +237,8 @@ export class PdfTextTools {
 			this.clearSelection();
 			return;
 		}
-		const cached = await this.cache.get(d.asset, d.pdfPage);
+		// The text the page SHOWS (a crop leaves runs out: review Q5).
+		const cached = await this.cache.getView(d.asset, d.pdfPage, viewOf(this.host.doc()?.pages[d.pageIndex]?.background));
 		if (!this.on || this.destroyed) return;
 		if (!cached) {
 			this.clearSelection();
@@ -244,7 +246,7 @@ export class PdfTextTools {
 		}
 		const page = this.host.doc()?.pages[d.pageIndex];
 		if (!page || page.id !== d.pageId) return;
-		const p = pageToPdf({ x: d.start[0], y: d.start[1] }, backgroundRect(page), cached.content);
+		const p = pageToPdf({ x: d.start[0], y: d.start[1] }, backgroundRect(page), cached.content, viewOf(page.background));
 		const caret = caretAt(cached.content, cached.text, p, this.measure, TAP_REACH);
 		const word = caret ? wordRange(cached.text.text, caret.offset) : null;
 		if (!word) {
@@ -258,16 +260,17 @@ export class PdfTextTools {
 
 	/** Turns the drag so far into the selection. */
 	private applyDrag(d: Drag): void {
-		const cached = this.cache.peek(d.asset, d.pdfPage);
 		const page = this.host.doc()?.pages[d.pageIndex];
+		const cached = this.cache.peekView(d.asset, d.pdfPage, viewOf(page?.background));
 		if (!cached || !page || page.id !== d.pageId) return;
 		const rect = backgroundRect(page);
+		const view = viewOf(page.background);
 		if (d.anchor === null) {
-			const c = caretAt(cached.content, cached.text, pageToPdf({ x: d.start[0], y: d.start[1] }, rect, cached.content), this.measure);
+			const c = caretAt(cached.content, cached.text, pageToPdf({ x: d.start[0], y: d.start[1] }, rect, cached.content, view), this.measure);
 			d.anchor = c ? c.offset : -1;
 		}
 		if (d.anchor < 0) return;
-		const f = caretAt(cached.content, cached.text, pageToPdf({ x: d.focus[0], y: d.focus[1] }, rect, cached.content), this.measure);
+		const f = caretAt(cached.content, cached.text, pageToPdf({ x: d.focus[0], y: d.focus[1] }, rect, cached.content, view), this.measure);
 		const range = f ? rangeBetween(d.anchor, f.offset) : null;
 		this.sel = range && rangeHasText(cached.text, range)
 			? { pageIndex: d.pageIndex, pageId: d.pageId, asset: d.asset, pdfPage: d.pdfPage, range, rects: null }
@@ -309,7 +312,8 @@ export class PdfTextTools {
 	/** The selected text, or null. */
 	copyText(): string | null {
 		const s = this.sel;
-		const cached = s ? this.cache.peek(s.asset, s.pdfPage) : null;
+		const shownPage = s ? this.host.doc()?.pages.find((p) => p.id === s.pageId) : undefined;
+		const cached = s ? this.cache.peekView(s.asset, s.pdfPage, viewOf(shownPage?.background)) : null;
 		if (!s || !cached) return null;
 		const text = selectionText(cached.content, cached.text, s.range);
 		return text.length > 0 ? text : null;
@@ -382,10 +386,10 @@ export class PdfTextTools {
 	}
 
 	/** The selection's boxes on its notebook page. */
-	private rectsOf(s: Selected, cached: CachedPage, rect: RectLike): RectLike[] {
-		const key = `${rect.x}|${rect.y}|${rect.width}|${rect.height}`;
+	private rectsOf(s: Selected, cached: CachedPage, rect: RectLike, view?: PdfView): RectLike[] {
+		const key = `${rect.x}|${rect.y}|${rect.width}|${rect.height}|${view?.rotate ?? 0}|${view?.crop ? `${view.crop.x},${view.crop.y},${view.crop.width},${view.crop.height}` : ""}`;
 		if (s.rects && s.rects.key === key) return s.rects.list;
-		const list = selectionBoxes(cached.content, cached.text, s.range, this.measure).map((r) => pdfRectToPage(r, rect, cached.content));
+		const list = selectionBoxes(cached.content, cached.text, s.range, this.measure).map((r) => pdfRectToPage(r, rect, cached.content, view));
 		s.rects = { key, list };
 		return list;
 	}
@@ -430,17 +434,19 @@ export class PdfTextTools {
 					ctx.lineWidth = 1;
 					ctx.setLineDash([4, 3]);
 					for (const l of found.links) {
-						const r = pdfRectToPage(l, rect, found);
+						const r = pdfRectToPage(l, rect, found, viewOf(bg));
+						// A link the crop leaves out is not on the page (review Q5).
+						if (r.x + r.width <= rect.x || r.y + r.height <= rect.y || r.x >= rect.x + rect.width || r.y >= rect.y + rect.height) continue;
 						ctx.strokeRect((box.x + r.x) * v.scale + v.offsetX, (box.y + r.y) * v.scale + v.offsetY, r.width * v.scale, r.height * v.scale);
 					}
 					ctx.setLineDash([]);
 				}
 			}
 			if (s && s.pageIndex === i && s.pageId === page.id) {
-				const cached = this.cache.peek(s.asset, s.pdfPage);
+				const cached = this.cache.peekView(s.asset, s.pdfPage, viewOf(bg));
 				if (!cached) continue;
 				ctx.fillStyle = SELECTION_FILL;
-				const rects = this.rectsOf(s, cached, rect);
+				const rects = this.rectsOf(s, cached, rect, viewOf(bg));
 				const screen = rects.map((r) => ({ x: (box.x + r.x) * v.scale + v.offsetX, y: (box.y + r.y) * v.scale + v.offsetY, width: r.width * v.scale, height: r.height * v.scale }));
 				for (const r of screen) ctx.fillRect(r.x, r.y, r.width, r.height);
 				shown = unionBox(screen);

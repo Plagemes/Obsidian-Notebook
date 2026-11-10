@@ -12,6 +12,7 @@ import { visiblePages, type Layout } from "../ink/layout";
 import type { Renderer } from "../ink/renderer";
 import type { Size, Viewport } from "../ink/viewport";
 import { backgroundRect } from "../model/margins";
+import { viewOf } from "../model/pdf-view";
 import type { NotebookDocument, Page, Stroke } from "../model/types";
 import { PageTextCache, runSearch, type SearchHit } from "../pdf/text-index";
 import { boxesOnPage, type PageTextContent, type TextMeasure } from "../pdf/text-items";
@@ -396,16 +397,18 @@ export class PdfReading {
 	/** The boxes of a hit on its notebook page (page coordinates), cached while the page's PDF box is unchanged. */
 	private rectsOf(hit: SearchHit, page: Page): Rect[] {
 		const { asset, pdfPage } = hit.target;
-		const cached = this.cache.peek(asset, pdfPage);
+		// The text the page SHOWS: a hit in a run a crop leaves out has no box (review Q5).
+		const cached = this.cache.peekView(asset, pdfPage, viewOf(page.background));
 		if (!cached) {
 			void this.cache.get(asset, pdfPage).then(() => this.requestDraw());
 			return [];
 		}
 		const r = backgroundRect(page);
-		const key = `${r.x}|${r.y}|${r.width}|${r.height}`;
+		const view = viewOf(page.background);
+		const key = `${r.x}|${r.y}|${r.width}|${r.height}|${view?.rotate ?? 0}|${view?.crop ? `${view.crop.x},${view.crop.y},${view.crop.width},${view.crop.height}` : ""}`;
 		const have = this.rects.get(hit);
 		if (have && have.key === key) return have.rects;
-		const onPage = boxesOnPage({ ...cached.content, items: hitBoxes(cached.content, cached.text, hit, this.measure) }, r);
+		const onPage = boxesOnPage({ ...cached.content, items: hitBoxes(cached.content, cached.text, hit, this.measure) }, r, view);
 		// A run's box is its font size high; the letters (with ascenders and descenders) sit lower in it.
 		const rects = onPage.map((b) => ({ x: b.x, y: b.y + b.height * 0.1, width: b.width, height: b.height * 1.15 }));
 		this.rects.set(hit, { key, rects });
@@ -506,9 +509,9 @@ export class PdfReading {
 	snapStroke(page: Page, stroke: Stroke): Stroke[] | null {
 		const bg = page.background;
 		if (!this.host.settings().snapHighlighter || stroke.tool !== "highlighter" || bg?.kind !== "pdf") return null;
-		const cached = this.cache.peek(bg.asset, bg.page);
+		const cached = this.cache.peekView(bg.asset, bg.page, viewOf(bg));
 		if (!cached || cached.content.items.length === 0) return null;
-		const boxes = boxesOnPage(cached.content, backgroundRect(page)).filter((b) => b.str.length > 0);
+		const boxes = boxesOnPage(cached.content, backgroundRect(page), viewOf(bg)).filter((b) => b.str.length > 0);
 		const bands = snapHighlight(stroke.points, boxes, this.measure);
 		if (bands.length === 0) return null;
 		return snappedStrokes(stroke, bands);

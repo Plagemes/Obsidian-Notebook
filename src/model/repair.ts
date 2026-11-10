@@ -654,8 +654,17 @@ function salvageSkeleton(p: RawObject, ctx: SalvageContext): { page: RawObject; 
 	}
 	if (p.background !== undefined) {
 		const withBg = { ...page, background: p.background };
+		// v26: a turn or crop that is not valid is reset and the valid one kept (the page size and ink are in turned coordinates when the turn is
+		// valid): without the crop, then without the turn, then without both; the PDF page itself stays.
+		const rawBg = p.background;
+		const without = (...keys: string[]): Record<string, unknown> | null =>
+			isObj(rawBg) && keys.some((k) => k in rawBg) ? Object.fromEntries(Object.entries(rawBg).filter(([k]) => !keys.includes(k))) : null;
+		const kept = [without("crop"), without("rotate"), without("rotate", "crop")].find((bg) => bg !== null && tryDoc([{ ...page, background: bg }], ctx.assets));
 		if (tryDoc([withBg], ctx.assets)) page.background = p.background;
-		else ctx.summary.backgroundsLost++;
+		else if (kept) {
+			page.background = kept;
+			ctx.summary.fieldsReset++;
+		} else ctx.summary.backgroundsLost++;
 	}
 	if (p.margins !== undefined) {
 		// v6 margins position the background and the ink against each other: kept when they validate on this page, else reset to none.

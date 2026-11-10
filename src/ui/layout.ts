@@ -1,7 +1,7 @@
 // ui redesign: the layout engine. From the action registry, the current context, the width of the view and the use
 // counts, it decides what the primary toolbar shows in its quick slots, what the contextual bar offers, and how the
 // "All actions" and page sheets are organised. Deterministic and pure (no DOM, no 'obsidian'): unit-tested.
-import { ACTIONS, activeContexts, allActions, GROUP_ORDER, isRelevant, type ActionDef, type ActionGroup, type ContextKind, type Surface, type ToolId, type UiContext } from "./actions";
+import { ACTIONS, activeContexts, allActions, GROUP_ORDER, isEnabled, isRelevant, type ActionDef, type ActionGroup, type ContextKind, type Surface, type ToolId, type UiContext } from "./actions";
 import { adaptBoost, NO_ADAPT, pageVariant, selectionVariant, suggestedTools, type LayoutAdapt } from "./adapt";
 import { contextScore, forThisPage } from "./context-rank";
 import { usageBoost, type UsageMap } from "./usage";
@@ -86,6 +86,8 @@ export interface ContextBarPlan {
 	second?: string[];
 	/** 0.14: the content this bar was adapted to (a selection of "ink", "image", "text", "mixed" or "object"; a "slide"), for its label. */
 	variant?: string;
+	/** 0.28 (#403): up to two suggested actions (chips at the front of a selection bar), from the geometry of the selection; absent when none. Apart from `actions`, so no slot moves. */
+	suggest?: string[];
 }
 
 /** Number of action buttons the contextual bar can show in a view `width` CSS px wide (beside its label and collapse button). */
@@ -108,6 +110,10 @@ export function contextBar(c: UiContext, width: number, usage: UsageMap, now: nu
 			const plan: ContextBarPlan = { kind, actions: fit.map((a) => a.id) };
 			if (second.length > 0) plan.second = second.map((a) => a.id);
 			if (variant) plan.variant = variant;
+			if (kind === "selection") {
+				const chips = (c.selection?.suggest ?? []).filter((id) => actions.some((a) => a.id === id && isRelevant(a, c) && isEnabled(a, c))).slice(0, 2);
+				if (chips.length > 0) plan.suggest = chips;
+			}
 			return plan;
 		}
 	}

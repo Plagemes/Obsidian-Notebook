@@ -5,6 +5,7 @@ import { openNotebookAtPage } from "../integration/open";
 import { findLooseSheet } from "../library/loose-sheet";
 import { renderThumbnail } from "../library/thumbnail";
 import { backgroundRect } from "../model/margins";
+import { viewOf } from "../model/pdf-view";
 import { parse } from "../model/serialize";
 import type { NotebookDocument } from "../model/types";
 import { boxesOnPage } from "../pdf/text-items";
@@ -180,7 +181,7 @@ export class InboxService {
 		const media = new NotebookMedia(this.app, () => doc, () => this.plugin.settings.folder, () => undefined);
 		try {
 			const content = await media.pdf.pageText(bg.asset, bg.page);
-			return textUnderStroke(stroke, boxesOnPage(content, backgroundRect(page)));
+			return textUnderStroke(stroke, boxesOnPage(content, backgroundRect(page), viewOf(bg)));
 		} catch (e) {
 			console.error("[notebook] inbox: PDF text", e);
 			return "";

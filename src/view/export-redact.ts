@@ -6,17 +6,22 @@
 // pages as they are. An excerpt of a region covered on another page is left out too (ink/redact.ts `coveredExcerpt`).
 import { t } from "../i18n";
 import { hasRedactions, headerAfterRedaction, redactPages } from "../ink/redact";
-import { boxesOf, countBoxes } from "../model/redact";
+import { boxesOf, countBoxes, staleRedactionPages } from "../model/redact";
 import type { Page } from "../model/types";
 import type { ExportOptions } from "./export";
 import { showNotice } from "./notice";
 
 /** Thrown by `withRedaction` when the boxes of the notebook cannot be read: nothing must be written. Its message is shown as it is. */
 export class RedactionUnavailableError extends Error {
-	constructor() {
-		super(t("redact.unreadable"));
+	constructor(stale = false) {
+		super(t(stale ? "redact.stale" : "redact.unreadable"));
 		this.name = "RedactionUnavailableError";
 	}
+}
+
+/** 0.28 (#76): the message of a refusal: the boxes cannot be read, or they were drawn on another turn or crop of a PDF page than the one it shows now. */
+export function redactBlockedMessage(options: Pick<ExportOptions, "redactStale">): string {
+	return t(options.redactStale === true ? "redact.stale" : "redact.unreadable");
 }
 
 /**
@@ -25,13 +30,13 @@ export class RedactionUnavailableError extends Error {
  */
 export function redactionRefused(options: ExportOptions): boolean {
 	if (options.redactBlocked !== true) return false;
-	showNotice(t("redact.unreadable"), 10000);
+	showNotice(redactBlockedMessage(options), 10000);
 	return true;
 }
 
-/** Throws `RedactionUnavailableError` when the options say the boxes of the notebook could not be read. */
+/** Throws `RedactionUnavailableError` when the options say the boxes of the notebook could not be read (or are stale, see `withRedaction`). */
 export function assertRedactionReadable(options: ExportOptions): void {
-	if (options.redactBlocked === true) throw new RedactionUnavailableError();
+	if (options.redactBlocked === true) throw new RedactionUnavailableError(options.redactStale === true);
 }
 
 /**
@@ -43,6 +48,8 @@ export function assertRedactionReadable(options: ExportOptions): void {
 export function withRedaction(pages: readonly Page[], options: ExportOptions): { pages: readonly Page[]; options: ExportOptions } {
 	assertRedactionReadable(options);
 	const boxes = options.redact;
+	// 0.28 (#76), fail closed: a page turned or cropped after its boxes were drawn is never written (its boxes are where the old page was).
+	if (boxes && staleRedactionPages(pages, boxes).length > 0) throw new RedactionUnavailableError(true);
 	if (!boxes || countBoxes(boxes) === 0 || !hasRedactions(pages, boxes)) return { pages, options };
 	const header = options.header;
 	return {

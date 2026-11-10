@@ -2,6 +2,7 @@ import { loadPdfJs, Platform, type App, type TFile } from "obsidian";
 import { renderThumbnail } from "../library/thumbnail";
 import { drawElement, drawTextElement } from "../ink/renderer";
 import { backgroundRect } from "../model/margins";
+import { viewOf } from "../model/pdf-view";
 import { parse } from "../model/serialize";
 import type { NotebookDocument, Page } from "../model/types";
 import { assetIdFromHash, sha256Hex } from "../pdf/hash";
@@ -100,7 +101,7 @@ export async function openNotebookReference(app: App, file: TFile, notebooksFold
 	const drawMedia = (ctx: CanvasRenderingContext2D, page: Page): void => {
 		const bg = page.background;
 		if (bg) {
-			const img = bg.kind === "image" ? media.image(bg.asset) : ((media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null);
+			const img = bg.kind === "image" ? media.image(bg.asset) : ((media.pdf.peek(bg.asset, bg.page, undefined, viewOf(bg))?.canvas as CanvasImageSource | undefined) ?? null);
 			const r = backgroundRect(page);
 			if (img) ctx.drawImage(img, r.x, r.y, r.width, r.height);
 			else {
@@ -134,7 +135,7 @@ export async function openNotebookReference(app: App, file: TFile, notebooksFold
 			const pixels = Math.round(cssWidth * dpr);
 			const bg = page.background;
 			// Load the PDF page first so the synchronous drawing below finds it.
-			if (bg?.kind === "pdf") await media.pdf.render(bg.asset, bg.page, quantizeScale(pixels / page.width)).catch(() => undefined);
+			if (bg?.kind === "pdf") await media.pdf.render(bg.asset, bg.page, quantizeScale(pixels / page.width), viewOf(bg)).catch(() => undefined);
 			const img = createEl("img");
 			img.src = renderThumbnail(page, pixels, { mime: "image/jpeg", quality: 0.9, drawBackground: (ctx, p) => drawMedia(ctx, p) });
 			return img;

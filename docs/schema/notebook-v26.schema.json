@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v25.schema.json",
-  "title": "Notebook document, format version 25",
-  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 25). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
+  "$id": "https://github.com/Plagemes/Obsidian-Notebook/blob/main/docs/schema/notebook-v26.schema.json",
+  "title": "Notebook document, format version 26",
+  "description": "The `.notebook` file written by the Notebook plugin for Obsidian (format \"obsidian-notebook\", version 26). All lengths are in typographic points (pt), origin at the top left of the page. The schema describes what the plugin WRITES. The plugin also accepts older versions (it migrates them) and ignores unknown fields on read, so this schema leaves objects open (no additionalProperties: false). Rules that need more than one value (unique ids across a page, assets that must exist, groups of at least two members, 'locked' elements, stroke ids named by states or sticky notes) cannot be expressed in JSON Schema; see docs/format.md. String limits count Unicode code points here; the plugin counts UTF-16 units in a few places, so a string made of astral characters may be refused by the plugin a little before this schema does.",
   "type": "object",
   "required": ["format", "version", "id", "createdAt", "modifiedAt", "meta", "assets", "pages"],
   "properties": {
     "format": { "const": "obsidian-notebook", "description": "Always this string. Distinguishes the file from any other JSON." },
-    "version": { "const": 25, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
+    "version": { "const": 26, "description": "Integer format version. A reader that supports a lower version must treat a higher one as read-only." },
     "id": { "type": "string", "minLength": 1, "description": "Document id (a UUID when available). Survives renames and copies made with 'Make a copy'." },
     "createdAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time the notebook was created." },
     "modifiedAt": { "type": "string", "minLength": 1, "description": "ISO 8601 time of the last content save." },
@@ -226,7 +226,19 @@
           "properties": {
             "kind": { "const": "pdf" },
             "asset": { "$ref": "#/$defs/id" },
-            "page": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "1-based page of the PDF." }
+            "page": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "1-based page of the PDF." },
+            "rotate": { "enum": [90, 180, 270], "description": "v26: the PDF page is turned this many degrees clockwise, on top of the PDF's own rotation. Absent means upright, the look of every earlier version; the plugin never writes 0." },
+            "crop": {
+              "type": "object",
+              "required": ["x", "y", "width", "height"],
+              "description": "v26: the part of the PDF page that is shown, in PDF points of the page as it is drawn upright at scale 1 (origin top-left, y down; applied before `rotate`). Absent means the whole page. It is not checked against the PDF page's size here (the size is not in the file): a reader clamps it to the page.",
+              "properties": {
+                "x": { "type": "number", "minimum": 0, "maximum": 14400 },
+                "y": { "type": "number", "minimum": 0, "maximum": 14400 },
+                "width": { "type": "number", "minimum": 16, "maximum": 14400 },
+                "height": { "type": "number", "minimum": 16, "maximum": 14400 }
+              }
+            }
           }
         },
         {

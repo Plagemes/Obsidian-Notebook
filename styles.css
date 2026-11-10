@@ -18981,7 +18981,7 @@ body.notebook-style-obsidian {
 	transform: translateX(-50%);
 }
 
-.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-page-refs) > .notebook-welcome-back { top: calc(52px + var(--nb-top-shift, 0px)); }
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-page-refs) > .notebook-welcome-back { top: calc(66px + var(--nb-top-shift, 0px)); }
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-slide-back) > .notebook-welcome-back { top: calc(62px + var(--nb-top-shift, 0px)); }
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-symbol-strip:not(.notebook-hidden)) > .notebook-welcome-back { top: calc(68px + var(--nb-top-shift, 0px)); }
 .workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-page-refs):has(> .notebook-slide-back) > .notebook-welcome-back { top: calc(100px + var(--nb-top-shift, 0px)); }
@@ -21197,4 +21197,680 @@ body.notebook-style-obsidian {
 	.nb-ui.nb-macro-modal .nb-macro-step-n {
 		display: none;
 	}
+}
+
+/* ===== 0.28 pdfrotate ===== */
+/* The dialog that turns and crops a PDF page: the whole page, turned as it will be, with a frame on the part to keep. */
+.nb-ui.nb-pdfview .nb-pdfview-stage {
+	padding: calc(var(--nb-target) / 2);
+	margin-bottom: var(--nb-space-2);
+	display: flex;
+	justify-content: center;
+	background: var(--nb-surface-2);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	touch-action: none;
+	user-select: none;
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-page {
+	--nb-pv-w: 595;
+	--nb-pv-h: 842;
+	position: relative;
+	width: min(100%, calc(48vh * var(--nb-pv-w) / var(--nb-pv-h)));
+	aspect-ratio: calc(var(--nb-pv-w) / var(--nb-pv-h));
+	box-shadow: var(--nb-shadow-1);
+}
+
+/* The shade over what the frame leaves out: clipped to the page; it never takes a touch. */
+.nb-ui.nb-pdfview .nb-pdfview-shade {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-shadefill {
+	--nb-pv-x: 0%;
+	--nb-pv-y: 0%;
+	--nb-pv-fw: 100%;
+	--nb-pv-fh: 100%;
+	position: absolute;
+	left: var(--nb-pv-x);
+	top: var(--nb-pv-y);
+	width: var(--nb-pv-fw);
+	height: var(--nb-pv-fh);
+	box-shadow: 0 0 0 100vmax var(--nb-card-shade);
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	display: block;
+	background: #fff;
+}
+
+/* The frame: its outline and the handles on it. */
+.nb-ui.nb-pdfview .nb-pdfview-frame {
+	--nb-pv-x: 0%;
+	--nb-pv-y: 0%;
+	--nb-pv-fw: 100%;
+	--nb-pv-fh: 100%;
+	position: absolute;
+	left: var(--nb-pv-x);
+	top: var(--nb-pv-y);
+	width: var(--nb-pv-fw);
+	height: var(--nb-pv-fh);
+	box-sizing: border-box;
+	border: 2px solid var(--nb-accent);
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-move {
+	position: absolute;
+	inset: 0;
+	cursor: move;
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-handle {
+	position: absolute;
+	width: var(--nb-target);
+	height: var(--nb-target);
+	margin: calc(var(--nb-target) / -2) 0 0 calc(var(--nb-target) / -2);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	outline: none;
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-handle::after {
+	content: "";
+	width: 14px;
+	height: 14px;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-bg-elevated);
+	border: 2px solid var(--nb-accent);
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-handle:focus-visible::after {
+	background: var(--nb-accent);
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-n { left: 50%; top: 0; cursor: ns-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-s { left: 50%; top: 100%; cursor: ns-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-w { left: 0; top: 50%; cursor: ew-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-e { left: 100%; top: 50%; cursor: ew-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-nw { left: 0; top: 0; cursor: nwse-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-sw { left: 0; top: 100%; cursor: nesw-resize; }
+
+.nb-ui.nb-pdfview .nb-pdfview-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--nb-space-2);
+	margin-bottom: var(--nb-space-2);
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-readout {
+	margin-left: auto;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}
+
+/* ===== 0.28 pageundo ===== */
+/* History panel with per-page undo on: the steps of the page in view carry an accent edge; steps that touch the whole notebook are drawn quieter. */
+.nb-ui.nb-hist-modal .nb-hist-row.is-here {
+	border-left: 3px solid var(--nb-accent);
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row.is-global .nb-hist-row-title {
+	color: var(--nb-text-muted);
+}
+
+
+/* ===== 0.28 linehandle ===== */
+.nb-ui.nb-lh-layer {
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.nb-ui.nb-lh-layer.notebook-hidden,
+.nb-ui.nb-lh-bar.notebook-hidden,
+.nb-ui .nb-lh-slot.notebook-hidden,
+.nb-ui .nb-lh-band.notebook-hidden,
+.nb-ui .nb-lh-handle.notebook-hidden {
+	display: none;
+}
+
+/* the outline of a line: a quiet rail at rest, the whole box when chosen or dragged */
+.nb-ui .nb-lh-band,
+.nb-ui .nb-lh-slot {
+	position: absolute;
+	left: var(--nb-lh-x, 0);
+	top: var(--nb-lh-y, 0);
+	width: var(--nb-lh-w, 0);
+	height: var(--nb-lh-h, 0);
+	box-sizing: border-box;
+	border-radius: 6px;
+	pointer-events: none;
+}
+
+.nb-ui .nb-lh-band {
+	border: 0 solid var(--nb-accent);
+	border-left-width: 2px;
+	opacity: 0.45;
+	transform: translateY(var(--nb-lh-dy, 0px));
+}
+
+.nb-ui .nb-lh-band.is-shifting {
+	border-left-width: 2px;
+	border-style: dashed;
+	border-width: 1px;
+	opacity: 0.55;
+	transition: transform 120ms ease-out;
+}
+
+.nb-ui .nb-lh-band.is-chosen,
+.nb-ui .nb-lh-band.is-dragging {
+	border-width: 2px;
+	border-style: solid;
+	background: var(--nb-accent-bg);
+	opacity: 1;
+}
+
+.nb-ui .nb-lh-band.is-blocked {
+	border-color: var(--nb-text-faint);
+}
+
+.nb-ui .nb-lh-band.is-dragging.is-refused {
+	border-color: var(--nb-danger);
+	background: transparent;
+}
+
+.nb-ui .nb-lh-slot {
+	border: 2px dashed var(--nb-accent);
+	background: var(--nb-accent-bg);
+	opacity: 0.8;
+}
+
+.nb-ui .nb-lh-handle {
+	position: absolute;
+	left: var(--nb-lh-x, 0);
+	top: var(--nb-lh-y, 0);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: var(--nb-lh-hh, 32px);
+	min-height: 0;
+	padding: 0;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-m);
+	background: var(--nb-panel);
+	color: var(--nb-text-muted);
+	box-shadow: var(--nb-shadow-1);
+	cursor: grab;
+	pointer-events: auto;
+	touch-action: none;
+	user-select: none;
+	transform: translateY(var(--nb-lh-dy, 0px));
+}
+
+.nb-ui .nb-lh-handle::after {
+	/* a larger target than the 32 px grip, for a finger */
+	content: "";
+	position: absolute;
+	inset: -6px -8px;
+}
+
+.nb-ui .nb-lh-handle .nb-lh-grip {
+	display: inline-flex;
+}
+
+.nb-ui .nb-lh-handle .nb-lh-grip svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui .nb-lh-handle:hover {
+	color: var(--nb-text);
+	border-color: var(--nb-accent);
+}
+
+.nb-ui .nb-lh-handle.is-chosen {
+	color: #ffffff;
+	border-color: var(--nb-accent);
+	background: var(--nb-accent);
+}
+
+.nb-ui .nb-lh-handle.is-blocked {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.nb-ui .nb-lh-handle.is-dragging {
+	cursor: grabbing;
+	box-shadow: var(--nb-shadow-float);
+	z-index: 1;
+}
+
+.nb-ui .nb-lh-handle.is-dragging.is-refused {
+	border-color: var(--nb-danger);
+}
+
+.nb-ui .nb-lh-handle.is-shifting {
+	transition: transform 120ms ease-out;
+}
+
+.nb-ui .nb-lh-handle:focus-visible,
+.nb-ui .nb-lh-step:focus-visible,
+.nb-ui .nb-lh-done:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: 2px;
+}
+
+/* the bar: what the mode is, the two step buttons and the way out. At the bottom centre, above the contextual bar (the top centre belongs to the symbols strip and the slide-back pill) */
+.nb-ui.nb-lh-bar {
+	position: absolute;
+	bottom: calc(14px + var(--nb-ctx-lift, 0px));
+	left: 50%;
+	z-index: 9;
+	transform: translateX(-50%);
+	display: inline-flex;
+	align-items: center;
+	gap: var(--nb-space-2);
+	max-width: calc(100% - 24px);
+	padding: 5px 6px 5px 12px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-chip);
+	box-shadow: var(--nb-shadow-float);
+	cursor: default;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-bar-icon {
+	display: inline-flex;
+	color: var(--nb-accent);
+}
+
+.nb-ui.nb-lh-bar .nb-lh-bar-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-bar-hint {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	min-height: 0;
+	padding: 0;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	color: var(--nb-text);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-step svg {
+	width: 18px;
+	height: 18px;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-step:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.nb-ui.nb-lh-bar .nb-lh-done {
+	min-height: 34px;
+	padding: 0 14px;
+	border: 1px solid var(--nb-accent);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent);
+	color: #ffffff;
+	font-size: var(--nb-fs-chip);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+@media (max-width: 480px) {
+	.nb-ui.nb-lh-bar .nb-lh-bar-hint {
+		display: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.nb-ui .nb-lh-band.is-shifting,
+	.nb-ui .nb-lh-handle.is-shifting {
+		transition: none;
+	}
+}
+
+
+/* ===== 0.28 tables ===== */
+.nb-ui.nb-table-dialog .nb-table-stepper {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.nb-ui.nb-table-dialog .nb-table-stepper .nb-modal-input {
+	width: 72px;
+	min-height: 44px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui.nb-table-dialog .nb-table-step {
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	cursor: pointer;
+}
+
+.nb-ui.nb-table-dialog .nb-table-seg {
+	max-width: 100%;
+}
+
+.nb-ui.nb-table-dialog .nb-table-seg .nb-segment {
+	min-width: 0;
+	flex: 1 1 0;
+	padding: 0 10px;
+}
+
+.nb-ui.nb-table-dialog .nb-table-colours {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.nb-ui.nb-table-dialog .nb-table-swatch {
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 2px solid var(--nb-border);
+	border-radius: 50%;
+	background: var(--nb-table-swatch, var(--nb-text));
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-table-dialog .nb-table-swatch.is-active {
+	border-color: var(--nb-accent);
+	box-shadow: 0 0 0 2px var(--nb-accent-bg);
+}
+
+.nb-ui.nb-table-dialog .nb-table-preview {
+	display: flex;
+	justify-content: center;
+	padding: 10px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-card);
+	background: var(--nb-panel);
+}
+
+.nb-ui.nb-table-dialog .nb-table-preview-svg {
+	width: 100%;
+	max-width: 240px;
+	height: auto;
+}
+
+/* ===== 0.28 livelecture ===== */
+/* Live lecture bar (#132): timer + "New page" + "Important moment"; at the top left by default, moved to the bottom-left stack below. */
+.workspace-leaf-content .view-content.notebook-view .notebook-live-bar {
+	position: absolute;
+	top: calc(66px + var(--nb-top-shift, 0px));
+	left: 8px;
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	max-width: calc(100% - 16px);
+	padding: 2px 4px 2px 10px;
+	border: 1px solid var(--nb-border-strong);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-glass-strong);
+	-webkit-backdrop-filter: var(--nb-glass-blur);
+	backdrop-filter: var(--nb-glass-blur);
+	box-shadow: var(--nb-shadow-float);
+	color: var(--nb-text);
+	font-size: var(--nb-fs-meta);
+	transition: opacity var(--nb-motion-fast, 120ms) ease-out;
+}
+
+.workspace-leaf-content .view-content.notebook-view.is-tools-faded .notebook-live-bar {
+	opacity: var(--nb-tool-fade-opacity);
+	transition-duration: var(--nb-motion, 300ms);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-live-clock {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-live-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--nb-accent);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-live-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-live-bar.is-folded .notebook-live-actions {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-live-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 36px;
+	min-height: 36px;
+	padding: 0;
+	border: none;
+	border-radius: var(--nb-radius-pill);
+	background: transparent;
+	box-shadow: none;
+	color: var(--nb-text);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-live-btn:hover {
+	background: var(--nb-hover);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-live-btn:focus-visible {
+	outline: 2px solid var(--nb-accent);
+	outline-offset: -2px;
+}
+
+@media (pointer: coarse) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-live-btn {
+		min-width: 44px;
+		min-height: 44px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.workspace-leaf-content .view-content.notebook-view .notebook-live-bar {
+		transition: none;
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+}
+
+.nb-ui .notebook-live-moment {
+	cursor: pointer;
+}
+
+/* Bottom left, in the stack of the minimap, the colour-filter pill and the lecture-header chip (the top has no room left on a phone). */
+.workspace-leaf-content .view-content.notebook-view .notebook-live-bar {
+	top: auto;
+	bottom: calc(16px + var(--nb-ctx-lift, 0px));
+	left: calc(8px + var(--nb-map-bl, 0px));
+	max-width: calc(100% - 16px - var(--nb-map-bl, 0px));
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-meaning-pill) > .notebook-live-bar {
+	bottom: calc(60px + var(--nb-ctx-lift, 0px));
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .notebook-lecture-header-offer) > .notebook-live-bar {
+	bottom: calc(72px + var(--nb-ctx-lift, 0px));
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-body:has(> .nb-meaning-pill):has(> .notebook-lecture-header-offer) > .notebook-live-bar {
+	bottom: calc(116px + var(--nb-ctx-lift, 0px));
+}
+
+/* ===== 0.28 boxnum ===== */
+.nb-ui.notebook-boxindex-modal .nb-boxindex-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.nb-ui .nb-boxindex-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 44px;
+	padding: 6px 12px;
+	border: 0;
+	border-radius: var(--nb-radius-sm, 8px);
+	background: var(--nb-surface-2, var(--nb-accent-bg));
+	color: var(--nb-text);
+	font-size: var(--nb-fs-body, 14px);
+	text-align: left;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui .nb-boxindex-row:hover,
+.nb-ui .nb-boxindex-row:focus-visible {
+	background: var(--nb-accent-bg);
+	outline: 2px solid var(--nb-accent);
+	outline-offset: -2px;
+}
+
+.nb-ui .nb-boxindex-swatch {
+	flex: none;
+	width: 10px;
+	height: 28px;
+	border-radius: 3px;
+}
+
+.nb-ui .nb-boxindex-label {
+	flex: none;
+	min-width: 72px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui .nb-boxindex-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--nb-text-muted, var(--nb-text));
+}
+
+.nb-ui .nb-boxindex-page {
+	flex: none;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: var(--nb-accent-bg);
+	font-size: var(--nb-fs-chip);
+}
+
+@media (max-width: 480px) {
+	.nb-ui .nb-boxindex-label {
+		min-width: 60px;
+	}
+}
+
+/* ===== 0.28 geosuggest ===== */
+/* Suggested actions (#403): up to two chips in a row above the selection bar. A row of their own, so no slot below moves. */
+.workspace-leaf-content .view-content.notebook-view .notebook-context-bar > .notebook-context-suggest {
+	order: 5;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	max-width: 100%;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-bar > .notebook-context-suggest.notebook-hidden {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-suggest .notebook-suggest-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 32px;
+	padding: 0 var(--nb-space-3, 12px) 0 var(--nb-space-2, 8px);
+	border: 1px solid var(--nb-accent);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+	box-shadow: var(--nb-shadow-float, none);
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-semibold, 600);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-suggest .notebook-suggest-chip:hover {
+	background: var(--nb-accent-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-suggest .notebook-suggest-chip:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-suggest-chip-icon {
+	display: inline-flex;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-suggest-chip-icon svg {
+	width: 16px;
+	height: 16px;
 }

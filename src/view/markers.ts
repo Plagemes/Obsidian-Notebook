@@ -17,6 +17,7 @@ import {
 import {
 	BOX_KINDS, type BoxElement, type BoxKind, type MarkerElement, type MarkerKind, type NotebookDocument, type Page, type PageElement,
 } from "../model/types";
+import { collectLiveMarks } from "../timetable/live-lecture";
 import { setDestructive } from "../ui/destructive";
 
 /** What the next tap or drag on a page places. */
@@ -464,6 +465,23 @@ class EndOfLectureModal extends Modal {
 		this.section("markers.panel.homework", g.homework);
 		this.section("markers.panel.importance", g.importance);
 		this.section("markers.panel.boxes", g.boxes);
+		this.moments(doc, range);
+	}
+
+	/** 0.28 livelecture (#132): the stamped "important moments" of the range; a row jumps to its page. */
+	private moments(doc: NotebookDocument, range: { from: number; to: number }): void {
+		const marks = collectLiveMarks(doc.pages, doc.meta?.bookmarks ?? [], doc.meta?.bookmarkInfo, range);
+		if (marks.length === 0) return;
+		this.contentEl.createEl("h4", { cls: "notebook-marker-section", text: `${t("markers.panel.moments")} (${marks.length})` });
+		const list = this.contentEl.createDiv({ cls: "notebook-marker-list" });
+		for (const m of marks) {
+			const row = list.createDiv({ cls: "notebook-marker-row notebook-live-moment" });
+			row.createDiv({ cls: "notebook-marker-main", text: t("markers.panel.moment", { label: m.label, n: String(m.pageIndex + 1) }) });
+			row.addEventListener("click", () => {
+				this.close();
+				this.host.scrollTo(m.pageIndex, 0);
+			});
+		}
 	}
 
 	private section(title: MessageKey, entries: readonly MarkerEntry[]): void {

@@ -12,6 +12,7 @@ import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN
 import { AREA_MAX_SIDE, AREA_MIN_SIDE } from "./area";
 import { isOpacity, normaliseOpacity, OPACITY_MAX, OPACITY_MIN } from "./opacity";
 import { canTaper, isTaper, TAPER_MAX, TAPER_MIN } from "./taper";
+import { isPdfCrop, isPdfRotation, PDF_CROP_MAX, PDF_CROP_MIN_SIDE } from "./pdf-view-format";
 import { commentLine, normalizeComments, readComments } from "./comments-format";
 import { normalizePageStates, STATE_COLOR_RE, statesLine } from "./states-format";
 import { normalizePageTags } from "./page-tags";
@@ -432,8 +433,13 @@ function assemble(
 		if (tags) out.push(`\t\t\t"tags": ${j(tags)},`);
 		const b = page.background;
 		if (b) {
+			// v26 (#76): the turn and the crop of a PDF page, each only when set, after `page`.
+			const pdfView = b.kind === "pdf"
+				? (b.rotate !== undefined ? `,"rotate":${j(b.rotate)}` : "")
+					+ (b.crop !== undefined ? `,"crop":{"x":${j(b.crop.x)},"y":${j(b.crop.y)},"width":${j(b.crop.width)},"height":${j(b.crop.height)}}` : "")
+				: "";
 			out.push(b.kind === "pdf"
-				? `\t\t\t"background": {"kind":"pdf","asset":${j(b.asset)},"page":${j(b.page)}},`
+				? `\t\t\t"background": {"kind":"pdf","asset":${j(b.asset)},"page":${j(b.page)}${pdfView}},`
 				: `\t\t\t"background": {"kind":${j(b.kind)},"asset":${j(b.asset)}},`);
 		}
 		const m = page.margins;
@@ -901,7 +907,7 @@ function requireAsset(assets: Assets, id: string, kind: AssetKind, path: string)
 	if (a.kind !== kind) fail(path, `expected a ${kind} asset, found ${a.kind}`);
 }
 
-function readBackground(v: unknown, path: string, assets: Assets): PageBackground {
+function readBackground(v: unknown, path: string, assets: Assets, drop: Dropped | null = null, withPdfView = true): PageBackground {
 	if (!isObject(v)) fail(path, "expected an object");
 	const asset = str(v.asset, `${path}.asset`);
 	if (v.kind === "pdf") {
@@ -909,7 +915,29 @@ function readBackground(v: unknown, path: string, assets: Assets): PageBackgroun
 			fail(`${path}.page`, "expected an integer >= 1");
 		}
 		requireAsset(assets, asset, "pdf", `${path}.asset`);
-		return { kind: "pdf", asset, page: v.page };
+		const bg: PageBackground = { kind: "pdf", asset, page: v.page };
+		// v26 (#76): the turn and the crop (a file of an older format has none of ours: odd keys are ignored, as the migration drops them).
+		// Details: read leniently, an invalid one (a turn that is not 90, 180 or 270; a crop that is not four finite numbers, with sides of at least
+		// PDF_CROP_MIN_SIDE pt and nothing negative or beyond PDF_CROP_MAX) is dropped and counted (the page shows that much of the PDF as before);
+		// strictly it fails, so a malformed one is never written. A crop is NOT checked against the PDF page (its size is not in the file): the
+		// renderers clamp it (see `effectiveCrop`).
+		if (withPdfView) {
+			if (v.rotate !== undefined) {
+				const rotate = orDrop(drop, () => {
+					if (!isPdfRotation(v.rotate)) fail(`${path}.rotate`, "expected 90, 180 or 270");
+					return v.rotate;
+				});
+				if (rotate !== undefined) bg.rotate = rotate;
+			}
+			if (v.crop !== undefined) {
+				const crop = orDrop(drop, () => {
+					if (!isPdfCrop(v.crop)) fail(`${path}.crop`, `expected {x, y, width, height} in pt (x, y from 0; sides from ${PDF_CROP_MIN_SIDE}; at most ${PDF_CROP_MAX})`);
+					return { x: v.crop.x, y: v.crop.y, width: v.crop.width, height: v.crop.height };
+				});
+				if (crop !== undefined) bg.crop = crop;
+			}
+		}
+		return bg;
 	}
 	if (v.kind === "image") {
 		requireAsset(assets, asset, "image", `${path}.asset`);
@@ -1566,7 +1594,7 @@ function dissolveSmallGroups(page: Page, path: string, drop: Dropped | null): vo
 	});
 }
 
-function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true, withTimes = true, withPens = true, withShapeStyle = true, withOpacity = true, withTaper = true): Page {
+function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, drop: Dropped | null = null, slides: SlideIds = new Set<string>(), withStates = true, withLocked = true, withComments = true, withGroups = true, withTimes = true, withPens = true, withShapeStyle = true, withOpacity = true, withTaper = true, withPdfView = true): Page {
 	if (!isObject(v)) fail(path, "expected an object");
 	const id = str(v.id, `${path}.id`);
 	const width = positive(v.width, `${path}.width`);
@@ -1590,7 +1618,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 		const tags = readPageTags(v.tags, `${path}.tags`);
 		if (tags) page.tags = tags;
 	}
-	if (v.background !== undefined) page.background = readBackground(v.background, `${path}.background`, assets);
+	if (v.background !== undefined) page.background = readBackground(v.background, `${path}.background`, assets, drop, withPdfView);
 	if (v.margins !== undefined) page.margins = readMargins(v.margins, `${path}.margins`, width, height);
 	if (v.infinite !== undefined) {
 		if (typeof v.infinite !== "boolean") fail(`${path}.infinite`, "expected a boolean");
@@ -1894,7 +1922,7 @@ export class StagedParse {
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
-		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18, this.from >= 19, this.from >= 20, this.from >= 22, this.from >= 24, this.from >= 25);
+		this.doc.pages[i] = readPage(this.rawPages[i], `pages[${i}]`, this.ids, this.doc.assets ?? {}, this.drop, slides, this.from >= 13, this.from >= 14, this.from >= 16, this.from >= 18, this.from >= 19, this.from >= 20, this.from >= 22, this.from >= 24, this.from >= 25, this.from >= 26);
 	}
 
 	get pending(): number {
@@ -1964,7 +1992,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v22 → v23 is the identity apart from the version (the area element is new and nothing is dropped), so large v22 files are staged too.
 	// v23 → v24 only drops the `opacity` keys of strokes, images and areas (ignored page by page), so large v23 files are staged too.
 	// v24 → v25 only drops the `taperStart` and `taperEnd` keys of strokes (ignored page by page), so large v24 files are staged too.
-	if (pre.version === 9 || pre.version === 10 || pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22 || pre.version === 23 || pre.version === 24) return StagedParse.create(pre.raw, first, pre.version);
+	// v25 → v26 only drops the `rotate` and `crop` keys of PDF backgrounds (ignored page by page), so large v25 files are staged too.
+	if (pre.version === 25 || pre.version === 9 || pre.version === 10|| pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22 || pre.version === 23 || pre.version === 24) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }
@@ -2058,9 +2087,17 @@ export function checkContent(doc: NotebookDocument): string | null {
 			if (viewLine(readView(JSON.parse(line), `view ${v.id}`, null)) !== line) return `view ${v.id}: round-trip mismatch`;
 			if (Object.isFrozen(v)) checkedViews.add(v);
 		}
+		// 0.28 review (#98): the references into the notebook's shared tables are checked on EVERY call, not cached with the element: an out-of-order
+		// step must never leave a picture, a background or the cover pointing at a file record that is no longer there. (Ink whose slide is not in
+		// the table is accepted on purpose, see tests/model-v12: the writer drops the link; per-page undo never removes a slide entry out of order.)
+		const asset = (id: string, kind: AssetKind): boolean => Object.prototype.hasOwnProperty.call(assets, id) && assets[id]!.kind === kind;
+		const cover = doc.meta?.coverArt;
+		if (cover?.kind === "image" && !asset(cover.asset, "image")) return "meta.coverArt.asset: not an image asset of this notebook";
 		// 0.19: ids are unique across strokes and elements, as `serializeChecked` requires (two copies of one element would fail every save).
 		const ids = new Set<string>();
 		for (const page of doc.pages) {
+			const bg = page.background;
+			if (bg && !asset(bg.asset, bg.kind === "pdf" ? "pdf" : "image")) return `page ${page.id} background: refers to an asset that does not exist`;
 			// v19: a start and an end time that go together (the writer writes what it has, the strict reader refuses anything else).
 			const times = pageTimesProblem(page.startAt, page.endAt);
 			if (times) return `page ${page.id}: ${times}`;
@@ -2073,6 +2110,8 @@ export function checkContent(doc: NotebookDocument): string | null {
 			for (const el of page.elements ?? []) {
 				if (ids.has(el.id)) return `element ${el.id}: duplicate id`;
 				ids.add(el.id);
+				const ref = el.type === "image" || el.type === "excerpt" ? el.asset : undefined;
+				if (ref !== undefined && !asset(ref, "image")) return `element ${el.id}: refers to an asset that does not exist`;
 			}
 			for (const s of page.strokes) {
 				if (verifiedLines.has(s) || validatedStrokes.has(s)) continue;

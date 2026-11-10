@@ -233,6 +233,8 @@ const WRITING: SettingSpec[] = [
 	},
 	// 0.26 zoomwidth (#350): pen width relative to zoom
 	{ id: "penWidthFollowsZoom", section: "writing", order: 74, name: "settings.penWidthFollowsZoom", desc: "settings.penWidthFollowsZoom.desc", control: { type: "toggle" }, keywords: "pen width zoom thickness spessore penna ingrandimento" },
+	// 0.28 bucket (#184): the paint bucket's fill look (view/paint-bucket.ts)
+	{ id: "bucketTint", section: "writing", order: 75, name: "settings.bucketTint", desc: "settings.bucketTint.desc", control: { type: "toggle" }, keywords: "paint bucket fill area tint solid colour secchiello riempi area tinta" },
 	// 0.25 profiles (#219): Lecture / Study / custom writing profiles (view/writing-profiles.ts); the switcher is on the pen options chip row
 	{ id: "writingProfileOnLecture", section: "writing", order: 73, name: "settings.profileOnLecture", desc: "settings.profileOnLecture.desc", keywords: "profile lecture study fast careful switch pens stabilization paper profilo lezione studio", control: { type: "toggle" } },
 	{ id: "eraseAreaElements", section: "writing", group: ADVANCED, order: 10, name: "settings.eraseAreaElements", desc: "settings.eraseAreaElements.desc", control: { type: "toggle" } },
@@ -325,6 +327,8 @@ const PAGES: SettingSpec[] = [
 	},
 	// 0.27 semzoom (#130)
 	{ id: "semanticZoom", section: "pages", order: 26, name: "settings.semanticZoom", desc: "settings.semanticZoom.desc", control: { type: "toggle" }, keywords: "zoom out overview headings titles labels panoramica titoli orientamento" },
+	// 0.28 pageundo (#98)
+	{ id: "pageUndo", section: "pages", order: 35, name: "settings.pageUndo", desc: "settings.pageUndo.desc", control: { type: "toggle" }, keywords: "undo redo history page per-page annulla ripeti cronologia pagina" },
 	{ id: "autoNextPage", section: "pages", order: 30, name: "settings.autoNextPage", desc: "settings.autoNextPage.desc", control: { type: "toggle" } },
 	{ id: "autoScrollWriting", section: "pages", order: 40, name: "settings.autoScroll", desc: "settings.autoScroll.desc", control: { type: "toggle" } },
 	{ id: "pageTurnerKeys", section: "pages", order: 50, name: "settings.pageTurnerKeys", desc: "settings.pageTurnerKeys.desc", control: { type: "toggle" }, keywords: "keyboard tastiera clicker" },
@@ -333,6 +337,10 @@ const PAGES: SettingSpec[] = [
 	{ id: "outlineSlides", section: "pages", group: "outline", order: 20, name: "settings.outlineSlides", desc: "settings.outlineSlides.desc", control: { type: "toggle" }, keywords: "outline pdf slide diapositive" },
 	{ id: "outlineHeadings", section: "pages", group: "outline", order: 30, name: "settings.outlineHeadings", desc: "settings.outlineHeadings.desc", control: { type: "toggle" }, keywords: "outline heading titoli handwriting scrittura" },
 	{ id: "outlineMarkers", section: "pages", group: "outline", order: 40, name: "settings.outlineMarkers", desc: "settings.outlineMarkers.desc", control: { type: "toggle" }, keywords: "outline marker segnalini domande compiti" },
+	// 0.28 (#205): numbering of structured boxes ("Def. 3.2").
+	{ id: "boxNumbering", section: "pages", order: 55, name: "settings.boxNumbering", desc: "settings.boxNumbering.desc", control: { type: "toggle" }, keywords: "box definition theorem numbering number chapter definizione teorema numerazione numero capitolo" },
+	{ id: "boxNumberChapter", section: "pages", order: 56, name: "settings.boxNumberChapter", desc: "settings.boxNumberChapter.desc", control: { type: "toggle" }, parent: "boxNumbering", visible: (s) => s.boxNumbering, keywords: "box numbering chapter prefix numerazione capitolo prefisso" },
+	{ id: "boxNumberShared", section: "pages", order: 57, name: "settings.boxNumberShared", desc: "settings.boxNumberShared.desc", control: { type: "toggle" }, parent: "boxNumbering", visible: (s) => s.boxNumbering, keywords: "box numbering shared counter numerazione contatore unico" },
 	// 0.16 (#46): the outline of a PDF in the notebook outline.
 	{
 		id: "outlinePdf", section: "pages", group: "outline", order: 50, name: "settings.outlinePdf", desc: "settings.outlinePdf.desc",
@@ -582,6 +590,8 @@ const STUDY: SettingSpec[] = [
 	{ id: "workspaceOnLecture", section: "study", group: "timetable", order: 30.5, name: "settings.workspaceOnLecture", desc: "settings.workspaceOnLecture.desc", control: { type: "toggle" }, keywords: "workspace preset lecture slides outline panels class area di lavoro lezione pannelli diapositive" },
 	// 0.21 slideback (#225): the pill back to where you last wrote during a lecture.
 	{ id: "slideBack", section: "study", group: "timetable", order: 31, name: "settings.slideBack", desc: "settings.slideBack.desc", control: { type: "toggle" }, keywords: "lecture slide back return current page lezione diapositiva torna" },
+	// 0.28 livelecture (#132): the live bar with the timer and the quick buttons.
+	{ id: "liveBar", section: "study", group: "timetable", order: 31.5, name: "settings.liveBar", desc: "settings.liveBar.desc", control: { type: "toggle" }, keywords: "lecture live bar timer elapsed new page important moment bookmark lezione timer barra momento importante" },
 	// 0.23 welcomeback (#420): the card with the way back, open questions and gaps when a notebook is reopened after a while.
 	{ id: "welcomeBack", section: "study", group: "timetable", order: 33, name: "settings.welcomeBack", desc: "settings.welcomeBack.desc", control: { type: "toggle" }, keywords: "welcome back reopen resume where i left questions gaps bentornato riprendi domande lacune" },
 	{ id: "welcomeBackHours", section: "study", group: "timetable", order: 34, name: "settings.welcomeBackHours", desc: "settings.welcomeBackHours.desc", control: { type: "slider", min: WELCOME_HOURS_MIN, max: WELCOME_HOURS_MAX, step: 1, format: suffix("h") }, parent: "welcomeBack", visible: (s) => s.welcomeBack },
@@ -619,6 +629,7 @@ const APPEARANCE: SettingSpec[] = [
 	{ id: "adaptPageType", section: "appearance", order: 31, name: "settings.adaptPageType", desc: "settings.adaptPageType.desc", control: { type: "toggle" }, keywords: "adaptive toolbar page slide ruled grid adattiva barra pagina" },
 	{ id: "adaptLearn", section: "appearance", order: 32, name: "settings.adaptLearn", desc: "settings.adaptLearn.desc", control: { type: "toggle" }, keywords: "adaptive toolbar learn notebook course usage frequent adattiva impara quaderno corso" },
 	{ id: "adaptSelection", section: "appearance", order: 33, name: "settings.adaptSelection", desc: "settings.adaptSelection.desc", control: { type: "toggle" }, keywords: "adaptive selection bar ink image text lasso adattiva selezione" },
+	{ id: "suggestSelection", section: "appearance", order: 33.5, name: "settings.suggestSelection", desc: "settings.suggestSelection.desc", control: { type: "toggle" }, keywords: "suggest actions selection highlight link group chips suggerisci azioni selezione" },
 	{ id: "toolbarReset", section: "appearance", order: 34, name: "settings.toolbarReset", desc: "settings.toolbarReset.desc", control: { type: "action", run: "toolbar-reset", button: "settings.toolbarReset.button" }, keywords: "adaptive toolbar pinned pin reset forget learned fissate azzera dimentica" },
 	// 0.27 macros (#170): a name, an icon and a list of actions on one toolbar button (also in All actions and as an Obsidian command)
 	{

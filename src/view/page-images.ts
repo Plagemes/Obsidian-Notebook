@@ -11,6 +11,7 @@ import { drawPageRaster } from "../ink/page-raster";
 import { burnPixelRects, burnPlan, type BurnPlan } from "../ink/redact";
 import { elementAssetId } from "../model/excerpts";
 import { renderSize } from "../model/export-markdown";
+import { viewOf } from "../model/pdf-view";
 import type { Page } from "../model/types";
 import { burnedCanvas, sourceSize } from "./burn";
 import type { NotebookMedia } from "./media";
@@ -62,7 +63,7 @@ export class PageImageRenderer {
 		const burn = burnPlan(page);
 		try {
 			if (bg.kind === "pdf") {
-				const picture = await media.pdf.render(bg.asset, bg.page, scale);
+				const picture = await media.pdf.render(bg.asset, bg.page, scale, viewOf(bg));
 				return burn ? await burned(picture, burn) : picture;
 			}
 			const bitmap = await createImageBitmap(new Blob([await media.readAsset(bg.asset)]));

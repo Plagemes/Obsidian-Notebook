@@ -125,12 +125,12 @@ function shifted(s: Stroke, o: TidyShift | undefined): Stroke {
 	return { ...s, points: s.points.map(([x, y, p]): Point => [x + o.dx, y + o.dy, p]) };
 }
 
-interface Row {
+export interface Row {
 	strokes: Stroke[];
 	box: BBox;
 }
 
-function unionBox(boxes: readonly BBox[]): BBox {
+export function unionBox(boxes: readonly BBox[]): BBox {
 	return {
 		minX: Math.min(...boxes.map((b) => b.minX)), minY: Math.min(...boxes.map((b) => b.minY)),
 		maxX: Math.max(...boxes.map((b) => b.maxX)), maxY: Math.max(...boxes.map((b) => b.maxY)),
@@ -138,7 +138,7 @@ function unionBox(boxes: readonly BBox[]): BBox {
 }
 
 /** Pieces of lines that lie side by side on the same rows (the vertical overlap is most of the lower piece, the gap between them is under `gap`) become one line. */
-function joinPieces(rows: readonly Row[], gap: number): Row[] {
+export function joinPieces(rows: readonly Row[], gap: number): Row[] {
 	const n = rows.length;
 	if (n < 2 || n > 600) return [...rows];
 	const parent = rows.map((_, i) => i);

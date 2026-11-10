@@ -140,7 +140,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 38. **P2** 🧪 Align and distribute the selection.
 39. **P2** 🧪 Group elements and lock elements (for example a background image that must not move). (0.20, format v18: an optional `group` on strokes and elements and `locked` on elements. *Group* / *Ungroup* / *Lock* in the selection bar; a tap or the lasso on one member picks the whole group; the lasso, a tap and the area eraser skip a locked element; a *Locked · Unlock* chip on a tap and *Locked elements…* in the page menu unlock.)
 40. **P2** Layers: annotations on a layer separate from the PDF, which can be hidden or locked.
-41. **P2** Hand-drawn tables: insert a grid of cells and write inside it.
+41. **P2** 🧪 Hand-drawn tables: insert a grid of cells and write inside it.
 42. **P3** Symbol keyboard (Greek, maths) for text boxes.
 
 ### PDF
@@ -193,7 +193,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 73. **P1** 🧪 More papers: Cornell, music staff, isometric, hexagonal, calligraphy, planner.
 74. 🧪 **P1** Save a page as a template, with a template gallery.
 75. **P2** 🧪 Automatic header with date and page number.
-76. **P2** Rotate and crop imported PDF pages.
+76. **P2** 🧪 Rotate and crop imported PDF pages (format v26: `rotate` and `crop` on a PDF page background; page sheet actions and a crop dialog; ink, highlights and boxes stay on the same part of the PDF).
 77. **P2** 🧪 Merge notebooks, split a notebook, extract pages into a new notebook.
 78. **P2** 🧪 Move a selection to another page.
 79. **P2** 🧪 Drag files (images, PDFs) straight onto a page.
@@ -248,7 +248,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 95. **P1** 🧪 Automatic next page: writing at the bottom of the last page appends a new page (different from infinite pages).
 96. **P2** Strike-through as logical deletion: a line over a word marks it as deleted; it stays readable struck through and can be hidden.
 97. **P1** 🧪 Selective eraser: erase only one kind of ink (only highlighter, only one colour) and leave the rest.
-98. **P2** Per-page undo: each page has its own history; undo on one page never touches another.
+98. **P2** 🧪 Per-page undo: each page has its own history; undo on one page never touches another. (0.28: Settings > Pages > *Undo on this page only*, off by default; one global History where every step knows the pages it touched, so Undo / Redo act on the newest step of the page in view with the step's own inverse; steps that touch several pages, the page list or the whole notebook are never undone out of order; the history panel marks them and stays global. `model/page-undo.ts`, `History.undoOnPage`.)
 99. **P2** 🧪 Area highlighter: translucent rectangles, ideal on scanned PDFs.
 100. **P1** 🧪 Invisible ink for self-testing: write answers with a hidden pen and reveal them with "show solutions".
 101. **P2** 🧪 Colours with meaning: define what each colour means (red = definition, blue = example), filter the view by it and generate a digest per colour.
@@ -294,7 +294,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 129. **P3** Search by drawing: sketch a shape and find pages with similar drawings (geometric descriptors, no AI).
 130. **P2** 🧪 Semantic zoom: when zoomed out, headings and excerpts are shown large for orientation.
 131. **P3** Arrows linking regions of different pages, visible in the side-by-side view.
-132. **P2** Live lecture mode: a timer and quick buttons ("new page", "important moment"); each mark becomes a timestamped bookmark.
+132. **P2** 🧪 Live lecture mode: a timer and quick buttons ("new page", "important moment"); each mark becomes a timestamped bookmark.
 133. ~~**P2** Course dashboard page that updates itself: next exam, pages due for review, recent notebooks.~~ — moved to the "Study and exam update" (to be designed later, user decision 2026-10-29)
 134. **P2** 🧪 Pen sets per subject, loaded automatically with the notebook (e.g. maths or languages).
 135. **P2** Mirror page: a page that always shows the current content of a page in another notebook (transclusion).
@@ -385,7 +385,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - The result is inserted as text or as a formula element together with its expression.
     - Same safe math parser as the graphs (no code execution). Later (M5): handwritten calculations.
 183. **P3** Gentle snapping of handwriting to the lines while writing on ruled paper.
-184. **P2** Paint bucket: fill closed areas with colour (diagrams, maps).
+184. **P2** 🧪 Paint bucket: fill closed areas with colour (diagrams, maps). (0.28: tap inside an area closed by ink; the area is traced from a low-resolution mask and stored as a filled shape stroke behind the ink, tint or solid; gaps of a pen width are closed; no format change; holes are not left out.)
 185. **P1** 🧪 Erase area: draw an outline and everything inside disappears, in one gesture.
 186. **P2** 🧪 Copy a page into another notebook, with a link back to the source page.
 187. **P2** 🧪 Back-of-book index: mark terms or regions and an index page with references is generated. (0.21: *Add to index…* turns a lasso selection into an `#idx <term>` marker; *Back-of-book index…* lists the terms A-Z with page chips and writes `<Notebook> — Index.md`; no format change.)
@@ -414,7 +414,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 202. **P1** 🧪 Questions for the lecturer: mark a question on the page; it goes to a list for the end of class or office hours, with a resolved state.
 203. **P1** 🧪 Importance markers (!, !!, ★) on the page, collected per lecture.
 204. **P1** 🧪 Structured boxes: Definition, Theorem, Example, Proof, Remark — frames drawn on the fly that become callouts in the companion note.
-205. **P2** Automatic numbering of boxes (Def. 3.2) and an index of the course's definitions and theorems.
+205. **P2** 🧪 Automatic numbering of boxes (Def. 3.2) and an index of the course's definitions and theorems.
 206. **P2** 🧪 Instant axes: one gesture drops Cartesian axes with ticks for quick hand-drawn graphs.
 207. **P2** Personal shorthand: your abbreviation symbols with an automatically generated legend.
 208. **P1** 🧪 Quick textbook reference: "p. 134" becomes a link to the textbook PDF at that page.
@@ -491,7 +491,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### Ink structure (foundation for many features)
 255. **P1** 🧪 Words and lines detected without OCR: double tap selects a word, triple tap a line. Basis for reflow (#92), alignment (#93) and headings (#102).
-256. **P2** Line handle: drag whole lines to reorder them.
+256. **P2** 🧪 Line handle: drag whole lines to reorder them.
 257. **P2** Overwrite: write over a word and the new one replaces the old.
 258. **P3** Smart underline: a line under a word is straightened and fitted to that word.
 259. **P3** Self-adjusting boxes: a frame around handwriting grows when lines are added.
@@ -726,7 +726,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 
 ### Selection
 402. **P1** 🧪 Selection bar by content type: ink, image, text or mixed selection each show their own actions (extends the selection contextual bar).
-403. **P2** Actions suggested by the selection's geometry: a row of words → card, highlight; two regions joined by an arrow → link.
+403. **P2** 🧪 Actions suggested by the selection's geometry: a row of words → highlight, note; two regions joined by an arrow → link; a loop → group (0.28; rules only, up to two chips above the selection bar; "card" is Insert into note, there is no flashcard feature).
 404. **P3** Preview before applying: press and hold an action to see its result.
 405. **P3** Radial menu for the selection.
 406. **P2** Resize and rotate handles shown only when they are meaningful.

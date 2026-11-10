@@ -41,23 +41,50 @@ function measure(text: string): number {
 	return c.measureText(text).width;
 }
 
+/** m × n for [a, b, c, d, e, f] (n first). */
+function mul(m: Matrix, n: Matrix): Matrix {
+	return [
+		m[0]! * n[0]! + m[2]! * n[1]!, m[1]! * n[0]! + m[3]! * n[1]!, m[0]! * n[2]! + m[2]! * n[3]!, m[1]! * n[2]! + m[3]! * n[3]!,
+		m[0]! * n[4]! + m[2]! * n[5]! + m[4]!, m[1]! * n[4]! + m[3]! * n[5]! + m[5]!,
+	];
+}
+
 function fakePage(n: number) {
-	const viewport = (scale: number) => ({
-		width: FAKE_PAGE.width * scale,
-		height: FAKE_PAGE.height * scale,
-		transform: [scale, 0, 0, -scale, 0, FAKE_PAGE.height * scale] as Matrix,
-	});
+	// 0.28 (#76): like pdf.js, a viewport can be turned (`rotation`, clockwise degrees) and shifted (`offsetX`, `offsetY`, device px).
+	const viewport = (scale: number, rotation = 0, offsetX = 0, offsetY = 0) => {
+		const w = FAKE_PAGE.width * scale, h = FAKE_PAGE.height * scale;
+		const r = ((rotation % 360) + 360) % 360;
+		const turn: Matrix = r === 90 ? [0, 1, -1, 0, h, 0] : r === 180 ? [-1, 0, 0, -1, w, h] : r === 270 ? [0, -1, 1, 0, 0, w] : [1, 0, 0, 1, 0, 0];
+		const view: Matrix = [turn[0]!, turn[1]!, turn[2]!, turn[3]!, turn[4]! + offsetX, turn[5]! + offsetY];
+		const swap = r === 90 || r === 270;
+		return { width: swap ? h : w, height: swap ? w : h, transform: mul(view, [scale, 0, 0, -scale, 0, h]), view, scale };
+	};
 	return {
-		getViewport: ({ scale }: { scale: number }) => viewport(scale),
-		render: ({ canvasContext, viewport: vp }: { canvasContext: CanvasRenderingContext2D; viewport: { width: number } }) => {
-			const scale = vp.width / FAKE_PAGE.width;
+		rotate: 0,
+		getViewport: ({ scale, rotation, offsetX, offsetY }: { scale: number; rotation?: number; offsetX?: number; offsetY?: number }) => viewport(scale, rotation, offsetX, offsetY),
+		render: ({ canvasContext, viewport: vp }: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; view?: Matrix; scale?: number } }) => {
+			const scale = vp.scale ?? vp.width / FAKE_PAGE.width;
 			const ctx = canvasContext;
 			ctx.fillStyle = "#e8eef8";
 			ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+			ctx.save();
+			// The sheet is drawn in its own pixels, then carried by the viewport's turn and shift onto the (possibly smaller) bitmap.
+			if (vp.view) ctx.setTransform(vp.view[0]!, vp.view[1]!, vp.view[2]!, vp.view[3]!, vp.view[4]!, vp.view[5]!);
+			ctx.fillStyle = "#e8eef8";
+			ctx.fillRect(0, 0, FAKE_PAGE.width * scale, FAKE_PAGE.height * scale);
+			if ((window as unknown as { __harnessPdfMark?: boolean }).__harnessPdfMark) {
+				// A frame around the sheet and a red mark in its top-left corner, so a turn and a crop can be seen (`doc=pdfrotate` only).
+				ctx.strokeStyle = "#1d4ed8";
+				ctx.lineWidth = 3 * scale;
+				ctx.strokeRect(1.5 * scale, 1.5 * scale, FAKE_PAGE.width * scale - 3 * scale, FAKE_PAGE.height * scale - 3 * scale);
+				ctx.fillStyle = "#dc2626";
+				ctx.fillRect(0, 0, 40 * scale, 40 * scale);
+			}
 			ctx.fillStyle = "#111827";
 			ctx.font = `${FAKE_FONT * scale}px sans-serif`;
 			ctx.textBaseline = "alphabetic";
 			for (const [text, x, y] of FAKE_LINES[n - 1] ?? []) ctx.fillText(text, x * scale, y * scale);
+			ctx.restore();
 			return { promise: Promise.resolve(), cancel: () => undefined };
 		},
 		getTextContent: async () => ({

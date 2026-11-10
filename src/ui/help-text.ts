@@ -6,8 +6,10 @@ import type { MessageKey } from "../i18n/en";
 export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	undo: "help.undo",
 	redo: "help.redo",
+	"paint-bucket": "help.paintBucket",
 	"nav-back": "help.navBack",
 	"nav-forward": "help.navForward",
+	"box-index": "help.boxIndex",
 	"toggle-page-mode": "help.pageMode",
 	"toggle-spread": "help.spread",
 	"insert-image": "help.insertImage",
@@ -52,6 +54,10 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"comment-selection": "help.comment",
 	"math-edit": "help.mathEdit",
 	"pdf-search": "help.pdfSearch",
+	// 0.28 (#76): turn and crop the PDF page
+	"pdf-rotate-right": "help.pdfRotateRight",
+	"pdf-rotate-left": "help.pdfRotateLeft",
+	"pdf-crop": "help.pdfCrop",
 	// 0.24 review: the actions added later in the wave
 	"page-global-bookmark": "help.globalBookmark",
 	"bookmarks-open": "help.openBookmarks",
@@ -70,11 +76,24 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	// 0.26 tidy
 	"selection-tidy": "help.tidy",
 	"page-tidy": "help.tidy",
+	// 0.28 linehandle (#256)
+	"page-reorder-lines": "help.reorderLines",
 	// 0.26 smooth (#66)
 	"selection-smooth": "help.smooth",
 	"selection-straighten": "help.straighten",
+	// 0.28 geosuggest (#403)
+	"selection-highlight": "help.geoHighlight",
+	"selection-insert-note": "help.geoNote",
+	"link-selection": "help.geoLink",
 	// 0.26 related (#422)
 	"related-pages": "help.relatedPanel",
+	// 0.28 tables (#41)
+	"insert-table": "help.table.insert",
+	"table-add-row": "help.table.addRow",
+	"table-add-col": "help.table.addCol",
+	"table-remove-row": "help.table.removeRow",
+	"table-remove-col": "help.table.removeCol",
+	"table-even": "help.table.even",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

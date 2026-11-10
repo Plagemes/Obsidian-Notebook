@@ -3,6 +3,7 @@
  */
 import type { Size, Viewport } from "../ink/viewport";
 import { createStroke } from "../model/document";
+import { viewOf } from "../model/pdf-view";
 import { freezeStroke } from "../model/serialize";
 import { RENDER_INK, type Page, type Stroke } from "../model/types";
 import type { SearchHit, SearchTarget } from "../pdf/text-index";
@@ -31,7 +32,10 @@ export function searchTargets(pages: readonly Page[], from: number): SearchTarge
 	for (let k = 0; k < n; k++) {
 		const page = pages[(start + k) % n]!;
 		const bg = page.background;
-		if (bg?.kind === "pdf") out.push({ pageId: page.id, asset: bg.asset, pdfPage: bg.page });
+		if (bg?.kind === "pdf") {
+			const view = viewOf(bg);
+			out.push({ pageId: page.id, asset: bg.asset, pdfPage: bg.page, ...(view ? { view } : {}) });
+		}
 	}
 	return out;
 }

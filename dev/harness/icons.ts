@@ -3,6 +3,8 @@
  * for the harness (24 × 24, 2 px strokes); not Lucide's artwork. Unknown names fall back to two letters.
  */
 const P: Record<string, string> = {
+	// 0.28 linehandle: the line handle's grip (six dots)
+	"grip-vertical": "M9 5h.01 M9 12h.01 M9 19h.01 M15 5h.01 M15 12h.01 M15 19h.01",
 	// 0.22 syncprov: the cloud sign-in dialog
 	"cloud": "M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.1 4.5 4.5 0 0 0 7 18z",
 	// 0.16 merge: move to page, exact position, add to notebook (inbox menu)

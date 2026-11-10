@@ -74,8 +74,13 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	if (a.id === "workspace-lecture") boost += c.lecture && c.workspace !== "lecture" ? 30 : c.sidePane.open && c.workspace !== "lecture" ? 6 : 0;
 	if (a.id === "workspace-presets") boost += c.lecture ? 12 : c.sidePane.open ? 8 : 0;
 	if (c.comments?.panel && a.id.startsWith("comment")) boost += 15;
+	// 0.28 (#403): what the shape of the selection suggests (the chips) also comes first under "For this page".
+	if (hasSelection && c.selection?.suggest?.includes(a.id)) boost += HERE_MIN_BOOST + 5;
 	// 0.25 (#93): lining the words up fits ink on ruled paper above all (the words go onto the ruled line).
 	if (a.id === "selection-baseline" && hasSelection && c.page?.kind === "ruled") boost += 10;
+	// 0.28 (#76): turning and cropping the page fit a PDF page (a scan on its side, a slide with wide margins): they lean forward on one, but not
+	// enough for "For this page" (the page is turned once, not all the time).
+	if ((a.id === "pdf-rotate-right" || a.id === "pdf-rotate-left" || a.id === "pdf-crop") && c.page?.background === "pdf") boost += 6;
 	// 0.26 (#358): the opacity fits a selection of ink, pictures or areas best, then the highlighter or a shape in hand (both enough for "For this page");
 	// with the plain pen in hand (always, nearly) it only leans forward in the list, so it does not crowd "For this page".
 	if (a.id === "opacity" && canOpacity(c)) boost += hasSelection ? HERE_MIN_BOOST + 8 : c.tool === "highlighter" || c.tool === "shape" ? HERE_MIN_BOOST : 10;
@@ -83,12 +88,21 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// On grid or plain paper it only leans forward in the page group: an ordinary page with the pen in hand shows no "For this page" section.
 	if (a.id === "selection-tidy" && (c.selection?.strokes ?? 0) >= 12) boost += 8;
 	if (a.id === "page-tidy" && !hasSelection && (c.page?.kind === "ruled" || c.page?.kind === "grid" || c.page?.kind === "plain")) boost += c.page.kind === "ruled" ? 16 : 10;
+	// 0.28 (#256): reordering lines fits a page of writing: it comes first while the mode is on (to turn it off), leans forward on paper made for writing
+	// when nothing is selected, and never reaches "For this page" on its own otherwise.
+	if (a.id === "page-reorder-lines") boost += c.toggles.lineHandles ? HERE_MIN_BOOST + 6 : !hasSelection && (c.page?.kind === "ruled" || c.page?.kind === "grid" || c.page?.kind === "plain") ? (c.page.kind === "ruled" ? 6 : 3) : 0;
 	// 0.26 (#66): reshaping handwriting fits a selection of strokes; a long wobbly line (underline, ruler line) on grid or plain paper is likelier meant straight.
 	if (a.id === "selection-smooth" && hasSelection) boost += 4;
 	if (a.id === "selection-straighten" && hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 6;
 	// 0.27 (#170): a macro fits where its first step can start: one that starts on the selection comes first when something is selected (enough for "For this page");
 	// one that starts somewhere it cannot (nothing selected, a locked page) steps back; any other leans forward a little.
+	// 0.28 (#41): the table actions fit a selected table above all (enough for "For this page"); inserting one leans forward a little on grid and plain paper.
+	if (a.id.startsWith("table-") && c.selection?.table === true) boost += HERE_MIN_BOOST + 4;
+	if (a.id === "insert-table" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 4;
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
+	// 0.28 (#184): the paint bucket fills shapes: with the shape tool in hand it is the next thing wanted (enough for "For this page"); with a selection
+	// it steps back (the person is editing, not colouring); otherwise it only leans forward a little on a page that can be edited.
+	if (a.id === "paint-bucket") boost += hasSelection ? 0 : c.tool === "shape" ? HERE_MIN_BOOST + 2 : c.page && !c.page.locked ? 3 : 0;
 	return boost;
 }
 
