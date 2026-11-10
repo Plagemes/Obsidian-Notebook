@@ -1,8 +1,9 @@
 import { createId, quantizePoint } from "../model/document";
 import { UpdateItems } from "../model/groups";
 import { AddStroke, Batch, removeStrokes, type Command } from "../model/history";
-import type { Page, Stroke } from "../model/types";
+import type { Page, Stroke, TapeElement } from "../model/types";
 import { movesUnderRedaction, type RedactGuard } from "./redact";
+import { strokeTouchesTapes } from "./tape-guard";
 import { buildTable, inkToShift, tableBox, type DetectedTable, type GridEdit, type InkBox, type TableGrid, type TableStyle } from "./table";
 
 /**
@@ -34,16 +35,24 @@ export function insertTableCommand(page: Pick<Page, "id" | "strokes">, grid: Tab
 export type TableEditRefusal =
 	/** The lines of the table are no longer all on the page (a stale selection, a posed copy). */
 	| "gone"
-	/** A line of the table belongs to a part of a drawing with states: fresh line ids would drop it from the part. */
+	/**
+	 * A line of the table belongs to a part of a drawing with states: fresh line ids would drop it from the part. 0.29 (R3-2): or ink the
+	 * insert would push does (the part's pivot would stay behind).
+	 */
 	| "states"
 	/** The grown table, or the ink the insert pushes along, would end up outside the page. */
 	| "edge"
 	/** The ink the insert pushes along is, or would land, under a redaction box (or the boxes cannot be read). */
-	| "redacted";
+	| "redacted"
+	/**
+	 * Round-4 review (Y8): ink the insert would push lies under a locked study tape. A locked tape never moves, so the answer would come out
+	 * from under it (and the tape would cover the answer of the row before): refused until the tape is unlocked.
+	 */
+	| "tapeLocked";
 
 export type TableEditPlan = { ok: true; cmd: Command; strokes: Stroke[] } | { ok: false; reason: TableEditRefusal };
 
-type EditPage = Pick<Page, "id" | "strokes"> & Partial<Pick<Page, "width" | "height" | "infinite" | "states">>;
+type EditPage = Pick<Page, "id" | "strokes"> & Partial<Pick<Page, "width" | "height" | "infinite" | "states" | "elements">>;
 
 /** Points this far beyond the page edge are still on it (rounding of the grid). */
 const EDGE_TOL = 0.01;
@@ -52,6 +61,24 @@ const shiftStroke = (s: Stroke, axis: "x" | "y", by: number): Stroke => ({
 	...s,
 	points: s.points.map((p) => (axis === "y" ? quantizePoint(p[0], p[1] + by, p[2]) : quantizePoint(p[0] + by, p[1], p[2]))),
 });
+
+const shiftTape = (t: TapeElement, axis: "x" | "y", by: number): TapeElement => ({ ...t, [axis]: Math.round((t[axis] + by) * 100) / 100 });
+
+/**
+ * Round-3 review (Z6): the study tapes that follow the ink an insert pushes: those that cover at least one stroke of `ink` (the table's own
+ * lines left out) and whose covered strokes are all pushed. A tape over a pushed answer moves with it, so the answer stays covered and the
+ * tape does not end up over the answer of the row before.
+ */
+function tapesToShift(page: EditPage, ink: readonly Stroke[], pushed: ReadonlySet<string>): TapeElement[] {
+	// A locked tape never moves (0.20 rule): it stays where it is, like any locked element (round-4 review Y8: an insert that would push ink
+	// from under a locked tape is refused before this, `tapeLocked`).
+	const tapes = (page.elements ?? []).filter((el): el is TapeElement => el.type === "tape" && el.locked !== true);
+	if (tapes.length === 0 || pushed.size === 0) return [];
+	return tapes.filter((tape) => {
+		const covered = ink.filter((s) => strokeTouchesTapes(s, [tape]));
+		return covered.length > 0 && covered.every((s) => pushed.has(s.id));
+	});
+}
 
 const insidePage = (page: EditPage, minX: number, minY: number, maxX: number, maxY: number): boolean => {
 	if (page.width === undefined || page.height === undefined) return true;
@@ -75,10 +102,13 @@ export function planTableEdit(
 	for (const part of page.states?.parts ?? []) for (const id of part.items) inPart.add(id);
 	if (table.strokes.some((s) => inPart.has(s.id))) return { ok: false, reason: "states" };
 	let pushed: Stroke[] = [];
+	let tapes: TapeElement[] = [];
 	if (edit.shift) {
 		const mine = new Set(table.strokes.map((s) => s.id));
 		const ids = new Set(inkToShift(table.grid, edit.shift, ink.filter((s) => !mine.has(s.id)).map(inkBox)));
 		pushed = ink.filter((s) => ids.has(s.id) && !mine.has(s.id));
+		// 0.29 (review R3-2): ink of a drawing-state part would move while the part's pivot stays, so its poses would turn about the old point.
+		if (pushed.some((s) => inPart.has(s.id))) return { ok: false, reason: "states" };
 		const box = tableBox(edit.grid);
 		if (!insidePage(page, box.minX, box.minY, box.maxX, box.maxY)) return { ok: false, reason: "edge" };
 		const { axis, by } = edit.shift;
@@ -87,7 +117,16 @@ export function planTableEdit(
 			const b = inkBox(s);
 			if (!insidePage(page, b.minX, b.minY, b.maxX, b.maxY)) return { ok: false, reason: "edge" };
 		}
-		if (guard && movesUnderRedaction(guard, { strokes: pushed, elements: [] }, { strokes: moved, elements: [] })) return { ok: false, reason: "redacted" };
+		// Round-4 review (Y8): a locked tape over ink the insert pushes stays where it is: refused, so no covered answer is uncovered.
+		const locked = (page.elements ?? []).filter((el): el is TapeElement => el.type === "tape" && el.locked === true);
+		if (locked.length > 0 && pushed.some((s) => strokeTouchesTapes(s, locked))) return { ok: false, reason: "tapeLocked" };
+		// Round-3 review (Z6): the tapes over the pushed answers go with them (same step), and obey the same edge and redaction rules.
+		tapes = tapesToShift(page, ink.filter((s) => !mine.has(s.id)), new Set(pushed.map((s) => s.id)));
+		const movedTapes = tapes.map((tp) => shiftTape(tp, axis, by));
+		for (const tp of movedTapes) {
+			if (!insidePage(page, tp.x, tp.y, tp.x + tp.width, tp.y + tp.height)) return { ok: false, reason: "edge" };
+		}
+		if (guard && movesUnderRedaction(guard, { strokes: pushed, elements: tapes }, { strokes: moved, elements: movedTapes })) return { ok: false, reason: "redacted" };
 	}
 	const removed = removeStrokes(page.id, page.strokes, table.strokes, "Edit table");
 	if (!removed) return { ok: false, reason: "gone" };
@@ -97,7 +136,8 @@ export function planTableEdit(
 	const commands: Command[] = [removed, ...strokes.map((s, i) => new AddStroke(page.id, s, base + i))];
 	if (edit.shift && pushed.length > 0) {
 		const { axis, by } = edit.shift;
-		commands.push(new UpdateItems(page.id, new Set(pushed.map((s) => s.id)), (item) => shiftStroke(item as Stroke, axis, by), "Edit table"));
+		const ids = new Set([...pushed.map((s) => s.id), ...tapes.map((tp) => tp.id)]);
+		commands.push(new UpdateItems(page.id, ids, (item) => ("points" in item ? shiftStroke(item, axis, by) : item.type === "tape" ? shiftTape(item, axis, by) : item), "Edit table"));
 	}
 	return { ok: true, cmd: new Batch("Edit table", commands), strokes };
 }

@@ -1,5 +1,6 @@
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import type { AreaElement, BoxElement, CheckboxElement, EquationElement, MarkerElement, Page, StickyElement, TextElement } from "../model/types";
+import type { AreaElement, BoxElement, CheckboxElement, EquationElement, MarkerElement, Page, StickyElement, TapeElement, TextElement } from "../model/types";
+import { TAPE_EDGE, tapeEdge } from "./tape-render";
 import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
 import { graphScene, GRAPH_STYLE, type GraphScene } from "../math/graph-scene";
 import type { Polygon } from "../math/outline";
@@ -17,6 +18,7 @@ import { inkAlpha, strokeSvgPath } from "./stroke-shape";
 import { opacityOf } from "../model/opacity";
 import { fillAlpha, fillPathD, isFilled } from "./shape-style";
 import { LINK_COLOR, lineRuns, shownText } from "./link-text";
+import { withFigureScope, type FigureLabelSource } from "./figure-text";
 
 /** Line widths of the paper pattern, pt. Shared with the PDF exporter. */
 export const PAPER_LINE_WIDTH: Readonly<Record<PaperLineKind, number>> = { minor: 0.3, major: 0.5, margin: 0.5 };
@@ -69,6 +71,8 @@ export interface SvgOptions {
 	equationOutline?: (el: EquationElement) => { polys: Polygon[]; sx: number; sy: number } | null;
 	/** wave 0.9 (381): "ink" has no white sheet (transparent), PDF/picture background or paper; "background" has no ink. Default "both". */
 	layers?: ExportLayers;
+	/** 0.29 (#248) review fix (F1): the figure numbers of the notebook (absent: the ambient fallback). */
+	figures?: FigureLabelSource;
 }
 
 /** Line height of text elements as a multiple of the font size (same as the PDF export). */
@@ -92,6 +96,11 @@ function headerTag(h: HeaderLayout): string {
 }
 
 export function pageToSvg(page: Page, options: SvgOptions = {}): string {
+	// 0.29 (#248) review fix (F1): the figure numbers of the notebook the page belongs to, never those of another open one.
+	return withFigureScope(options.figures, () => pageToSvgOf(page, options));
+}
+
+function pageToSvgOf(page: Page, options: SvgOptions): string {
 	const { width, height } = page;
 	const out: string[] = [];
 	out.push(
@@ -185,8 +194,17 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	for (const el of page.elements ?? []) if (el.type === "marker") out.push(markerTag(el));
 	// v17 checkboxes above the ink, like marker badges.
 	for (const el of page.elements ?? []) if (el.type === "checkbox") out.push(checkboxTag(el));
+	// v27 (#10) study tapes last of all, hidden (the way a notebook opens): an opaque strip with its edge. A clean export leaves them out.
+	for (const el of page.elements ?? []) if (el.type === "tape") out.push(tapeTag(el));
 	out.push("</svg>");
 	return out.join("\n") + "\n";
+}
+
+/** v27 study tape: an opaque strip in its colour with a darker edge (the canvas adds faint stripes; the cover is the same). */
+function tapeTag(el: TapeElement): string {
+	const e = TAPE_EDGE;
+	return `<rect x="${num(el.x)}" y="${num(el.y)}" width="${num(el.width)}" height="${num(el.height)}" fill="${escapeAttr(el.color)}"/>`
+		+ `<rect x="${num(el.x + e / 2)}" y="${num(el.y + e / 2)}" width="${num(Math.max(0, el.width - e))}" height="${num(Math.max(0, el.height - e))}" fill="none" stroke="${escapeAttr(tapeEdge(el.color))}" stroke-width="${num(e)}"/>`;
 }
 
 const pointsAttr = (pts: ReadonlyArray<readonly [number, number]>): string => pts.map(([x, y]) => `${num(x)},${num(y)}`).join(" ");

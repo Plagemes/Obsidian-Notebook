@@ -5,8 +5,10 @@
  * for; the window asks again only after a resize or a zoom has ended.
  */
 import { Component, loadPdfJs, MarkdownRenderer, Platform, type App, type TFile } from "obsidian";
+import { t } from "../i18n";
 import { drawElement, drawTextElement } from "../ink/renderer";
 import { renderThumbnail, thumbnailSize } from "../library/thumbnail";
+import { withFigureLabels } from "../model/figure-captions";
 import { backgroundRect } from "../model/margins";
 import { viewOf } from "../model/pdf-view";
 import { parse } from "../model/serialize";
@@ -121,7 +123,10 @@ async function openNotebook(deps: SourceDeps, file: TFile): Promise<RefSource> {
 		}
 		const elements = page.elements ?? [];
 		for (const el of elements) if (el.type === "image") drawElement(ctx, el, media.image(el.asset));
-		for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		// 0.29 (#406, review R6): figure captions and references are numbered from THIS notebook, not from the one open in the view.
+		withFigureLabels(pagesNow(), () => {
+			for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		}, t("figcap.abbr"));
 	};
 
 	return {

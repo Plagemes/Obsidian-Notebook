@@ -7,8 +7,16 @@ import {
 import type { RedactGuard } from "../ink/redact";
 import { insertTableCommand, planTableEdit, type TableEditRefusal } from "../ink/table-edit";
 import type { Command } from "../model/history";
-import type { NotebookDocument, Page, PageElement, Stroke } from "../model/types";
+import type { NotebookDocument, Page, PageElement, Stroke, TextElement } from "../model/types";
+import { AddElement } from "../model/history";
+import { createId } from "../model/document";
+import { readTableCells } from "../ink/table-numbers";
+import { boxBeside } from "../ink/table-report";
 import { showNotice } from "./notice";
+import { openTableStats } from "./table-stats";
+
+const STATS_BOX_WIDTH = 190;
+const STATS_FONT = 15;
 import { askTable } from "./table-dialog";
 import type { SelectedPart } from "./group-tools";
 
@@ -41,6 +49,7 @@ const REFUSALS: Record<Exclude<TableEditRefusal, "gone">, Parameters<typeof t>[0
 	states: "table.noStates",
 	edge: "table.noRoom",
 	redacted: "table.noRedacted",
+	tapeLocked: "table.noTapeLocked",
 };
 
 export class TableTools {
@@ -102,6 +111,30 @@ export class TableTools {
 
 	removeColumn(): void {
 		this.edit((table) => removeLastCol(table.grid), "table.col.removed", "table.col.last");
+	}
+
+	/** 0.29 (#295): the statistics card of the selected table; "Insert as text" adds a text box beside it (one undo step). */
+	showStats(): void {
+		const cur = this.current();
+		if (!cur) return;
+		const { page, table } = cur;
+		const pageId = page.id;
+		const cells = readTableCells(table.grid, page.elements ?? []);
+		openTableStats(this.host.app, {
+			cells,
+			cols: colsOf(table.grid),
+			insert: (text) => {
+				if (!this.host.editable()) return false;
+				const now = this.host.doc()?.pages[cur.part.pageIndex];
+				if (!now || now.id !== pageId) return false;
+				const spot = boxBeside(table.grid, now, STATS_BOX_WIDTH);
+				const el: TextElement = { id: createId(), type: "text", x: spot.x, y: spot.y, width: spot.width, text, fontSize: STATS_FONT, color: this.host.penColor() };
+				if (!this.host.execute(new AddElement(now.id, el, now.elements?.length ?? 0))) return false;
+				this.host.refresh();
+				showNotice(t("tableStats.inserted"), 2200);
+				return true;
+			},
+		});
 	}
 
 	evenOut(): void {

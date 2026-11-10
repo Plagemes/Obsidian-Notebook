@@ -24,10 +24,11 @@ import { hiddenStickyInk } from "../model/sticky";
 import { EQUATION_NUMBER_GAP } from "../model/math-elements";
 import { backgroundRect } from "../model/margins";
 import { isCheckbox } from "../model/checklist";
+import { sourceInk } from "../model/clean-export";
 import { pageCopy } from "../model/states";
 import { countBoxes, rectsOverlap, type RedactBox, type Redactions, boxesOf } from "../model/redact";
 import { pieceTaper } from "../model/taper";
-import { RENDER_INK, type AreaElement, type CommentRegion, type ExcerptElement, type NotebookMeta, type Page, type PageComment, type PageElement, type Point, type Stroke } from "../model/types";
+import { RENDER_INK, type AreaElement, type CommentRegion, type ExcerptElement, type NotebookMeta, type Page, type PageComment, type PageElement, type Point, type Stroke, type TapeElement } from "../model/types";
 import { boundGraphId } from "./attach";
 import { checkboxLabelBounds } from "./checklist";
 import { elementBounds } from "./elements";
@@ -47,7 +48,7 @@ export const REDACT_COLOR = "#000000";
 /** Pt added around an element's area before it is tested against a box (the writers draw a little beyond the stored geometry). */
 const ELEMENT_PAD = 3;
 /** Pt added to the reach of a pen around a box: ink within it is cut as well, so no thickness of a line shows under the edge. */
-const INK_PAD = 1;
+export const INK_PAD = 1;
 /** Pixels added on every side of a burned rectangle (the JPEG of a background smears a little past an edge). */
 const BURN_PAD_PX = 2;
 
@@ -321,20 +322,27 @@ function subtractBox(r: BBox, box: RedactBox): BBox[] {
 	return out;
 }
 
-function cutArea(el: AreaElement, boxes: readonly RedactBox[]): AreaElement[] {
+/**
+ * An area highlighter, or (v27, #10) a study tape, with the parts under the boxes cut away: a tape is drawn above all the ink, so it is cut
+ * like an area and never covers a black box (the box stays on top of everything; what the tape covered elsewhere stays covered).
+ */
+function cutArea<T extends AreaElement | TapeElement>(el: T, boxes: readonly RedactBox[]): T[] {
 	let parts: BBox[] = [{ minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height }];
 	for (const box of boxes) parts = parts.flatMap((p) => subtractBox(p, box));
 	if (parts.length === 1 && parts[0]!.minX === el.x && parts[0]!.minY === el.y && parts[0]!.maxX === el.x + el.width && parts[0]!.maxY === el.y + el.height) return [el];
-	const out: AreaElement[] = [];
+	const out: T[] = [];
 	for (const p of parts) {
 		const width = p.maxX - p.minX;
 		const height = p.maxY - p.minY;
-		if (width < 0.5 || height < 0.5) continue;
+		// Review fix (T4): a sliver of tape is kept however thin (what the tape covers next to a box stays covered); an area sliver is not.
+		if (el.type === "tape" ? !(width > 0 && height > 0) : width < 0.5 || height < 0.5) continue;
 		const { group: _group, locked: _locked, lockAt: _lockAt, ...rest } = el;
 		void _group;
 		void _locked;
 		void _lockAt;
-		out.push({ ...rest, id: out.length === 0 ? el.id : `${el.id}.r${out.length}`, x: p.minX, y: p.minY, width, height });
+		// The piece is the same kind as `el` (an area or a tape) without its group and lock: only the rectangle and the id change.
+		const piece = { ...rest, id: out.length === 0 ? el.id : `${el.id}.r${out.length}`, x: p.minX, y: p.minY, width, height };
+		out.push(piece as T);
 	}
 	return out;
 }
@@ -396,8 +404,8 @@ export function redactPage(page: Page, boxes: readonly RedactBox[], notebook?: R
 	const goneGraphs = new Set<string>();
 	const keptEls: PageElement[] = [];
 	for (const el of elements) {
-		if (el.type === "area") {
-			keptEls.push(...cutArea(el, all));
+		if (el.type === "area" || el.type === "tape") {
+			keptEls.push(...cutArea<typeof el>(el, all));
 			continue;
 		}
 		if (overlaps(redactBounds(el), all) || coveredExcerpt(el, notebook)) {
@@ -405,8 +413,9 @@ export function redactPage(page: Page, boxes: readonly RedactBox[], notebook?: R
 			continue;
 		}
 		// Review fix (P13): the typed label of a checkbox whose handwritten label (the ink on its row, to its right) a box touches is
-		// left out: it can say what the handwriting says.
-		if (el.type === "checkbox" && el.label !== undefined && overlaps(checkboxLabelBounds(el, page.strokes, checkboxes), all, ELEMENT_PAD)) {
+		// left out: it can say what the handwriting says. Round-2 review (H2): measured on the ink as it is on the page (`sourceInk`), not on a
+		// clean copy that left the struck words out: struck handwriting under a box still takes the typed label with it.
+		if (el.type === "checkbox" && el.label !== undefined && overlaps(checkboxLabelBounds(el, sourceInk(page), checkboxes), all, ELEMENT_PAD)) {
 			const { label: _label, ...rest } = el;
 			void _label;
 			keptEls.push(rest);

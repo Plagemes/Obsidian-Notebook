@@ -54,6 +54,7 @@ export async function printPages(everyPage: readonly Page[], indices: readonly n
 		...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
 		...(options.layers ? { layers: options.layers } : {}),
 		...(options.header ? { header: options.header } : {}),
+		...(options.figures ? { figures: options.figures } : {}),
 	});
 	const urls: string[] = [];
 	const root = doc.body.createDiv({ cls: "notebook-print-root", attr: { "aria-hidden": "true" } });

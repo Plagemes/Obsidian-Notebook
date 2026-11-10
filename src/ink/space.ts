@@ -1,10 +1,11 @@
 import type { NewPageContent, PageContentChange, PageContentPlan } from "../model/page-content";
 import { freezeStroke } from "../model/serialize";
-import type { PageElement, Stroke } from "../model/types";
+import type { PageElement, Stroke, TapeElement } from "../model/types";
 import { linkedInkIds } from "./attach";
 import { elementBounds, transformElement, type MeasureText } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
 import { growForInfinite } from "./infinite";
+import { elementTouchesTapes, strokeTouchesTapes } from "./tape-guard";
 import { transformStroke } from "./lasso";
 import { estimateMeasure } from "./text-layout";
 import { translate } from "./transform";
@@ -39,6 +40,11 @@ interface Item {
 	index: number;
 	minY: number;
 	maxY: number;
+	/**
+	 * Round-3 review (Z5): the height that decides its side of the line and the page it lands on, in "stacked" coordinates: the centre of the
+	 * study tape it lies under (so it goes wherever the tape goes), or of its own extent.
+	 */
+	centre: number;
 }
 
 export interface SpaceMove {
@@ -120,8 +126,7 @@ export function analyseSpace(
 	let stayBottom = 0;
 	let movingTop = Infinity;
 	const take = (item: Item) => {
-		const centre = (item.minY + item.maxY) / 2;
-		if (item.page > pageIndex || centre >= y) {
+		if (item.page > pageIndex || item.centre >= y) {
 			moving.push(item);
 			movingTop = Math.min(movingTop, item.minY);
 		} else {
@@ -139,13 +144,32 @@ export function analyseSpace(
 			const nb = elementBounds(el, measure);
 			for (const id of linked) if (!noteOf.has(id)) noteOf.set(id, nb);
 		}
+		// 0.29 (#10, review R5): ink a study tape reaches over moves (or stays) with the tape, so a tape that straddles the line never leaves its
+		// covered strokes on the other side (a spoiler, and an empty tape over paper). Round-3 review (Z5): the same for a text box, picture or
+		// checkbox under a tape (`elementTouchesTapes`, the tape itself excluded); the tape's centre decides the side, and the extent is the
+		// union of the item's own bounds and the tape's, so the rest of a long stroke still keeps Remove space from pulling ink over it.
+		const tapes = (pages[i]!.elements ?? []).filter((el): el is TapeElement => el.type === "tape");
+		const tapeBox = (t: TapeElement): BBox => ({ minX: t.x, minY: t.y, maxX: t.x + t.width, maxY: t.y + t.height });
+		const put = (item: Omit<Item, "minY" | "maxY" | "centre">, own: BBox, tape: TapeElement | undefined): void => {
+			const t = tape ? tapeBox(tape) : null;
+			const minY = t ? Math.min(own.minY, t.minY) : own.minY;
+			const maxY = t ? Math.max(own.maxY, t.maxY) : own.maxY;
+			const centre = t ? (t.minY + t.maxY) / 2 : (own.minY + own.maxY) / 2;
+			take({ ...item, minY: base + minY, maxY: base + maxY, centre: base + centre });
+		};
 		pages[i]!.strokes.forEach((stroke, index) => {
-			const b = noteOf.get(stroke.id) ?? boundsOf(stroke);
-			take({ stroke, page: i, index, minY: base + b.minY, maxY: base + b.maxY });
+			const note = noteOf.get(stroke.id);
+			if (note) {
+				put({ stroke, page: i, index }, note, undefined);
+			} else {
+				const own = boundsOf(stroke);
+				put({ stroke, page: i, index }, own, tapes.length > 0 ? tapes.find((tape) => strokeTouchesTapes(stroke, [tape], own)) : undefined);
+			}
 		});
 		pages[i]!.elements?.forEach((element, index) => {
-			const b = elementBounds(element, measure);
-			take({ element, page: i, index, minY: base + b.minY, maxY: base + b.maxY });
+			const own = elementBounds(element, measure);
+			const tape = tapes.length > 0 ? tapes.find((t) => t.id !== element.id && elementTouchesTapes(element, [t], measure)) : undefined;
+			put({ element, page: i, index }, own, tape);
 		});
 	}
 	if (moving.length === 0) return null;
@@ -169,7 +193,7 @@ export function analyseSpace(
 
 	const moves: SpaceMove[] = [];
 	for (const item of moving) {
-		const land = locate((item.minY + item.maxY) / 2 + d);
+		const land = locate(item.centre + d);
 		if (!land) return null;
 		moves.push({ item, target: land.page, dy: d - (land.offset - offset.get(item.page)!) });
 	}

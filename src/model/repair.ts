@@ -29,6 +29,7 @@ import { normalizeBookmarkInfo, normalizeBookmarkInfoMap } from "./bookmarks";
 import { CHECKBOX_DEFAULT_COLOR } from "./checklist";
 import { createId } from "./document";
 import { STICKY_DEFAULT_COLOR } from "./sticky";
+import { DEFAULT_TAPE_COLOR, TAPE_COLORS } from "./tape";
 import { cleanMarkerText, isBoxKind, isIsoDate, isMarkerKind } from "./markers";
 import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
@@ -339,7 +340,23 @@ function migrateTolerant(raw: RawObject, version: number, summary: RepairSummary
 			summary.pages.lost++;
 			continue;
 		}
-		const skeleton = tryMigrate({ ...raw, pages: [{ ...p, strokes: [] }] });
+		let src: RawObject = p;
+		let skeleton = tryMigrate({ ...raw, pages: [{ ...p, strokes: [] }] });
+		// Review fix (T8): an element the migration refuses (a v27 tape in a file labelled older) costs only itself, not the page and its ink.
+		if (!skeleton && Array.isArray(p.elements) && p.elements.length > 0) {
+			const bare = tryMigrate({ ...raw, pages: [{ ...p, strokes: [], elements: [] }] });
+			if (bare) {
+				const elements: unknown[] = [];
+				for (const e of p.elements as unknown[]) {
+					const one = tryMigrate({ ...raw, pages: [{ ...p, strokes: [], elements: [e] }] });
+					const got = one ? ((one.pages as RawObject[])[0]!.elements as unknown[] | undefined)?.[0] : undefined;
+					if (got !== undefined) elements.push(e);
+					else summary.elements.lost++;
+				}
+				src = { ...p, elements };
+				skeleton = tryMigrate({ ...raw, pages: [{ ...src, strokes: [] }] });
+			}
+		}
 		if (!skeleton) {
 			summary.pages.lost++;
 			summary.strokes.lost += Array.isArray(p.strokes) ? p.strokes.length : 0;
@@ -348,7 +365,7 @@ function migrateTolerant(raw: RawObject, version: number, summary: RepairSummary
 		const migratedPage = (skeleton.pages as RawObject[])[0]!;
 		const strokes: unknown[] = [];
 		for (const s of Array.isArray(p.strokes) ? (p.strokes as unknown[]) : []) {
-			const one = tryMigrate({ ...raw, pages: [{ ...p, strokes: [s] }] });
+			const one = tryMigrate({ ...raw, pages: [{ ...src, strokes: [s] }] });
 			const got = one ? ((one.pages as RawObject[])[0]!.strokes as unknown[])[0] : undefined;
 			if (got !== undefined) strokes.push(got);
 			else summary.strokes.lost++;
@@ -485,7 +502,8 @@ function fixElement(v: unknown, assets: Record<string, Asset>): RawObject | null
 	// v15 sticky notes too: an invalid text or list of hidden strokes is left out, the note is kept.
 	// v17 checkboxes too: an invalid tick time, label or task link is left out, the checkbox is kept.
 	// v23 areas too (the lenient reader refuses one whose rectangle or colour is invalid: it is lost, it stays in the original).
-	if (v.type === "equation" || v.type === "graph" || v.type === "excerpt" || v.type === "sticky" || v.type === "checkbox" || v.type === "area") return fixMathElement(v, assets);
+	// v27 study tapes too, by the same rule.
+	if (v.type === "equation" || v.type === "graph" || v.type === "excerpt" || v.type === "sticky" || v.type === "checkbox" || v.type === "area" || v.type === "tape") return fixMathElement(v, assets);
 	return null;
 }
 
@@ -1029,6 +1047,8 @@ export function repairNotebookText(text: string, now: Date = new Date()): Repair
 /** Colour given to an item whose own is missing or invalid: what a new one of its kind starts with (strokes and text boxes: black, like the repair of a file). */
 const MISSING_COLOUR: Readonly<Record<string, string>> = {
 	text: "#000000", checkbox: CHECKBOX_DEFAULT_COLOR, sticky: STICKY_DEFAULT_COLOR, area: "#facc15", equation: "#000000",
+	// v27: a study tape without a colour gets the default tape colour (it must stay opaque to hide what it covers).
+	tape: TAPE_COLORS[DEFAULT_TAPE_COLOR],
 };
 
 /**

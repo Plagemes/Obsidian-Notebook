@@ -8,6 +8,7 @@ import { graphClips, strokeClip } from "./attach";
 import { hiddenStickyInk, stickyColours } from "../model/sticky";
 import { stickyShapes, stickyTextBox } from "./sticky-render";
 import { checkboxPaths } from "./checkbox-render";
+import { TAPE_EDGE, tapeEdge } from "./tape-render";
 import type { Polygon } from "../math/outline";
 import type { BBox } from "./hit-test";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
@@ -23,6 +24,7 @@ import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "..
 import { LINK_COLOR, lineRuns, linksInCodePoints, shownText } from "./link-text";
 import { tileLabel, type SplitPlan } from "./export-tiles";
 import { dashRuns, fillAlpha, FILL_TINT_ALPHA, isFilled } from "./shape-style";
+import { withFigureScope, type FigureLabelSource } from "./figure-text";
 
 /**
  * An image placed on a page, in page coordinates (pt, origin top-left, y down). `jpeg` is a
@@ -51,6 +53,8 @@ export interface PdfPlacedImage {
 export interface PdfOptions {
 	paper?: boolean;
 	title?: string;
+	/** 0.29 (#248) review fix (F1, F3): the figure numbers of the notebook, frozen at the start of the export (absent: the ambient fallback). */
+	figures?: FigureLabelSource;
 	/** Images of a page (PDF background and image elements). */
 	images?: (page: Page) => PdfPlacedImage[];
 	/** v8 invisible ink: draw the hidden strokes of a page (default: never; they are the solutions). */
@@ -278,10 +282,12 @@ function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void,
 
 /** The PDF of `pages` (see `pdfSteps` above for the layout). Synchronous. */
 export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Uint8Array {
-	const steps = pdfSteps(pages, options);
-	let step = steps.next();
-	while (!step.done) step = steps.next();
-	return step.value;
+	return withFigureScope(options.figures, () => {
+		const steps = pdfSteps(pages, options);
+		let step = steps.next();
+		while (!step.done) step = steps.next();
+		return step.value;
+	});
 }
 
 /**
@@ -290,10 +296,11 @@ export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Ui
  */
 export async function pagesToPdfYielding(pages: readonly Page[], options: PdfOptions, pause: () => Promise<void>): Promise<Uint8Array> {
 	const steps = pdfSteps(pages, options);
-	let step = steps.next();
+	// Review fix (F1, F3): the numbers are in force only while a chunk runs (never across the await), and they are the frozen ones.
+	let step = withFigureScope(options.figures, () => steps.next());
 	while (!step.done) {
 		await pause();
-		step = steps.next();
+		step = withFigureScope(options.figures, () => steps.next());
 	}
 	return step.value;
 }
@@ -488,6 +495,14 @@ function pageContent(
 	}
 	// v17 checkboxes above the ink, like marker badges.
 	for (const el of page.elements ?? []) if (el.type === "checkbox") ops.push(checkboxOps(el));
+	// v27 (#10) study tapes last of all, hidden (the way a notebook opens): an opaque strip and its edge, at full opacity. A clean export
+	// leaves them out (model/clean-export.ts).
+	for (const el of page.elements ?? []) {
+		if (el.type !== "tape") continue;
+		const e = TAPE_EDGE;
+		ops.push(`q\n${rgb(el.color)} rg\n${num(el.x)} ${num(el.y)} ${num(el.width)} ${num(el.height)} re f\n${rgb(tapeEdge(el.color))} RG\n${num(e)} w\n`
+			+ `${num(el.x + e / 2)} ${num(el.y + e / 2)} ${num(Math.max(0, el.width - e))} ${num(Math.max(0, el.height - e))} re S\nQ`);
+	}
 	return ops.join("\n");
 }
 

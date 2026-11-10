@@ -10,6 +10,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"nav-back": "help.navBack",
 	"nav-forward": "help.navForward",
 	"box-index": "help.boxIndex",
+	"figure-caption": "help.figureCaption",
+	"figure-ref": "help.figureRef",
 	"toggle-page-mode": "help.pageMode",
 	"toggle-spread": "help.spread",
 	"insert-image": "help.insertImage",
@@ -53,6 +55,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"selection-make-task": "help.makeTask",
 	"comment-selection": "help.comment",
 	"math-edit": "help.mathEdit",
+	// 0.29 (#182): the advanced calculator
+	calculator: "help.calculator",
 	"pdf-search": "help.pdfSearch",
 	// 0.28 (#76): turn and crop the PDF page
 	"pdf-rotate-right": "help.pdfRotateRight",
@@ -78,6 +82,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"page-tidy": "help.tidy",
 	// 0.28 linehandle (#256)
 	"page-reorder-lines": "help.reorderLines",
+	// 0.29 strikedelete (#96)
+	"toggle-hide-struck": "help.hideStruck",
 	// 0.26 smooth (#66)
 	"selection-smooth": "help.smooth",
 	"selection-straighten": "help.straighten",
@@ -94,6 +100,15 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"table-remove-row": "help.table.removeRow",
 	"table-remove-col": "help.table.removeCol",
 	"table-even": "help.table.even",
+	// 0.29 studytape (#10)
+	"study-tape": "tape.help.draw",
+	"tapes-reveal-all": "tape.help.revealAll",
+	"tapes-hide-all": "tape.help.hideAll",
+	// 0.29 charts (#244)
+	"chart-from-table": "help.chart.fromTable",
+	"chart-update": "help.chart.update",
+	// 0.29 stats (#295)
+	"table-stats": "help.table.stats",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

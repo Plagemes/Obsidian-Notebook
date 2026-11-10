@@ -4,6 +4,7 @@
 // after each page, and the decoded picture bitmaps kept between pages are bounded (a few, and a size budget; the ones the
 // page being drawn uses are never freed); `close()` frees the rest.
 import { layerFlags, type ExportLayers } from "../ink/export-layers";
+import type { FigureLabelSource } from "../ink/figure-text";
 import type { BoxLabel } from "../ink/marker-render";
 import { BitmapCache, MAX_CACHED_BITMAP_BYTES, MAX_CACHED_BITMAPS } from "../ink/bitmap-cache";
 import type { HeaderLayout } from "../ink/page-header";
@@ -25,6 +26,8 @@ export interface PageImageOptions {
 	layers?: ExportLayers;
 	/** 0.15 (#75): the automatic page header or footer of a page (null: none). */
 	header?: (page: Page) => HeaderLayout | null;
+	/** 0.29 (#248) review fix (F1): the figure numbers of the notebook (frozen by the caller; absent: the ambient fallback). */
+	figures?: FigureLabelSource;
 }
 
 export interface PageImage {
@@ -133,6 +136,7 @@ export class PageImageRenderer {
 				...(this.options.layers ? { layers: this.options.layers } : {}),
 				...(this.options.header ? { header: this.options.header(page) } : {}),
 				...(this.options.equationNumbers ? { equationNumbers: this.options.equationNumbers } : {}),
+				...(this.options.figures ? { figures: this.options.figures } : {}),
 			});
 			if (background && "close" in background) (background as ImageBitmap).close();
 			const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
@@ -173,6 +177,7 @@ export class PageImageRenderer {
 						...(this.options.layers ? { layers: this.options.layers } : {}),
 						...(this.options.header ? { header: this.options.header(page) } : {}),
 						...(this.options.equationNumbers ? { equationNumbers: this.options.equationNumbers } : {}),
+						...(this.options.figures ? { figures: this.options.figures } : {}),
 					});
 					blobs.push(await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png")));
 				} catch (e) {

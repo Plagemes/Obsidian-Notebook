@@ -37,6 +37,12 @@ export interface FiguresHost {
 	 * puts the whole original picture on the clipboard, so a covered one is refused instead.
 	 */
 	copyRefused?(entry: FigureEntry): string | null;
+	/** 0.29 (#248): the number the figure has when it is captioned ("Fig. 3"), else null. Absent: no numbers are shown. */
+	captionNumber?(entry: FigureEntry): number | null;
+	/** 0.29 (#248): adds a caption to the figure, or changes the words of its caption. Absent (a notebook that cannot be edited): not offered. */
+	caption?(entry: FigureEntry): void;
+	/** 0.29 (#248): puts a reference to a captioned figure on the page in view. Absent: not offered. */
+	insertReference?(entry: FigureEntry): void;
 }
 
 /** Thumbnails by asset id (assets are content-addressed, so the picture is the same in any notebook), kept across openings. */
@@ -285,6 +291,13 @@ export class FiguresModal extends Modal {
 		}
 		const badge = open.createSpan({ cls: "nb-figures-badge", text: t("figures.page", { n: String(entry.pageIndex + 1) }) });
 		badge.setAttribute("aria-hidden", "true");
+		// 0.29 (#248): a captioned figure shows its current number.
+		const number = this.figures.captionNumber?.(entry) ?? null;
+		if (number !== null) {
+			const tag = open.createSpan({ cls: "nb-figures-capno", text: `${t("figcap.abbr")} ${number}`, attr: { "data-figure-number": String(number) } });
+			tag.setAttribute("aria-hidden", "true");
+			card.addClass("is-captioned");
+		}
 		const kindMark = open.createSpan({ cls: `nb-figures-kind is-${entry.kind}`, attr: { "aria-hidden": "true" } });
 		setIcon(kindMark, KIND_ICON[entry.kind]);
 
@@ -346,6 +359,20 @@ export class FiguresModal extends Modal {
 		menu.addItem((i) => i.setTitle(t("figures.act.go", { n: String(entry.pageIndex + 1) })).setIcon("locate-fixed").onClick(() => this.go(entry)));
 		menu.addItem((i) => i.setTitle(t("figures.act.copy")).setIcon("copy").onClick(() => void this.copy(entry)));
 		const host = this.figures;
+		// 0.29 (#248): caption it (or change the words), and refer to it. These close the gallery: the dialogs work on the page.
+		if (host.caption) {
+			const has = (host.captionNumber?.(entry) ?? null) !== null;
+			menu.addItem((i) => i.setTitle(t(has ? "figures.act.captionEdit" : "figures.act.caption")).setIcon("quote").onClick(() => {
+				this.close();
+				host.caption?.(entry);
+			}));
+		}
+		if (host.insertReference && (host.captionNumber?.(entry) ?? null) !== null) {
+			menu.addItem((i) => i.setTitle(t("figures.act.reference")).setIcon("link").onClick(() => {
+				this.close();
+				host.insertReference?.(entry);
+			}));
+		}
 		if (host.insertIntoNote) {
 			menu.addItem((i) => i.setTitle(t("figures.act.insert")).setIcon("file-input").onClick(() => {
 				this.close();

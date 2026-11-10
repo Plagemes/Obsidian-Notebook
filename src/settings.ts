@@ -20,10 +20,12 @@ import { isMinimapMode, type MinimapMode } from "./model/minimap-geometry";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { normaliseRecentColours } from "./ink/colour";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
+import { DEFAULT_TAPE_COLOR, isTapeColorName, type TapeColorName } from "./model/tape";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
 import { DEFAULT_LECTURE_SETTINGS, readLectureSettings, type LectureSettings } from "./timetable/lecture-mode";
 import { DEFAULT_ZETTEL_SETTINGS, readZettelSettings, type ZettelSettings } from "./zettel/settings";
+import { readCardTemplateSettings, type CardTemplateSettings } from "./zettel/card-template-settings";
 import { DEFAULT_TOOLBAR_SIZE, isToolbarSize, type ToolbarSize } from "./ui/toolbar-size";
 import { DEFAULT_INPUT_PREF, isInputPref, type InputPref } from "./ui/input-layout";
 import { cleanFadeSeconds, DEFAULT_TOOL_FADE_MODE, DEFAULT_TOOL_FADE_SECONDS, isToolFadeMode, type ToolFadeMode } from "./ui/tool-fade";
@@ -51,7 +53,7 @@ import { isPenKind, normaliseNib, type PenKind } from "./ink/pen-kinds";
 export const APPEARANCE_STYLES = ["notebook", "obsidian"] as const;
 export type AppearanceStyle = (typeof APPEARANCE_STYLES)[number];
 
-export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, GhostSettings, PdfCopySettings, BackupSettings, CloudSyncSettings {
+export interface NotebookSettings extends CompanionSettings, GestureSettings, PenGestureSettings, TrashSettings, ZettelSettings, CardTemplateSettings, ReadingSettings, LectureSettings, BoardSettings, PresentSettings, SnapSettings, GhostSettings, PdfCopySettings, BackupSettings, CloudSyncSettings {
 	/** UI language: "auto" follows Obsidian. */
 	uiLanguage: UiLanguage;
 	folder: string;
@@ -310,6 +312,11 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	commentMarkers: boolean;
 	/** Add the comments to the PDF export as margin notes (a strip beside each page that has comments). */
 	commentsInPdf: boolean;
+	// 0.29 strikedelete (#96): words struck through with a line are logically deleted
+	/** Hide the words that are struck through (and their lines) in the view. The ink is never deleted; off by default. */
+	hideStruck: boolean;
+	/** Leave struck-out words out of exports and shares by default (the export dialog's own switch starts from it). Off by default. */
+	exportHideStruck: boolean;
 	headerMode: HeaderMode;
 	headerPageNumber: boolean;
 	headerPageTotal: boolean;
@@ -365,6 +372,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	slideInkLink: boolean;
 	/** #226: a small badge next to ink written beside a slide; tapping it shows the slide again. */
 	slideInkBadges: boolean;
+	// 0.29 studytape (#10)
+	/** The colour of new study tapes (a name of `TAPE_COLORS`). */
+	tapeColor: TapeColorName;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -494,6 +504,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	indexPrefix: "#idx",
 	commentMarkers: true,
 	commentsInPdf: false,
+	hideStruck: false,
+	exportHideStruck: false,
 	headerMode: "off",
 	headerPageNumber: true,
 	headerPageTotal: true,
@@ -525,6 +537,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	// 0.14 slides
 	slideInkLink: true,
 	slideInkBadges: true,
+	tapeColor: DEFAULT_TAPE_COLOR, // 0.29 studytape (#10)
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -532,6 +545,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	penGesturesCustom: [],
 	...DEFAULT_TRASH_SETTINGS,
 	...DEFAULT_ZETTEL_SETTINGS,
+	zettelCardTemplates: [],
 	...DEFAULT_LECTURE_SETTINGS,
 	zettelSlipBoxes: [],
 	...DEFAULT_READING_SETTINGS,
@@ -697,6 +711,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.indexPrefix === "string") s.indexPrefix = normalizeIndexPrefix(d.indexPrefix);
 	if (typeof d.commentMarkers === "boolean") s.commentMarkers = d.commentMarkers;
 	if (typeof d.commentsInPdf === "boolean") s.commentsInPdf = d.commentsInPdf;
+	if (typeof d.hideStruck === "boolean") s.hideStruck = d.hideStruck;
+	if (typeof d.exportHideStruck === "boolean") s.exportHideStruck = d.exportHideStruck;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
 	if (isClipBackground(d.clipImageBackground)) s.clipImageBackground = d.clipImageBackground;
@@ -723,6 +739,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	// 0.14 slides
 	if (typeof d.slideInkLink === "boolean") s.slideInkLink = d.slideInkLink;
 	if (typeof d.slideInkBadges === "boolean") s.slideInkBadges = d.slideInkBadges;
+	if (isTapeColorName(d.tapeColor)) s.tapeColor = d.tapeColor; // 0.29 studytape (#10)
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;
@@ -732,7 +749,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	Object.assign(s, readTrashSettings(d));
 	Object.assign(s, readLectureSettings(d));
 	if (typeof d.inkFollowsObjects === "boolean") s.inkFollowsObjects = d.inkFollowsObjects;
-	Object.assign(s, readZettelSettings(d));
+	Object.assign(s, readZettelSettings(d), readCardTemplateSettings(d));
 	Object.assign(s, readReadingSettings(d));
 	Object.assign(s, readPresentSettings(d));
 	Object.assign(s, readSnapSettings(d));

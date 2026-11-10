@@ -349,7 +349,7 @@ Numbers from the final run of 0.9.0 (development PC).
 
 | Command | Result |
 |---|---|
-| `npm test` (unit project only; benchmarks are separate) | 7478 tests passed |
+| `npm test` (unit project only; benchmarks are separate) | 7888 tests passed |
 | `npm run lint` | eslint + `tsc --noEmit`: 0 errors; `eslint-plugin-obsidianmd` recommended rules: 0 errors |
 | `npm run build` | ok; `check-bundle: ok (requires found: obsidian)` |
 | `npm run bench` | ok; numbers below (PC only) |
@@ -4664,3 +4664,264 @@ Rules only, no AI. Chips appear in a row above the selection bar; they run exist
 | *Highlight* action (area behind the selection, one undo step) | yes | harness `doc=geosuggest` | | | |
 | Flashcards / a "Make card" action | no | | | | none exists in the plugin: the row offers *Insert into note* instead |
 | Region-to-region link | no | | | | the plugin has links from a selection to a note only: the arrow offers *Link to a note…* |
+
+### 0.29 — studytape: study tape, opaque strips that hide part of a page and reveal on tap (roadmap #10; document format 27; steps 3320-3339)
+
+Whether a tape is revealed is never saved: every tape is covered again when the notebook is opened.
+
+3320. **Lay a tape.** Write a question and its answer. *All actions* > *Study tape*: a notice says the mode is on and the action shows as checked. Drag with the S Pen over the answer: one opaque strip in the colour of the setting covers it while you drag (a preview) and stays when you lift. No ink is written. One undo removes the tape, redo brings it back.
+3321. **Tap to reveal and hide.** With the mode still on, tap the tape with the pen: only a faint tint and a dashed outline are left and the answer reads again; tap again: covered. A tap where there is no tape gives a short hint and lays nothing.
+3322. **Mode off.** Run *Study tape* again, or pick any tool in the toolbar: the mode turns off (a notice the first way). With the pen, a tap on a tape still reveals or hides it; nothing is written by the tap (no dot).
+3323. **No ink under a hidden tape.** With the pen in hand, start a stroke on a hidden tape and drag off it: nothing is written. On a revealed tape the same stroke is ordinary ink.
+3324. **Finger.** With *Write with finger* off, tap a tape with a finger: it reveals or hides. A finger drag that starts on a tape pans the page and leaves the tape as it is. Resting the palm while writing with the pen never reveals a tape.
+3325. **Reveal all / Hide all.** With some tapes hidden, *All actions* offers *Reveal all study tapes* (under *For this page* too); it reveals every tape of the notebook. *Hide all study tapes* covers them again. With no tapes neither is offered.
+3326. **Reopen.** Reveal a tape, close the notebook and open it again (or restart Obsidian): every tape is covered again. Synced to another device, the tapes are there, covered.
+3327. **Read-only and locked.** In read-only mode, a pen or finger tap still reveals and hides; *Study tape* is not available and no tape can be laid. On a locked page a drag in the mode lays nothing, a tap still reveals.
+3328. **Select, move, resize, delete.** Lasso a tape: it moves, resizes and turns a quarter turn with the selection; *Delete* removes it; each is one undo step. Group it with ink, lock it: a locked tape is not offered to edit and is listed in the locked-items list as *Study tape*.
+3329. **Erasers and lasso under a tape.** Write an answer as one cursive stroke that sticks out of a hidden tape, and another answer under two tapes laid side by side. Rub the stroke eraser, the segment eraser, the area eraser (with *Area eraser removes text and images* on, over a text box half under a tape too) and a scribble across them: nothing under the tapes is erased, not even the part that sticks out, and a short notice says to reveal the tape first; reveal the tape and the same gestures erase. The area eraser removes a tape itself only with *Area eraser removes text and images* on. Lasso a whole exercise (question, tape and covered answer) and drag it elsewhere: the covered answer moves with it and stays covered while it moves; cut and paste it, or group the tape with its answer and move the group: the answer always comes along. With the lasso, a tap on a text box under a revealed tape selects the text box. Export the notebook: the export dialog says that tapes only cover content visually.
+3330. **Colour setting.** Settings > Study > *Study tape colour*: pick Sky, Rose, Sand or Slate; the next tape takes that colour, the old ones keep theirs.
+3331. **Night and themes.** In dark mode the tape is darker but still clearly opaque; read in light, dark and with *Follow Obsidian theme*.
+3332. **Exports.** Export a page with tapes as PDF, PNG, SVG and interactive HTML: every tape is drawn covering (as the notebook opens), even one revealed on screen. *Copy as image* and thumbnails also show them covering.
+3333. **Clean copy and hand-in.** A clean export leaves the tapes out (the answers show). *Hand in* leaves the tapes out too and keeps everything else.
+3334. **Redaction.** Redact a region that a tape overlaps: the exported black box is on top and the tape is cut around it; nothing under a redaction shows.
+3335. **Older plugin.** Open a notebook with a tape in 0.28 (format 26): it opens read-only with the "newer version" message and is never overwritten.
+3336. **History panel and page info.** The history panel names the step "study tape"; *Page info* counts the tapes.
+3337. **Phone.** On a phone-width view the actions, notices and the tape itself read well; a tap with a finger on a small tape still hits it.
+3338. **Long-press help and Italian.** Hold a finger on the actions in *All actions*: one line of help each. Texts read in Italian.
+3339. **Performance.** A page with 30 tapes over a full page of writing scrolls and writes without lag; writing next to a hidden tape never draws on top of it.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v27: element `tape`, migration 26→27, lenient read / strict write, staged load, repair, merge, schema | yes | `tests/model-v27.test.ts`, `tests/format-schema.test.ts` | | | |
+| Study tape mode: drag to lay (one undo step), colour setting | yes | `tests/model-v27.test.ts`, harness `doc=studytape` | | | |
+| Tap to reveal / hide (pen, finger that pans, read-only), view-only state | yes | `tests/model-v27.test.ts`, harness `doc=studytape` | | | |
+| Reveal all / Hide all actions, ranking, help | yes | `tests/model-v27.test.ts`, harness `doc=studytape` | | | |
+| No ink under a hidden tape; the erasers never touch what a hidden tape covers (all tapes together); the lasso, groups and ink-follows take covered ink | yes | `tests/model-v27.test.ts` (tool), `tests/studytape-review.test.ts`, harness `doc=studytape` (pen, eraser, lasso) | | | |
+| Select, move, resize, quarter turn, delete, group, lock | yes | `tests/model-v27.test.ts` (geometry) | | | |
+| Review round 2: the pen delete gesture spares covered ink; table Add row/column and chart Update take covered ink; Delete/Cut of a selection holding covered content asks first; a text-tool tap on a hidden tape opens no covered box; Insert space keeps a tape and its ink together | yes | `tests/studytape-review2.test.ts`, harness `doc=studytape`, `doc=tables`, `doc=charts` | | | |
+| Exports draw tapes covering (PDF, PNG, SVG, HTML, thumbnails, Copy as image) | yes | `tests/model-v27.test.ts` | | | |
+| Clean copy and hand-in leave tapes out; redaction cuts tapes (fail-closed) | yes | `tests/model-v27.test.ts` | | | |
+| A tape's own colour picker in the selection bar | no | | | | the colour is chosen in the settings for new tapes |
+| Remembering revealed tapes across reopen | no | | | | by design: tapes cover again each time |
+### 0.29 — redactundo: Undo and Redo never move writing out from under a redaction box; table inserts and drawing states (review R3-1, R3-2, R2-3; steps 3480-3499)
+
+Hardening from the 0.28 reviews, not a roadmap item. Implemented, not verified on hardware. Needs a notebook page with handwriting, the Redact dialog (Export > *Redact…*) and the S Pen.
+
+3480. **Reorder, box, Undo.** Write three lines; the first one "SSN 123". *Reorder lines*: drag the first line below the second. Open the Redact dialog and draw a box over the SSN line where it is now; close. Press Undo: nothing moves, a notice says Undo was not done because it would move writing out from under a redaction box (or under one), and to remove or redo the boxes on the page first. Export the page as PDF: the SSN line is covered.
+3481. **The step stays.** Open the history panel: *Line moved* is still the latest step. Remove the box (Redact dialog), press Undo: the lines go back. Redo: they move again.
+3482. **Redo refused.** After 3481, Undo (lines back), draw a box over the SSN line at the top, Redo: refused with the Redo notice; the history panel still offers the step as the next Redo; remove the box and Redo works.
+3483. **Table row.** Insert a table, write in its last row, *Add row* above it (the writing moves down one row). Draw a box over the writing where it is now. Undo: refused with the notice; the table and the writing stay; export: covered.
+3484. **Lasso move.** Lasso a word and move it; draw a box over it; Undo: refused. Change the colour of the boxed word and Undo the colour change: allowed (a restyle is not a move).
+3485. **Not refused.** With a box on the page: write under the box and Undo, erase under the box and Undo, then Redo: all allowed. A box only on another page, or a move far from every box: Undo and Redo work as before. A notebook with no boxes: nothing changes.
+3486. **Per-page undo.** Settings > Pages > *Undo on this page only* on. Reorder lines on page 1, write on page 2, box the moved line on page 1, go back to page 1 and Undo: refused with the notice; go to page 2 and Undo: your page 2 writing goes. Turn the setting off afterwards.
+3487. **History panel jump.** With a refused move in the history, tap the first entry of the history panel: the jump stops at the move (the steps after it are undone), the notice says why; the move and the steps before it are still listed.
+3488. **Move to another page.** Select writing, move it to another page, Undo it (it is back), draw a box over it on the first page, Redo: refused.
+3489. **Drawing states and tables.** Make a drawing with states whose ink sits in the last row of a table (state part over that ink). Select the table, *Add row* above that row: refused with "These lines, or the writing the change would push, belong to a part of a drawing with states…"; nothing moves. *Add row* below the part's ink still works.
+3490. **Italian.** With the plugin in Italian the two notices read in Italian ("Annulla non eseguito…", "Ripeti non eseguito…").
+3491. **Margin comment (U1).** Write three lines and add a margin comment on the first one ("PIN 9999", with a reply). *Reorder lines*: drag the first line below the second (the comment moves with it). Draw a redaction box over the comment's region only, not over the writing. Undo: refused with the notice. Export: the comment and its reply are not in the export. Remove the box: Undo works.
+3492. **Font size (U3).** Add a text box "PIN 9999" at a small size, make it larger, draw a box over the part of the larger text that the small one did not reach. Undo the size change: refused. Remove the box, Undo, then draw a box beside the small text where the larger one will reach and Redo: allowed (a text that only grows can only be covered more).
+3493. **Unreadable storage (U2).** Only on a test vault: damage the redaction storage (developer console: set the local-storage value `notebook-redactions`, which Obsidian prefixes with the vault id, to `{`), reopen the notebook. Lasso-move a word, Undo: refused with the notice that the stored boxes cannot be read, naming *Reset redaction storage* (not the "remove the boxes" notice). Writing a stroke and undoing it still works. Export… › Redact… › *Reset redaction storage*, confirm: the Undo now works. Check the Italian text too.
+3494. **Long jump (U7).** In a notebook with boxes and a few hundred steps, tap the first entry of the history panel: the jump runs as fast as without boxes (no visible pause per slice).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Undo / Redo refused when they move writing out from under (or under) a redaction box; step kept in place (also per page, groups, jumps; unreadable boxes refuse any move) | yes | `tests/redact-undo.test.ts` | | | |
+| Table row / column insert refuses pushed ink of a drawing-state part (R3-2) | yes | `tests/redact-undo.test.ts` | | | |
+| Undo / Redo check hardened: comment regions (U1), unreadable-storage notice and pages named by the step only (U2), export area of elements (U3), failing inverse dropped like a failed step (U4), resampled strokes (U5), cross-page moves to/from removed or box-free pages (U6), one store read per jump (U7) | yes | `tests/redact-undo.test.ts` | | | |
+| Excerpts in other notebooks marked stale after a PDF turn or crop; reading position remapped (R2-3) | no | | | | needs a view key in the excerpt source (format change); documented in `docs/architecture.md` |
+### 0.29 — figcaptions: figure captions and self-updating references (roadmap #248; steps 3360-3379)
+
+Not verified on hardware. No document format change: a caption is an ordinary text box whose text starts with `{{figcap:<picture id>}}` and a reference is a text box holding `{{figref:<picture id>}}`. The number is worked out from the document each time and shown in its place (like a wikilink's label); the stored text never changes. Only pictures *with a caption* are numbered, in reading order (page order, then top to bottom and left to right).
+
+3360. **Caption.** Place a photo, select it, open *All actions* and choose *Caption figure…*. Type "Lake at dawn" and tap *Add caption*: a text box under the picture reads "Fig. 1 — Lake at dawn" and a notice says "Caption added: Fig. 1." One undo removes the box. With no room under the picture the box goes above it.
+3361. **Edit.** Select the same picture and choose *Caption figure…* again: the dialog shows "Now Fig. 1." and the words; change them and save: the same box changes (one undo step). Editing the box with the text tool shows the raw `{{figcap:…}}` marker, which you can leave alone.
+3362. **Renumbering.** Caption a second picture lower on the page: "Fig. 2". Caption a third on an earlier page: it becomes "Fig. 1" and the others move to 2 and 3 at once. Drag the lower picture above the upper one: their numbers swap. Delete a captioned picture: the ones after it count down; undo restores them.
+3363. **Reference.** *All actions*, *Figure reference…*: pick "Fig. 2 — …" (rows are at least 44 px tall, with the page). A small text box "Fig. 2" appears where the pen last touched (or in the middle of the page) and is selected. Add text next to it with the text tool ("see ") if you like.
+3364. **Follows renumbering.** Do 3362 again with the reference on the page: it always shows the figure's current number, also after closing and reopening the notebook.
+3365. **Tap to jump.** Tap the reference with a finger (or Ctrl/Cmd+click with a mouse, or select it and use *Open link*): the view goes to the picture and outlines it. Back (the page history) returns.
+3366. **Deleted figure.** Delete the captioned picture (or its caption box): the reference reads "Fig. ?" in a dimmed, dashed link style; tapping it says the figure is gone or has no caption. Undo brings the number back. The picker shows "N references show Fig. ?".
+3367. **Exports.** Export a page with captions and references as PDF, SVG and PNG, and print it: each shows the same numbers as the screen (a reference is underlined in the link colour). The Markdown export and the companion note write "Fig. 2 — …" and "Fig. 2", never the markers.
+3368. **Figures gallery.** Open *Figures…*: a captioned figure shows its number ("Fig. 2") in the top-left of its card; the card's menu has *Caption…* (or *Edit caption…*) and, for a captioned one, *Insert reference*.
+3369. **Locked and read-only.** On a locked page, or in read-only mode, adding or changing a caption or a reference is refused with the usual message; the gallery shows no caption items in read-only mode.
+3370. **Cut-outs and large notebooks.** A figure cut-out (an anchored excerpt with a picture) can be captioned like a photo. In a notebook with 100+ pages and many captions scrolling and writing stay smooth (the numbers are cached and recomputed only after an edit).
+3371. **Italian, phone, light, dark.** With the plugin in Italian the dialog and picker read in Italian ("Fig." stays); both fit a phone and read in light and dark and with *Follow Obsidian theme*. Hold a finger on the *Caption figure…* / *Figure reference…* entries of the All actions sheet: the bubble shows the name and one line.
+3372. **Ranking.** With one picture selected, *Caption figure…* is under *For this page*. *Figure reference…* is not offered under *For this page*, but sits higher in the list once the notebook has a captioned figure.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Caption box and reference markers (no format change); parsing, building, `Fig. ?` for a missing figure | yes | `tests/figure-captions.test.ts` | | | |
+| Numbering in reading order across the notebook; renumbering on add, remove, move, page reorder | yes | `tests/figure-captions.test.ts`, harness `doc=figcaptions` | | | |
+| Display-time resolution on the page, PDF, SVG, PNG, print, Markdown export and companion note (stored text unchanged) | yes | `tests/figure-captions.test.ts`, harness `doc=figcaptions` | | | |
+| Tap on a reference jumps to the figure (finger tap, Ctrl/Cmd+click, *Open link*) | yes | `tests/figure-captions.test.ts` (hit area) | | | |
+| *Caption figure…* (selection) and *Figure reference…* actions, gallery card number and menu items, picker and caption dialog | yes | `tests/figure-captions.test.ts`, harness `doc=figcaptions`, `tests/actions*.test.ts` | | | |
+| History: uses the existing AddElement / ReplaceElement commands (already classified for per-page undo); no new command | yes | `tests/page-undo-*.test.ts` | | | |
+| Reference to a picture that has no caption yet | no | | | | the picker lists captioned figures only |
+| Numbers of figures in a notebook that is not open (library thumbnails, hover previews of other notebooks) | no | | | | show "Fig. ?" there; open notebooks, exports, the API PDF, Markdown and the companion note compute them |
+| References as links in the interactive HTML export | no | | | | the number is shown, the link is not added |
+### 0.29 — strikedelete: strike-through as logical deletion (roadmap #96; steps 3460-3479)
+
+A line through the middle of a handwritten word marks it as deleted. The word stays; the view can hide it; exports can leave it out. Nothing is stored: the state is read from the ink, the document format is unchanged (v26).
+
+3460. **Default.** Write a few words and draw one straight, slow line through the middle of one of them (pen, fountain pen or brush). Nothing changes: the word is still there, struck through. *Settings, Reading, Hide struck-out words* is off.
+3461. **Hide.** Turn on *Hide struck words* (All actions sheet, command palette, or Settings). About half a second after the pen lifts, the struck word and its line disappear; the rest of the line of writing does not move.
+3462. **Show again.** Turn it off: the word and its line are back exactly where they were. Open the file in a text editor or check the page info: no stroke was lost.
+3463. **What does not count.** Underline a word; draw a line above a word; cross the bar of a t or an A; draw a hyphen between words; draw a diagonal slash; scribble back and forth. With the switch on none of these hides a word. (A fast scribble still erases when *Scribble to erase* is on: that is unchanged.)
+3464. **Several words.** Draw one long line through three words of one line: all three go. A line through words of two different lines hides only the words it runs through the middle of.
+3465. **One letter.** Cross out a single letter with a line a little wider than the letter: it goes. The bar of a t inside a word does not hide the t.
+3466. **Undo / erase.** With the switch on, undo the strike line: the word comes back. Redo: it goes. Turn the switch off, erase the strike line with the eraser: the word stays and is no longer struck.
+3467. **Hidden ink is safe.** With the switch on, drag the stroke eraser and the area eraser over the empty spot where a struck word was, and lasso that spot: nothing is erased or selected. Switch it off: the word is still there.
+3468. **Pen safety.** Writing is not slower and no frame is dropped while the switch is on, on a page with a lot of ink; the struck word disappears only after you stop writing. Closing and reopening the notebook with the switch on hides the words again.
+3469. **Export.** Export, tick *Leave out struck-out words*, choose PDF: the PDF has no struck words and no strike lines. Repeat with PNG, SVG, HTML and Print. Without the tick (the default) the struck words are in the export, struck through. The notebook is unchanged afterwards.
+3470. **Clean copy.** *Clean copy* alone does not drop struck words; with both ticked it does both. *Settings, Reading, Leave out struck-out words from exports* on: the export dialog opens with the tick on, and *Share page…* leaves them out too.
+3471. **Phone and tablet, Italian, themes.** The two settings, the action in All actions (with the strikethrough icon) and the export row read well on a phone width, in Italian, in light and dark and with *Follow Obsidian theme*. Long-press the action in the sheet: the help bubble explains it.
+3472. **Limits to know.** The text boxes, equations and pictures are never "struck". Search, the headings index and the Markdown digest still see struck words. A struck word on a page with states follows the state shown.
+3473. **Scribble is safe.** With *Scribble to erase* and *Hide struck words* on, strike a word (it disappears), then scratch a word next to it: only the scratched word is erased; switch hiding off, the struck word is still there.
+3474. **Setting reaches the quick exports.** With *Leave out struck-out words from exports* on and a word struck: run the *Export PDF* command, a page's PDF action, the page-range export and the Markdown export: none shows the struck word. Turn the setting off: all of them show it again.
+3475. **Writing over a hidden word.** With hiding on, write a new word on the empty place of a hidden struck one: it stays visible after the pause and is in the exported PDF.
+3476. **Group.** Group a word you then strike with another word; with hiding on, move the visible word: the group moves whole, and with hiding off the struck word is at the new place.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Detection of struck words from geometry (true strike, underline/overline/short bar not counted, single letter, several words, slanted lines, right-to-left, not gluing words) | yes | `tests/strikethrough.test.ts` | | | |
+| Per-page cache, recomputed only on change | yes | `tests/strikethrough.test.ts` | | | |
+| Hide struck words in the view (setting, All actions toggle, command), eraser/lasso skip hidden ink | yes | harness `doc=strikedelete` | | | |
+| Clean-export filter `struck` (PDF, SVG, HTML, PNG, print, share) | yes | `tests/strikethrough.test.ts`, `tests/clean-export.test.ts`, harness `doc=strikedelete` | | | |
+| Export dialog switch, settings en + it, help text | yes | `tests/settings-schema.test.ts`, harness `doc=strikedelete` | | | |
+| Search / headings index / digest ignore struck words | no | | | | left out: not cheap without touching those readers |
+| Thumbnails, minimap and the zoomed-out levels hide struck words | no | | | | they draw the document as it is; only the page canvas and exports honour the switch |
+| Quick exports from a page's menu (without the dialog) | no | | | | they draw the page as it is; use the export dialog |
+### 0.29 — charts: bar, line and pie charts from the numbers of a hand-drawn table (roadmap #244; steps 3340-3359)
+
+A chart is ordinary shape strokes and text boxes of one group; "Update chart" re-reads the table the chart was made from. The plugin does not read handwriting: the numbers are typed in text boxes placed in the cells (Text tool, tap in a cell).
+
+3340. **Table with numbers.** Insert a table (4 rows, 3 columns) and type in text boxes: row 1 "Month", "Sales", "Cost"; rows 2 to 4 a month name and two numbers each (use a decimal comma in one of them, e.g. 12,5). Select the table (tap it). *All actions* shows *Chart from table* (and *For this page* offers it first). With nothing selected, or a chart selected, it is not there.
+3341. **Dialog.** Tap it: the dialog shows the type (Bars, Line, Pie), a title field, eight colour dots, the size, a small picture of the chart and "Numbers found: 6 (rows: 3, columns: 2)". Every control works; the picture follows each choice; the picture is not a control. Delete the numbers of a second table and open the dialog: it says no numbers were found and *Insert chart* is disabled.
+3342. **Insert.** Choose Bars, type a title, a colour, Medium, *Insert chart*. The chart appears below the table (to the right when there is no room below) with a frame, the title, a value axis with round ticks and light grid lines, one label per month, two bars per month in two colours, value labels on the bars and a legend (Sales, Cost). The chart is selected. One undo removes it whole; redo brings it back.
+3343. **Line and pie.** Repeat with *Line* (a line per series with a dot per number; an empty cell leaves a gap) and *Pie* (one wedge per row of the first column of numbers, clockwise from the top; a legend with the share of each). A zero or negative value has no wedge.
+3344. **Move and restyle.** Drag the chart, resize it, change its colour with the selection bar: it behaves as any group (the title and labels are text boxes, the bars are shapes).
+3345. **Update.** Change a number in the table (edit the text box). Select the chart: *All actions* shows *Update chart* (and no *Chart from table*). Tap it: the chart is redrawn in the same place and size, with the same type and colours, and a notice says so. One undo brings the previous chart back exactly. Tap *Update chart* again without changing anything: "The chart already shows the numbers in its table."
+3346. **Edited title.** Edit the title text box of the chart, change a number, update: the new title is kept.
+3347. **Table changes.** Add a row to the table (*Add row*), type a new month, update: the chart has one more category. Change a cell to text: it is left out and the chart still draws. Empty every number and update: refused with "The table holds no numbers…", the chart is untouched.
+3348. **Table gone / copy.** Delete the table and update the chart: "The table this chart was made from is no longer in the notebook." Copy the chart and paste it: the copy has no table to read (*Update chart* says so); the original still updates. Chart and table on different pages: update still works.
+3349. **Locked.** Lock the page: *Chart from table* and *Update chart* are disabled and nothing changes. Lock a text box of the chart (Lock): *Update chart* is refused with a reason.
+3350. **Exports.** Export the page as PDF, PNG and SVG and print or share it: the chart is drawn with its bars, wedges, lines and text. With redaction on, a box over the chart hides it in the exports.
+3351. **History panel.** The steps read "Chart inserted" and "Chart updated" (in Italian "Grafico inserito", "Grafico aggiornato"). With *Undo on this page only* on, undo of a chart step acts on that page only.
+3352. **Phone, light, dark, Italian.** The dialog fits a phone, reads in light and dark and with *Follow Obsidian theme* (its picture sits on a light paper), and all texts are in Italian with the plugin in Italian. Long-press *Chart from table* / *Update chart* in the sheet: the help bubble explains each.
+3353. **Many numbers.** A table of 12 rows and 4 series: labels thin out (every other one, clipped) rather than overlap; a pie of 15 rows shows 11 slices and "Other".
+3354. **Real device.** On the tablet with the S Pen: the colour dots and segments are easy to hit, the picture is crisp, inserting is instant, and the text of the chart is a similar size to the table's.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Number parsing (decimal comma, thousands, percent, currency, minus), data from cells (labels, series, header row, gaps, limits) | yes | `tests/chart-layout.test.ts` | | | |
+| Axis ticks, scales, pie angles, bar / line / pie layout (empty, negative, non-numeric, tiny boxes) | yes | `tests/chart-layout.test.ts` | | | |
+| Text of the cells of a table (text boxes and number equations) | yes | `tests/chart.test.ts` | | | |
+| Chart as shape strokes + text boxes of one group, valid document, one undo step to insert | yes | `tests/chart.test.ts`, harness `doc=charts` | | | |
+| Update chart: re-reads the table, same place / type / colour / title, one undo step, "same", refusals (gone, no link, no source, no data, locked, states) | yes | `tests/chart.test.ts`, harness `doc=charts` | | | |
+| Dialog (type, title, colour, size, live picture, what was read), actions, help, ranking, commands, en + it | yes | `tests/chart-actions.test.ts`, `tests/ui-registry.test.ts`, harness `doc=charts` | | | |
+| Reading the numbers from handwriting | no | | | | the plugin has no handwriting recognition: numbers are typed in text boxes |
+| Updating by itself when a number changes | no | | | | explicit *Update chart* only (a chart is plain content; nothing watches the table) |
+| Axis titles, stacked or horizontal bars, a secondary axis | no | | | | not in this wave |
+### 0.29 — stats: statistics from table data (roadmap #295; steps 3380-3399)
+
+*Table statistics* in the All actions sheet while a hand-drawn table is selected. Implemented, not verified on hardware. The numbers are read from TEXT BOXES written inside the cells (handwriting is not recognised); no format change. Needs a notebook page.
+
+3380. **Offered.** Draw a table (Insert > Table, 4 rows, 3 columns). Add a text box in each cell: a header row (x, y, note) and under it numbers (1, 2,5, 4) and (3, 6, 9). Select the table: All actions > *Table statistics*. With nothing or other ink selected it is not offered.
+3381. **Summary.** The card lists the columns by header name; for x it shows the count, mean, median, standard deviation, minimum, maximum and sum, correct for the numbers typed (check one by hand).
+3382. **Decimal comma and non-numbers.** "2,5" counts as 2.5. Write a word (n/a) in a numeric column: it is skipped, and the count line says how many were skipped. Empty cells are not counted.
+3383. **Line.** Choose a second column under *Fit a line against column*: the card shows `y = ...x + ...`, slope, intercept and R squared. With fewer than two rows or all equal x it says why there is no line.
+3384. **Insert as text.** The text box appears to the right of the table (under it when there is no room), in the pen colour, with the same text as the card. One undo removes it; redo brings it back; the history panel shows *Element added*.
+3385. **Copy.** *Copy* then paste in a note: the same text.
+3386. **No numbers.** A table with no text boxes: the card says no numbers were found and that handwriting is not read.
+3387. **Locked page / read-only.** The card still opens; *Insert as text* adds nothing on a locked page.
+3388. **Dark, light, phone, Italian.** The card reads in both themes, fits a phone, 44 px targets, is in Italian with the plugin in Italian; long-press help of the action explains what it does.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Number parsing, summary, regression (`src/math/stats.ts`) | yes | `tests/table-stats.test.ts` | | | |
+| Reading text boxes into cells, report text, box placement | yes | `tests/table-stats.test.ts` | | | |
+| Statistics card, Insert as text (one undo step), Copy, action, help, context rank | yes | harness `doc=stats` | | | |
+| Reading handwriting in cells | no | | | | needs recognition; type numbers in text boxes |
+| Regression line drawn on a chart | no | | | | with the table charts |
+### 0.29 — calculator: advanced calculator (roadmap #182; steps 3400-3419)
+
+*All actions › Insert › Calculator* (or the command *Open the calculator*) opens a dialog with an expression line, a big answer, large keys, a tape and your variables. Nothing is written into the notebook file by the dialog itself: the tape, the display choices and the variables of each notebook are kept on this device only. A result reaches the page only through the three insert buttons, each one undo step. No document format change.
+
+3400. **Open.** Open the calculator from *All actions* (Insert) and from the command palette. On a tablet the soft keyboard stays away until you tap the keyboard button next to the line; on desktop the line has the focus. With a text box selected, its first line is already in the expression line.
+3401. **Keys with the pen and a finger.** Tap `1`, `÷`, `3`, `+`, `1`, `÷`, `6`: the line reads `1/3+1/6`, a muted preview `= 1/2` shows while you type. Every key is at least 48 px and reacts to the S Pen tip and to a finger; the caret stays in the line. `⌫` deletes one character (or the selection), `C` empties the line.
+3402. **Equals.** Tap `=`: the answer is `1/2` with `≈ 0.5` under it, the line joins the tape. Typing an operator right after (`+`) continues from the answer.
+3403. **Decimals stay exact.** `0.1 + 0.2` gives `0.3`, `1.1 * 1.1` gives `1.21`, `20!` and `2^100` give every digit.
+3404. **Units.** `3 km/h to m/s` gives `0.833333333333 m/s`; `3 km + 200 m` gives `3.2 km`; `2 kg * 9.8 m/s^2` gives `19.6 N`; `100 degC to K`, `1 mi to km`, `5 kg to lb`. `3 m + 2 s` and `3 m to s` say why they cannot be done, in the dialog, with the unit names.
+3405. **Constants by name.** `c`, `h`, `NA`, `kB`, `R`, `qe`… give the value with its unit; `m = 5 kg` then `m * g` gives `49.03325 N`. The *Constants* group of keys lists them (long-press a key for its meaning in the bubble where it has one). After a number, `g`/`h` mean gram/hour (`3 g`, `2 h`); on their own they are the constants.
+3406. **Variables on the page's notebook.** `a = 3.2`, then `a * 2` gives `6.4`. `f(x) = a * x`, then `f(5)` gives `16`. They show as chips under the answer (tap a chip to use it, × to forget it). Close and reopen the dialog, restart Obsidian: they are still there, for this notebook, and not in another notebook; they are not on another device.
+3407. **Fractions, complex numbers, matrices.** `(1 + 2i) * (3 - i)` gives `5 + 5i`; `sqrt(-4)` gives `2i`; `inv([1, 2; 3, 4])` gives a grid `-2 1; 3/2 -1/2`; `det([1, 2; 3, 4])` gives `-2`; `[1, 2; 3, 4]^2`; `cross([1,0,0],[0,1,0])`. A singular matrix says it has no inverse.
+3408. **Statistics.** `mean([2, 4, 4, 5])`, `median`, `mode`, `std`, `var`, `quantile([1,2,3,4,5], 0.5)`, `slope([1,2,3],[2,4,6])`; `mean(2 m, 4 m)` keeps the unit.
+3409. **Equation solver.** `solve(x^2 = 2, x)` gives `[-1.41421356237, 1.41421356237]`; `solve(cos(x) = x, x, 0, 1)` in radians gives `0.739085133215`; `integrate(x^2, x, 0, 3)` gives `9`; `diff(x^3, x, 2)` gives `12`. An equation with no real root says so. The dialog stays responsive (these only run on `=`, not while typing).
+3410. **Degrees and radians.** *Angles* chips: `sin(30)` is `0.5` in degrees and `-0.988031624093` in radians; `sin(30 deg)` is `0.5` in both. `asin(1)` is `90` in degrees. The choice is kept.
+3411. **Notation and significant figures.** *Notation*: `123456` as scientific is `1.23456 × 10⁵`, engineering `123.456 × 10³`. *Significant figures* − / +: Auto, 15 … 3; at 3, `123456.789` shows `123000` and `2.5` shows `2.50`. *Fractions › Decimal* shows `0.5` and `0.583333333333` instead of fractions. Changing a choice changes the answer on screen at once.
+3412. **Tape.** Each worked-out line stays on the tape (newest first, 100 lines, on this device). Tap the left part of a row to put the expression back in the line; the right part to put the answer in the expression; *Clear the tape* empties it.
+3413. **Insert as text.** With a page that can be edited in view, work out `sin(30)` and tap *Insert as text*: a text box `sin(30) = 0.5` appears in the middle of the view, selected, in the pen colour. One undo removes it.
+3414. **Insert as formula.** Tap *Insert as formula*: a typeset formula element `sin(30) = 0.5` (fractions as fractions, units upright, matrices as brackets) is added and selected, one undo step. If the formula cannot be typeset a notice says so and the line goes in as text.
+3415. **Draw as graph.** Type `f(x) = x^2 - 3` and press `=`: *Draw as graph* adds a graph with that function (the graph panel can change it); with `a = 3` and `a * x` the graph has a slider for `a`; in degrees mode the graph's trigonometry is in degrees. A plain sum has the button dimmed with the reason in its tooltip.
+3416. **Locked and read-only pages.** On a locked page the insert buttons give the *page locked* notice and add nothing; in a read-only notebook they are dimmed (the calculator itself still works).
+3417. **Help.** Long-press the keys, the *Angles / Notation / Fractions / Significant figures* controls and the four result buttons: a bubble explains each, in English and Italian. The *Examples* section loads sample expressions into the line.
+3418. **Phone and themes.** On a phone-width view the dialog is one column (line, answer, tape, keys), nothing scrolls sideways; light, dark and *Follow Obsidian theme* read well; the Italian texts (errors too) fit.
+3419. **Unusual input.** `1/0`, `(1 +`, `foo`, `sin(3 m)`, `2^100000`, 1000 characters, a deeply nested bracket: each gives a sentence in the dialog and changes nothing; Obsidian stays responsive.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Exact arithmetic: fractions, decimals without float noise, big integers (BigInt, bounded) | yes | `tests/calc.test.ts` | | | |
+| Units and conversions (SI, prefixes, common non-SI, degC/degF), dimension checking, constants by name | yes | `tests/calc.test.ts`, `tests/calc-ui.test.ts` | | | the constants table is the one the reference sheets (#181) will read; #181 itself is not built |
+| Variables and functions, kept per notebook on this device | yes | `tests/calc.test.ts`, `tests/calc-ui.test.ts` | | | "on the page" is per notebook: a per-page store would need a format change |
+| Complex numbers, matrices and vectors, statistics on lists, numeric equation solver, integrals, derivatives | yes | `tests/calc.test.ts` | | | |
+| Degrees/radians, notation, significant figures, fractions as decimals; tape | yes | `tests/calc.test.ts`, `tests/calc-ui.test.ts`, harness `doc=calculator` | | | |
+| Large pen-friendly keys; dialog on the shared shell; help, ranking | yes | `tests/calc-ui.test.ts`, harness `doc=calculator` | | | |
+| Result inserted as text, as a formula element with its expression, as a function graph | yes | harness `doc=calculator` | | | |
+| Handwritten calculations | no | | | | later (M5, as the roadmap says) |
+### 0.29 — hygiene: Zettelkasten system hygiene (roadmap Z10; steps 3420-3439)
+
+3420. **Open.** Command palette, *Check Zettelkasten hygiene*: a report opens with a progress line, then three lists (Unlinked cards, Cards without a title, Likely duplicates) with counts. No file changes (check the vault's modified times).
+3421. **Unlinked.** A card nothing links to and that links to nothing is listed; add a wikilink to it from any note, scan again: it is gone. A link written in the card's `links` property counts too.
+3422. **Untitled.** A card with an empty `title` is listed; *Open* opens its note.
+3423. **Duplicates.** Make two cards with the same title (or two cards of the same page and region, or copy a card's text into another card): they appear as one group with the reason (same title / same page and region / nearly the same text).
+3424. **Add title.** *Add title…* opens a prompt; Cancel changes nothing; Save writes the title (and renames the note only if it still had the plugin's name); the row disappears.
+3425. **Link.** *Link…* opens a card picker, then a confirmation; Cancel changes nothing; confirming adds the link to both notes' `links`.
+3426. **Trash.** *Move to trash* asks first, naming the note; Cancel keeps it; confirming moves the note to Obsidian's trash (restorable) and the notebook page is untouched.
+3427. **Large vault.** With a few thousand cards the report stays responsive while it reads (progress counts up) and closing it stops the scan.
+3428. **Phone and tablet.** Rows wrap, buttons are at least 40 px, nothing scrolls sideways; light, dark and Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Detection: unlinked, untitled, duplicates (title, page and region, near-identical text), idle slices (pure) | yes | `tests/zettel-hygiene.test.ts` | | | |
+| Read-only report with Open per row | yes | harness `doc=hygiene` | | | |
+| Fixes with confirmation: add title, link two cards, move to trash | yes | harness `doc=hygiene` (trash path; title and link are asked first) | | | |
+### 0.29 — cardtemplates: card templates, roadmap Z9 (steps 3440-3459)
+
+Update to 0.29 and fully close and reopen Obsidian. Use a vault with a notebook that has some handwriting. Reference screenshots after `HARNESS_DOC=cardtemplates npm run harness:check`: `dev/harness/dist/shots/design/cardtemplates-*.png` (picker, picker-custom, manager, manager-empty; tablet and phone, light and dark). Not verified on a device.
+
+3440. **Picker.** On a notebook page choose *Make card from this page*. The dialog has a *Template* row: Blank, Concept, Question, Quote, Definition. Blank is selected; the fields below are as before.
+3441. **Concept.** Choose *Concept*: the type tile moves to *Permanent*. Type a title, *Create card*. Expected: the note has the properties as usual plus `card-template: concept`, the live ink, *Transcription*, then four headings (*The idea in one sentence*, *Why it matters*, *Examples*, *Connections*) with room under each. Type under a heading: nothing else in the note changes.
+3442. **Question, quote, definition.** Make one card of each. Expected types *Fleeting*, *Literature*, *Permanent* and the tags `question`, `quote`, `definition` added to any tags you typed (no duplicates if you typed the same one).
+3443. **The type is still yours.** Choose *Quote*, then tap *Fleeting*: the card is created as *Fleeting*, with the quote headings.
+3444. **Blank is unchanged.** Make a card with *Blank*: the note is exactly as in 0.28 (no `card-template`, no extra headings).
+3445. **Inbox.** In the Inbox, *Make card* on an item: the same Template row appears; a template there adds its headings after the transcribed text.
+3446. **Language.** With the plugin in Italian the template names, hints and headings are Italian (*Citazione*, *Fonte e pagina*…). Switch to English: new cards use English headings; cards already made keep theirs.
+3447. **Manager.** *Settings → Study → Zettelkasten → Card templates → Open*. The four built-in templates are listed. Tap the copy button on *Quote*: a template of your own appears with four areas.
+3448. **Edit.** Rename it, change the suggested type, add a tag, put `Seen on {{date}}` as an area. Leave each field. Close the manager and reopen it: the changes are there. Make a card with it: the heading reads *Seen on* and today's date; the type tile is preselected.
+3449. **Delete.** The *Delete* button turns into *Tap again to delete*; tapping elsewhere and back to another row's button does not delete the first. A second tap on the same button deletes the template; cards already made from it are untouched.
+3450. **Empty name.** *Add template*, leave the name empty, close the manager: nothing is saved for it and it does not appear in the card dialog.
+3451. **Sync / restart.** Restart Obsidian: your templates are still offered. Delete a template that a card was made from: the card still opens normally.
+3452. **Pen, finger, mouse.** The tiles, the type tiles, the manager buttons and fields work with the S Pen, a finger and the mouse, and are easy to hit (44 px).
+3453. **Phone width, light, dark.** The tiles wrap to two per row, nothing scrolls sideways, texts read in light, dark and *Follow Obsidian theme*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Built-in card templates (concept, question, quote, definition), en + it | yes | `tests/card-templates.test.ts` | | | |
+| Template applied to a new card note (headings, `card-template`, tags, transcription kept) | yes | `tests/card-templates.test.ts` | | | |
+| Custom templates in settings (lenient read, unknown fields kept) | yes | `tests/card-templates.test.ts` | | | |
+| Picker in the New card dialog and the Inbox; manager in Settings | yes | harness `doc=cardtemplates` | | | |
+| Handwriting areas inside the card (ink boxes) | no | | | | templates add labelled Markdown areas under the ink; the ink region itself is chosen as before |
+| Quick exports (Export PDF command, page range, page menu PDF, API `exportPdf`, Markdown, hand-in) follow the setting | yes | `tests/strike-export.test.ts` | | | |
+| Scribble erase / pen delete gesture skip hidden struck ink | yes | `tests/strike-scribble.test.ts` | | | |
+| A line only strikes ink written before it | yes | `tests/strikethrough.test.ts` | | | |
+| Groups complete with hidden struck members; very dense pages are skipped in the view | yes | `tests/strikethrough.test.ts` | | | |
+| Pictures of a selection into notes, copies, digests leave out struck words | no | | | | not covered; the setting text says which files are |

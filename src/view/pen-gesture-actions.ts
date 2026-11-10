@@ -34,6 +34,15 @@ export interface PenGestureView {
 	boundsOf(): ((s: Stroke) => BBox) | undefined;
 	/** v8: whether the hidden ink of `page` is shown (solutions revealed); hidden ink is never a gesture target otherwise. */
 	revealed(page: Page): boolean;
+	/** 0.29 (#96): ids of the struck words the view hides on `page` (null: none); a scribble gesture never deletes them. */
+	struckHidden?(page: Page): ReadonlySet<string> | null;
+	/**
+	 * 0.29 (#10, review R1): which strokes of `page` a hidden study tape reaches over (undefined: no hidden tape there); the delete gesture never
+	 * deletes them, like the scribble eraser.
+	 */
+	spareStroke?(page: Page): ((s: Stroke) => boolean) | undefined;
+	/** 0.29 (#10): says that the gesture left ink under a hidden study tape alone. */
+	tapeKept?(): void;
 	/** The current lasso selection, if any (page, strokes, objects). */
 	selection(): { pageIndex: number; strokes: readonly Stroke[]; elements: readonly PageElement[] } | null;
 	/** Is this page-local point on the selection (box or handles)? */
@@ -85,7 +94,7 @@ export function gestureWorld(v: PenGestureView): GestureWorld {
 			}
 			const duration = trail[trail.length - 1]!.t - trail[0]!.t;
 			const scribble = detectScribble(pts, duration);
-			return scribble ? scribbleVictims(scribble, erasableStrokes(page), v.penStyle().width, v.boundsOf(), v.revealed(page)).length : 0;
+			return scribble ? scribbleVictims(scribble, erasableStrokes(page, v.struckHidden?.(page)), v.penStyle().width, v.boundsOf(), v.revealed(page)).length : 0;
 		},
 		onPage: (p) => v.pageIndexAt(p) >= 0,
 		onSelection(p) {
@@ -170,7 +179,16 @@ export function runGesture(v: PenGestureView, r: Recognition, trail: readonly Tr
 	switch (r.id) {
 		case "delete": {
 			if (!ink) return;
-			const steps = scribbleEraseSteps(ink.page, ink.stroke, trail[trail.length - 1]!.t - trail[0]!.t, v.boundsOf(), {}, v.revealed(ink.page));
+			const duration = trail[trail.length - 1]!.t - trail[0]!.t;
+			const struck = v.struckHidden?.(ink.page) ?? null;
+			// 0.29 (#10, review R1): ink a hidden study tape reaches over is never deleted (the user reveals the tape to erase there).
+			const spare = v.spareStroke?.(ink.page);
+			const steps = scribbleEraseSteps(ink.page, ink.stroke, duration, v.boundsOf(), {}, v.revealed(ink.page), struck, spare);
+			if (spare) {
+				const scribble = detectScribble(ink.stroke.points, duration);
+				const crossed = scribble ? scribbleVictims(scribble, erasableStrokes(ink.page, struck), ink.stroke.width, v.boundsOf(), v.revealed(ink.page)) : [];
+				if (crossed.some(spare)) v.tapeKept?.();
+			}
 			if (steps) {
 				v.clearSelection();
 				v.execute([steps.keep, steps.erase]);

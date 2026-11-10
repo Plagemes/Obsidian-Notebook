@@ -1,7 +1,7 @@
-// docs/schema/notebook-v26.schema.json against what the serializer really writes (roadmap #167).
+// docs/schema/notebook-v27.schema.json against what the serializer really writes (roadmap #167).
 // The schema is a published contract for other tools: a document the plugin writes must always satisfy it, and a document that
 // breaks one of the writer's rules must not. The validator is a small dependency-free one (tests/json-schema-lite.ts).
-import schemaText from "../docs/schema/notebook-v26.schema.json?raw";
+import schemaText from "../docs/schema/notebook-v27.schema.json?raw";
 import guide from "../docs/format.md?raw";
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
@@ -110,6 +110,9 @@ function fullDocument(): NotebookDocument {
 		// v23: the area highlighter (the second one is locked).
 		{ id: "el-area", type: "area", x: 30, y: 730, width: 200, height: 24, color: "#facc15", opacity: 0.7 },
 		{ id: "el-area-locked", type: "area", x: 250, y: 730, width: 120.5, height: 24.25, color: "#4ADE80", locked: true, lockAt: 1_700_000_000_003 },
+		// v27: the study tape (the second one is locked).
+		{ id: "el-tape", type: "tape", x: 30, y: 770, width: 180, height: 20, color: "#8fd3bf" },
+		{ id: "el-tape-locked", type: "tape", x: 250, y: 770, width: 90.5, height: 18.25, color: "#9CC3EC", locked: true, lockAt: 1_700_000_000_004 },
 	];
 	const page1: Page = {
 		id: "p-ink", width: 595.28, height: 841.89, paper: { kind: "cornell", spacing: 22.68 },
@@ -150,7 +153,7 @@ function fullDocument(): NotebookDocument {
 	return doc;
 }
 
-describe("notebook-v25.schema.json: what the serializer writes validates", () => {
+describe("notebook-v27.schema.json: what the serializer writes validates", () => {
 	it("is a well-formed draft 2020-12 schema for the current format version", () => {
 		expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
 		expect((getAt(schema as Raw, ["properties", "version", "const"]))).toBe(CURRENT_VERSION);
@@ -176,7 +179,7 @@ describe("notebook-v25.schema.json: what the serializer writes validates", () =>
 		// The test document really covers everything: every element type and the optional fields of the format are in the output.
 		const raw = JSON.parse(text) as { pages: { elements?: { type: string }[] }[] };
 		const types = new Set(raw.pages.flatMap((p) => (p.elements ?? []).map((e) => e.type)));
-		expect([...types].sort()).toEqual(["area", "box", "checkbox", "equation", "excerpt", "graph", "image", "marker", "sticky", "text"]);
+		expect([...types].sort()).toEqual(["area", "box", "checkbox", "equation", "excerpt", "graph", "image", "marker", "sticky", "tape", "text"]);
 		for (const key of [
 			'"bookmarkInfo"', '"description"', '"coverArt"', '"position"', '"slides"', '"views"', '"tags"', '"background"', '"margins"', '"infinite"', '"locked"',
 			'"states"', '"comments"', '"hidden"', '"slide"', '"group"', '"lockAt"', '"outline"', '"taskAt"', '"sketch"', '"resolved"', '"inline"', '"numbered"',
@@ -195,7 +198,7 @@ describe("notebook-v25.schema.json: what the serializer writes validates", () =>
 	});
 });
 
-describe("notebook-v25.schema.json: invalid documents are refused", () => {
+describe("notebook-v27.schema.json: invalid documents are refused", () => {
 	const base = (): Raw => parseRaw(written(fullDocument()));
 	const bad = (name: string, edit: (raw: Raw) => void): void => {
 		it(name, () => {
@@ -356,6 +359,13 @@ describe("notebook-v25.schema.json: invalid documents are refused", () => {
 	bad("opacity as a string", set(["pages", 0, "strokes", 5, "opacity"], "half"));
 	bad("opacity 0 on a picture", set(["pages", 0, "elements", 1, "opacity"], 0));
 	bad("opacity on an area above 1", set(["pages", 0, "elements", 14, "opacity"], 2));
+	// v27: the study tape.
+	bad("tape too thin", set(["pages", 0, "elements", 16, "height"], 3));
+	bad("tape too wide", set(["pages", 0, "elements", 16, "width"], 20001));
+	bad("tape without a colour", del(["pages", 0, "elements", 16, "color"]));
+	bad("tape with a colour name", set(["pages", 0, "elements", 16, "color"], "mint"));
+	bad("tape without a size", del(["pages", 0, "elements", 16, "width"]));
+	bad("tape with x as a string", set(["pages", 0, "elements", 17, "x"], "left"));
 	// v25: the taper of the ends of a line (strokes 11 and 12 are tapered; 0 is a render 1 pen, 1 a highlighter, 5 a marker).
 	bad("taper 0", set(["pages", 0, "strokes", 11, "taperStart"], 0));
 	bad("taper below 5 %", set(["pages", 0, "strokes", 11, "taperEnd"], 0.04));
@@ -414,7 +424,7 @@ describe("docs/format.md", () => {
 	});
 
 	it("names the schema file and the version it describes", () => {
-		expect(guide).toContain("schema/notebook-v26.schema.json");
+		expect(guide).toContain("schema/notebook-v27.schema.json");
 		expect(guide).toContain(`version ${CURRENT_VERSION}`);
 	});
 });

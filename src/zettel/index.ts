@@ -2,6 +2,7 @@ import type { Menu, Plugin } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import { isNotebookFile } from "../storage/format";
 import { NotebookView } from "../view/notebook-view";
+import { openHygiene } from "./hygiene-view";
 import { registerInbox } from "./inbox";
 import type { InboxService } from "./inbox-service";
 import { ZettelService, type ZettelHost } from "./service";
@@ -46,6 +47,7 @@ export function registerZettel(plugin: ZettelHost): ZettelService {
 	viewCommand("zettel-toggle-slip-box", "zettel.command.toggleSlipBox", (v) => service.toggleSlipBox(v));
 	plugin.addCommand({ id: "zettel-new-slip-box", name: t("zettel.command.newSlipBox"), callback: () => void service.newSlipBox() });
 	plugin.addCommand({ id: "zettel-orphans", name: t("zettel.command.orphans"), callback: () => service.showOrphans() });
+	plugin.addCommand({ id: "zettel-hygiene", name: t("hygiene.command"), callback: () => openHygiene(app, service) }); // 0.29 hygiene (Z10)
 	plugin.addCommand({ id: "zettel-toggle-regions", name: t("zettel.command.toggleRegions"), callback: () => void service.toggleRegions() });
 
 	// The notebook tab's "More options" menu (and the file menu of the notebook in that tab).

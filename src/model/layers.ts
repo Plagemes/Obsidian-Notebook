@@ -36,6 +36,8 @@ export function elementBand(el: PageElement): number {
 		case "marker": return 5;
 		// v17 checkboxes are drawn above the ink like marker badges, in the same band.
 		case "checkbox": return 5;
+		// v27 study tapes are drawn last of all, above the ink and the badges (that is what hides what is under them).
+		case "tape": return 6;
 	}
 }
 

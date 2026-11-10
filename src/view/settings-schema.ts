@@ -29,6 +29,12 @@ import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 import { SYMBOL_COUNT_MAX, SYMBOL_COUNT_MIN } from "../ui/symbol-rank";
 import { TOOL_FADE_SECONDS_MAX, TOOL_FADE_SECONDS_MIN } from "../ui/tool-fade";
 import { CLOUD_INTERVAL_MAX, CLOUD_LARGE_MAX_MB, CLOUD_MOBILE_MAX_MB, CLOUD_MOBILE_MIN_MB } from "../sync/settings";
+import { TAPE_COLOR_NAMES, type TapeColorName } from "../model/tape";
+
+/** 0.29 studytape (#10): the names of the study tape colours. */
+const TAPE_COLOR_LABELS: Readonly<Record<TapeColorName, MessageKey>> = {
+	mint: "tape.color.mint", sky: "tape.color.sky", rose: "tape.color.rose", sand: "tape.color.sand", slate: "tape.color.slate",
+};
 
 export type SettingKey = keyof NotebookSettings;
 
@@ -109,7 +115,7 @@ export const GROUPS: readonly GroupSpec[] = [
 ];
 
 /** Runs of the action rows; the tab maps each id to what it does. */
-export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open" | "meanings-edit" | "macros-manage";
+export type SettingActionId = "hints-reset" | "toolbar-reset" | "pen-test" | "benchmark" | "companion-update-all" | "sync-check" | "timetable-edit" | "gesture-sheet" | "gesture-custom" | "notebook-templates-manage" | "pen-sets" | "board-columns" | "storage-open" | "meanings-edit" | "macros-manage" | "card-templates";
 /** Rows drawn by the tab itself (no stored setting of their own). */
 export type SettingCustomId = "device-name" | "pen-key" | "device-info" | "backup-now" | "cloud-account" | "cloud-sync-now" | "cloud-log" | "cloud-secret";
 
@@ -402,6 +408,9 @@ const READING: SettingSpec[] = [
 	// 0.18 (#86): margin comments.
 	{ id: "commentMarkers", section: "reading", order: 70, name: "settings.commentMarkers", desc: "settings.commentMarkers.desc", control: { type: "toggle" }, keywords: "comments markers margin review commenti margine revisione" },
 	{ id: "commentsInPdf", section: "reading", order: 71, name: "settings.commentsInPdf", desc: "settings.commentsInPdf.desc", control: { type: "toggle" }, keywords: "comments pdf markdown export margin notes commenti esporta note a margine" },
+	// 0.29 strikedelete (#96): a line through a handwritten word marks it as deleted; it can be hidden in the view and left out of exports.
+	{ id: "hideStruck", section: "reading", order: 80, name: "settings.hideStruck", desc: "settings.hideStruck.desc", control: { type: "toggle" }, keywords: "strike strikethrough struck crossed out deleted hide words line through barrato cancellato nascondi parole riga" },
+	{ id: "exportHideStruck", section: "reading", order: 81, name: "settings.exportHideStruck", desc: "settings.exportHideStruck.desc", control: { type: "toggle" }, keywords: "strike strikethrough struck crossed out deleted export share pdf png barrato cancellato esporta condividi" },
 	// 0.20 refwindow (#107): the floating reference window.
 	{ id: "refWindowSnap", section: "reading", order: 75, name: "settings.refWindowSnap", desc: "settings.refWindowSnap.desc", control: { type: "toggle" }, keywords: "reference window floating snap edges finestra riferimento aggancio bordi" },
 
@@ -610,6 +619,17 @@ const STUDY: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["timestamp", "settings.zettelIdScheme.timestamp"], ["luhmann", "settings.zettelIdScheme.luhmann"]]) },
 	},
 	{ id: "zettelShowRegions", section: "study", group: "zettel", order: 30, name: "settings.zettelShowRegions", desc: "settings.zettelShowRegions.desc", control: { type: "toggle" } },
+	// 0.29 studytape (#10): the colour of new study tapes (a main option of the section: the tape is a study tool of every notebook)
+	{
+		id: "tapeColor", section: "study", order: 10, name: "settings.tapeColor", desc: "settings.tapeColor.desc", keywords: "study tape hide reveal cover answers colour nastro studio nascondi rivela copri risposte colore",
+		control: { type: "dropdown", options: options(TAPE_COLOR_NAMES.map((n) => [n, TAPE_COLOR_LABELS[n]] as const)) },
+	},
+	// 0.29 cardtemplates: the template manager
+	{
+		id: "cardTemplates", section: "study", group: "zettel", order: 40, name: "settings.cardTemplates", desc: "settings.cardTemplates.desc",
+		control: { type: "action", run: "card-templates", button: "settings.open" }, edits: ["zettelCardTemplates"],
+		keywords: "card templates concept question quote definition zettel modelli schede citazione definizione domanda",
+	},
 ];
 
 const APPEARANCE: SettingSpec[] = [

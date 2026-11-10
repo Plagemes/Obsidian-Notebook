@@ -5,7 +5,9 @@
 // writer that goes through here refuses to write (`RedactionUnavailableError`, with a message the reader can act on) instead of writing the
 // pages as they are. An excerpt of a region covered on another page is left out too (ink/redact.ts `coveredExcerpt`).
 import { t } from "../i18n";
+import { withFigureScope } from "../ink/figure-text";
 import { hasRedactions, headerAfterRedaction, redactPages } from "../ink/redact";
+import { cleanPagesForExport, STRUCK_ONLY } from "../model/clean-export";
 import { boxesOf, countBoxes, staleRedactionPages } from "../model/redact";
 import type { Page } from "../model/types";
 import type { ExportOptions } from "./export";
@@ -47,13 +49,29 @@ export function assertRedactionReadable(options: ExportOptions): void {
  */
 export function withRedaction(pages: readonly Page[], options: ExportOptions): { pages: readonly Page[]; options: ExportOptions } {
 	assertRedactionReadable(options);
+	// 0.29 (#96): "leave struck-out words out of exports" comes first, so a box is placed on the pages as they are written. The cleaned pages
+	// keep their ids and backgrounds; the returned options no longer ask for it (a writer that calls this twice cleans once).
+	if (options.struck === true) {
+		const rest: ExportOptions = { ...options };
+		delete rest.struck;
+		const cleaned = cleanPagesForExport(pages, STRUCK_ONLY);
+		return redactCleaned(cleaned.some((p, i) => p !== pages[i]) ? cleaned : pages, rest);
+	}
+	return redactCleaned(pages, options);
+}
+
+
+function redactCleaned(pages: readonly Page[], options: ExportOptions): { pages: readonly Page[]; options: ExportOptions } {
 	const boxes = options.redact;
 	// 0.28 (#76), fail closed: a page turned or cropped after its boxes were drawn is never written (its boxes are where the old page was).
 	if (boxes && staleRedactionPages(pages, boxes).length > 0) throw new RedactionUnavailableError(true);
-	if (!boxes || countBoxes(boxes) === 0 || !hasRedactions(pages, boxes)) return { pages, options };
+	if (!boxes || countBoxes(boxes) === 0) return { pages, options };
+	// Review fix (F4): the boxes are worked out on the text as the file will show it ("Fig. 12", not "Fig. ?"): the same figure scope as the writer.
+	const covered = withFigureScope(options.figures, () => (hasRedactions(pages, boxes) ? redactPages(pages, boxes) : null));
+	if (!covered) return { pages, options };
 	const header = options.header;
 	return {
-		pages: redactPages(pages, boxes),
+		pages: covered,
 		options: { ...options, ...(header ? { header: (p: Page) => headerAfterRedaction(header(p), p) } : {}) },
 	};
 }

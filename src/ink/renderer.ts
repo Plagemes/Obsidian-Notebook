@@ -1,4 +1,6 @@
-import type { AreaElement, ExcerptElement, Page, PageElement, Point, ShapeDash, Stroke, TextElement, Tool } from "../model/types";
+import type { AreaElement, ExcerptElement, Page, PageElement, Point, ShapeDash, Stroke, TapeElement, TextElement, Tool } from "../model/types";
+import { drawTape } from "./tape-render";
+import type { TapeReveal } from "../model/tape";
 import { isNewPen, MM, RENDER_FREEHAND, RENDER_INK } from "../model/types";
 import { opacityOf } from "../model/opacity";
 import { strokeTaper, writingTaper } from "../model/taper";
@@ -14,6 +16,7 @@ import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { drawLinkedLines, shownText } from "./link-text";
+import { hasFigureTokens, withFigureScope, type FigureLabelSource } from "./figure-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
 import { memoColors, nightHighlighter, nightInk, nightLine, NIGHT_BACKGROUND_VEIL, NIGHT_HIGHLIGHTER_ALPHA, NIGHT_PAPER } from "./night";
@@ -74,7 +77,7 @@ export function drawTextElement(ctx: CanvasRenderingContext2D, el: TextElement):
 		ctx.fillStyle = el.color;
 		ctx.textBaseline = "top";
 		// A link ([[Note|alias]]) shows its label, not its markup (ink/wikilink.ts); the layout is of what is shown.
-		const shown = el.text.includes("[[") ? shownText(el.text) : null;
+		const shown = el.text.includes("[[") || hasFigureTokens(el.text) ? shownText(el.text) : null;
 		const layout = layoutText(shown ? shown.text : el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
 		// Links are drawn in their own colour (ink/link-text.ts); text without any takes the plain path.
 		if (shown && shown.links.length > 0) {
@@ -142,6 +145,15 @@ export function drawElement(
 	}
 	if (el.type === "area") {
 		drawArea(ctx, el);
+		return;
+	}
+	if (el.type === "tape") {
+		ctx.save();
+		try {
+			drawTape(ctx, el);
+		} finally {
+			ctx.restore();
+		}
 		return;
 	}
 	ctx.save();
@@ -317,6 +329,10 @@ export class Renderer {
 	private live: LiveStroke | null = null;
 	/** v23 (#99): the rectangle of the area highlighter being dragged, on the live layer (never saved). */
 	private areaPreview: { pageIndex: number; area: AreaElement } | null = null;
+	/** v27 (#10): the study tape being dragged, on the live layer (never saved). */
+	private tapePreview: { pageIndex: number; tape: TapeElement } | null = null;
+	/** v27 (#10): which study tapes are revealed in this view (view-only). Null: every tape hides what is under it. */
+	private tapeReveal: TapeReveal | null = null;
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
 	private peek: PeekOverlay | null = null;
@@ -333,6 +349,9 @@ export class Renderer {
 	/** 0.22 (#101): view-only "filter by meaning": ink for which this says true is drawn faint (never saved; the static layer is redrawn once when it changes). */
 	private inkDim: ((stroke: Pick<Stroke, "color">) => boolean) | null = null;
 	private dimNow = false;
+	/** 0.29 (#96): view-only "hide struck words": the ids of the struck-through ink of a page (read from the view's cache, never computed here). */
+	private struckInk: ((page: Page) => ReadonlySet<string> | null) | null = null;
+	private figureLabels: FigureLabelSource | null = null;
 	/** wave 0.9 (367): night mode, view-only. Colours are mapped when they are drawn; the document is never touched. */
 	private night = false;
 	private readonly nightInkColor = memoColors(nightInk);
@@ -534,6 +553,19 @@ export class Renderer {
 		this.invalidate();
 	}
 
+	/** v27 (#10): which study tapes are revealed in this view (view-only; null: none, every tape hides what is under it). */
+	setTapeReveal(reveal: TapeReveal | null): void {
+		this.tapeReveal = reveal;
+		this.invalidate();
+	}
+
+	/** v27 (#10): shows the tape being dragged (null ends it). Only the live layer is redrawn. */
+	setTapePreview(preview: { pageIndex: number; tape: TapeElement } | null): void {
+		this.tapePreview = preview;
+		this.liveDirty = true;
+		this.schedule();
+	}
+
 	/** v8: how structured boxes are labelled (the view passes translated kind names). */
 	setBoxLabel(label: BoxLabel | undefined): void {
 		this.boxLabel = label;
@@ -551,6 +583,23 @@ export class Renderer {
 		if (hideAnnotations === this.hideAnnotations && backgroundAlpha === this.backgroundAlpha) return;
 		this.hideAnnotations = hideAnnotations;
 		this.backgroundAlpha = backgroundAlpha;
+		this.invalidate();
+	}
+
+	/**
+	 * 0.29 (#96), view-only: the ink `ids(page)` names (struck-through words and their lines) is not drawn. The lookup must be a cheap
+	 * read of a cache (it runs once per visible page per redraw); null: everything is drawn. The ink stays in the document.
+	 */
+	setStruckInk(ids: ((page: Page) => ReadonlySet<string> | null) | null): void {
+		if (ids === this.struckInk) return;
+		this.struckInk = ids;
+		this.invalidate();
+	}
+
+	/** 0.29 (#248) review fix (F1): the source of the figure numbers of the notebook this renderer draws (null: the ambient fallback). */
+	setFigureLabels(source: FigureLabelSource | null): void {
+		if (source === this.figureLabels) return;
+		this.figureLabels = source;
 		this.invalidate();
 	}
 
@@ -597,7 +646,8 @@ export class Renderer {
 			this.wet = null;
 			this.wetDone = null;
 		}
-		if (this.staticDirty || !box || this.staticCanvas.style.transform) {
+		// v27 (#10): on a page with a hidden study tape the new ink goes under the tape, so the page is drawn again in order.
+		if (this.staticDirty || !box || this.staticCanvas.style.transform || this.hasHidingTape(pageIndex)) {
 			this.invalidate();
 			if (wet && fromWet) this.releaseWet(wet, false, strokeTaper(stroke) !== undefined);
 			return;
@@ -1053,8 +1103,9 @@ export class Renderer {
 				const clips = graphClips(page.elements);
 				// v15: the ink a collapsed sticky note keeps hidden is not drawn (it comes back when the note is opened).
 				const noteInk = bare ? null : hiddenStickyInk(page.elements);
+				const struckInk = this.struckInk?.(page) ?? null;
 				for (const stroke of page.strokes) {
-					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal) || noteInk?.has(stroke.id)) continue;
+					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal) || noteInk?.has(stroke.id) || struckInk?.has(stroke.id)) continue;
 					try {
 						const b = this.boundsOf(stroke);
 						// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and
@@ -1085,6 +1136,9 @@ export class Renderer {
 				}
 				// v8 marker badges go above the ink, so they stay visible and tappable.
 				if (!bare && page.elements?.length) this.drawMarkers(ctx, page);
+				// v27 (#10): study tapes above everything else on the page. Review fix (T5): also with the annotations hidden on a PDF page (reading
+				// mode), where they cover answers on the slide itself.
+				if (page.elements?.length) this.drawTapes(ctx, page);
 			} finally {
 				ctx.restore();
 			}
@@ -1182,7 +1236,28 @@ export class Renderer {
 		}
 		for (const el of elements) {
 			if (el.type !== "text" || skip(el)) continue;
-			this.guarded(ctx, "text element", () => drawTextElement(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el));
+			// Review fix (F1): the figure numbers of THIS notebook only, never those of another open view.
+			this.guarded(ctx, "text element", () => withFigureScope(this.figureLabels, () => drawTextElement(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el)));
+		}
+	}
+
+	/** v27 (#10): whether page `pageIndex` has a study tape that hides what is under it now. */
+	private hasHidingTape(pageIndex: number): boolean {
+		const elements = this.pages[pageIndex]?.elements;
+		if (!elements) return false;
+		for (const el of elements) if (el.type === "tape" && !this.tapeReveal?.isRevealed(el.id)) return true;
+		return false;
+	}
+
+	/**
+	 * v27 (#10) study tapes: last of all, above the ink, the badges and every other element, so a hidden tape hides what is under it. A revealed
+	 * tape (view-only) is only a tint and a dashed outline.
+	 */
+	private drawTapes(ctx: CanvasRenderingContext2D, page: Page): void {
+		for (const el of page.elements ?? []) {
+			if (el.type !== "tape" || this.hiddenElements?.has(el) || this.selectedElements?.has(el)) continue;
+			const revealed = this.tapeReveal?.isRevealed(el.id) ?? false;
+			this.guarded(ctx, "tape element", () => drawTape(ctx, el, { revealed, night: this.night, scale: this.viewport.scale }));
 		}
 	}
 
@@ -1277,10 +1352,10 @@ export class Renderer {
 			const box = boxes[sel.pageIndex]!;
 			// A selection across pages floats over the gaps between them, so nothing is clipped to its page.
 			const clip = !sel.parts || sel.parts.length === 0;
-			this.drawSelectedItems(ctx, box, sel.strokes, sel.elements, sel.matrix, clip);
+			this.drawSelectedItems(ctx, box, sel.pageIndex, sel.strokes, sel.elements, sel.matrix, clip);
 			for (const part of sel.parts ?? []) {
 				const partBox = boxes[part.pageIndex];
-				if (partBox) this.drawSelectedItems(ctx, partBox, part.strokes, part.elements, partMatrix(sel.matrix, part.offset[0], part.offset[1]), false);
+				if (partBox) this.drawSelectedItems(ctx, partBox, part.pageIndex, part.strokes, part.elements, partMatrix(sel.matrix, part.offset[0], part.offset[1]), false);
 			}
 			this.drawSelectionFrame(ctx, box, sel);
 		});
@@ -1291,10 +1366,12 @@ export class Renderer {
 			for (const e of preview) {
 				const box = boxes[e.pageIndex];
 				if (!box) continue;
-				if (e.elements.length > 0) {
+				const m = translate(0, e.dy);
+				// v27 (#10, review fix T6): study tapes go last (drawTapesOver below), above the shifted ink.
+				const others = e.elements.filter((el) => el.type !== "tape");
+				if (others.length > 0) {
 					this.beginPage(ctx, box);
-					const m = translate(0, e.dy);
-					for (const el of e.elements) {
+					for (const el of others) {
 						const moved = transformElement(el, m, measureText);
 						drawElement(ctx, moved, this.elementImage(moved), this.boxLabel, this.equationNumbers());
 					}
@@ -1314,6 +1391,7 @@ export class Renderer {
 					this.fillStroke(ctx, stroke);
 				}
 				ctx.restore();
+				this.drawTapesOver(ctx, box, true, e.pageIndex, e.elements, m, e.strokes.length > 0 || others.length > 0);
 			}
 		});
 
@@ -1392,6 +1470,13 @@ export class Renderer {
 			ctx.strokeRect(area.area.x, area.area.y, area.area.width, area.area.height);
 			ctx.restore();
 		});
+		// v27 (#10): the study tape being dragged, with the look it will have.
+		const tape = this.tapePreview;
+		if (tape && boxes[tape.pageIndex]) this.guarded(ctx, "tape preview", () => {
+			this.beginPage(ctx, boxes[tape.pageIndex]!);
+			drawTape(ctx, tape.tape, { night: this.night, scale: this.viewport.scale });
+			ctx.restore();
+		});
 	}
 
 	/** How an area highlighter is painted: the highlighter's look in the day, its night counterpart at night, fainter when dimmed by the meaning filter. */
@@ -1448,13 +1533,17 @@ export class Renderer {
 		ctx.restore();
 	}
 
-	/** Selected elements (under the ink, as they will be once committed: a text box cannot rotate) and strokes, with `matrix` applied. */
+	/**
+	 * Selected elements (under the ink, as they will be once committed: a text box cannot rotate) and strokes, with `matrix` applied. v27 (#10):
+	 * then the study tapes over them (see drawTapesOver), so covered ink in a selection stays covered.
+	 */
 	private drawSelectedItems(
-		ctx: CanvasRenderingContext2D, box: PageBox, strokes: readonly Stroke[], elements: readonly PageElement[], matrix: Matrix, clip: boolean,
+		ctx: CanvasRenderingContext2D, box: PageBox, pageIndex: number, strokes: readonly Stroke[], elements: readonly PageElement[], matrix: Matrix, clip: boolean,
 	): void {
-		if (elements.length > 0) {
+		const others = elements.filter((el) => el.type !== "tape");
+		if (others.length > 0) {
 			this.beginPage(ctx, box, clip);
-			for (const el of elements) {
+			for (const el of others) {
 				const moved = transformElement(el, matrix, measureText);
 				drawElement(ctx, moved, this.elementImage(moved), this.boxLabel, this.equationNumbers());
 			}
@@ -1464,6 +1553,29 @@ export class Renderer {
 		const [a, b, c, d, e, f] = matrix;
 		ctx.transform(a, b, c, d, e, f);
 		for (const stroke of strokes) this.fillStroke(ctx, stroke);
+		ctx.restore();
+		this.drawTapesOver(ctx, box, clip, pageIndex, elements, matrix, strokes.length > 0 || others.length > 0);
+	}
+
+	/**
+	 * v27 (#10, review fix T6): study tapes on the live layer, above ink and elements that left the static layer (a selection, the space preview):
+	 * the `moving` tapes with `m`, in the look they have on this screen, then (when `under` says something moved below them) the page's other
+	 * hidden tapes where they are, so nothing a tape hides shows above it while it moves.
+	 */
+	private drawTapesOver(
+		ctx: CanvasRenderingContext2D, box: PageBox, clip: boolean, pageIndex: number, moving: readonly PageElement[], m: Matrix, under: boolean,
+	): void {
+		const mine = moving.filter((el): el is TapeElement => el.type === "tape");
+		const still = under
+			? (this.pages[pageIndex]?.elements ?? []).filter((el): el is TapeElement => el.type === "tape" && !moving.includes(el) && !this.tapeReveal?.isRevealed(el.id))
+			: [];
+		if (mine.length === 0 && still.length === 0) return;
+		this.beginPage(ctx, box, clip);
+		for (const el of mine) {
+			const moved = transformElement(el, m, measureText);
+			if (moved.type === "tape") this.guarded(ctx, "tape element", () => drawTape(ctx, moved, { revealed: this.tapeReveal?.isRevealed(moved.id) ?? false, night: this.night, scale: this.viewport.scale }));
+		}
+		for (const el of still) this.guarded(ctx, "tape element", () => drawTape(ctx, el, { night: this.night, scale: this.viewport.scale }));
 		ctx.restore();
 	}
 

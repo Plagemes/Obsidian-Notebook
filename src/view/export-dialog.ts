@@ -17,6 +17,7 @@ import { DEFAULT_PNG_SCALE, PNG_SCALES, isPngScale, scaleDpi, type PngScale } fr
 import { parsePageRange } from "../model/page-range";
 import { folderProblem } from "./export-markdown";
 import type { ExportRequest } from "./export";
+import { STRUCK_ONLY, type CleanExportOptions } from "../model/clean-export";
 import { rangeProblem } from "./range-text";
 import { modalShell, setShellButtonLabel, shellButton, shellNote } from "../ui/components/modal-shell";
 
@@ -33,6 +34,8 @@ export interface ExportDialogHost {
 	canPrint: boolean;
 	/** wave 0.10: start on this format (the PNG and Print shortcuts), instead of the last one used. */
 	initialFormat?: ExportFormat;
+	/** 0.29 (#96): whether "Leave out struck-out words" starts on (the setting; the last choice of this session wins). Absent: off. */
+	struckDefault?: boolean;
 	/** 0.18 (#178): the pages as they are exported; with them the dialog offers "Split into sheets" for infinite pages and previews the cuts. */
 	pages?: () => readonly Page[];
 	/**
@@ -50,8 +53,8 @@ export interface ExportDialogHost {
 }
 
 /** The choices of the last export in this session (not saved). */
-const last: { format: ExportFormat; layers: ExportLayers; dpi: MarkdownDpi; scale: PngScale; split: SplitSettings; splitOn: boolean; clean: boolean; cleanOpenStickies: boolean } = {
-	format: "pdf", layers: "both", dpi: DEFAULT_MARKDOWN_DPI, scale: DEFAULT_PNG_SCALE, split: { ...DEFAULT_SPLIT }, splitOn: false, clean: false, cleanOpenStickies: false,
+const last: { format: ExportFormat; layers: ExportLayers; dpi: MarkdownDpi; scale: PngScale; split: SplitSettings; splitOn: boolean; clean: boolean; cleanOpenStickies: boolean; struck: boolean | null } = {
+	format: "pdf", layers: "both", dpi: DEFAULT_MARKDOWN_DPI, scale: DEFAULT_PNG_SCALE, split: { ...DEFAULT_SPLIT }, splitOn: false, clean: false, cleanOpenStickies: false, struck: null,
 };
 /** Width of the cut preview, CSS px (drawn twice as large). */
 const PREVIEW_W = 300;
@@ -71,6 +74,8 @@ export class ExportModal extends Modal {
 	private cleanOn = last.clean;
 	private cleanOpenStickies = last.cleanOpenStickies;
 	private cleanStickiesSetting: Setting | null = null;
+	// 0.29 (#96): struck-out words left out (works with or without the clean copy).
+	private cleanStruck: boolean;
 	// 0.26 (#285): redaction boxes.
 	private redactOn = false;
 	private redactSetting: Setting | null = null;
@@ -105,6 +110,7 @@ export class ExportModal extends Modal {
 		this.folder = host.defaultFolder;
 		const wanted = host.initialFormat ?? last.format;
 		this.format = wanted === "print" && !host.canPrint ? "pdf" : wanted;
+		this.cleanStruck = last.struck ?? host.struckDefault === true;
 	}
 
 	onOpen(): void {
@@ -158,6 +164,10 @@ export class ExportModal extends Modal {
 			this.cleanOpenStickies = v;
 		}));
 		this.cleanStickiesSetting.settingEl.toggle(this.cleanOn);
+		// 0.29 (#96): struck-out words (a line through the middle of a handwritten word) are left out; the notebook keeps them.
+		new Setting(contentEl).setName(t("export.struck")).setDesc(t("export.struck.desc")).addToggle((tg) => tg.setValue(this.cleanStruck).onChange((v) => {
+			this.cleanStruck = v;
+		}));
 		if (this.host.redact) this.buildRedact(contentEl, this.host.redact);
 		this.folderSetting = new Setting(contentEl).setName(t("export.markdown.folder")).setDesc(t("export.markdown.folder.desc"));
 		this.folderSetting.addText((tx) => {
@@ -178,6 +188,8 @@ export class ExportModal extends Modal {
 		this.fileDesc = shellNote(contentEl, "");
 		this.fileDesc.addClass("notebook-export-note");
 		shellNote(contentEl, t("export.dialog.hidden")).addClass("notebook-export-note");
+		// 0.29 (#10, review T3): a study tape is a visual study aid, not a redaction: said where the export is chosen, when there is one.
+		if (this.host.pages?.().some((p) => p.elements?.some((e) => e.type === "tape"))) shellNote(contentEl, t("tape.export.note")).addClass("notebook-export-note");
 		this.problem = shellNote(contentEl, "", "error");
 		this.problem.addClass("notebook-export-problem");
 		shellButton(shell.foot, "secondary", t("export.dialog.cancel"), () => this.close());
@@ -317,6 +329,7 @@ export class ExportModal extends Modal {
 		last.splitOn = this.splitOn;
 		last.clean = this.cleanOn;
 		last.cleanOpenStickies = this.cleanOpenStickies;
+		last.struck = this.cleanStruck;
 		const split = this.splitActive();
 		const redact = this.activeRedactions();
 		this.close();
@@ -326,8 +339,15 @@ export class ExportModal extends Modal {
 			...(redact ? { redact } : {}),
 			...(this.format === "png" ? { folder: this.folder, scale: this.scale } : {}),
 			...(split ? { split: { ...this.split } } : {}),
-			...(this.cleanOn ? { clean: { openStickies: this.cleanOpenStickies } } : {}),
+			...(this.cleanOn || this.cleanStruck ? { clean: this.cleanOptions() } : {}),
 		});
+	}
+
+	/** The filter of the choice: the clean copy and/or the struck words (struck words alone leave the study layers in). */
+	private cleanOptions(): CleanExportOptions {
+		const struck = this.cleanStruck;
+		// Round-2 review (H3): struck words alone keep the study tapes too, like every other writer (`STRUCK_ONLY`).
+		return this.cleanOn ? { openStickies: this.cleanOpenStickies, struck } : { ...STRUCK_ONLY, struck };
 	}
 
 	// --- 0.18 (#178): split an infinite page into sheets of paper ---

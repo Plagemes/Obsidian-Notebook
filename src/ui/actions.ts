@@ -54,6 +54,8 @@ export interface UiContext {
 		/** 0.28 (#403): action ids the geometry of the selection suggests (chips at the front of the selection bar; optional, none when absent). */ suggest?: readonly string[];
 		/** 0.20 (#39): the selected items can be made one group (two or more, not already exactly one group), and how many of them are in a group now (optional, false and 0 when absent). */ canGroup?: boolean; grouped?: number;
 		/** 0.28 (#41): the selection is exactly one hand-drawn table (optional, false when absent). */ table?: boolean;
+		/** 0.29 (#244): the selection holds one hand-drawn table a chart can be made from, other items allowed (optional, false when absent). */ chartable?: boolean;
+		/** 0.29 (#244): the selection is exactly one chart made from a table (optional, false when absent). */ chart?: boolean;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -83,11 +85,14 @@ export interface UiContext {
 		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
 		/** 0.17 (#71): snap is available (the setting is not "off") and whether it is on now (not paused in this view). Optional (absent: available, on). */ snapAvailable?: boolean; snap?: boolean;
 		/** 0.28 (#256): the "Reorder lines" mode (handles at the left of the handwritten lines) is on. Optional (off when absent). */ lineHandles?: boolean;
+		/** 0.29 (#96): the struck-through words are hidden in the view. Optional (off when absent). */ struckHidden?: boolean;
 	};
 	/** wave 0.10 (81): the device can print (desktop with a print dialog); false or absent on a phone or tablet. */
 	canPrint?: boolean;
 	/** wave 0.8: invisible-ink pen mode and the view-only "Show solutions" toggles (notebook, page in view). Optional. */
 	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
+	/** 0.29 (#10): the "Study tape" mode is on, how many study tapes the notebook has and how many are revealed (view-only). Optional (absent: none). */
+	tapes?: { drawing: boolean; total: number; revealed: number };
 	/** wave 0.9: view-only night mode (367) and cropped PDF margins (376). Optional (both off when absent). */
 	display?: { night: boolean; crop: boolean };
 	/** 0.15 (241): the state strip is open. Optional (closed when absent). */
@@ -106,6 +111,8 @@ export interface UiContext {
 	nav?: { back: boolean; forward: boolean };
 	/** 0.25 (#84): how many steps the undo history holds (to take back) and how many were undone (to bring back). Optional (absent: none). */
 	history?: { undo: number; redo: number };
+	/** 0.29 (#248): how many figures of the notebook have a caption (and so a number). Optional (none when absent). */
+	figures?: { captioned: number };
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -155,6 +162,8 @@ const pageOpen = (c: UiContext) => c.editable && !c.page?.locked;
 const pdfPage = (c: UiContext) => c.page?.background === "pdf";
 const backgroundPage = (c: UiContext) => !!c.page && c.page.background !== "none";
 const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.selection.elements > 0;
+/** 0.29 (#248): the selection is exactly one picture or figure cut-out (the figure caption action). */
+export const isOneFigure = (c: UiContext): boolean => !!c.selection && c.selection.strokes === 0 && c.selection.elements === 1 && (c.selection.images ?? 0) + (c.selection.excerpts ?? 0) === 1;
 /** wave 0.10: how many things are selected (strokes and elements), and whether the selection holds ink. */
 const itemCount = (c: UiContext) => (c.selection?.strokes ?? 0) + (c.selection?.elements ?? 0);
 const lassoOrSelection = (c: UiContext) => c.tool === "lasso" || itemCount(c) > 0;
@@ -330,7 +339,11 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "table-add-col", label: "table.addCol", icon: "between-vertical-end", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 53, scope: "view", command: "table.command.addCol", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table column add insert tabella colonna aggiungi" },
 	{ id: "table-remove-row", label: "table.removeRow", icon: "rows-3", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 48, scope: "view", command: "table.command.removeRow", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table row remove delete last tabella riga rimuovi ultima" },
 	{ id: "table-remove-col", label: "table.removeCol", icon: "columns-3", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 47, scope: "view", command: "table.command.removeCol", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table column remove delete last tabella colonna rimuovi ultima" },
+	// 0.29 (#244): a chart from the numbers in a selected table, and the same chart read again after the numbers change.
+	{ id: "chart-from-table", label: "chart.fromTable", icon: "bar-chart-3", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 52, scope: "view", command: "chart.command.fromTable", when: (c) => c.selection?.chartable === true, enabled: pageOpen, keywords: "chart graph bar line pie table data numbers statistics grafico tabella dati numeri barre linea torta istogramma" },
+	{ id: "chart-update", label: "chart.update", icon: "refresh-cw", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 51, scope: "view", command: "chart.command.update", when: (c) => c.selection?.chart === true, enabled: pageOpen, keywords: "chart graph update refresh table numbers change grafico aggiorna tabella numeri cambiati" },
 	{ id: "table-even", label: "table.even", icon: "layout-grid", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 46, scope: "view", command: "table.command.even", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table cells even equal resize same size tabella celle uniformi uguali dimensione" },
+	{ id: "table-stats", label: "table.stats", icon: "sigma", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 45, scope: "view", command: "table.command.stats", when: (c) => c.selection?.table === true, enabled: pageOpen, keywords: "table statistics mean average median deviation regression slope min max count numbers column tabella statistiche media mediana deviazione standard regressione colonna" },
 	{ id: "checkbox-toggle", label: "checklist.toggle", icon: "square-check", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 93, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) > 0, enabled: pageOpen, keywords: "checkbox tick untick casella spunta" },
 	{ id: "checkbox-select-label", label: "checklist.selectLabel", icon: "text-select", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 92, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, keywords: "checkbox label text select casella testo seleziona" },
 	{ id: "checkbox-label", label: "checklist.editLabel", icon: "square-pen", group: "selection", surfaces: ["context"], contexts: ["selection"], priority: 89, scope: "view", when: (c) => (c.selection?.checkboxes ?? 0) === 1, enabled: pageOpen, keywords: "checkbox label name casella etichetta nome" },
@@ -341,6 +354,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "selection-group", label: "groups.group", icon: "group", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 52, scope: "view", command: "groups.command.group", when: (c) => c.selection?.canGroup === true, enabled: pageOpen, keywords: "group together combine join one raggruppa unisci" },
 	{ id: "selection-ungroup", label: "groups.ungroup", icon: "ungroup", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 51, scope: "view", command: "groups.command.ungroup", when: (c) => (c.selection?.grouped ?? 0) > 0, enabled: pageOpen, keywords: "ungroup split separate break group dividi separa gruppo" },
 	{ id: "selection-lock", label: "groups.lock", icon: "lock", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 49, scope: "view", command: "groups.command.lock", when: (c) => (c.selection?.elements ?? 0) > 0, enabled: pageOpen, keywords: "lock fix pin freeze background anchor blocca fissa sfondo" },
+	// 0.29 (#182): the advanced calculator (units, fractions, matrices, statistics, a solver); its result goes onto the page as text, a formula or a graph.
+	{ id: "calculator", label: "calc.open", icon: "calculator", group: "insert", surfaces: ["sheet"], priority: 51, scope: "view", command: "calc.command.open", readOnly: true, keywords: "calculator calculate maths units convert fractions matrix statistics solve equation calcolatrice calcola unita conversione frazioni matrice statistica equazione" },
 	{ id: "insert-graph", label: "math.insertGraph", icon: "chart-spline", group: "insert", surfaces: ["sheet"], priority: 50, scope: "view", command: "math.command.insertGraph", keywords: "function plot chart curve grafico funzione" },
 	// "add-page" is the Obsidian command (and its hotkey): it adds a page right away, same paper, as before 0.14. The on-screen "+" is
 	// "add-page-suggest": it opens the Smart "+" strip (0.14, 410); the command of the same name opens that strip from the keyboard.
@@ -464,6 +479,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "invisible-ink", label: "markers.command.invisible", icon: "eye-off", group: "view", surfaces: ["sheet"], priority: 35, scope: "view", command: true, checked: (c) => !!c.markers?.invisibleInk, keywords: "hidden solutions self-test" },
 	{ id: "show-solutions", label: "markers.command.solutions", icon: "eye", group: "view", surfaces: ["sheet"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.solutions, keywords: "invisible ink hidden" },
 	{ id: "show-page-solutions", label: "markers.menu.pageSolutions", icon: "eye", group: "page", surfaces: ["page"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.pageSolutions, keywords: "invisible ink hidden" },
+	// 0.29 (#10): study tape: a mode that lays opaque strips over parts of a page, and the view-only "reveal all" / "hide all" of the tapes.
+	{ id: "study-tape", label: "tape.action.draw", icon: "rectangle-horizontal", group: "view", surfaces: ["sheet"], priority: 36, scope: "view", command: true, checked: (c) => !!c.tapes?.drawing, keywords: "study tape cover hide reveal answers self-test quiz nastro studio copri nascondi rivela risposte" },
+	{ id: "tapes-reveal-all", label: "tape.action.revealAll", icon: "eye", group: "view", surfaces: ["sheet"], priority: 33, scope: "view", command: true, readOnly: true, when: (c) => !!c.tapes && c.tapes.revealed < c.tapes.total, keywords: "study tape reveal show answers nastro studio rivela mostra risposte" },
+	{ id: "tapes-hide-all", label: "tape.action.hideAll", icon: "eye-off", group: "view", surfaces: ["sheet"], priority: 32, scope: "view", command: true, readOnly: true, when: (c) => !!c.tapes && c.tapes.revealed > 0, keywords: "study tape hide cover answers nastro studio nascondi copri risposte" },
 
 	// --- wave 0.10 (363): tabs of the open notebooks (the strip and the toolbar swipe call the same step).
 	// Roadmap #19: a copy of this notebook in the templates folder (works on a read-only notebook too: it only reads).
@@ -524,6 +543,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "meaning-filter", label: "meaning.filter.menu", icon: "filter", group: "view", surfaces: ["sheet", "notebook"], priority: 34, scope: "view", command: "command.meaningFilter", readOnly: true, keywords: "colour color meaning legend filter definition example significato colori filtra legenda" },
 	{ id: "meaning-legend", label: "meaning.menu", icon: "tags", group: "view", surfaces: ["sheet", "notebook"], priority: 33, scope: "view", command: "command.meaningLegend", readOnly: true, keywords: "colour color meaning legend definition example significato colori legenda" },
 	{ id: "meaning-digest", label: "meaning.digest.menu", icon: "tags", group: "share", surfaces: ["sheet", "notebook"], priority: 24.5, scope: "view", command: "command.meaningDigest", readOnly: true, keywords: "colour color meaning digest collect note definition example raccolta colori significato" },
+	// 0.29 (#96): a line through a handwritten word marks it as deleted; this view switch hides the struck words (the ink stays in the notebook).
+	{ id: "toggle-hide-struck", label: "strike.action", icon: "strikethrough", group: "view", surfaces: ["sheet"], priority: 32, scope: "view", command: "command.hideStruck", readOnly: true, checked: (c) => !!c.toggles.struckHidden, keywords: "strike strikethrough struck crossed out deleted hide words line through barrato cancellato nascondi parole riga" },
 	// 0.18 mentions (O7): the notes that link to the page in view (and to the notebook as a whole).
 	{ id: "mentions", label: "mentions.menu", icon: "links-coming-in", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 24, scope: "view", command: "command.mentions", readOnly: true, keywords: "mentions backlinks linked notes links menzioni collegamenti note" },
 	// 0.19 (#228): every picture and figure cut-out of the section, the notebook or some pages, in one grid.
@@ -598,6 +619,7 @@ export const ACTIONS: readonly ActionDef[] = [
 	external("zettel-toggle-slip-box", "zettel.command.toggleSlipBox", "archive", "zettel", "zettel/index.ts", ["notebook", "palette"]),
 	external("zettel-new-slip-box", "zettel.command.newSlipBox", "archive", "zettel", "zettel/index.ts"),
 	external("zettel-orphans", "zettel.command.orphans", "unlink", "zettel", "zettel/index.ts"),
+	external("zettel-hygiene", "hygiene.command", "shield-check", "zettel", "zettel/index.ts"), // 0.29 (Z10)
 	external("zettel-toggle-regions", "zettel.command.toggleRegions", "scan", "zettel", "zettel/index.ts"),
 	// wave 0.8: processing flow (Z4): the Inbox view; quick textbook reference (208)
 	global("zettel-inbox", "inbox.command.open", "inbox", "zettel", ["sheet", "palette"], 30),
@@ -628,6 +650,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "formula-sheet", label: "formulasheet.menu", icon: "sigma", group: "share", surfaces: ["sheet", "notebook"], priority: 21, scope: "view", command: "command.formulaSheet", readOnly: true, keywords: "formula sheet equations latex maths collect formulario formule equazioni raccolta" },
 	// 0.28 (#205): index of the numbered definitions and theorems.
 	{ id: "box-index", label: "boxindex.menu", icon: "list-ordered", group: "share", surfaces: ["sheet", "notebook"], priority: 20, scope: "view", command: "command.boxIndex", readOnly: true, keywords: "definitions theorems index numbered boxes list definizioni teoremi indice numerati riquadri elenco" },
+	// 0.29 (#248): figure captions ("Fig. 3 — text") numbered by reading order, and references that always show the current number.
+	{ id: "figure-caption", label: "figcap.caption.menu", icon: "quote", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.1, scope: "view", command: "command.figureCaption", when: isOneFigure, enabled: pageOpen, keywords: "figure caption number picture photo label legenda didascalia numero figura immagine" },
+	{ id: "figure-ref", label: "figcap.refs.menu", icon: "link", group: "insert", surfaces: ["sheet", "palette"], priority: 44, scope: "view", command: "command.figureRef", enabled: pageOpen, keywords: "figure reference cross-reference see fig number link riferimento figura rimando numero collegamento" },
 	// 0.18 (#86): margin comments: a comment anchored to the selection's region, or to a rectangle drawn on the page; the side panel lists them.
 	{ id: "comment-selection", label: "comments.action", icon: "message-square-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40, scope: "view", command: "comments.command.selection", when: hasSelection, enabled: pageOpen, keywords: "comment note margin review annotation commento nota margine revisione" },
 	{ id: "comment-region", label: "comments.region", icon: "square-dashed", group: "insert", surfaces: ["sheet", "palette"], priority: 46, scope: "view", command: true, enabled: pageOpen, keywords: "comment region rectangle margin note review commento regione rettangolo margine" },

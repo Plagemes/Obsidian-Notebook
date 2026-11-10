@@ -1,6 +1,8 @@
 import { loadPdfJs, Platform, type App, type TFile } from "obsidian";
+import { t } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { drawElement, drawTextElement } from "../ink/renderer";
+import { withFigureLabels } from "../model/figure-captions";
 import { backgroundRect } from "../model/margins";
 import { viewOf } from "../model/pdf-view";
 import { parse } from "../model/serialize";
@@ -111,7 +113,10 @@ export async function openNotebookReference(app: App, file: TFile, notebooksFold
 		}
 		const elements = page.elements ?? [];
 		for (const el of elements) if (el.type === "image") drawElement(ctx, el, media.image(el.asset));
-		for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		// 0.29 (#406, review R6): figure captions and references are numbered from THIS notebook, not from the one open in the view.
+		withFigureLabels(doc.pages, () => {
+			for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		}, t("figcap.abbr"));
 	};
 
 	return {

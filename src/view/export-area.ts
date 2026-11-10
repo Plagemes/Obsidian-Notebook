@@ -63,6 +63,7 @@ export async function drawAreaPicture(host: AreaHost, plan: AreaPlan, request: A
 			paper: false, layers: "ink", images: placed, hiddenInk: options.hiddenInk?.(host.page) ?? false,
 			...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 			...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
+			...(options.figures ? { figures: options.figures } : {}),
 		});
 		const cropped = areaSvg(svg, plan.rect);
 		if (!cropped) throw new Error("could not build the SVG");

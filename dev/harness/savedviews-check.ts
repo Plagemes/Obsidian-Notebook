@@ -236,7 +236,7 @@ export async function checkSavedviews(api: SavedviewsCheckApi): Promise<{ ok: bo
 	const text = serialize(doc());
 	const back = parse(text);
 	add("the views are written and read back exactly", back.ok && JSON.stringify(back.doc.views) === JSON.stringify(views()), back.ok ? "" : back.message);
-	add("the file says it is format 21 or newer (26 since 0.28)", /"version": 2[1-6]\D/.test(text));
+	add("the file says it is format 21 or newer (27 since 0.29)", /"version": 2[1-7]\D/.test(text));
 
 	// --- the final state: the list open, one view missing, for the screenshot ---
 	// (the third page goes again: the view saved on it is the missing row)

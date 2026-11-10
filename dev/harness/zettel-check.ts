@@ -150,6 +150,11 @@ class FakeInbox {
 		return Promise.resolve({ title: i.text.split(/[.:]/)[0] ?? "", type, source: type === "literature" ? "Anatomy handbook, p. 12" : "", tags: ["study"] });
 	}
 
+	/** Z9: the card dialog asks for the templates on offer; none here (the picker has its own check, cardtemplates). */
+	cardTemplates(): [] {
+		return [];
+	}
+
 	createCard(i: InboxItem, answer: CardAnswer): Promise<boolean> {
 		this.created.push(answer);
 		this.states.set(i.key, { status: "card", entry: entryOf(i.key, "card", "1a") });
@@ -260,7 +265,7 @@ function closeModal(): void {
 /** The Inbox drawn like a leaf of Obsidian's workspace, over the page. */
 async function mount(app: App, fake: FakeInbox, luhmann = false): Promise<Mounted> {
 	await unmount();
-	const host = document.body.createDiv({ cls: "harness-zettel-host" });
+	const host = document.body.createDiv({ cls: "harness-zettel-host" });
 	const leaf = new WorkspaceLeaf(app, host);
 	leaf.containerEl.addClass("harness-zettel-leaf");
 	const view = new InboxView(leaf as unknown as ObsidianLeaf, fake as unknown as InboxService, () => luhmann);
@@ -275,7 +280,7 @@ async function mount(app: App, fake: FakeInbox, luhmann = false): Promise<Mounte
 function showModal(m: { open(): void; modalEl: HTMLElement; close(): void }): void {
 	closeModal();
 	m.open();
-	backdrop = document.body.createDiv({ cls: "harness-modal-container harness-zettel-backdrop" });
+	backdrop = document.body.createDiv({ cls: "harness-modal-container harness-zettel-backdrop" });
 	backdrop.appendChild(m.modalEl);
 	modal = m;
 }
@@ -314,7 +319,7 @@ export async function zettelState(api: ZettelCheckApi, state: ZettelState): Prom
 		if (dlg) {
 			// Obsidian's modal container: a dimmed layer above the leaf that centres the dialog.
 			backdrop?.remove();
-			backdrop = document.body.createDiv({ cls: "harness-modal-container harness-zettel-backdrop" });
+			backdrop = document.body.createDiv({ cls: "harness-modal-container harness-zettel-backdrop" });
 			backdrop.appendChild(dlg);
 			type(dlg.querySelector<HTMLInputElement>(".nb-zk-input"), "Spaced repetition beats rereading");
 			const inputs = dlg.querySelectorAll<HTMLInputElement>(".nb-zk-input");
@@ -354,7 +359,7 @@ function showCardList(app: App, fake: FakeInbox): void {
 		list.renderSuggestion({ item: it, match: { score: 0, matches: [] } }, row);
 	});
 	el.addClass("harness-zettel-list-modal");
-	backdrop = document.body.createDiv({ cls: "harness-modal-container harness-zettel-backdrop" });
+	backdrop = document.body.createDiv({ cls: "harness-modal-container harness-zettel-backdrop" });
 	backdrop.appendChild(el);
 	modal = { close: () => el.remove(), modalEl: el };
 	(el as HTMLElement & { picked?: string[] }).picked = picked;

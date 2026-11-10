@@ -93,7 +93,7 @@ Beyond the original spec. Priority: **P1** next, **P2** very useful, **P3** nice
 7. **P2** 🧪 Free colour picker with recent colours and an eyedropper.
 8. **P2** Pressure curve calibration per device, with a test area.
 9. **P2** Tilt-aware pencil (tiltX/tiltY widen and lighten the stroke).
-10. **P2** Study tape: opaque strips that hide parts of a page and reveal on tap.
+10. **P2** 🧪 Study tape: opaque strips that hide parts of a page and reveal on tap. (0.29, document format 27.)
 11. **P2** Zoom window for writing small on a large page.
 12. **P3** 🧪 Laser pointer (fading temporary ink) for presentations. (Delivered inside presentation mode, #87.)
 13. **P3** Protractor and compass alongside the ruler.
@@ -246,7 +246,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 93. **P2** 🧪 Align to baseline: crooked handwritten words are moved onto a common baseline.
 94. **P2** 🧪 Ghost guide lines on blank paper: they appear while writing and fade when you stop.
 95. **P1** 🧪 Automatic next page: writing at the bottom of the last page appends a new page (different from infinite pages).
-96. **P2** Strike-through as logical deletion: a line over a word marks it as deleted; it stays readable struck through and can be hidden.
+96. **P2** 🧪 Strike-through as logical deletion: a line over a word marks it as deleted; it stays readable struck through and can be hidden.
 97. **P1** 🧪 Selective eraser: erase only one kind of ink (only highlighter, only one colour) and leave the rest.
 98. **P2** 🧪 Per-page undo: each page has its own history; undo on one page never touches another. (0.28: Settings > Pages > *Undo on this page only*, off by default; one global History where every step knows the pages it touched, so Undo / Redo act on the newest step of the page in view with the step's own inverse; steps that touch several pages, the page list or the whole notebook are never undone out of order; the history panel marks them and stays global. `model/page-undo.ts`, `History.undoOnPage`.)
 99. **P2** 🧪 Area highlighter: translucent rectangles, ideal on scanned PDFs.
@@ -378,7 +378,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - Docked side panel or floating window.
     - Drag a formula or an element card onto the page and it becomes a real element (formula #110 or stamp #142); values are available by name in the calculator (#182).
     - Visual style consistent with the rest of the plugin and with Obsidian.
-182. **P2** Advanced calculator:
+182. **P2** 🧪 Advanced calculator (0.29: *All actions › Insert › Calculator*; all of the list below except handwritten calculations; the constants come from a built-in table that the reference sheets of #181 will read, because #181 is not built; variables are kept per notebook on the device, not per page, so there is no format change; offline and eval-free):
     - Unit-aware expressions ("3 km/h to m/s") and constants by name from the reference sheets (g, c, h…).
     - Variables that persist on the page (a = 3.2, then a·2); exact fractions, complex numbers, matrices and vectors, statistics on lists, numeric equation solver.
     - Degrees/radians, scientific notation and significant figures configurable; calculation history tape; large pen-friendly keys; link to function graphs (#113).
@@ -477,11 +477,11 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 ### Technical and scientific drawing
 242. **P2** Dynamic geometry: points and figures linked by constraints that update when you drag one (a lightweight GeoGebra inside the page).
 243. **P2** Scale drawing with dimensions: set the scale (1 cm = 1 m) and measurements and dimension lines show real sizes.
-244. **P2** Charts from table data (bar, line, pie), updated when the numbers change.
+244. **P2** 🧪 Charts from table data (bar, line, pie), updated when the numbers change. (0.29: *Chart from table* on a selected hand-drawn table, then *Update chart* on the selected chart redraws it in place in one undo step; the chart is ordinary shape strokes and text boxes, no format change; the numbers are read from text boxes typed in the cells, handwriting is not read; the update is explicit, not automatic.)
 245. **P2** Hand-drawn flowcharts that tidy themselves: boxes and arrows recognised, aligned and connected.
 246. **P2** Leader-line labels, auto-aligned, for annotated figures (anatomy, diagrams).
 247. **P2** Numbered markers on a figure (1, 2, 3) with an automatically generated legend.
-248. **P2** Figure captions and numbering ("Fig. 3") with references that update themselves.
+248. **P2** 🧪 Figure captions and numbering ("Fig. 3") with references that update themselves.
 249. **P2** 🧪 Automatic course formula sheet: collects every formula element (#110) into one page.
 250. **P3** Pattern fills (hatching, dots).
 251. **P3** Duplicate in series: copies on a grid or along a path.
@@ -550,8 +550,8 @@ A complete Zettelkasten workflow where handwriting is first-class. Everything go
 - **Z6 P2** Drawn maps of content: a page where cards are placed as live transclusions and relations are drawn; it also generates a Markdown MOC.
 - **Z7 P2** Sequences and branches (Luhmann style 1, 1a, 1a1), optional, with previous/next/children navigation.
 - **Z8 P2** Slip-box view in the library: browse cards like index cards, filter by tag, "draw a random card" to rediscover ideas.
-- **Z9 P2** Card templates: concept, question, quote, definition.
-- **Z10 P2** System hygiene: orphan cards (no links), duplicates, cards without a typed title.
+- **Z10 P2** 🧪 System hygiene: orphan cards (no links), duplicates, cards without a typed title. (0.29: command *Check Zettelkasten hygiene* opens a read-only report on the modal shell: unlinked cards (no link to or from another note), likely duplicates (same title, same page and region, or nearly the same text) and cards without a title, each with *Open*; scanning runs in idle slices and writes nothing. Fixes (*Add title…*, *Link…*, *Move to trash*) each ask first and go through the card writer or `fileManager.trashFile`. No format change; waiting for hardware verification.)
+- **Z9 P2** 🧪 Card templates: concept, question, quote, definition (and your own, in the card dialog and Settings → Zettelkasten).
 - **Z11 P1** 🧪 Title and transcription: each card has a typed title (search and graph) and a transcription field, filled by hand or later by handwriting recognition (M5).
 - **Z12 P1** 🧪 Container-proof: built on the companion note (O1) and the format layer.
 
@@ -563,7 +563,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 292. ~~**P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.~~ — dropped (user decision, 2026-10-29)
 293. **P2** 🧪 Dimensional analysis of formulas: flags inconsistent units. (0.23: pure engine `src/math/dimensions.ts` reads SI units, prefixes and common derived units written in an equation (`5\,\mathrm{m}`), propagates dimensions through + − × ÷ ^, roots, functions, fractions, derivatives, integrals and sums, and compares both sides of `=`; symbols take their dimension from a value or a `[v] = m/s` line. The equation editor shows a quiet hint under the preview (setting *Check units in equations*, Writing); no format change.)
 294. **P2** 🧪 Balancing of typed chemical reactions. (0.23: `src/math/chem-balance.ts`, "Balance reaction" in the selection bar; waiting for hardware verification.)
-295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart.
+295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart. (0.29, partial: a statistics card for a selected table with mean, median, deviation, extremes, count and a fitted line, inserted as text or copied; numbers are read from text boxes in the cells; the line drawn on a chart waits for the table charts.)
 296. **P3** Step-by-step linear systems and matrices shown on the page.
 297. ~~**P3** Basic vector maps as backgrounds for geography and history (public-domain data).~~ — dropped (user decision, 2026-10-29)
 298. ~~**P3** Truth tables and simulated logic circuits.~~ — dropped (user decision, 2026-10-29)

@@ -5,6 +5,7 @@
  */
 import { loadPdfJs, Modal, normalizePath, Setting, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
+import { backgroundShifts } from "../ink/redact-step";
 import { notebookUri } from "../integration/links";
 import { Batch, SetPageMargins, type Command } from "../model/history";
 import { backgroundRect, MAX_MARGIN_RATIO, marginsEqual, marginsOf, normalizeMargins, pagesWithSameBackground } from "../model/margins";
@@ -35,6 +36,11 @@ export interface PdfActionHost {
 	editable(): boolean;
 	/** 0.28 (#76): whether a page has redaction boxes (or the boxes cannot be read): such a page is never turned or cropped. Optional (none when absent). */
 	hasRedaction?(pageId: string): boolean;
+	/**
+	 * Round-4 review (Y5): true, after a notice that says why, when `run` would refuse `cmd` because it moves, stretches or replaces the
+	 * background of a page with redaction boxes (or the boxes cannot be read). Optional (`marginsRefused` on `hasRedaction` when absent).
+	 */
+	redactRefused?(cmd: Command): boolean;
 	/** Runs `cmd` as one undo step and refreshes the view; false when the document can no longer be edited. */
 	run(cmd: Command, scrollTo?: number): boolean;
 }
@@ -49,6 +55,26 @@ function marginCommand(target: Page, after: PageMargins | undefined): Command | 
 	const next = normalizeMargins(after);
 	if (marginsEqual(target.margins, next)) return null;
 	return new SetPageMargins(target.id, target.margins, next);
+}
+
+/**
+ * Round-2 review (H1): true when `cmd` changes the left margin of a page with redaction boxes (or while the boxes cannot be read:
+ * `hasRedaction` says so too): the PDF and the ink would move out from under the boxes, which every export burns where they are.
+ * Round-3 review (Z7): no notice of its own: the margins dialog shows the reason in place.
+ */
+export function marginsRefused(host: Pick<PdfActionHost, "doc" | "hasRedaction">, cmd: Command): boolean {
+	return backgroundShifts(host.doc, cmd).some((id) => host.hasRedaction?.(id) === true);
+}
+
+/**
+ * Round-4 review (Y5): true, after one notice, when "Update PDF" would switch the slide under the redaction boxes of a page (or the boxes
+ * cannot be read): the whole update is refused before anything is written.
+ */
+export function republishRefused(host: Pick<PdfActionHost, "doc" | "hasRedaction" | "redactRefused">, cmd: Command): boolean {
+	if (host.redactRefused) return host.redactRefused(cmd);
+	if (!marginsRefused(host, cmd)) return false;
+	showNotice(t("redactmove.background"), 9000);
+	return true;
 }
 
 /** Asks for the margins of a page (mm) and applies them, optionally to every page of the same PDF, as one undo step. */
@@ -95,9 +121,18 @@ export function openMarginsModal(host: PdfActionHost, page: Page): void {
 			const cmd = marginCommand(p, margins);
 			if (cmd) commands.push(cmd);
 		}
+		const cmd = commands.length === 0 ? null : commands.length === 1 ? commands[0]! : new Batch("Change page margins", commands);
+		// Round-2 review (H1): a new left margin moves the PDF and the ink out from under the redaction boxes of the page (they stay in page
+		// coordinates), so it is refused on a page with boxes (or while they cannot be read), like a turn or a crop. The dialog stays open: the
+		// right and bottom margins can still change.
+		if (cmd && marginsRefused(host, cmd)) {
+			errorEl.setText(t("redactmove.background"));
+			errorEl.removeClass("notebook-hidden");
+			return;
+		}
 		modal.close();
-		if (commands.length === 0) return;
-		host.run(commands.length === 1 ? commands[0]! : new Batch("Change page margins", commands), host.doc.pages.indexOf(page));
+		if (!cmd) return;
+		host.run(cmd, host.doc.pages.indexOf(page));
 	};
 	const submit = () => {
 		const ok = (v: number, max: number) => Number.isFinite(v) && v >= 0 && v <= max;
@@ -203,6 +238,10 @@ export async function updatePdfFromNewVersion(host: PdfActionHost, anchorIndex: 
 		}
 		const choice = await askRepublish(host, result, unreadable);
 		if (!choice || !host.editable()) return;
+		// Round-4 review (Y5): the plan is checked against the redaction boxes BEFORE the new PDF is stored, so a refused update leaves no
+		// orphan file in `_assets/`. Only the asset id is read by the check (it is the hash of the bytes, the same once stored).
+		const draft = planRepublish(host.doc, result, { id: assetId, kind: "pdf", path: "", name: picked.name, bytes: picked.bytes.byteLength }, sizes, choice);
+		if (draft.command && republishRefused(host, draft.command)) return;
 		const asset = await storeAsset(host.app, host.folder, picked.bytes, picked.name, "pdf");
 		if (asset.id !== assetId) throw new Error("the file changed while it was being read");
 		host.media.addPending(asset);

@@ -276,4 +276,9 @@ export class InboxService {
 	cards(): CardRecord[] {
 		return this.zettel.allCards().sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 	}
+
+	/** Z9: the card templates the card dialog offers. */
+	cardTemplates() {
+		return this.zettel.cardTemplates();
+	}
 }

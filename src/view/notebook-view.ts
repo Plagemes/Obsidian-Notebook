@@ -17,7 +17,7 @@ import {
 	captureCrossPageClip, frameOffset, inkFollowers, pagesTouchedBy, partsBounds, planCrossPageTransform, selectAcrossPages, type PagePart,
 } from "../ink/cross-page";
 import { elementsInLasso, hitElement, hitLockedElement } from "../ink/elements";
-import { eraseAreaCommand } from "../ink/erase-area";
+import { cutOutsidePolygon, eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
 import { AreaEraseGesture, areasUnderEraser } from "../ink/area-erase";
 import { createArea } from "../model/area";
@@ -66,8 +66,9 @@ import { backgroundRect } from "../model/margins";
 import { viewKey, viewOf, type PdfView } from "../model/pdf-view";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
-	ReplaceStroke, SetMeta, SetPageSize, type Command,
+	ReplaceStroke, SetMeta, SetPageSize, type Command, type StepCheck,
 } from "../model/history";
+import { backgroundShifts, redactStepCheck } from "../ink/redact-step"; // 0.29 redactundo (R3-1)
 import { pageContentCommand } from "../model/page-content";
 import { pageRules } from "../model/page-undo";
 import { checkContent, freezeStroke } from "../model/serialize";
@@ -76,7 +77,7 @@ import { newStrokeTaper, strokeTaper } from "../model/taper";
 import {
 	DEFAULT_META, isLinePen, isNewPen, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
-	type PaperKind, type Point, type Stroke, type TextElement, type Tool, RENDER_FREEHAND, RENDER_INK,
+	type PaperKind, type Point, type Stroke, type TapeElement, type TextElement, type Tool, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
 import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
@@ -114,12 +115,16 @@ import { exportPdf, runExport, type ExportOptions } from "./export";
 import { announceRedactionOff, redactBlockedMessage, redactionRefused, withRedaction } from "./export-redact"; // 0.26 redact (#285)
 import { RedactModal } from "./redact-dialog";
 import { loadRedactState, resetRedactStorage, saveRedactState, takeRedactStoreNotice } from "../ui/redact-store";
-import { boxesOf, countBoxes, isArmed, staleRedactionPages, tagNewBoxes, type RedactState } from "../model/redact";
+import { adoptGeometry, boxesOf, countBoxes, isArmed, staleRedactionPages, tagNewBoxes, type RedactState } from "../model/redact";
 import { elementKept, headerAfterRedaction, withExcerptChains, type RedactGuard } from "../ink/redact";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
 import { FiguresModal } from "./figures";
+import { FigureCaptionModal, FigureNumbers, FigureRefModal } from "./figure-captions";
+import { withFigureScope } from "../ink/figure-text";
+import { brokenReferences, captionBoxes, captionElement, figureLabelSourceOf, markerSafeId, referenceElement, withCaptionWords } from "../model/figure-captions";
+import { collectFigures, type FigureEntry } from "../model/figures";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { QuickTabsStrip } from "./quick-tabs";
@@ -225,14 +230,22 @@ import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
+import { TapeTools } from "./tape-tools";
+import { hidingTapes, tapeColorOf, underTape as pointUnderTapes } from "../model/tape";
+import { elementTouchesTapes, selectionHoldsCovered, strokeTouchesTapes } from "../ink/tape-guard";
+import { confirmDestructive } from "../ui/destructive";
 import { AxesTools, type AxesHost } from "./axes-tools";
 import { TableTools, type TableHost } from "./table-tools";
 import { tableOfSelection } from "../ink/table";
+import { chartOfSelection, tableInSelection } from "../ink/chart";
+import { ChartTools } from "./chart-tools";
 import { ChemTools, holdsReaction } from "./chem-tools";
+import { CalculatorTools } from "./calculator";
 import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
 import { LineHandleTools, type LineHandleHost } from "./line-handles";
+import { StrikeHide } from "./strike-hide"; // 0.29 (#96)
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
@@ -302,6 +315,8 @@ const NARROW_PX = 720;
 const THUMB_PDF_SCALE = 0.75;
 /** Page thumbnails are at most this many CSS px wide (the panel asks for 60, 120 or, in the large layout, 240). */
 const THUMB_CSS_WIDTH = 240;
+/** 0.29 (#10): the notice that the eraser left ink under a hidden study tape alone comes at most this often (ms). */
+const TAPE_NOTICE_MS = 5000;
 
 export interface NotebookHost {
 	settings: NotebookSettings;
@@ -527,6 +542,8 @@ export class NotebookView extends FileView {
 		tick: () => this.editTick,
 		redraw: () => this.renderer?.invalidate(),
 	});
+	/** 0.29 (#248): the numbers of the captioned figures ("Fig. 3"); derived from the document, never stored. */
+	private readonly figureNumbers = new FigureNumbers({ pages: () => this.shownDoc()?.pages ?? [], tick: () => this.editTick });
 	/** Roadmap 50: the fast scrollbar with a page preview (view/scrollbar.ts). */
 	private scrollbar: FastScrollbar | null = null;
 	/** 0.17 (#173): the floating overview of the page in view (view/minimap.ts). */
@@ -556,18 +573,28 @@ export class NotebookView extends FileView {
 	private sticky: StickyTools | null = null;
 	/** 0.19 (#103): handwritten checklists (taps, the square drawn by hand, send to tasks, the task lines). */
 	private checklist: ChecklistTools | null = null;
+	/** 0.29 (#10): study tapes (the mode that lays them, taps that reveal them; the reveal is view-only). */
+	private tapes: TapeTools | null = null;
+	/** 0.29 (#10): when the eraser last said it left ink under a hidden study tape alone. */
+	private tapeNoticeAt = -Infinity;
 	/** 0.22 (#206): instant axes (an L or a + drawn by hand, the insert). */
 	private axes: AxesTools | null = null;
 	/** 0.28 (#41): hand-drawn tables (insert, add / remove rows and columns, even cells). */
 	private tables: TableTools | null = null;
+	/** 0.29 (#244): charts from table data (make one from a selected table, update it when the numbers change). */
+	private charts: ChartTools | null = null;
 	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
 	private chem: ChemTools | null = null;
+	/** 0.29 (#182): the advanced calculator (null before the view is open). */
+	private calculator: CalculatorTools | null = null;
 	/** 0.20 (#39): groups and locked elements (Group, Ungroup, Lock, the Unlock chip, the list of locked elements). */
 	private groups: GroupTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
 	private comments: CommentTools | null = null;
 	/** 0.28 (#256): the "Reorder lines" mode (a handle at the left of every handwritten line of the page in view). */
 	private lineHandles: LineHandleTools | null = null;
+	/** 0.29 (#96): hides the words that are struck through (view-only; null before the view is open). */
+	private strikeHide: StrikeHide | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
 	private colour: ColourTools | null = null;
@@ -771,6 +798,7 @@ export class NotebookView extends FileView {
 	async onOpen(): Promise<void> {
 		this.contentEl.empty();
 		this.contentEl.addClass("notebook-view");
+		this.figureNumbers.register();
 		this.toolbar = new Toolbar(this.contentEl, this.tools, {
 			change: (state) => this.onToolsChanged(state),
 			undo: () => this.runAction("undo"),
@@ -859,6 +887,7 @@ export class NotebookView extends FileView {
 					render: {
 						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 						...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 					},
 					...(options.prepare ? { prepare: options.prepare } : {}),
 				};
@@ -920,12 +949,26 @@ export class NotebookView extends FileView {
 		this.math = new MathTools(this.mathHost());
 		this.sticky = new StickyTools(this.stickyHost());
 		this.checklist = new ChecklistTools(this.checklistHost());
+		this.mountTapes();
 		this.axes = new AxesTools(this.axesHost());
 		this.tables = new TableTools(this.tableHost());
+		this.charts = new ChartTools(this.tableHost());
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
+		this.calculator = new CalculatorTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
 		this.lineHandles = new LineHandleTools(this.lineHandleHost());
+		this.strikeHide = new StrikeHide({
+			pages: () => { const doc = this.shownDoc(); return doc ? this.renderPagesOf(doc) : []; },
+			renderer: () => this.renderer,
+			enabled: () => this.host.settings.hideStruck,
+			setEnabled: (on) => {
+				this.host.settings.hideStruck = on;
+				void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+			},
+			busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null || !!this.controller?.drawing,
+			changed: () => this.refreshUi(),
+		});
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
 			body: this.body,
@@ -985,7 +1028,9 @@ export class NotebookView extends FileView {
 		this.symbols?.sync();
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
+		this.renderer.setFigureLabels(this.figureNumbers.liveSource); // 0.29 (#248) review fix (F1): this notebook's numbers only
 		this.mountMarkers();
+		this.renderer.setTapeReveal(this.tapes?.reveal ?? null);
 		this.mountStates();
 		this.lectureHeader = new LectureHeaderService({
 			parent: () => this.body,
@@ -1321,6 +1366,7 @@ export class NotebookView extends FileView {
 		this.mentions = null;
 		this.headingWarm.dispose();
 		this.boxNumbers.dispose();
+		this.figureNumbers.dispose();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer, this.heavyTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
 		this.pens?.destroy();
@@ -1375,6 +1421,8 @@ export class NotebookView extends FileView {
 		this.comments = null;
 		this.lineHandles?.destroy();
 		this.lineHandles = null;
+		this.strikeHide?.destroy();
+		this.strikeHide = null;
 		this.stopNav?.();
 		this.stopNav = null;
 		this.stopMarks?.();
@@ -1387,10 +1435,14 @@ export class NotebookView extends FileView {
 		this.selectionActions = null;
 		this.arrange = null;
 		this.checklist?.destroy();
+		this.tapes?.destroy();
+		this.tapes = null;
 		this.axes?.destroy();
 		this.axes = null;
 		this.tables = null;
+		this.charts = null;
 		this.chem = null;
+		this.calculator = null;
 		this.checklist = null;
 		this.groups?.destroy();
 		this.groups = null;
@@ -1856,11 +1908,15 @@ export class NotebookView extends FileView {
 		// 0.28 (#98): per-page undo. The history is told how pages are told apart, and whether a new edit keeps the other pages' undone steps.
 		this.history.setPageRules(pageRules);
 		this.history.setPagewise(settings.pageUndo);
+		// 0.29 (review R3-1): an undo or a redo that would move ink out from under (or under) a redaction box is refused and stays in the history.
+		// Round-2 review (H4): a check that throws refuses the step too (fail closed), with its own notice.
+		this.history.setStepCheck(this.redactStepCheck(), (step) => void showNotice(t("redactundo.failed", { step: t(step === "undo" ? "tool.undo" : "tool.redo") }), 8000));
 		if (this.toolbar) {
 			this.toolbar.setPageUndo(settings.pageUndo);
 			this.updateHistoryButtons();
 		}
 		this.meaningTools?.refresh();
+		this.strikeHide?.sync(); // 0.29 (#96): the "hide struck words" setting
 		this.renderer?.invalidate(); // 0.28 (#205): the box numbering settings change the labels
 		this.applyInput(settings);
 		refreshSlideBadges(this); // 0.14 slides: the badges setting
@@ -1931,6 +1987,7 @@ export class NotebookView extends FileView {
 			this.clearSelection();
 			this.markers?.disarm();
 			this.excerpts?.disarm();
+			this.tapes?.stopDrawing();
 			this.penLinks?.hideChip();
 			this.pageOffer?.cancel();
 			this.radial?.close();
@@ -2740,6 +2797,7 @@ export class NotebookView extends FileView {
 			canPrint: canPrint(),
 			...(initialFormat ? { initialFormat } : {}),
 			pages: () => this.renderPagesOf(doc),
+			struckDefault: this.host.settings.exportHideStruck,
 			// 0.26 (#285): the redaction boxes of this notebook on this device, and the dialog where they are drawn.
 			redact: {
 				state: () => this.redactState(),
@@ -2776,6 +2834,18 @@ export class NotebookView extends FileView {
 
 	/** Review fix (P4): the reader has been told that the boxes of this notebook are held for this session only. */
 	private redactSaveWarned = false;
+
+	/**
+	 * Round-3 review (Z2): boxes stored before 0.29 do not know where the background of their page was; they adopt its geometry as it is when
+	 * the notebook is opened (once: afterwards every box knows it, and an export refuses a page whose background moved since). Nothing is
+	 * written when the boxes cannot be read or none needs it.
+	 */
+	private adoptRedactGeometry(doc: NotebookDocument): void {
+		const state = loadRedactState(this.app, doc.id);
+		if (state.unreadable === true || countBoxes(state.boxes) === 0) return;
+		const boxes = adoptGeometry(state.boxes, doc.pages);
+		if (boxes !== state.boxes) this.saveRedact({ on: state.on, boxes });
+	}
 
 	/** 0.26 (#285): the dialog where boxes are drawn over the parts of the pages that must not leave the notebook (nothing in the notebook changes). */
 	private openRedact(pageIndex: number, closed: () => void): void {
@@ -2846,6 +2916,7 @@ export class NotebookView extends FileView {
 				render: {
 					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 				},
 			},
 		};
@@ -2902,6 +2973,7 @@ export class NotebookView extends FileView {
 		const modal = new SharePageModal({
 			app: this.app, file, pageCount: doc.pages.length, pageIndex: index, selection: crop,
 			pages: () => this.renderPagesOf(doc), media: this.media, options: () => this.exportOptions(),
+			struck: this.host.settings.exportHideStruck,
 		});
 		if (fromSelection) modal.startOnSelection();
 		modal.open();
@@ -2927,6 +2999,7 @@ export class NotebookView extends FileView {
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 			},
 		});
 	}
@@ -2951,6 +3024,7 @@ export class NotebookView extends FileView {
 				render: {
 					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 				},
 				...(options.prepare ? { prepare: options.prepare } : {}),
 			}, request);
@@ -2968,12 +3042,13 @@ export class NotebookView extends FileView {
 			assetIds: () => new Set(Object.values(this.shownDoc()?.assets ?? {}).filter((a) => a.kind === "image").map((a) => a.id)),
 			current: () => this.currentPageIndex(),
 			readAsset: (id) => (this.media ? this.media.readAsset(id) : Promise.reject(new Error("no media"))),
-			goTo: (entry) => {
-				const index = docPages().findIndex((p) => p.id === entry.pageId);
-				if (index < 0) return;
-				this.recordArrival(index);
-				if (!this.excerpts?.reveal(index, { x: entry.x, y: entry.y, width: entry.width, height: entry.height })) this.scrollToPage(index);
-			},
+			goTo: (entry) => this.goToFigureEntry(entry),
+			// 0.29 (#248): the figure's number when it has a caption, and the caption actions (only on a notebook that can be edited).
+			captionNumber: (entry) => this.figureNumbers.numberOf(entry.elementId),
+			...(this.editable() ? {
+				caption: (entry: FigureEntry) => this.captionFigure(entry),
+				insertReference: (entry: FigureEntry) => this.insertFigureReference(entry.elementId),
+			} : {}),
 			insertIntoNote: (entry) => {
 				const doc = this.session?.doc;
 				const index = docPages().findIndex((p) => p.id === entry.pageId);
@@ -2989,6 +3064,7 @@ export class NotebookView extends FileView {
 					render: {
 						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 						...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 					},
 				});
 			},
@@ -3048,6 +3124,7 @@ export class NotebookView extends FileView {
 				render: {
 					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 				},
 				...(options.prepare ? { prepare: options.prepare } : {}),
 			}, word);
@@ -3130,6 +3207,127 @@ export class NotebookView extends FileView {
 		}, this.host.settings.boxNumbering).open();
 	}
 
+	// --- 0.29 (#248) figure captions and references ---
+
+	/** Scrolls to a figure of the gallery or of a reference, and outlines it for a moment. */
+	private goToFigureEntry(entry: FigureEntry): void {
+		const index = (this.shownDoc()?.pages ?? []).findIndex((p) => p.id === entry.pageId);
+		if (index < 0) return;
+		this.recordArrival(index);
+		if (!this.excerpts?.reveal(index, { x: entry.x, y: entry.y, width: entry.width, height: entry.height })) this.scrollToPage(index);
+	}
+
+	/** A tap on "Fig. 3" in the text: goes to the figure; a figure that is gone (or lost its caption) says so. */
+	private openFigureReference(figureId: string): void {
+		const found = this.figureNumbers.forFigure(figureId);
+		if (!found) {
+			showNotice(t("figcap.gone"), 5000);
+			return;
+		}
+		this.goToFigureEntry(found.figure);
+	}
+
+	/** The picture in the selection as a gallery entry, or null when the selection is not exactly one picture. */
+	private selectedFigure(): FigureEntry | null {
+		const sel = this.selection;
+		const doc = this.shownDoc();
+		if (!sel || !doc || sel.others?.length || sel.strokes.length > 0 || sel.elements.length !== 1) return null;
+		const el = sel.elements[0];
+		const page = doc.pages[sel.pageIndex];
+		if (!el || !page || (el.type !== "image" && el.type !== "excerpt")) return null;
+		return collectFigures(doc.pages, [sel.pageIndex]).find((f) => f.elementId === el.id) ?? null;
+	}
+
+	/** "Caption figure…" for the selected picture. */
+	captionSelectedFigure(): void {
+		const entry = this.selectedFigure();
+		if (!entry) {
+			showNotice(t("figcap.notFigure"), 5000);
+			return;
+		}
+		this.captionFigure(entry);
+	}
+
+	/** Asks for the words of a figure's caption, then adds the caption under the picture (or changes the words of the one it has). */
+	private captionFigure(entry: FigureEntry): void {
+		if (!this.editableDocument()) return;
+		if (!markerSafeId(entry.elementId)) {
+			showNotice(t("figcap.badId"), 6000);
+			return;
+		}
+		this.commitText();
+		const existing = this.figureNumbers.forFigure(entry.elementId);
+		new FigureCaptionModal(this.app, {
+			number: existing?.number ?? null,
+			words: existing?.captions[0]?.text ?? "",
+			save: (words) => this.saveCaption(entry, words),
+		}).open();
+	}
+
+	private saveCaption(entry: FigureEntry, words: string): void {
+		const doc = this.editableDocument();
+		if (!doc) return;
+		const page = doc.pages.find((p) => p.id === entry.pageId);
+		const figure = page ? collectFigures(doc.pages, [doc.pages.indexOf(page)]).find((f) => f.elementId === entry.elementId) : undefined;
+		if (!page || !figure) {
+			showNotice(t("figcap.gone"), 5000);
+			return;
+		}
+		const existing = captionBoxes(doc.pages).find((b) => b.figureId === entry.elementId);
+		let ok = false;
+		let added: TextElement | null = null;
+		if (existing) {
+			const home = doc.pages[existing.pageIndex];
+			const before = home?.elements?.find((e) => e.id === existing.boxId);
+			const text = before?.type === "text" ? withCaptionWords(before.text, words) : null;
+			if (!home || before?.type !== "text" || text === null) return;
+			if (text === before.text) return;
+			ok = this.history.execute(new ReplaceElement(home.id, before, { ...before, text }));
+		} else {
+			added = captionElement(figure, page, words, this.tools.textSize, this.tools.penColor);
+			ok = this.history.execute(new AddElement(page.id, added, page.elements?.length ?? 0));
+		}
+		if (!ok) return;
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+		const n = this.figureNumbers.numberOf(entry.elementId);
+		if (added && n !== null) showNotice(t("figcap.added", { n: String(n) }), 3000);
+	}
+
+	/** "Figure reference…": picks a captioned figure and puts a reference to it on the page. */
+	openFigureRefs(): void {
+		if (!this.editableDocument()) return;
+		this.commitText();
+		new FigureRefModal(this.app, {
+			items: () => this.figureNumbers.items(),
+			broken: () => brokenReferences(this.shownDoc()?.pages ?? [], this.figureNumbers.items()).length,
+			insert: (id) => this.insertFigureReference(id),
+		}).open();
+	}
+
+	/** A text box holding a reference to the figure, where the pen last touched (or the middle of the page in view), selected so it can be moved. */
+	private insertFigureReference(figureId: string): void {
+		const doc = this.editableDocument();
+		if (!doc) return;
+		this.commitText();
+		const found = this.figureNumbers.forFigure(figureId);
+		if (!found) {
+			showNotice(t("figcap.noCaption"), 6000);
+			return;
+		}
+		const pen = this.lastPen;
+		const penIndex = pen ? doc.pages.findIndex((p) => p.id === pen.pageId) : -1;
+		const spot = stampSpot(pen && penIndex >= 0 ? { pageIndex: penIndex, x: pen.x, y: pen.y, at: pen.at } : null, Date.now(), doc.pages, this.currentPageIndex());
+		const page = spot ? doc.pages[spot.pageIndex] : undefined;
+		if (!spot || !page) return;
+		const el = referenceElement(figureId, page, spot.x, spot.y, this.tools.textSize, this.tools.penColor, measureText, t("figcap.abbr"));
+		if (!this.history.execute(new AddElement(page.id, el, page.elements?.length ?? 0))) return;
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+		this.selectItems(spot.pageIndex, [], [el]);
+		showNotice(t("figcap.inserted", { n: String(found.number) }), 3000);
+	}
+
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */
 	openMentions(): void {
 		this.mentions?.open();
@@ -3199,6 +3397,7 @@ export class NotebookView extends FileView {
 				render: {
 					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 				},
 				...(options.prepare ? { prepare: options.prepare } : {}),
 			}, request),
@@ -3259,8 +3458,17 @@ export class NotebookView extends FileView {
 			...(this.host.settings.commentsInPdf ? { comments: pdfCommentLabels() } : {}),
 			// Review fix (U1): tells the excerpts of this notebook from those of another, also for the boxes of the export dialog.
 			...(doc ? { redactDoc: doc.id } : {}),
+			...this.struckOption(),
+			// 0.29 (#248) review fix (F1, F3): the figure numbers of this notebook as they are now, frozen: every writer resolves its pages
+			// against them (also across the awaits of a long export), never against another open view.
+			figures: this.figureNumbers.snapshot(),
 			...this.redactOptions(),
 		};
+	}
+
+	/** 0.29 (#96): the setting "Leave struck-out words out of exports", for every writer that goes through `withRedaction`. */
+	private struckOption(): Pick<ExportOptions, "struck"> {
+		return this.host.settings.exportHideStruck ? { struck: true } : {};
 	}
 
 	/**
@@ -3359,6 +3567,11 @@ export class NotebookView extends FileView {
 		return this.lineHandles;
 	}
 
+	/** 0.29 (#96): the "Hide struck words" switch of this view (null before the view is open). */
+	get strikeTools(): StrikeHide | null {
+		return this.strikeHide;
+	}
+
 	/** What the line handles need from the view. */
 	private lineHandleHost(): LineHandleHost {
 		return {
@@ -3380,6 +3593,27 @@ export class NotebookView extends FileView {
 	private redactGuard(pageId: string): RedactGuard {
 		const stored = this.redactState();
 		return { boxes: boxesOf(stored.boxes, pageId), unreadable: stored.unreadable === true };
+	}
+
+	/**
+	 * 0.29 (review R3-1): the History check of every Undo and Redo (also per page, from the history panel and in a macro): a step that moves
+	 * ink out from under, or under, a redaction box of its page is refused with a notice and stays in the history (ink/redact-step.ts).
+	 */
+	private redactStepCheck(): StepCheck {
+		return redactStepCheck(
+			() => {
+				const stored = this.redactState();
+				return { boxesOf: (pageId) => boxesOf(stored.boxes, pageId), unreadable: stored.unreadable === true, any: countBoxes(stored.boxes) > 0 };
+			},
+			// Nothing changed (the step is back where it was), so the buttons are already right. Review U2: when the stored boxes cannot be
+			// read there is no box to remove, so the notice names the way out (Redact > Reset redaction storage, or the boxes drawn again).
+			(step, unreadable) => void showNotice(
+				unreadable
+					? t("redactundo.unreadable", { step: t(step === "undo" ? "tool.undo" : "tool.redo") })
+					: t(step === "undo" ? "redactundo.undo" : "redactundo.redo"),
+				unreadable ? 12000 : 8000,
+			),
+		);
 	}
 
 	/** What the comment tools need from the view. */
@@ -3493,7 +3727,7 @@ export class NotebookView extends FileView {
 			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, strokes: this.selection.strokes, elements: this.selection.elements } : null),
 			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
 			penColor: () => this.tools.penColor,
-			inkOf: (page) => this.inkInView(page),
+			inkOf: (page) => this.inkOutsideTapes(page), // 0.29 (#10): a checkbox label is what the reader can see
 			sendTask: (pageIndex, bounds, request) => this.sendChecklistTask(pageIndex, bounds, request),
 			refresh: () => this.refreshUi(),
 		};
@@ -3515,7 +3749,10 @@ export class NotebookView extends FileView {
 		return {
 			app: this.app, doc: () => c.doc(), editable: () => c.editable(), execute: (cmd) => c.execute(cmd), insertTarget: () => c.insertTarget(),
 			selection: () => (this.selection ? this.selectionParts(this.selection) : null),
-			select: (p, s, e) => c.select(p, s, e), penColor: () => c.penColor(), inkOf: (page) => c.inkOf(page), refresh: () => c.refresh(),
+			select: (p, s, e) => c.select(p, s, e), penColor: () => c.penColor(), refresh: () => c.refresh(),
+			// 0.29 (#10, review R2): the table push and the chart check take ALL the ink, covered strokes and hidden struck words included, so a
+			// row insert moves taped answers with their row and what is saved never depends on what is revealed (not the checkbox host's inkOf).
+			inkOf: (page) => this.inkInView(page, true),
 			redactGuard: (pageId) => this.redactGuard(pageId),
 		};
 	}
@@ -3523,6 +3760,11 @@ export class NotebookView extends FileView {
 	/** 0.28 (#41): hand-drawn tables of this view (null before the view is open). */
 	get tableTools(): TableTools | null {
 		return this.tables;
+	}
+
+	/** 0.29 (#244): charts from table data of this view (null before the view is open). */
+	get chartTools(): ChartTools | null {
+		return this.charts;
 	}
 
 	/** 0.22 (#206): instant axes of this view (null before the view is open). */
@@ -3533,6 +3775,11 @@ export class NotebookView extends FileView {
 	/** 0.23 (#294): balancing of typed chemical reactions (null before the view is open). */
 	get chemTools(): ChemTools | null {
 		return this.chem;
+	}
+
+	/** 0.29 (#182): the advanced calculator of this view (null before the view is open). */
+	get calculatorTools(): CalculatorTools | null {
+		return this.calculator;
 	}
 
 	/** 0.19 (#103): handwritten checklists of this view (null before the view is open). */
@@ -3558,6 +3805,7 @@ export class NotebookView extends FileView {
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 			},
 			...(options.prepare ? { prepare: options.prepare } : {}),
 		}, request);
@@ -3631,7 +3879,8 @@ export class NotebookView extends FileView {
 		const box = index < 0 ? null : layout.boxes[index];
 		if (!page || !box) return null;
 		const [x, y] = toPageLocal(box, dx, dy);
-		return { strokes: this.inkInView(page), x, y, scale: this.viewport.scale };
+		// 0.29 (#10): the eyedropper never picks the style of ink a hidden study tape covers.
+		return { strokes: this.inkOutsideTapes(page), x, y, scale: this.viewport.scale };
 	}
 
 	/** Markers, boxes and invisible ink of this view (null before the view is open). */
@@ -3671,14 +3920,44 @@ export class NotebookView extends FileView {
 	}
 
 	/** The strokes of `page` the reader can see (v8: hidden ink only while the solutions are shown). */
-	private inkInView(page: Page): readonly Stroke[] {
+	private inkInView(page: Page, withStruck = false): readonly Stroke[] {
 		const shown = visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
 		// 0.17 (#20): the ink a collapsed sticky note keeps hidden is not there to erase, select or offer.
 		const noteInk = hiddenStickyInk(page.elements);
-		const ink = noteInk ? shown.filter((s) => !noteInk.has(s.id)) : shown;
+		const unnoted = noteInk ? shown.filter((s) => !noteInk.has(s.id)) : shown;
+		// 0.29 (#96): struck words that are hidden are not there to erase, select or offer either (nothing is deleted by touching empty paper).
+		// `withStruck`: only to complete a group (review S4): a group a selection touches comes whole, its hidden struck members with it.
+		const struck = !withStruck && this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null;
+		const ink = struck ? unnoted.filter((s) => !struck.has(s.id)) : unnoted;
 		// 0.15 (241): a shown state moved some strokes away from where they were drawn: the ink tools leave them alone.
 		const moved = this.statesTools?.displaced(page);
+		// 0.29 (#10, review fix T2): ink under a hidden study tape stays in: the lasso, groups and "ink follows objects" take it with the rest, so
+		// what is saved never depends on which tapes are revealed on this screen (see inkOutsideTapes for the erasers).
 		return moved ? ink.filter((s) => !moved.has(s.id)) : ink;
+	}
+
+	/** 0.29 (#10): the study tapes of `page` that hide what is under them on this screen. */
+	private hidingTapesOf(page: Page): TapeElement[] {
+		return this.tapes ? hidingTapes(page, this.tapes.reveal) : [];
+	}
+
+	/**
+	 * 0.29 (#10, review fix T1): the ink in view without every stroke a hidden study tape reaches over, even in part (all the hidden tapes
+	 * together): what the erasers and the pen-start offers may touch. Nobody can see that ink, so nothing may change it until it is revealed.
+	 */
+	private inkOutsideTapes(page: Page): readonly Stroke[] {
+		const ink = this.inkInView(page);
+		const tapes = this.hidingTapesOf(page);
+		const bounds = this.renderer?.boundsOf;
+		return tapes.length > 0 ? ink.filter((s) => !strokeTouchesTapes(s, tapes, bounds?.(s))) : ink;
+	}
+
+	/** 0.29 (#10): says (at most every few seconds) that the eraser left ink under a hidden study tape alone. */
+	private tapeKeptNotice(): void {
+		const now = performance.now();
+		if (now - this.tapeNoticeAt < TAPE_NOTICE_MS) return;
+		this.tapeNoticeAt = now;
+		showNotice(t("tape.erase.kept"));
 	}
 
 	/** v10: anchored excerpts of this view (null before the view is open). */
@@ -3822,6 +4101,33 @@ export class NotebookView extends FileView {
 		});
 	}
 
+	/** 0.29 (#10): the study tapes of this view (taps reveal them on any notebook; the mode lays new ones). */
+	private mountTapes(): void {
+		const c = this.checklistHost();
+		this.tapes = new TapeTools({
+			stage: () => c.stage(),
+			doc: () => c.doc(),
+			editable: () => c.editable(),
+			execute: (cmd) => c.execute(cmd),
+			color: () => tapeColorOf(this.host.settings.tapeColor),
+			scale: () => c.scale(),
+			pageAt: (x, y) => c.pageAt(x, y),
+			fingerNavigates: (e) => c.fingerNavigates(e),
+			penBusy: (t) => c.penBusy(t),
+			preview: (pageIndex, tape) => this.renderer?.setTapePreview(tape ? { pageIndex, tape } : null),
+			repaint: () => {
+				this.renderer?.invalidate();
+				this.refreshUi();
+			},
+		});
+		this.renderer?.setTapeReveal(this.tapes.reveal);
+	}
+
+	/** 0.29 (#10): study tapes of this view (null before the view is open). */
+	get tapeTools(): TapeTools | null {
+		return this.tapes;
+	}
+
 	private mountMarkers(): void {
 		this.markers = new MarkerTools({
 			app: this.app,
@@ -3928,6 +4234,30 @@ export class NotebookView extends FileView {
 		const sel = this.selection;
 		const page = sel && this.session?.doc?.pages[sel.pageIndex];
 		if (!sel || !page || !this.editable() || this.statesTools?.ownsSelection(sel)) return;
+		// 0.29 (#10, review R3): the selection frame draws the hidden tapes over what it holds, so covered answers would go unseen: ask first.
+		if (this.selectionCovered(sel)) {
+			confirmDestructive(this.app, { title: t("tape.delete.title"), body: t("tape.delete.body"), confirm: t("tape.delete.confirm") }, () => {
+				// Only the very selection the question was about (nothing is deleted when it changed meanwhile).
+				if (this.selection === sel && this.editable()) this.deleteSelectionNow(sel);
+			});
+			return;
+		}
+		this.deleteSelectionNow(sel);
+	}
+
+	/** 0.29 (#10, review R3): whether a selection holds ink or objects a hidden study tape covers, even in part (Delete and Cut ask first). */
+	selectionCovered(sel: Selection | null = this.selection): boolean {
+		const doc = this.session?.doc;
+		if (!sel || !doc) return false;
+		return this.selectionParts(sel).some((part) => {
+			const page = doc.pages[part.pageIndex];
+			return !!page && selectionHoldsCovered(part.strokes, part.elements, this.hidingTapesOf(page), this.renderer?.boundsOf, measureText);
+		});
+	}
+
+	private deleteSelectionNow(sel: Selection): void {
+		const page = this.session?.doc?.pages[sel.pageIndex];
+		if (!page) return;
 		if (sel.others?.length) {
 			this.deleteAcrossPages(sel);
 			return;
@@ -3936,8 +4266,9 @@ export class NotebookView extends FileView {
 		const { commands, removed: removedEls } = deleteSelectionCommands(page, sel.strokes, sel.elements);
 		// Ink written on a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
 		// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
+		// 0.29 (#10, review R3): nor is ink a hidden study tape reaches over (offers count only what the reader can see).
 		const owned = this.host.settings.inkFollowsObjects && removedEls.length > 0
-			? inkOnRemoved(this.inkInView(page), page.elements ?? [], removedEls, new Set(sel.strokes), measureText)
+			? inkOnRemoved(this.inkOutsideTapes(page), page.elements ?? [], removedEls, new Set(sel.strokes), measureText)
 			: [];
 		this.clearSelection();
 		if (commands.length === 0) return;
@@ -4027,7 +4358,8 @@ export class NotebookView extends FileView {
 			const removedEls = planned.removed;
 			if (this.host.settings.inkFollowsObjects && removedEls.length > 0) {
 				// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
-				const visible = new Set(this.inkInView(page));
+				// 0.29 (#10, review R3): nor ink a hidden study tape reaches over.
+				const visible = new Set(this.inkOutsideTapes(page));
 				const own = new Set(part.strokes);
 				const owned = inkFollowers(page, part, true, measureText).map((f) => f.stroke).filter((s) => visible.has(s) && !own.has(s));
 				if (owned.length > 0) offers.push({ page, removed: removedEls, owned });
@@ -4175,7 +4507,9 @@ export class NotebookView extends FileView {
 			exportPages: async (pages, suffix) => {
 				// 0.26 (#285): no other option is passed here, but the redaction boxes of the notebook still cover what the file would show (and
 				// boxes that cannot be read refuse the file, review fix P4).
-				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media, this.redactOptions());
+				// 0.29 (#96): the struck-out words setting covers this export too.
+				// Round-2 review (H6): the figure numbers of this notebook, frozen, like every other writer (F1).
+				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media, { ...this.struckOption(), figures: this.figureNumbers.snapshot(), ...this.redactOptions() });
 			},
 		};
 	}
@@ -4227,9 +4561,41 @@ export class NotebookView extends FileView {
 		return this.editable() && !this.controller?.drawing ? (this.session?.doc ?? null) : null;
 	}
 
+	/**
+	 * Round-3 review (Z1): whether `cmd` would move, stretch or replace the background of a page with redaction boxes (or any page it names
+	 * while the boxes cannot be read): `applyCommand` refuses it. Round-4 review (Y6): with the reason, or null: "unreadable" when the stored
+	 * boxes cannot be read (no page can be said to have boxes then), else "boxes". The restore and merge dialogs ask first, so the reader
+	 * gets one notice that says why.
+	 */
+	redactRefusal(cmd: Command): "boxes" | "unreadable" | null {
+		const doc = this.session?.doc;
+		if (!doc) return null;
+		let why: "boxes" | "unreadable" | null = null;
+		for (const id of backgroundShifts(doc, cmd)) {
+			const g = this.redactGuard(id);
+			if (g.unreadable === true) return "unreadable";
+			if (g.boxes.length > 0) why = "boxes";
+		}
+		return why;
+	}
+
+	/** Round-4 review (Y6): the notice for a change refused by `redactRefusal`. */
+	private redactRefusalNotice(why: "boxes" | "unreadable"): void {
+		showNotice(t(why === "unreadable" ? "redactmove.unreadable" : "redactmove.background"), 9000);
+	}
+
 	/** Runs a command built outside the view (merge, page restore) as one undo step. */
 	applyCommand(cmd: Command, scrollTo?: number): boolean {
-		if (!this.editableDocument()) return false;
+		const doc = this.editableDocument();
+		if (!doc) return false;
+		// Round-2 review (H1): a left margin that changes (a merge that widens a page, a page size that drops the margins) moves the background
+		// and the ink out from under the redaction boxes of the page: refused, like a PDF turn or crop (fail closed when the boxes are unreadable).
+		// Round-3 review (Z1, Z2): merges, page sizes, Update PDF and page restores included (see `backgroundShifts`).
+		const why = this.redactRefusal(cmd);
+		if (why) {
+			this.redactRefusalNotice(why);
+			return false;
+		}
 		this.commitText();
 		this.clearSelection();
 		// False when the history refused it (a locked page, or a change the writer would reject): the callers say so.
@@ -4746,14 +5112,16 @@ export class NotebookView extends FileView {
 			states: { open: !!this.statesTools?.open },
 			comments: { panel: this.comments?.panelOpen ?? false, total: this.comments?.counts.total ?? 0, open: this.comments?.counts.open ?? 0, drawing: this.comments?.drawing ?? false },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, spread: this.spreadOn, spreadRoom: canSpread(this.viewSize) || this.spreadOn, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", highlighterArea: this.tools.highlighterArea, readOnly: this.userReadOnly,
-				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused, lineHandles: this.lineHandles?.active === true },
+				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused, lineHandles: this.lineHandles?.active === true, struckHidden: this.host.settings.hideStruck },
 			canPrint: canPrint(),
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
 				pageSolutions: !!page && (this.markers?.pageSolutionsShown(page) ?? false),
 			},
+			tapes: { drawing: this.tapes?.drawing === true, ...(this.tapes?.counts() ?? { total: 0, revealed: 0 }) },
 			nav: this.navState(),
 			history: this.historyCounts(),
+			figures: { captioned: this.figureNumbers.items().length },
 			narrow: this.body?.hasClass("is-narrow") ?? false,
 			openNotebooks: this.tabs?.count ?? 0,
 		};
@@ -4801,6 +5169,9 @@ export class NotebookView extends FileView {
 			grouped: parts.reduce((n, p) => n + p.strokes.filter((s) => s.group !== undefined).length + p.elements.filter((e) => e.group !== undefined).length, 0),
 			// 0.28 (#41): the selection is exactly one hand-drawn table (the table actions show then).
 			table: parts.length === 1 && !!parts[0] && tableOfSelection(parts[0].strokes, parts[0].elements.length) !== null,
+			// 0.29 (#244): the selection holds one table a chart can be made from (other items allowed), or is exactly one chart (Update chart).
+			chartable: parts.length === 1 && !!parts[0] && tableInSelection(parts[0].strokes) !== null,
+			chart: parts.length === 1 && !!parts[0] && chartOfSelection(parts[0].strokes, parts[0].elements) !== null,
 			// 0.28 (#403): the chips the shape of the selection suggests (one page, ink only; empty when the setting is off).
 			suggest: this.suggestionsFor(sel),
 		};
@@ -4905,8 +5276,22 @@ export class NotebookView extends FileView {
 				const stored = this.redactState();
 				return stored.unreadable === true || boxesOf(stored.boxes, pageId).length > 0;
 			},
+			// Round-4 review (Y5): asked by "Update PDF" before the new PDF is stored, with the notice that says why.
+			redactRefused: (cmd) => {
+				if (!this.stillHere(session) || session.doc !== doc) return false;
+				const why = this.redactRefusal(cmd);
+				if (why) this.redactRefusalNotice(why);
+				return why !== null;
+			},
 			run: (cmd, scrollTo) => {
 				if (!this.stillHere(session) || session.doc !== doc) return false;
+				// Round-3 review (Z2): "Update PDF" switching the slide under the boxes of a page (and any other PDF action that would move or
+				// stretch a boxed background) is refused up front; the export would refuse the page anyway.
+				const why = this.redactRefusal(cmd);
+				if (why) {
+					this.redactRefusalNotice(why);
+					return false;
+				}
 				this.commitText();
 				this.clearSelection();
 				this.history.execute(cmd);
@@ -5210,6 +5595,7 @@ export class NotebookView extends FileView {
 		if (this.spreadOn && this.fitMode && this.layout && widthBefore > 0 && Math.abs(this.layout.width - widthBefore) > 0.5) this.refit(true);
 		this.pushRuler();
 		this.reading?.docChanged();
+		this.strikeHide?.docChanged();
 		this.pdfText?.docChanged();
 		this.display?.docChanged();
 		this.minimap?.invalidate();
@@ -5240,6 +5626,7 @@ export class NotebookView extends FileView {
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
 		this.headingWarm.touch(8000);
 		this.boxNumbers.reset();
+		this.figureNumbers.reset();
 		this.active = null;
 		this.jumping = null;
 		this.erasing = null;
@@ -5264,6 +5651,9 @@ export class NotebookView extends FileView {
 		this.history.clear();
 		this.renderer?.setLive(null);
 		this.renderer?.setAreaPreview(null);
+		this.renderer?.setTapePreview(null);
+		this.tapes?.stopDrawing();
+		this.tapes?.docChanged();
 		this.renderer?.cancelWet();
 		this.renderer?.setLasso(null);
 		this.renderer?.setSpacePreview(null);
@@ -5276,6 +5666,7 @@ export class NotebookView extends FileView {
 			this.body.show();
 			this.toolbar.setEditable(true);
 			this.symbols?.sync();
+			this.adoptRedactGeometry(doc);
 			if (!this.media) {
 				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged(), (page) => this.statesTools?.viewPages([page])[0] ?? page);
 				// wave 0.7: resilience (#346): in safe mode the backgrounds come after the first paint.
@@ -5377,7 +5768,8 @@ export class NotebookView extends FileView {
 		const header = this.exportHeader();
 		return {
 			file, doc, pages: [...this.renderPagesOf(doc)],
-			options: { boxLabel: this.boxNumbers.label, equationNumbers: equationNumbers(doc.pages), ...(header ? { header } : {}) },
+			// 0.29 (#248) review fix (F1, F3): the figure numbers of this document, frozen now (the view may be gone when the copy is built).
+			options: { boxLabel: this.boxNumbers.label, equationNumbers: equationNumbers(doc.pages), figures: figureLabelSourceOf(doc.pages, t("figcap.abbr")), ...(header ? { header } : {}) },
 			stamp: () => this.editTick,
 			unsaved: () => from.dirty,
 		};
@@ -5426,6 +5818,7 @@ export class NotebookView extends FileView {
 	}
 
 	private afterHistoryChange(): void {
+		this.figureNumbers.touch();
 		// The save is scheduled first (review W21 D6): if the layout or the viewport below throws, the recorded step is still written.
 		if (!this.userReadOnly) this.session?.markChanged();
 		this.renderer?.setGhost(null);
@@ -5509,6 +5902,8 @@ export class NotebookView extends FileView {
 		if (state.tool !== before.tool) this.pdfText?.exit();
 		// 0.11.2: so is "next stroke erases".
 		if (state.tool !== before.tool) this.controller?.disarmEraserNext();
+		// 0.29 (#10): choosing a tool ends the "Study tape" mode.
+		if (state.tool !== before.tool) this.tapes?.stopDrawing();
 		if (state.tool !== "lasso") this.clearSelection();
 		this.refreshUi();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
@@ -5698,7 +6093,9 @@ export class NotebookView extends FileView {
 			if (!img) incomplete = true;
 			drawElement(ctx, el, img);
 		}
-		for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		withFigureScope(this.figureNumbers.liveSource, () => {
+			for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		});
 		if (incomplete) this.thumbPending.add(page.id);
 	}
 
@@ -5858,6 +6255,12 @@ export class NotebookView extends FileView {
 		if (!page || !editor) return;
 		if (page.locked) {
 			this.pagesLocked([page.id]);
+			return;
+		}
+		// 0.29 (#10, review R4): a tap on a hidden study tape never opens the text box it covers (nor its lock chip). Round-3 review (Z4): nor
+		// does it start a new box there, which would be saved under the tape and never seen: the tape is revealed first.
+		if (pointUnderTapes(this.hidingTapesOf(page), local[0], local[1])) {
+			showNotice(t("tape.text.hidden"), 5000);
 			return;
 		}
 		this.clearSelection();
@@ -6029,7 +6432,7 @@ export class NotebookView extends FileView {
 		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "previous" ? (this.lastTool.previous() ?? this.tools.tool) : this.tools.tool;
 
 		// An armed marker or box takes the next contact whatever the tool (see below).
-		if (tool === "eraser" && this.tools.eraserMode !== "area" && !((this.markers?.armed || this.excerpts?.armed) && !eraserButton)) {
+		if (tool === "eraser" && this.tools.eraserMode !== "area" && !((this.markers?.armed || this.excerpts?.armed || this.tapes?.drawing) && !eraserButton)) {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
 			this.clearSelection();
 			const commands: Command[] = [];
@@ -6046,6 +6449,11 @@ export class NotebookView extends FileView {
 		const page = this.pageAtIndex(pageIndex);
 		if (page) this.touchedPageId = page.id; // review fix (S1): the page the page actions mean when both pages of a pair are in view
 		const local = toPageLocal(layout.boxes[pageIndex]!, dx, dy);
+		// 0.29 (#10): the "Study tape" mode lays a tape; a contact on a hidden tape reveals it (view-only, so a locked page too).
+		if (page && !eraserButton && this.tapes?.begin(pageIndex, page, local, sample, tool, page.locked === true)) {
+			this.clearSelection();
+			return true;
+		}
 		// 0.16 (#124): a locked page takes no ink, text, shape, space or eraser: only the lasso, to select and copy from it.
 		if (page?.locked && tool !== "lasso") {
 			this.clearSelection();
@@ -6182,6 +6590,14 @@ export class NotebookView extends FileView {
 		// v10: a contact that started on an excerpt's badge and moves is ink, not a tap.
 		if (this.excerpts) for (let i = 0; i < n; i++) this.excerpts.watch(NotebookView.at(samples, i));
 		if (this.checklist) for (let i = 0; i < n; i++) this.checklist.watch(NotebookView.at(samples, i));
+		// 0.29 (#10): a contact on a revealed tape that moves is ink; a tape being laid follows the pen.
+		const tapePage = this.tapes?.gesturePage ?? null;
+		if (this.tapes && tapePage === null) for (let i = 0; i < n; i++) this.tapes.move(null, NotebookView.at(samples, i));
+		if (this.tapes && tapePage !== null) {
+			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
+			this.tapes.move(last ? this.toLocal(tapePage, last) : null, last);
+			return;
+		}
 		if (this.pdfText?.dragging) {
 			const textPage = this.pdfText.gesturePage;
 			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
@@ -6386,9 +6802,13 @@ export class NotebookView extends FileView {
 		// v10: a short unmoved contact on an excerpt's badge was a tap: what it drew (a dot) is dropped, then the jump.
 		const badgeTap = this.excerpts?.takeBadgeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
 		// 0.19 (#103): the same for a checkbox: a short unmoved contact on it was a tap.
-		const boxTap = this.checklist?.takeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
-		this.endGesture(cancelled || badgeTap !== null || boxTap !== null);
+		const boxTap0 = this.checklist?.takeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
+		// 0.29 (#10): the same for a revealed study tape (a tap hides it again); the tape is on top, so it wins over a checkbox under it.
+		const tapeTap = this.tapes?.takeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
+		const boxTap = tapeTap ? null : boxTap0;
+		this.endGesture(cancelled || badgeTap !== null || boxTap !== null || tapeTap !== null);
 		this.toolFade?.strokeEnd();
+		if (tapeTap) this.tapes?.toggle(tapeTap);
 		if (boxTap) this.checklist?.toggle(boxTap);
 		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
@@ -6398,7 +6818,7 @@ export class NotebookView extends FileView {
 		// 0.14: the first stroke written during an automatic lecture is what adds its page (view/lecture-mode.ts). Deferred past the
 		// pointer handler so the contact is over; the document is only touched through the usual edit context.
 		const committed = this.committedIds();
-		if (!cancelled && badgeTap === null && boxTap === null && committed) {
+		if (!cancelled && badgeTap === null && boxTap === null && tapeTap === null && committed) {
 			window.setTimeout(() => {
 				this.lectureMode?.wrote();
 				this.welcomeBack?.wrote();
@@ -6434,6 +6854,7 @@ export class NotebookView extends FileView {
 
 	private endGesture(cancelled: boolean): void {
 		if (this.pdfText?.end(cancelled)) return;
+		if (this.tapes?.end(cancelled, performance.now())) return;
 		if (this.markers?.end(cancelled)) return;
 		if (this.excerpts?.end(cancelled)) return;
 		if (this.penGestures?.active) {
@@ -6611,7 +7032,13 @@ export class NotebookView extends FileView {
 		if (!this.host.settings.scribbleErase || !isLinePen(active.stroke.tool) || active.snap || active.recognized || !this.renderer) return false;
 		const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
 		// v8: hidden ink (the solutions) is never scratched out while it is not shown.
-		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf, {}, this.markers?.isRevealed(page) ?? false);
+		// 0.29 (#96): struck words hidden from the view are not scratched out with what is in front of them.
+		const struck = this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null;
+		// 0.29 (#10, review fix T1): nor is ink a hidden study tape reaches over.
+		const tapes = this.hidingTapesOf(page);
+		const boundsOf = this.renderer.boundsOf;
+		const spare = tapes.length > 0 ? (s: Stroke) => strokeTouchesTapes(s, tapes, boundsOf(s)) : undefined;
+		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, boundsOf, {}, this.markers?.isRevealed(page) ?? false, struck, spare);
 		if (!steps) return false;
 		this.clearSelection();
 		this.renderer.cancelWet();
@@ -6838,7 +7265,14 @@ export class NotebookView extends FileView {
 		}
 		const [ax, ay] = toPageLocal(box, from[0], from[1]);
 		const [bx, by] = toPageLocal(box, to[0], to[1]);
-		const hits = findHitStrokes(filterErasable(this.inkInView(page), this.eraseFilter()), ax, ay, bx, by, radius, renderer.boundsOf);
+		// 0.29 (#10, review fix T1): ink a hidden study tape reaches over, even in part, is never erased (the segment eraser would cut its hidden
+		// part); the user reveals the tape to erase there.
+		const tapes = this.hidingTapesOf(page);
+		const hits = findHitStrokes(filterErasable(this.inkOutsideTapes(page), this.eraseFilter()), ax, ay, bx, by, radius, renderer.boundsOf);
+		if (tapes.length > 0) {
+			const kept = filterErasable(this.inkInView(page), this.eraseFilter()).filter((s) => strokeTouchesTapes(s, tapes, renderer.boundsOf(s)));
+			if (kept.length > 0 && findHitStrokes(kept, ax, ay, bx, by, radius, renderer.boundsOf).length > 0) this.tapeKeptNotice();
+		}
 		let changed = false;
 		for (const stroke of hits) {
 			if (erasing.spare?.has(stroke.id)) continue;
@@ -6860,7 +7294,8 @@ export class NotebookView extends FileView {
 		// reached ink comes back. The selective eraser applies; a locked area stays.
 		const filter = this.eraseFilter();
 		if (changed) erasing.areas.inkErased(doc, filter);
-		if (erasing.areas.allowed(filter) && erasing.areas.eraseAreas(doc, page.id, areasUnderEraser(page.elements ?? [], ax, ay, bx, by, radius, filter), filter)) changed = true;
+		const areas = areasUnderEraser(page.elements ?? [], ax, ay, bx, by, radius, filter).filter((a) => !elementTouchesTapes(a, tapes));
+		if (erasing.areas.allowed(filter) && erasing.areas.eraseAreas(doc, page.id, areas, filter)) changed = true;
 		return changed;
 	}
 
@@ -6873,12 +7308,25 @@ export class NotebookView extends FileView {
 	private eraseArea(lasso: Lasso, page: Page): void {
 		const revealed = this.markers?.isRevealed(page) ?? false;
 		const spare = lasso.spare;
+		const struck = this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null; // 0.29 (#96): hidden struck words are not erased
+		// 0.29 (#10, review fix T1): strokes and elements a hidden study tape reaches over, even in part, are left alone (all the hidden tapes
+		// together): nobody can see what would be erased, and a cut would take the hidden part.
+		const tapes = this.hidingTapesOf(page);
+		const boundsOf = this.renderer?.boundsOf;
+		const spared = { any: false };
+		const underTape = (s: Stroke): boolean => {
+			if (tapes.length === 0 || !strokeTouchesTapes(s, tapes, boundsOf?.(s))) return false;
+			if (!spared.any && cutOutsidePolygon(s, lasso.points) !== null) spared.any = true;
+			return true;
+		};
 		const cmd = eraseAreaCommand(page, lasso.points, {
 			filter: this.eraseFilter(),
-			skip: revealed && !spare ? undefined : (s) => (!revealed && !!s.hidden) || !!spare?.has(s.id),
+			skip: revealed && !spare && tapes.length === 0 && !struck ? undefined : (s) => (!revealed && !!s.hidden) || !!spare?.has(s.id) || underTape(s) || !!struck?.has(s.id),
+			...(tapes.length > 0 ? { skipElement: (el: PageElement) => elementTouchesTapes(el, tapes, measureText) } : {}),
 			includeElements: this.host.settings.eraseAreaElements,
 			measure: measureText,
 		});
+		if (spared.any) this.tapeKeptNotice();
 		if (!cmd) return;
 		// 0.15 (241): the pieces a cut stroke left stay in its part, in the same undo step.
 		const doc = this.session?.doc;
@@ -6939,6 +7387,14 @@ export class NotebookView extends FileView {
 			stageRect: () => this.stage.getBoundingClientRect(),
 			boundsOf: () => this.renderer?.boundsOf,
 			revealed: (page) => this.markers?.isRevealed(page) ?? false,
+			struckHidden: (page) => (this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null),
+			// 0.29 (#10, review R1): the delete gesture spares ink a hidden study tape reaches over, as the scribble eraser does.
+			spareStroke: (page) => {
+				const tapes = this.hidingTapesOf(page);
+				const boundsOf = this.renderer?.boundsOf;
+				return tapes.length > 0 ? (s: Stroke) => strokeTouchesTapes(s, tapes, boundsOf?.(s)) : undefined;
+			},
+			tapeKept: () => this.tapeKeptNotice(),
 			selection: () => this.selection,
 			selectionHit: (pageIndex, local) => this.selection?.pageIndex === pageIndex && this.selectionHit(local) !== null,
 			selectPolygon: (pageIndex, polygon) => {
@@ -7166,7 +7622,8 @@ export class NotebookView extends FileView {
 		if (extent * this.viewport.scale < TAP_SLOP_PX) {
 			const p = lasso.points[0]!;
 			const tol = 6 / this.viewport.scale;
-			const el = hitElement(page.elements ?? [], p[0], p[1], tol, measureText);
+			// 0.29 (#10, review fix T9): a revealed study tape does not hide what is under it, so a tap picks that first.
+			const el = hitElement(page.elements ?? [], p[0], p[1], tol, measureText, false, (id) => this.tapes?.reveal.isRevealed(id) ?? false);
 			if (el) elements = [el];
 			else {
 				// 0.20 (#39): a member of a group that is hit by the tap is picked too (loose ink is not selected by a tap), and a locked
@@ -7187,7 +7644,7 @@ export class NotebookView extends FileView {
 			elements = elementsInLasso(page.elements ?? [], lasso.points, measureText);
 		}
 		// 0.20 (#39): picking one member of a group picks all of them.
-		({ strokes, elements } = expandToGroups(page, { strokes, elements }, this.inkInView(page)));
+		({ strokes, elements } = expandToGroups(page, { strokes, elements }, this.inkInView(page, true)));
 		const bounds = unionBounds(strokes, elements, measureText);
 		if (!bounds) return;
 		this.groups?.hideChip();
@@ -7211,7 +7668,7 @@ export class NotebookView extends FileView {
 		}).map((part) => {
 			// 0.20 (#39): a group is picked whole on each page (a group never spans pages).
 			const there = doc.pages[part.pageIndex];
-			return there ? { ...part, ...expandToGroups(there, part, this.inkInView(there)) } : part;
+			return there ? { ...part, ...expandToGroups(there, part, this.inkInView(there, true)) } : part;
 		});
 		const first = parts[0];
 		if (!first) return false;
@@ -7523,6 +7980,7 @@ export class NotebookView extends FileView {
 				return true;
 			},
 			deleteSelection: () => this.deleteSelection(),
+			selectionCovered: () => this.selectionCovered(),
 			boxes: () => this.layout?.boxes ?? [],
 			sharedClips: () => this.host.sharedClips?.() ?? (this.sharedClipStore ??= new SharedClipStore(vaultDeviceFileAdapter(this.app), () => this.host.settings.folder, sidecarDeviceId(this.app))),
 			pasteTarget: () => this.pasteTarget(),
@@ -7591,6 +8049,7 @@ export class NotebookView extends FileView {
 			tool: () => this.tools.tool,
 			labelColor: () => this.tools.penColor,
 			register: (ref) => this.registerEvent(ref),
+			openFigure: (id) => this.openFigureReference(id),
 		});
 		this.penLinks.bindEditor(editor);
 	}
@@ -7632,7 +8091,7 @@ export class NotebookView extends FileView {
 		// A group it touches is completed (as the lasso does), so a move, cut or delete never splits one.
 		const settle = (index: number, sel: { strokes: Stroke[]; elements: PageElement[] }): { strokes: Stroke[]; elements: PageElement[] } => {
 			const page = this.pageAtIndex(index);
-			return page ? selectableItems(page, sel, this.inkInView(page)) : { strokes: sel.strokes, elements: [...unlockedElements(sel.elements)] };
+			return page ? selectableItems(page, sel, this.inkInView(page, true)) :{ strokes: sel.strokes, elements: [...unlockedElements(sel.elements)] };
 		};
 		({ strokes, elements } = settle(pageIndex, { strokes, elements }));
 		others = others?.map((o) => ({ ...o, ...settle(o.pageIndex, o) }));
