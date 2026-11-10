@@ -193,6 +193,8 @@ for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"])
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "linehandle", theme, device, lowLatency: false });
 // 0.29 charts (#244): the chart dialog and a chart beside its table (dev/harness/charts-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "charts", theme, device, lowLatency: false });
+// 0.30 figmarkers (#247): numbered markers on a figure with a legend (dev/harness/figmarkers-check.ts), tablet and phone, light and dark.
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "figmarkers", theme, device, lowLatency: false });
 // 0.29 stats (#295): the table statistics card (dev/harness/stats-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "stats", theme, device, lowLatency: false });
 // 0.29 cardtemplates: the card template picker and manager (dev/harness/cardtemplates-check.ts), tablet and phone, light and dark.
@@ -505,6 +507,7 @@ async function main() {
 				else if (s.doc === "linehandle") report = await cdp.evaluate("window.harness.checkLinehandle()", 90000); // 0.28 linehandle
 				else if (s.doc === "tables") report = await cdp.evaluate("window.harness.checkTables()", 120000); // 0.28 tables
 				else if (s.doc === "charts") report = await cdp.evaluate("window.harness.checkCharts()", 120000); // 0.29 charts
+				else if (s.doc === "figmarkers") report = await cdp.evaluate("window.harness.checkFigmarkers()", 120000); // 0.30 figmarkers
 				else if (s.doc === "stats") report = await cdp.evaluate("window.harness.checkStats()", 120000); // 0.29 stats
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
 				else if (s.doc === "spread") report = await cdp.evaluate("window.harness.checkSpread()", 120000); // 0.27 spread
@@ -817,6 +820,19 @@ async function main() {
 						writeFileSync(join(designDir, `spread-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`spread ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.30 figmarkers: screenshots of a figure with numbered markers and its legend, and with one marker selected.
+			if (s.doc === "figmarkers") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["figure", "selected"]) {
+					try {
+						await cdp.evaluate(`window.harness.figmarkersShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `figmarkers-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`figmarkers ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

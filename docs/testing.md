@@ -4925,3 +4925,34 @@ Update to 0.29 and fully close and reopen Obsidian. Use a vault with a notebook 
 | A line only strikes ink written before it | yes | `tests/strikethrough.test.ts` | | | |
 | Groups complete with hidden struck members; very dense pages are skipped in the view | yes | `tests/strikethrough.test.ts` | | | |
 | Pictures of a selection into notes, copies, digests leave out struck words | no | | | | not covered; the setting text says which files are |
+
+### 0.30 — figmarkers: numbered markers on a figure with a legend (roadmap #247; steps 3560-3579)
+
+A marker is a ring with its number (a shape stroke and a text box, one group); the legend is a text box with a rule above it (one group). Neither is in the document format: they are ordinary content that the plugin finds again by the id of their groups.
+
+3560. **A picture.** Place a photo on a page. Select it (lasso, tap it): *All actions* shows *Add numbered marker* near the top (and no *Renumber markers*). Tap it: a numbered ring "1" appears on the picture (top left) and a legend under it with a rule and the line "1.". A notice says to drag the marker to its place and type the description. The new marker is selected.
+3561. **Drag and describe.** Drag marker 1 onto the part it names (it moves as one piece, ring and number together). Tap the legend text, type `Cell wall` after "1.": the legend reads "1. Cell wall".
+3562. **More markers.** With the marker still selected, *Add numbered marker* again, twice: markers 2 and 3 appear on distinct spots of the picture (never on top of each other) and the legend gets the lines "2." and "3." without changing the words you typed. Each use is one undo step: undo removes the last marker and its legend line only; redo brings them back.
+3563. **A drawing.** Draw a simple figure with the pen (a few shapes), lasso it, *Add numbered marker*: markers appear on the drawing and the legend under it. Select the drawing again and add another: it joins the same legend (it does not start a second one).
+3564. **Two figures.** Do the same on a second picture or drawing on the same page: it has its own markers numbered from 1 and its own legend. Select markers of both figures at once and try *Add numbered marker*: refused with "The selection holds markers of more than one figure…".
+3565. **Delete and renumber.** Delete marker 2 (select it, Delete): the markers read 1, 3 and the legend still lists 2. Select marker 3: *All actions* shows *Renumber markers* near the top. Tap it: the marker 3 becomes 2, and the legend reads "1. …" and "2. …" with each description staying with its marker; the description of the deleted marker is gone. A notice says so. Undo: the old numbers and legend come back in one step. Choose it again when everything is in order: "already numbered".
+3566. **A marker without a line.** Delete a legend line by hand, then *Renumber markers*: the line comes back, empty, in its place. Type two lines of text for one marker (press Enter and keep typing): they stay together under their marker after a renumber.
+3567. **Look.** The ring is a translucent tint with a solid outline in the pen colour; the number is centred in it and readable on a light picture, and (with a light pen colour) on a dark one. Change the pen colour before the first marker: all the markers of that figure share the colour of the first. Recolour or resize a marker with the selection bar: it works on that marker alone.
+3568. **Copies.** Select the picture with its markers and legend, copy and paste (or duplicate the page): the copy shows the same numbers and legend. Select a marker of the copy: *Renumber markers* is not offered (the copy is a picture, linked to nothing); change the original's markers and the copy does not change, and the other way round.
+3569. **Guards.** Lock the page: both actions are disabled. Lock the legend text box (Lock) and try *Add numbered marker* on that figure: refused with "The legend or a marker is locked…". Draw a redaction box over the spot where the next marker would go (grid of the picture's top left) and add: refused with the redaction message; move the box away and it works. Add 99 markers (or just trust the unit test): the 100th is refused.
+3570. **Exports and history.** Export the page as PDF, PNG and SVG: rings, numbers and legend are drawn. With redaction on, a box over a marker hides it. The history panel reads "Marker added" and "Markers renumbered" (Italian "Segnaposto aggiunto", "Segnaposto rinumerati"). With *Undo on this page only* on, undo of a marker step acts on that page only.
+3571. **Phone, light, dark, Italian.** The actions read well on a phone, in light, dark and *Follow Obsidian theme*, in Italian with the plugin in Italian; long-press the two actions in the sheet to see their help text.
+3572. **Real device.** On the tablet with the S Pen: the ring is a good size for the picture (not tiny, not huge), dragging a marker onto a small part is easy, and adding a marker is instant.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Group ids `nbm1.<m\|l>.<figure>.<random>`: build, parse, lenient reading, within the group id limit | yes | `tests/figure-markers.test.ts` | | | |
+| Legend text: entries, headings, continuation lines, add a line, reconcile after a renumber (descriptions follow their marker) | yes | `tests/figure-legend.test.ts` | | | |
+| Add marker on a picture or a drawing: next number, free spot, centred number, legend created or extended, one undo step, valid document | yes | `tests/figure-markers.test.ts`, harness `doc=figmarkers` | | | |
+| Renumber markers: closes gaps, legend follows, drops / adds lines, duplicates, refusals (locked, states, none, same), one undo step | yes | `tests/figure-markers.test.ts`, harness `doc=figmarkers` | | | |
+| Redaction fails closed for inserts; 99-marker limit; page-local steps for per-page undo | yes | `tests/figure-markers.test.ts` | | | |
+| Copies are plain pictures (fresh group ids), never linked to the original | yes | `tests/figure-markers.test.ts` | | | |
+| Actions, help, ranking, commands, history titles, en + it | yes | `tests/figure-marker-actions.test.ts` | | | |
+| Placing a marker by tapping the spot on the figure | no | | | | markers appear on a free spot and are dragged to place |
+| Renumbering by itself after a delete, or in reading order | no | | | | explicit *Renumber markers* in placement order only |
+| Leader lines from a marker to its legend text | no | | | | roadmap #246 |
