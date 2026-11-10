@@ -53,13 +53,12 @@ function marginCommand(target: Page, after: PageMargins | undefined): Command | 
 }
 
 /**
- * Round-2 review (H1): true, after a notice, when `cmd` changes the left margin of a page with redaction boxes (or while the boxes cannot be
- * read: `hasRedaction` says so too): the PDF and the ink would move out from under the boxes, which every export burns where they are.
+ * Round-2 review (H1): true when `cmd` changes the left margin of a page with redaction boxes (or while the boxes cannot be read:
+ * `hasRedaction` says so too): the PDF and the ink would move out from under the boxes, which every export burns where they are.
+ * Round-3 review (Z7): no notice of its own: the margins dialog shows the reason in place.
  */
 export function marginsRefused(host: Pick<PdfActionHost, "doc" | "hasRedaction">, cmd: Command): boolean {
-	if (!backgroundShifts(host.doc, cmd).some((id) => host.hasRedaction?.(id) === true)) return false;
-	showNotice(t("redactmove.background"), 9000);
-	return true;
+	return backgroundShifts(host.doc, cmd).some((id) => host.hasRedaction?.(id) === true);
 }
 
 /** Asks for the margins of a page (mm) and applies them, optionally to every page of the same PDF, as one undo step. */

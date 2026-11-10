@@ -5210,7 +5210,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.pdfRotateRight": "Gira la pagina PDF di un quarto di giro in senso orario. L'inchiostro e le note girano con lei, e Annulla rimette tutto a posto.",
 	"help.pdfRotateLeft": "Gira la pagina PDF di un quarto di giro in senso antiorario. L'inchiostro e le note girano con lei, e Annulla rimette tutto a posto.",
 	"help.pdfCrop": "Tiene solo una parte della pagina PDF, su questa pagina o su tutte le pagine del PDF. Non si cancella nulla: Pagina intera rimette tutto.",
-	"redact.stale": "Una pagina è stata ruotata o ritagliata dopo aver disegnato i suoi riquadri di oscuramento, quindi i riquadri non coprono più ciò che coprivano e non è stato scritto nulla. Apri Esporta… › Oscura…, elimina i riquadri di quella pagina e disegnali di nuovo.",
+	"redact.stale": "Una pagina è stata ruotata, ritagliata, ridimensionata o il suo sfondo è stato spostato o sostituito dopo aver disegnato i suoi riquadri di oscuramento, quindi i riquadri non coprono più ciò che coprivano e non è stato scritto nulla. Apri Esporta… › Oscura…, elimina i riquadri di quella pagina e disegnali di nuovo.",
 	"pdfView.invalidFrame": "Il riquadro è troppo piccolo da tenere. Ingrandiscilo.",
 	"pdfView.redacted": "Togli o rifai prima i riquadri di oscuramento di questa pagina: resterebbero dove era la pagina di prima.",
 	"pdfView.skipped": "Pagine rimaste com'erano: {n} ({why}).",
@@ -5411,7 +5411,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"redactundo.redo": "Ripeti non eseguito: sposterebbe la scrittura da sotto un riquadro di oscuramento (o sotto uno) in questa pagina. Prima rimuovi o rifai i riquadri della pagina; il passo resta nella cronologia.",
 	// 0.29 redactfix (round-2 review H1, H4)
 	"redactundo.failed": "{step} non eseguito: il controllo che tiene coperto ciò che i riquadri di oscuramento coprono non è riuscito. Il passo resta nella cronologia; riprova, oppure prima rimuovi i riquadri di questa pagina.",
-	"redactmove.background": "Togli o rifai prima i riquadri di oscuramento di questa pagina: un nuovo margine sinistro sposterebbe la pagina e la sua scrittura da sotto i riquadri.",
+	"redactmove.background": "Togli o rifai prima i riquadri di oscuramento di questa pagina: questa modifica (un nuovo margine sinistro, un'altra dimensione della pagina, un altro sfondo) sposterebbe o allungherebbe la pagina e la sua scrittura da sotto i riquadri.",
 	// 0.29 figcaptions (#248): didascalie e riferimenti delle figure
 	"figcap.abbr": "Fig.",
 	"figcap.caption.menu": "Didascalia della figura…",
@@ -5772,4 +5772,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"tape.delete.body": "Questa selezione include contenuti nascosti sotto i nastri di studio. Eliminarla comunque?",
 	"tape.delete.confirm": "Elimina",
 	"tape.export.note": "I nastri di studio coprono il contenuto solo alla vista: il testo sotto si può ancora trovare nei file esportati. Usa Oscura per togliere contenuti dalle esportazioni.",
+	// 0.29 review round 3
+	"tape.text.hidden": "Questo punto è sotto un nastro di studio coperto. Prima rivela il nastro (toccalo con la penna), poi scrivi o modifica il testo lì.",
+	"merge.redacted": "sposterebbe o allungherebbe lo sfondo di una pagina con riquadri di oscuramento, che non coprirebbero più ciò che coprono. Prima togli o rifai i riquadri di quella pagina (Esporta… › Oscura…).",
 };

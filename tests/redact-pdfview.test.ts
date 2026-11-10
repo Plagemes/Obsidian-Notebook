@@ -20,7 +20,7 @@ vi.mock("obsidian", async () => {
 import { pageToSvg } from "../src/ink/export-svg";
 import { createDocument } from "../src/model/document";
 import { History } from "../src/model/history";
-import { addBox, cleanBox, normaliseRedactions, pageViewKey, staleRedactionPages, tagNewBoxes, type Redactions } from "../src/model/redact";
+import { addBox, backgroundGeometry, cleanBox, normaliseRedactions, pageViewKey, staleRedactionPages, tagNewBoxes, type Redactions } from "../src/model/redact";
 import { buildViewCommands } from "../src/model/pdf-view-ops";
 import { planPageView, SetPdfView } from "../src/model/pdf-view-command";
 import type { NotebookDocument, Page, TextElement } from "../src/model/types";
@@ -56,14 +56,15 @@ describe("a redaction box remembers the view of its page", () => {
 	it("tags the boxes drawn now with the turn and crop of their page and leaves the old ones as they were", () => {
 		const { page } = pdfDoc();
 		const upright: Redactions = { p1: [BOX] };
-		expect(tagNewBoxes(upright, undefined, [page])).toEqual(upright);
+		// 0.29 (round-3 review Z2): a box drawn now also records the geometry of the page's background.
+		expect(tagNewBoxes(upright, undefined, [page])).toEqual({ p1: [{ ...BOX, geo: backgroundGeometry(page) }] });
 		const turned = { ...page, background: { kind: "pdf" as const, asset: ASSET, page: 1, rotate: 90 as const } };
 		expect(pageViewKey(turned)).toBe("r90");
 		const drawn: Redactions = { p1: [BOX, { x: 10, y: 10, width: 50, height: 20 }] };
 		// BOX was there before (untagged: drawn on the upright page); the second box is new.
 		const tagged = tagNewBoxes(drawn, { p1: [BOX] }, [turned]);
 		expect(tagged.p1![0]).toEqual(BOX);
-		expect(tagged.p1![1]).toEqual({ x: 10, y: 10, width: 50, height: 20, view: "r90" });
+		expect(tagged.p1![1]).toEqual({ x: 10, y: 10, width: 50, height: 20, view: "r90", geo: backgroundGeometry(turned) });
 	});
 
 	it("finds the pages whose boxes were drawn on another view", () => {

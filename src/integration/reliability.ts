@@ -50,6 +50,8 @@ export interface ReliabilityView {
 	editableDocument(): NotebookDocument | null;
 	/** Runs `cmd` on the document as one undo step. False when the view cannot take it now. */
 	applyCommand(cmd: Command, scrollTo?: number): boolean;
+	/** Round-3 review (Z1): whether `applyCommand` would refuse `cmd` because it moves the background under redaction boxes. */
+	redactRefuses?(cmd: Command): boolean;
 	/** Index of the page in view. */
 	currentPage(): number;
 	/** Writes everything to disk; true when nothing is left only in memory. */
@@ -397,6 +399,8 @@ class MergeModal extends Modal {
 			const doc = this.view.editableDocument();
 			if (!fresh.ok || !doc || fresh.doc.id !== doc.id) throw new Error(t("merge.unreadable", { name: copy.file.name }));
 			const plan = planMerge(doc, fresh.doc);
+			// Round-3 review (Z1): a merge that would move the background of a page with redaction boxes is refused with its own reason.
+			if (plan.command && this.view.redactRefuses?.(plan.command) === true) throw new Error(t("merge.redacted"));
 			if (plan.command && !this.view.applyCommand(plan.command)) throw new Error(t("merge.notEditable"));
 			showNotice(t("merge.done", { name: copy.file.name }));
 			if (this.moveCopy) await this.afterMerge(copy, fresh.doc, true);
