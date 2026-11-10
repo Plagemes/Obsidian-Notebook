@@ -224,9 +224,13 @@ export class StrikeCache {
 		return this.pages.get(pageId)?.result ?? null;
 	}
 
-	get(pageId: string, strokes: readonly Stroke[]): StrikeResult {
+	/**
+	 * The result for the page, computed when stale. `maxStrokes` (review S5): a page with more strokes than this is not looked at
+	 * (nothing on it is hidden in the view): the detection cannot be sliced, so a very dense page would hold the main thread.
+	 */
+	get(pageId: string, strokes: readonly Stroke[], maxStrokes = Infinity): StrikeResult {
 		if (this.fresh(pageId, strokes)) return this.pages.get(pageId)!.result;
-		const result = detectStrikes(strokes);
+		const result = strokes.length > maxStrokes ? NO_STRIKES : detectStrikes(strokes);
 		this.pages.set(pageId, { seen: strokes.slice(), result });
 		return result;
 	}
