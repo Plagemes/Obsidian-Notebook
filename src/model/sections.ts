@@ -227,15 +227,24 @@ class Continuations {
 		return set;
 	}
 
-	/** Whether `b` is a continuation of `a` (its id comes from `a`'s sequence) and still looks the same (not renamed or recoloured since). */
+	/** Whether `b` is a continuation of `a`: its id comes from `a`'s sequence (whatever either is called now). */
 	continues(a: Section, b: Section): boolean {
-		return a.id !== b.id && a.title === b.title && a.color === b.color && this.of(a.id).has(b.id);
+		return a.id !== b.id && this.of(a.id).has(b.id);
 	}
 
-	/** The section of `list` that `s` continues, or `s` itself. */
+	/**
+	 * The section of `list` at the start of the chain of continuations `s` belongs to, or `s` itself (review T2: the chain is followed, and
+	 * by id only, so a piece made while its original was renamed, or a piece of a piece, still finds the original).
+	 */
 	rootOf(s: Section, list: readonly Section[]): Section {
-		for (const r of list) if (this.continues(r, s)) return r;
-		return s;
+		const seen = new Set<string>([s.id]);
+		let cur = s;
+		for (;;) {
+			const up = list.find((r) => !seen.has(r.id) && this.continues(r, cur));
+			if (!up) return cur;
+			seen.add(up.id);
+			cur = up;
+		}
 	}
 
 	/** A new continuation id of `root`, not in `taken`. */
@@ -307,26 +316,28 @@ export function sectionsAfterReorder(sections: readonly Section[], before: reado
 		extra.push(copy);
 		placed.push({ section: copy, first: run.first, was: s });
 	}
-	// Review R1: two pieces of one split section (a continuation and the section it continues, or two continuations of one section) that
-	// the move made neighbours become one again. Independent sections that only share a title and colour are never joined.
+	// Review R1: two pieces of one split section (a continuation and the section it continues, or two continuations of one section, review
+	// T2) that the move made neighbours, and that still look the same (one renamed or recoloured stays apart), become one again.
+	// Independent sections that only share a title and colour are never joined.
 	const neighbours = new Set<string>();
 	for (let i = 1; i < shown.length; i++) neighbours.add(`${shown[i - 1]!.section.id}\n${shown[i]!.section.id}`);
 	const all = [...sections, ...extra];
 	const gone = new Set<string>();
-	let prev: { section: Section; root: Section } | null = null;
+	let prev: Section | null = null;
 	for (const p of placed) {
 		const s = p.section;
-		const root = conts.rootOf(s, all);
-		if (prev && prev.root.id === root.id && !neighbours.has(`${prev.section.id}\n${s.id}`)) {
+		const pair = prev !== null && prev.title === s.title && prev.color === s.color && !neighbours.has(`${prev.id}\n${s.id}`);
+		const root = pair ? conts.rootOf(s, all) : null;
+		if (prev && root && conts.rootOf(prev, all).id === root.id) {
 			if (s.id === root.id) {
 				// The original comes second: it keeps its id and starts where the piece before it started.
-				gone.add(prev.section.id);
-				start.set(s.id, start.get(prev.section.id) ?? prev.section.page);
-				prev = { section: s, root };
+				gone.add(prev.id);
+				start.set(s.id, start.get(prev.id) ?? prev.page);
+				prev = s;
 			} else gone.add(s.id);
 			continue;
 		}
-		prev = { section: s, root };
+		prev = s;
 	}
 	const shownIds = new Set(shown.map((r) => r.section.id));
 	let changed = sections.some((s) => gone.has(s.id)) || extra.some((s) => !gone.has(s.id));

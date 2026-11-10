@@ -701,6 +701,27 @@ describe("format v28: history", () => {
 		expect(doc.sections).toHaveLength(4);
 	});
 
+	it("review T2: the pieces of a section renamed while split, then renamed back, are put back together", () => {
+		const doc = laidOut(["x1", "x2", "x3", "s1", "t1", "y1"], { x: "x1", s: "s1", t: "t1", y: "y1" });
+		const history = historyOf(doc);
+		const rename = (id: string, title: string): void => {
+			expect(history.execute(setSections(doc, withSectionRenamed(sectionsOf(doc), id, title), "Rename section")!)).toBe(true);
+		};
+		// s1 between x1 and x2; X renamed; t1 dropped inside the continuation; X renamed back.
+		expect(history.execute(new MovePage("s1", 3, 1))).toBe(true);
+		rename("x", "Tmp");
+		expect(history.execute(new MovePage("t1", 4, 3))).toBe(true);
+		expect(looks(doc)).toEqual(["Tmp", "Section s", "Section x", "Section t", "Section x", "Section y"]);
+		// While the names differ, the pieces stay apart.
+		expect(doc.sections).toHaveLength(6);
+		rename("x", "Section x");
+		expect(history.execute(new MovePage("s1", 1, 4))).toBe(true);
+		expect(history.execute(new MovePage("t1", 2, 4))).toBe(true);
+		expect(ids(doc)).toEqual(["x1", "x2", "x3", "s1", "t1", "y1"]);
+		expect(membership(doc)).toEqual(["x", "x", "x", "s", "t", "y"]);
+		expect(doc.sections).toHaveLength(4);
+	});
+
 	it("is classified as a global step for per-page undo, and the panel has a title for it", () => {
 		expect(CLASSIFIED).toContain("SetSections");
 		const scope = computeScope(new SetSections([], [section("a", "p1")], "New section"));
