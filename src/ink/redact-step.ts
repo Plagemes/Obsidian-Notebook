@@ -21,13 +21,18 @@
  * - a stroke, an element or an anchored comment that leaves a page where it touched a box and is found on another page after the step (a move
  *   to another page), also when the step removed the page it left (review U6a); and one that arrives on a page from another captured page
  *   and touches a box there (review U6b).
+ * - round-2 review (H1): the background of a page with boxes (the PDF page or the picture) that moves, grows or changes: its rectangle on the
+ *   page (`backgroundRect`: a left margin, a page size) or what it shows (its asset, page, turn or crop). The boxes are page coordinates, so
+ *   the background would slide out from under them, and a background-only page has no ink that would tell.
  * Ink that only appears (an erase undone) or disappears (a stroke undone) is not a move: a box cuts whatever lies under it at export.
  * Fail closed: when the stored boxes cannot be read, any move on a page the step names refuses the step (`refused(step, true)`: the view says
  * so with its own notice, review U2).
  */
-import type { CommentRegion, NotebookDocument, Page, PageComment, PageCommentNote, PageElement, Point, Stroke } from "../model/types";
+import type { CommentRegion, NotebookDocument, Page, PageBackground, PageComment, PageCommentNote, PageElement, Point, Stroke } from "../model/types";
 import type { RedactBox } from "../model/redact";
-import type { StepCheck, StepInfo } from "../model/history";
+import { Batch, SetPageMargins, SetPageSize, type Command, type StepCheck, type StepInfo, type StepVerdict } from "../model/history";
+import { backgroundRect, marginsAfterResize, marginsOf, type Rect } from "../model/margins";
+import { backgroundViewKey } from "../model/pdf-view";
 import { INK_PAD, movesUnderRedaction, redactBounds, redactReach, type RedactGuard } from "./redact";
 
 /** The redaction boxes as the guard sees them: the boxes of a page, and whether the stored boxes could not be read. */
@@ -44,6 +49,48 @@ export interface PageShot {
 	strokes: readonly Stroke[];
 	elements: readonly PageElement[];
 	comments: readonly PageComment[];
+	/** Round-2 review (H1): where the background is drawn (null: the page has no background) and what it shows (`backgroundKey`). */
+	background: Rect | null;
+	backgroundKey: string;
+}
+
+/** What a background shows, as a text: the PDF asset, page, turn and crop, or the picture; "" without a background. */
+export function backgroundKey(bg: PageBackground | undefined): string {
+	if (!bg) return "";
+	return bg.kind === "pdf" ? `pdf|${backgroundViewKey(bg)}` : `${bg.kind}|${bg.asset}`;
+}
+
+/** The background of `page` as a `PageShot` holds it. */
+function backgroundOf(page: Page): { background: Rect | null; backgroundKey: string } {
+	return { background: page.background ? backgroundRect(page) : null, backgroundKey: backgroundKey(page.background) };
+}
+
+const sameRect = (a: Rect | null, b: Rect | null): boolean =>
+	a === b || (a !== null && b !== null && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height);
+
+/**
+ * Round-2 review (H1): the pages whose background `cmd` would move sideways when it runs on `doc` (a left margin that changes, or a page size
+ * that drops the margins). A margin change moves the background and the ink together, out from under the boxes, which stay in page
+ * coordinates: the actions refuse it on a page with boxes, like a PDF turn or crop. Pure: nothing runs.
+ */
+export function backgroundShifts(doc: NotebookDocument, cmd: Command): string[] {
+	const out: string[] = [];
+	const walk = (c: Command): void => {
+		if (c instanceof Batch) {
+			for (const x of c.commands) walk(x);
+			return;
+		}
+		if (c instanceof SetPageMargins) {
+			if (marginsOf({ margins: c.before }).left !== marginsOf({ margins: c.after }).left) out.push(c.pageId);
+			return;
+		}
+		if (c instanceof SetPageSize) {
+			const page = doc.pages.find((p) => p.id === c.pageId);
+			if (page?.margins && marginsOf(page).left !== marginsOf({ margins: marginsAfterResize(page, c.after) }).left) out.push(c.pageId);
+		}
+	};
+	walk(cmd);
+	return out;
 }
 
 /**
@@ -58,7 +105,7 @@ export function captureForStep(doc: NotebookDocument, boxes: StepBoxes, pages: R
 	for (const p of doc.pages) {
 		const named = pages === null || pages.has(p.id);
 		if (!named && (boxes.unreadable || boxes.boxesOf(p.id).length === 0)) continue;
-		out.push({ id: p.id, strokes: [...p.strokes], elements: [...(p.elements ?? [])], comments: [...(p.comments ?? [])] });
+		out.push({ id: p.id, strokes: [...p.strokes], elements: [...(p.elements ?? [])], comments: [...(p.comments ?? [])], ...backgroundOf(p) });
 	}
 	return out.length > 0 ? out : null;
 }
@@ -138,10 +185,17 @@ export function stepMovesUnderRedaction(before: readonly PageShot[], doc: Notebo
 	for (const p of doc.pages) pages.set(p.id, p);
 	// U6b: the page each captured item was on before the step.
 	const wasOn = new Map<string, string>();
+	// Round-2 review (H5): comment ids are unique only within a page (a duplicated page keeps them), so the notes of each captured page are known by page.
+	const notesBefore = new Map<string, Set<string>>();
 	for (const shot of before) {
 		for (const s of shot.strokes) wasOn.set(s.id, shot.id);
 		for (const el of shot.elements) wasOn.set(el.id, shot.id);
-		for (const c of notesOf(shot.comments)) wasOn.set(c.id, shot.id);
+		const notes = new Set<string>();
+		for (const c of notesOf(shot.comments)) {
+			wasOn.set(c.id, shot.id);
+			notes.add(c.id);
+		}
+		notesBefore.set(shot.id, notes);
 	}
 	for (const shot of before) {
 		const guard: RedactGuard = { boxes: boxes.boxesOf(shot.id), ...(boxes.unreadable ? { unreadable: true } : {}) };
@@ -149,8 +203,14 @@ export function stepMovesUnderRedaction(before: readonly PageShot[], doc: Notebo
 		if (!page) {
 			// U6a: a page the step removed takes its items with it, unless they are found on another page now.
 			const gone: Items = { strokes: [...shot.strokes], elements: [...shot.elements], notes: notesOf(shot.comments) };
-			if (size(gone) > 0 && leftToAnotherPage(gone, shot.id, doc, guard)) return true;
+			if (size(gone) > 0 && leftToAnotherPage(gone, shot.id, doc, guard, notesBefore)) return true;
 			continue;
+		}
+		// Round-2 review (H1): the background of a page with boxes (or of any named page while the boxes cannot be read) stays where it was and
+		// shows what it showed: a margin change, a page size or another background slides it out from under the boxes.
+		if ((guard.boxes.length > 0 || guard.unreadable === true) && (shot.background !== null || page.background)) {
+			const now = backgroundOf(page);
+			if (!sameRect(shot.background, now.background) || shot.backgroundKey !== now.backgroundKey) return true;
 		}
 		const nowStrokes = new Set<Stroke>(page.strokes);
 		const nowElements = new Set<PageElement>(page.elements ?? []);
@@ -192,7 +252,7 @@ export function stepMovesUnderRedaction(before: readonly PageShot[], doc: Notebo
 			}
 		}
 		if (movesUnderRedaction(guard, asMove(moved.before), asMove(moved.after))) return true;
-		if (size(left) > 0 && leftToAnotherPage(left, shot.id, doc, guard)) return true;
+		if (size(left) > 0 && leftToAnotherPage(left, shot.id, doc, guard, notesBefore)) return true;
 		// U6b: what arrived on this page from another captured page (a move to another page) and lies under a box here now.
 		for (const s of shot.strokes) had.add(s.id);
 		for (const el of shot.elements) had.add(el.id);
@@ -209,7 +269,8 @@ export function stepMovesUnderRedaction(before: readonly PageShot[], doc: Notebo
 
 /**
  * The History `StepCheck` of the redaction guard. `boxes` is read once per step (before it), or once per run of steps (a history-panel jump,
- * review U7: the store is read and parsed once for the whole slice). `refused` is told when a step is refused, with `unreadable` true when it
+ * review U7: the store is read and parsed once for the whole slice). `refused` is told when a step is refused and back where it was (round-2
+ * review H4: through the verdict, which the history calls only then), with `unreadable` true when it
  * was refused only because the stored boxes cannot be read (the view shows another notice, U2). Nothing is captured, and nothing is checked,
  * while the notebook has no box and the boxes can be read.
  */
@@ -226,27 +287,31 @@ export function redactStepCheck(boxes: () => StepBoxes, refused: (step: "undo" |
 		const known = read(info);
 		const before = captureForStep(doc, known, info?.pages ?? null);
 		if (!before) return null;
-		return (after) => {
-			if (!stepMovesUnderRedaction(before, after, known)) return false;
-			refused(step, known.unreadable);
-			return true;
-		};
+		// Round-2 review (H4): the notice is a function the history calls only once the step is back where it was (not when taking it back failed).
+		return (after): StepVerdict => (stepMovesUnderRedaction(before, after, known) ? () => refused(step, known.unreadable) : false);
 	};
 }
 
-/** Of the items that left page `pageId`, those that touched a box of it and are on another page now: true when there is any. */
-function leftToAnotherPage(left: Items, pageId: string, doc: NotebookDocument, guard: RedactGuard): boolean {
+/**
+ * Of the items that left page `pageId`, those that touched a box of it and are on another page now: true when there is any. Round-2 review
+ * (H5): a comment id is unique only within its page, so a note found on another page is the one that left only when that page was captured
+ * (`notesBefore`: the note ids of each captured page before the step) and did not have it before; a page the step does not name cannot have
+ * received it.
+ */
+function leftToAnotherPage(left: Items, pageId: string, doc: NotebookDocument, guard: RedactGuard, notesBefore: ReadonlyMap<string, ReadonlySet<string>>): boolean {
 	const touches = (m: { strokes: readonly Stroke[]; elements: readonly PageElement[]; regions: readonly CommentRegion[] }): boolean =>
 		movesUnderRedaction(guard, m, NOTHING);
 	const ids = new Set<string>([
 		...left.strokes.filter((s) => touches({ strokes: [s], elements: [], regions: [] })).map((s) => s.id),
 		...left.elements.filter((el) => touches({ strokes: [], elements: [el], regions: [] })).map((el) => el.id),
-		...left.notes.filter((c) => touches({ strokes: [], elements: [], regions: [c.region] })).map((c) => c.id),
 	]);
-	if (ids.size === 0) return false;
+	const noteIds = new Set<string>(left.notes.filter((c) => touches({ strokes: [], elements: [], regions: [c.region] })).map((c) => c.id));
+	if (ids.size === 0 && noteIds.size === 0) return false;
 	for (const p of doc.pages) {
 		if (p.id === pageId) continue;
-		if (p.strokes.some((s) => ids.has(s.id)) || (p.elements ?? []).some((el) => ids.has(el.id)) || (p.comments ?? []).some((c) => ids.has(c.id))) return true;
+		if (p.strokes.some((s) => ids.has(s.id)) || (p.elements ?? []).some((el) => ids.has(el.id))) return true;
+		const had = notesBefore.get(p.id);
+		if (had && notesOf(p.comments ?? []).some((c) => noteIds.has(c.id) && !had.has(c.id))) return true;
 	}
 	return false;
 }

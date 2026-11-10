@@ -68,7 +68,7 @@ import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
 	ReplaceStroke, SetMeta, SetPageSize, type Command, type StepCheck,
 } from "../model/history";
-import { redactStepCheck } from "../ink/redact-step"; // 0.29 redactundo (R3-1)
+import { backgroundShifts, redactStepCheck } from "../ink/redact-step"; // 0.29 redactundo (R3-1)
 import { pageContentCommand } from "../model/page-content";
 import { pageRules } from "../model/page-undo";
 import { checkContent, freezeStroke } from "../model/serialize";
@@ -1908,7 +1908,8 @@ export class NotebookView extends FileView {
 		this.history.setPageRules(pageRules);
 		this.history.setPagewise(settings.pageUndo);
 		// 0.29 (review R3-1): an undo or a redo that would move ink out from under (or under) a redaction box is refused and stays in the history.
-		this.history.setStepCheck(this.redactStepCheck());
+		// Round-2 review (H4): a check that throws refuses the step too (fail closed), with its own notice.
+		this.history.setStepCheck(this.redactStepCheck(), (step) => void showNotice(t("redactundo.failed", { step: t(step === "undo" ? "tool.undo" : "tool.redo") }), 8000));
 		if (this.toolbar) {
 			this.toolbar.setPageUndo(settings.pageUndo);
 			this.updateHistoryButtons();
@@ -4465,7 +4466,8 @@ export class NotebookView extends FileView {
 				// 0.26 (#285): no other option is passed here, but the redaction boxes of the notebook still cover what the file would show (and
 				// boxes that cannot be read refuse the file, review fix P4).
 				// 0.29 (#96): the struck-out words setting covers this export too.
-				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media, { ...this.struckOption(), ...this.redactOptions() });
+				// Round-2 review (H6): the figure numbers of this notebook, frozen, like every other writer (F1).
+				if (this.file) await exportPdf(this.app, this.file, pages, suffix, this.media, { ...this.struckOption(), figures: this.figureNumbers.snapshot(), ...this.redactOptions() });
 			},
 		};
 	}
@@ -4519,7 +4521,14 @@ export class NotebookView extends FileView {
 
 	/** Runs a command built outside the view (merge, page restore) as one undo step. */
 	applyCommand(cmd: Command, scrollTo?: number): boolean {
-		if (!this.editableDocument()) return false;
+		const doc = this.editableDocument();
+		if (!doc) return false;
+		// Round-2 review (H1): a left margin that changes (a merge that widens a page, a page size that drops the margins) moves the background
+		// and the ink out from under the redaction boxes of the page: refused, like a PDF turn or crop (fail closed when the boxes are unreadable).
+		if (backgroundShifts(doc, cmd).some((id) => { const g = this.redactGuard(id); return g.unreadable === true || g.boxes.length > 0; })) {
+			showNotice(t("redactmove.background"), 9000);
+			return false;
+		}
 		this.commitText();
 		this.clearSelection();
 		// False when the history refused it (a locked page, or a change the writer would reject): the callers say so.
