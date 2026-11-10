@@ -93,7 +93,7 @@ describe("format v27: the fields", () => {
 	});
 
 	it("is a document of the current version", () => {
-		expect(CURRENT_VERSION).toBe(27);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(27);
 		expect(ELEMENT_TYPES_V27).toEqual(["tape"]);
 		expect(parsed(serialize(docWith([tape("a")]))).doc.version).toBe(CURRENT_VERSION);
 	});
@@ -143,12 +143,12 @@ describe("format v27: migration from v26", () => {
 		expect(migrated.pages).toBe(raw.pages);
 	});
 
-	it("reads a v26 file and writes it as v27", () => {
+	it("reads a v26 file and writes it as the current version", () => {
 		const r = parsed(JSON.stringify(v26Raw()));
 		expect(r.migratedFrom).toBe(26);
 		expect(r.dropped).toBeUndefined();
-		expect(r.doc.version).toBe(27);
-		expect(getAt(parseRaw(serialize(r.doc)), ["version"])).toBe(27);
+		expect(r.doc.version).toBe(CURRENT_VERSION);
+		expect(getAt(parseRaw(serialize(r.doc)), ["version"])).toBe(CURRENT_VERSION);
 	});
 
 	it("reads files of older versions through the chain", () => {

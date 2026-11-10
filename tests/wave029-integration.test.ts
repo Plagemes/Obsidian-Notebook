@@ -45,8 +45,8 @@ function struckStrokes(): Stroke[] {
 }
 
 describe("0.29 integration: the format", () => {
-	it("is 27 (the study tape)", () => {
-		expect(CURRENT_VERSION).toBe(27);
+	it("is at least 27 (the study tape)", () => {
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(27);
 	});
 });
 

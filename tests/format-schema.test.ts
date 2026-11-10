@@ -1,7 +1,7 @@
-// docs/schema/notebook-v27.schema.json against what the serializer really writes (roadmap #167).
+// docs/schema/notebook-v28.schema.json against what the serializer really writes (roadmap #167).
 // The schema is a published contract for other tools: a document the plugin writes must always satisfy it, and a document that
 // breaks one of the writer's rules must not. The validator is a small dependency-free one (tests/json-schema-lite.ts).
-import schemaText from "../docs/schema/notebook-v27.schema.json?raw";
+import schemaText from "../docs/schema/notebook-v28.schema.json?raw";
 import guide from "../docs/format.md?raw";
 import { describe, expect, it } from "vitest";
 import { createDocument, createStroke } from "../src/model/document";
@@ -62,6 +62,11 @@ function fullDocument(): NotebookDocument {
 	doc.views = [
 		{ id: "v1", name: "Proof of lemma 2", page: "p-ink", x: 40.5, y: 220, width: 420, height: 310.2, zoom: 1.35 },
 		{ id: "v2", name: "Old page", page: "p-gone", x: 0, y: -12, width: 595.3, height: 400, zoom: 0.5 },
+	];
+	// v28: coloured sections (the second one names a page the notebook does not have: a dormant section is still written).
+	doc.sections = [
+		{ id: "sec1", title: "Mechanics", color: "#2f80f7", page: "p-pdf" },
+		{ id: "sec2", title: "Old chapter", color: "#F0565E", page: "p-gone" },
 	];
 
 	// Page 1: ink of every tool and render version, flags, groups, every element type.
@@ -153,7 +158,7 @@ function fullDocument(): NotebookDocument {
 	return doc;
 }
 
-describe("notebook-v27.schema.json: what the serializer writes validates", () => {
+describe("notebook-v28.schema.json: what the serializer writes validates", () => {
 	it("is a well-formed draft 2020-12 schema for the current format version", () => {
 		expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
 		expect((getAt(schema as Raw, ["properties", "version", "const"]))).toBe(CURRENT_VERSION);
@@ -181,7 +186,7 @@ describe("notebook-v27.schema.json: what the serializer writes validates", () =>
 		const types = new Set(raw.pages.flatMap((p) => (p.elements ?? []).map((e) => e.type)));
 		expect([...types].sort()).toEqual(["area", "box", "checkbox", "equation", "excerpt", "graph", "image", "marker", "sticky", "tape", "text"]);
 		for (const key of [
-			'"bookmarkInfo"', '"description"', '"coverArt"', '"position"', '"slides"', '"views"', '"tags"', '"background"', '"margins"', '"infinite"', '"locked"',
+			'"bookmarkInfo"', '"description"', '"coverArt"', '"position"', '"slides"', '"views"', '"sections"', '"tags"', '"background"', '"margins"', '"infinite"', '"locked"',
 			'"states"', '"comments"', '"hidden"', '"slide"', '"group"', '"lockAt"', '"outline"', '"taskAt"', '"sketch"', '"resolved"', '"inline"', '"numbered"',
 			'"startAt"', '"endAt"', '"collapsed"', '"ink"', '"table"', '"params"', '"axes"', '"degrees"', '"opacity"', '"taperStart"', '"taperEnd"',
 		]) expect(text, key).toContain(key);
@@ -198,7 +203,7 @@ describe("notebook-v27.schema.json: what the serializer writes validates", () =>
 	});
 });
 
-describe("notebook-v27.schema.json: invalid documents are refused", () => {
+describe("notebook-v28.schema.json: invalid documents are refused", () => {
 	const base = (): Raw => parseRaw(written(fullDocument()));
 	const bad = (name: string, edit: (raw: Raw) => void): void => {
 		it(name, () => {
@@ -254,6 +259,18 @@ describe("notebook-v27.schema.json: invalid documents are refused", () => {
 	bad("view x as a string", set(["views", 0, "x"], "4"));
 	bad("view id too long", set(["views", 0, "id"], "i".repeat(65)));
 	bad("more than 100 views", set(["views"], Array.from({ length: 101 }, (_, i) => ({ id: `v${i}`, name: `View ${i}`, page: "p-ink", x: 0, y: 0, width: 100, height: 100, zoom: 1 }))));
+	// v28: sections.
+	bad("sections empty (an empty list is not written)", set(["sections"], []));
+	bad("sections not an array", set(["sections"], { sec1: {} }));
+	bad("section without a title", del(["sections", 0, "title"]));
+	bad("section with an empty title", set(["sections", 0, "title"], ""));
+	bad("section title with a leading space", set(["sections", 0, "title"], " Mechanics"));
+	bad("section title too long", set(["sections", 0, "title"], "t".repeat(61)));
+	bad("section colour not a colour", set(["sections", 0, "color"], "blue"));
+	bad("section without a page", del(["sections", 0, "page"]));
+	bad("section without an id", del(["sections", 0, "id"]));
+	bad("section id too long", set(["sections", 0, "id"], "s".repeat(65)));
+	bad("more than 200 sections", set(["sections"], Array.from({ length: 201 }, (_, i) => ({ id: `s${i}`, title: `Section ${i}`, color: "#2f80f7", page: `p${i}` }))));
 	// Pages.
 	bad("page without strokes", del(["pages", 0, "strokes"]));
 	bad("page width zero", set(["pages", 0, "width"], 0));
@@ -424,7 +441,7 @@ describe("docs/format.md", () => {
 	});
 
 	it("names the schema file and the version it describes", () => {
-		expect(guide).toContain("schema/notebook-v27.schema.json");
+		expect(guide).toContain("schema/notebook-v28.schema.json");
 		expect(guide).toContain(`version ${CURRENT_VERSION}`);
 	});
 });

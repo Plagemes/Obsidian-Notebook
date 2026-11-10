@@ -35,6 +35,7 @@ import { SetPageTimes } from "./page-times";
 import { AddSlideRef } from "./slide-links";
 import { SetPageStates } from "./states";
 import { SetViews } from "./views";
+import { SetSections } from "./sections";
 import type { PageRules, Registered, ScopeFn, StepScope } from "./page-scope";
 
 export { redoSurvives, touchesPage, type PageRules, type PageStepResult, type ScopeFn, type StepScope } from "./page-scope";
@@ -99,7 +100,8 @@ export function computeScope(cmd: Command): StepScope {
 			// and saved views of other pages that point into it; it is never undone out of order, whatever else the step holds (when in doubt: global).
 			pages.add(leaf.pageId);
 			global = true;
-		} else if (leaf instanceof SetMeta || leaf instanceof SetViews) {
+		} else if (leaf instanceof SetMeta || leaf instanceof SetViews || leaf instanceof SetSections) {
+			// v28: the sections are a notebook-wide list (a section spans pages): global.
 			global = true;
 		} else if (leaf instanceof RemoveAsset) {
 			// Drops a record every page's pictures may point at (the storage manager's repoint): no page is undone or redone past it.
@@ -140,5 +142,5 @@ export const CLASSIFIED = [
 	"AddStroke", "EraseStrokes", "ReplaceStroke", "AddElement", "RemoveElement", "ReplaceElement", "ReorderLayer", "SetPaper", "SetPageSize", "SetPageMargins",
 	"SetPageBackground", "SetPageInfinite", "SetPageLocked", "SetPageTags", "SetPageTimes", "SetPageComments", "SetPageStates", "UpdateCheckbox", "SetMarkerDone",
 	"UpdateItems", "SetPageContent", "ReplacePage", "AddAsset", "AddSlideRef", "AddPage", "DeletePage", "MovePage", "InsertPages", "ReorderPages",
-	"SetMeta", "SetViews", "RemoveAsset", "Batch", "SetPdfView",
+	"SetMeta", "SetViews", "RemoveAsset", "Batch", "SetPdfView", "SetSections",
 ] as const;

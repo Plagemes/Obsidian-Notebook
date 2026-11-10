@@ -10,12 +10,16 @@ import { Batch, DeletePage, InsertPages, SetMeta, SetPageSize, SetPaper, type Co
 import { duplicatePages } from "./pages";
 import { SetPageLocked } from "./page-lock";
 import { normalizePageTag, sameTags, SetPageTags, unionPageTags } from "./page-tags";
-import { DEFAULT_META, PAPER_SPACING, type NotebookDocument, type Page, type PaperKind } from "./types";
+import { followSections, movedPages, restoreSections, sectionsAfterReorder } from "./sections";
+import { DEFAULT_META, PAPER_SPACING, type NotebookDocument, type Page, type PaperKind, type Section } from "./types";
 
 /** Puts the pages in the order of `after` (ids). Pages it does not name keep their relative order, after the named ones. Undo restores `before`. */
 export class ReorderPages implements Command {
 	readonly label = "Move pages";
-	constructor(readonly before: readonly string[], readonly after: readonly string[]) {}
+	/** v28: the sections before the move re-anchored those whose first page moved away (model/sections.ts). */
+	private sections: readonly Section[] | undefined;
+	/** `moved`: the pages the person moved (v28: sections stay where their other pages stay); absent: the fewest pages that explain the new order. */
+	constructor(readonly before: readonly string[], readonly after: readonly string[], readonly moved?: readonly string[]) {}
 
 	private arrange(doc: NotebookDocument, ids: readonly string[]): void {
 		const byId = new Map(doc.pages.map((p) => [p.id, p] as const));
@@ -33,11 +37,18 @@ export class ReorderPages implements Command {
 	}
 
 	apply(doc: NotebookDocument): void {
+		const old = doc.sections ? doc.pages.map((p) => p.id) : null;
 		this.arrange(doc, this.after);
+		if (!old || !doc.sections) return;
+		const now = doc.pages.map((p) => p.id);
+		const moved = this.moved ? new Set(this.moved) : movedPages(old, now);
+		this.sections = followSections(doc, sectionsAfterReorder(doc.sections, old, now, moved));
 	}
 
 	revert(doc: NotebookDocument): void {
 		this.arrange(doc, this.before);
+		restoreSections(doc, this.sections);
+		this.sections = undefined;
 	}
 }
 
@@ -70,8 +81,9 @@ export function planMove(order: readonly string[], selected: ReadonlySet<string>
 /** Moves the selected pages, keeping their order, to the start, the end or so that the first of them gets page number `position`. */
 export function moveCommand(doc: NotebookDocument, ids: Iterable<string>, to: MoveTarget): Command | null {
 	const before = doc.pages.map((p) => p.id);
-	const after = planMove(before, new Set(ids), to);
-	return after ? new ReorderPages(before, after) : null;
+	const selected = new Set(ids);
+	const after = planMove(before, selected, to);
+	return after ? new ReorderPages(before, after, before.filter((id) => selected.has(id))) : null;
 }
 
 /** ` p3-5` for pages that follow each other, ` selection` otherwise: tells the PDF exports of one notebook apart. */

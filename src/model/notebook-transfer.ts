@@ -20,7 +20,8 @@ import { cloneMeta, createDocument, createId } from "./document";
 import { lockedPages } from "./page-lock";
 import { copyStroke } from "./pages";
 import { AddSlideRef, slideMerger } from "./slide-links";
-import { DEFAULT_META, type NotebookDocument, type Page, type SlideRef } from "./types";
+import { sectionsAfterDelete } from "./sections";
+import { DEFAULT_META, type NotebookDocument, type Page, type Section, type SlideRef } from "./types";
 import { scanPageLinks } from "../integration/link-update";
 import { planPageMove, planSourceRemoval, withMovedBookmarks, type PageMoveFailure, type PageMovePlan, type SourceRemoval } from "../library/page-move";
 import { parseSubpathParams } from "../zettel/subpath";
@@ -166,6 +167,19 @@ export function planRemoval(current: NotebookDocument, moved: PageMovePlan["move
  */
 export function applyRemoval(doc: NotebookDocument, removal: SourceRemoval): void {
 	const gone = new Set(removal.remove.map((p) => p.id));
+	// v28: the sections follow the pages that go, as a delete of each would (model/sections.ts).
+	if (doc.sections) {
+		let sections: readonly Section[] = doc.sections;
+		const order = doc.pages.map((p) => p.id);
+		for (let i = order.length - 1; i >= 0; i--) {
+			if (!gone.has(order[i]!)) continue;
+			const id = order[i]!;
+			order.splice(i, 1);
+			sections = sectionsAfterDelete(sections, id, order[i]);
+		}
+		if (sections.length > 0) doc.sections = [...sections];
+		else delete doc.sections;
+	}
 	const keep = doc.pages.filter((p) => !removal.remove.includes(p));
 	if (removal.replacement) keep.push(removal.replacement);
 	doc.pages.splice(0, doc.pages.length, ...keep);

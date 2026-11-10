@@ -4,7 +4,8 @@
  * A notebook template is an ordinary notebook document stored in the notebook templates folder (no format change). Saving
  * one copies the notebook with fresh ids; using one makes a new notebook, again with fresh ids, either with the pages only
  * (paper, size, background, margins: the ink and elements are left out) or with the content too. Assets the kept pages use
- * and the slide links their ink carries come along; nothing else of the source (bookmarks, tags, position) does.
+ * and the slide links their ink carries come along, and so do the coloured sections (v28, re-anchored to the copies of their pages: they
+ * are the structure of the notebook); nothing else of the source (bookmarks, tags, position) does.
  * `{{date}}` and friends in text boxes, the title and the description are filled in when a notebook is made from a template.
  */
 import { elementAssetId } from "./excerpts";
@@ -12,6 +13,7 @@ import { cloneMeta, createId, createPage } from "./document";
 import { clearChecklist } from "./checklist";
 import { duplicatePages } from "./pages";
 import { freezeElement } from "./serialize";
+import { sectionsForCopy, sectionsOf } from "./sections";
 import { CURRENT_VERSION, DEFAULT_META, FORMAT_ID, type Asset, type NotebookDocument, type Page, type SlideRef } from "./types";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -73,6 +75,7 @@ export function templateFromNotebook(source: NotebookDocument, now: Date = new D
 	// v17: checkboxes are unticked and linked to no task in a template (a form to fill in again).
 	const pages = duplicatePages(source.pages).map((p) => clearChecklist(p)); // 0.29 (#248) review fix (F2)
 	const doc = documentOf(source, pages, now);
+	copySections(source, pages, doc);
 	// Tags and comments belong to the notebook that was written in, not to a template made from it.
 	for (const p of pages) {
 		delete p.tags;
@@ -118,5 +121,19 @@ export function notebookFromTemplate(template: NotebookDocument, options: FromTe
 		}
 		return page;
 	});
-	return documentOf(template, pages.length > 0 ? pages : [createPage()], now);
+	if (pages.length === 0) return documentOf(template, [createPage()], now);
+	const doc = documentOf(template, pages, now);
+	copySections(template, pages, doc);
+	return doc;
+}
+
+/** v28: the sections of `source`, re-anchored to the copies of their pages (`copies[i]` is the copy of `source.pages[i]`), with new ids. */
+function copySections(source: NotebookDocument, copies: readonly Page[], doc: NotebookDocument): void {
+	const map = new Map<string, string>();
+	source.pages.forEach((p, i) => {
+		const copy = copies[i];
+		if (copy) map.set(p.id, copy.id);
+	});
+	const sections = sectionsForCopy(sectionsOf(source), map);
+	if (sections.length > 0) doc.sections = sections;
 }

@@ -67,6 +67,7 @@ import { exemptFromLocks, SetPageLocked } from "./page-lock";
 import { mergedTimes, pageTimes, putPageTimes, sameTimes, SetPageTimes } from "./page-times";
 import { slideMerger } from "./slide-links";
 import { mergedViews, SetViews, viewsMergeReport, viewsOf } from "./views";
+import { mergedSections, sectionsOf, SetSections } from "./sections";
 import { remapStates, SetPageStates } from "./states";
 import { boxBounds, markerBounds } from "./markers";
 import { stableStringify } from "./math-elements";
@@ -127,6 +128,8 @@ export interface MergeSummary {
 	viewsDiffer: number;
 	/** v21: saved views of the copy that were not added because the main notebook already has the most (the copy stays in place). Not a change to merge. */
 	viewsFull: number;
+	/** v28: sections of the copy the main notebook does not have (by id) whose page the result has and starts no section of the main notebook, added. */
+	sectionsAdded: number;
 }
 
 export interface MergePlan {
@@ -344,7 +347,7 @@ function carriedInk(e: PageElement, strokeMap: ReadonlyMap<string, string>, adde
 export function planMerge(main: NotebookDocument, other: NotebookDocument): MergePlan {
 	const summary: MergeSummary = {
 		pagesAdded: 0, strokesAdded: 0, strokesCopied: 0, elementsAdded: 0, elementsCopied: 0, assetsAdded: 0,
-		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0, timesUpdated: 0, viewsAdded: 0, viewsDiffer: 0, viewsFull: 0,
+		tagsAdded: 0, bookmarksAdded: 0, bookmarkInfoAdded: 0, bookmarkInfoDiffer: 0, pageTagsAdded: 0, identical: 0, pageSettingsDiffer: 0, marginsDiffer: 0, pagesEnlarged: 0, onlyInMain: 0, markersResolved: 0, commentsAdded: 0, checkboxesUpdated: 0, flagsUpdated: 0, timesUpdated: 0, viewsAdded: 0, viewsDiffer: 0, viewsFull: 0, sectionsAdded: 0,
 	};
 	const commands: Command[] = [];
 	// v12: the copy's slide ids in the main notebook's table.
@@ -709,6 +712,14 @@ export function planMerge(main: NotebookDocument, other: NotebookDocument): Merg
 		commands.push(new SetViews(mainViews, unitedViews, "Merge saved views"));
 	}
 
+	// v28: the sections of the copy the main notebook lacks (by id), on pages the result has that start no section of the main notebook.
+	const mainSections = sectionsOf(main);
+	const unitedSections = mergedSections(mainSections, sectionsOf(other), viewPages);
+	if (unitedSections !== mainSections) {
+		summary.sectionsAdded = unitedSections.length - mainSections.length;
+		commands.push(new SetSections(mainSections, unitedSections, "Merge sections"));
+	}
+
 	// v12: the slide entries the copied ink names, first (in the same undo step).
 	commands.unshift(...slides.commands());
 	// v14: exempt from the page-lock guard: the merge exists to bring in what the other copy has, and a locked page of the main
@@ -777,7 +788,7 @@ export function mergeMeta(main: NotebookMeta, other: NotebookMeta, pageIds: Read
 /** Number of changes a summary describes (0: the copy holds nothing new). */
 export function mergeChangeCount(s: MergeSummary): number {
 	return s.pagesEnlarged + s.pagesAdded + s.strokesAdded + s.strokesCopied + s.elementsAdded + s.elementsCopied + s.assetsAdded + s.tagsAdded
-		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated + s.flagsUpdated + s.timesUpdated + s.viewsAdded;
+		+ s.bookmarksAdded + s.bookmarkInfoAdded + s.pageTagsAdded + s.markersResolved + s.commentsAdded + s.checkboxesUpdated + s.flagsUpdated + s.timesUpdated + s.viewsAdded + s.sectionsAdded;
 }
 
 /**
@@ -862,6 +873,10 @@ export function mergeCovers(result: NotebookDocument, other: NotebookDocument): 
 	// v21: every saved view of the copy whose page the result has is in the result (by id; the main notebook's view wins on a shared id).
 	const haveViews = new Set(viewsOf(result).map((v) => v.id));
 	for (const v of viewsOf(other)) if (resultPages.has(v.page) && !haveViews.has(v.id)) return false;
+	// v28: every section of the copy whose page the result has is in the result (by id), unless that page starts another section there (the main notebook's wins).
+	const haveSections = new Set(sectionsOf(result).map((s) => s.id));
+	const sectionPages = new Set(sectionsOf(result).map((s) => s.page));
+	for (const s of sectionsOf(other)) if (resultPages.has(s.page) && !haveSections.has(s.id) && !sectionPages.has(s.page)) return false;
 	const tags = new Set(result.meta?.tags ?? []);
 	if (!(other.meta?.tags ?? []).every((t) => tags.has(t))) return false;
 	// v7: every page tag, every bookmark and every bookmark detail field of the copy is in the result, with the same value.
