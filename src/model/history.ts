@@ -750,6 +750,14 @@ export class Batch implements Command {
  */
 export type ContentGuard = (doc: NotebookDocument) => string | null;
 
+/**
+ * 0.29 (review R3-1): a check of an undo or a redo the history does not own (the view's redaction guard). Called with the document BEFORE
+ * the step; it returns null (nothing to check) or a function called with the document AFTER the step, which returns true to refuse the step.
+ * A refused step changes nothing: the document is put back as it was and the step stays exactly where it was in its stack (it is not dropped,
+ * like a step on a locked page), so it is still offered once what refused it is gone. The check says why itself.
+ */
+export type StepCheck = (doc: NotebookDocument, step: "undo" | "redo") => ((after: NotebookDocument) => boolean) | null;
+
 /** What an object of the document held before an undo or a redo: its own fields, and the contents of its lists and tables that can change in place. */
 interface Shot {
 	target: Record<string, unknown>;
@@ -1077,6 +1085,48 @@ export class History {
 		return this.pagewise && this.rules !== null;
 	}
 
+	/** 0.29 (review R3-1): the outside check of every undo and redo (see `StepCheck`); null: none. */
+	private stepCheck: StepCheck | null = null;
+
+	setStepCheck(check: StepCheck | null): void {
+		this.stepCheck = check;
+	}
+
+	/** The outside check for one step, taken before it; a check that fails to start refuses the step (fail closed). */
+	private prepareCheck(doc: NotebookDocument, step: "undo" | "redo"): ((after: NotebookDocument) => boolean) | null {
+		if (!this.stepCheck) return null;
+		try {
+			return this.stepCheck(doc, step);
+		} catch (e) {
+			console.error("[notebook] undo/redo check", e);
+			return () => true;
+		}
+	}
+
+	/**
+	 * 0.29 (review R3-1): asks the outside check about the step just taken; when it refuses (or fails: fail closed), the step is taken back
+	 * with its own inverse (`inverse`: as for a locked page, so a command that remembers what it swapped, like `UpdateItems`, is ready for
+	 * the next try). Should the inverse throw, the document is put back from `snapshot`. True when refused: the caller puts the step back
+	 * where it was.
+	 */
+	private checkRefused(check: (after: NotebookDocument) => boolean, snapshot: Shot[] | null, inverse: () => void): boolean {
+		let refuse: boolean;
+		try {
+			refuse = check(this.doc());
+		} catch (e) {
+			console.error("[notebook] undo/redo check", e);
+			refuse = true;
+		}
+		if (!refuse) return false;
+		try {
+			inverse();
+		} catch (e) {
+			if (!snapshot) throw e;
+			for (const s of snapshot) restoreShot(s);
+		}
+		return true;
+	}
+
 	/** Drops the oldest steps beyond the limit. */
 	private trimUndo(): void {
 		while (this.undoStack.length > this.limit) this.undoStack.shift();
@@ -1150,7 +1200,12 @@ export class History {
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		const snapshot = this.guard ? snapshotDocument(doc) : null;
 		const wasBad = this.badBefore(doc, snapshot, known);
+		const check = this.prepareCheck(doc, "undo");
 		if (!this.ran(() => cmd.revert(doc), snapshot, "undo", cmd, keepAt)) return null;
+		if (check && this.checkRefused(check, snapshot, () => cmd.apply(doc))) {
+			this.undoStack.splice(at, 0, cmd);
+			return null;
+		}
 		if (locks) {
 			// An older edit of a page that has been locked since (a synced change, a lock set later and left on): the undo
 			// is not done and stays on the stack for when the page is unlocked.
@@ -1185,7 +1240,12 @@ export class History {
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		const snapshot = this.guard ? snapshotDocument(doc) : null;
 		const wasBad = this.badBefore(doc, snapshot, known);
+		const check = this.prepareCheck(doc, "redo");
 		if (!this.ran(() => cmd.apply(doc), snapshot, "redo", cmd, keepAt)) return null;
+		if (check && this.checkRefused(check, snapshot, () => cmd.revert(doc))) {
+			this.redoStack.splice(at, 0, cmd);
+			return null;
+		}
 		if (locks) {
 			const hit = lockedChanges(doc, locks);
 			if (hit.length > 0) {

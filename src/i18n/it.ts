@@ -5260,7 +5260,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"linehandle.refused.background": "La scrittura su una pagina PDF o immagine resta su ciò che annota: le sue righe non si possono riordinare.",
 	"linehandle.refused.redacted": "Questa pagina ha riquadri di oscuramento e spostare la riga cambierebbe ciò che sta sotto. Prima rimuovi o rifai i riquadri.",
 	"table.noRoom": "La tabella uscirebbe dal bordo della pagina. Prima rimpicciolisci le celle o sposta la tabella.",
-	"table.noStates": "Queste linee fanno parte di un disegno con stati: la tabella non si può modificare.",
+	"table.noStates": "Queste linee, o la scrittura che la modifica sposterebbe, fanno parte di un disegno con stati: la tabella non si può modificare.",
 	"table.noRedacted": "Questa pagina ha riquadri di oscuramento e l'inserimento sposterebbe inchiostro sotto di essi o via da essi. Prima rimuovi o rifai i riquadri.",
 	"linehandle.cancelled": "La pagina è cambiata: lo spostamento è stato annullato.",
 	"histpanel.t.moveLine": "Riga spostata",
@@ -5386,4 +5386,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.geoLink": "Collega la selezione a una nota: toccandola con la penna si apre quella nota.",
 	"settings.suggestSelection": "Suggerisci azioni dalla selezione",
 	"settings.suggestSelection.desc": "Chip per una riga di parole, una freccia tra due gruppi o un cerchio. Solo regole, no IA.",
+	// 0.29 redactundo (review R3-1): un annulla o un ripeti che sposterebbe la scrittura da sotto un riquadro di oscuramento (o sotto uno)
+	"redactundo.undo": "Annulla non eseguito: sposterebbe la scrittura da sotto un riquadro di oscuramento (o sotto uno) in questa pagina. Prima rimuovi o rifai i riquadri della pagina; il passo resta nella cronologia.",
+	"redactundo.redo": "Ripeti non eseguito: sposterebbe la scrittura da sotto un riquadro di oscuramento (o sotto uno) in questa pagina. Prima rimuovi o rifai i riquadri della pagina; il passo resta nella cronologia.",
 };
