@@ -563,7 +563,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 292. ~~**P2** Step checker: type the steps of a calculation one per line; each line is checked numerically for equivalence with the previous one.~~ — dropped (user decision, 2026-10-29)
 293. **P2** 🧪 Dimensional analysis of formulas: flags inconsistent units. (0.23: pure engine `src/math/dimensions.ts` reads SI units, prefixes and common derived units written in an equation (`5\,\mathrm{m}`), propagates dimensions through + − × ÷ ^, roots, functions, fractions, derivatives, integrals and sums, and compares both sides of `=`; symbols take their dimension from a value or a `[v] = m/s` line. The equation editor shows a quiet hint under the preview (setting *Check units in equations*, Writing); no format change.)
 294. **P2** 🧪 Balancing of typed chemical reactions. (0.23: `src/math/chem-balance.ts`, "Balance reaction" in the selection bar; waiting for hardware verification.)
-295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart.
+295. **P2** Statistics from table data: mean, deviation, regression, with the line drawn on the chart. (0.29, partial: a statistics card for a selected table with mean, median, deviation, extremes, count and a fitted line, inserted as text or copied; numbers are read from text boxes in the cells; the line drawn on a chart waits for the table charts.)
 296. **P3** Step-by-step linear systems and matrices shown on the page.
 297. ~~**P3** Basic vector maps as backgrounds for geography and history (public-domain data).~~ — dropped (user decision, 2026-10-29)
 298. ~~**P3** Truth tables and simulated logic circuits.~~ — dropped (user decision, 2026-10-29)

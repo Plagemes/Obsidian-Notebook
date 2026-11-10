@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### stats
+- **Statistics from a table (#295).** With a hand-drawn table selected, *Table statistics* (All actions) opens a card with the count, mean, median, standard deviation, minimum, maximum and sum of a column and, with a second column chosen, the fitted line (slope, intercept, R squared). *Insert as text* adds a text box beside the table (or under it when the page is narrow) as one undo step; *Copy* puts the same text on the clipboard. Numbers are read from the text boxes written in the cells (decimal point or comma, a header row is recognised); cells that are not numbers are skipped and counted, handwriting is not read. No format change. Code: `src/math/stats.ts`, `src/ink/table-numbers.ts`, `src/ink/table-report.ts`, `src/view/table-stats.ts`.
+
 ## 0.28.0 — 2026-11-10
 
 Eight features: rotate and crop PDF pages (#76), per-page undo (#98, a setting, off by default), hand-drawn tables (#41), a paint bucket (#184), a line handle to reorder lines (#256), a live lecture mode (#132), numbered boxes with an index (#205) and actions suggested by the selection's geometry (#403). The notebook format moves to version 26 (PDF page rotation and crop): the migration from version 25 is automatic, and Notebook 0.27 and older open a v26 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).

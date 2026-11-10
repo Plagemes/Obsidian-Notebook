@@ -245,6 +245,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"table-remove-row": (v) => v.tableTools?.removeRow(),
 	"table-remove-col": (v) => v.tableTools?.removeColumn(),
 	"table-even": (v) => v.tableTools?.evenOut(),
+	"table-stats": (v) => v.tableTools?.showStats(),
 	"checkbox-toggle": (v) => v.checklistTools?.toggleSelected(),
 	"checkbox-select-label": (v) => v.checklistTools?.selectWithLabel(),
 	"checkbox-label": (v) => v.checklistTools?.editLabel(),
