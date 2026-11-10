@@ -4613,3 +4613,28 @@ Manual steps (real Obsidian; nothing here is verified on Android hardware). Use 
 | Moments list in the end-of-lecture panel, tap to jump | yes | `collectLiveMarks` in `tests/live-lecture.test.ts`; harness `doc=livelecture` | | | |
 | Timer after a restart of a manual lecture | no | | | | a manual lecture without a class restarts at 00:00 when the notebook is reopened; a class lecture keeps the class start |
 | Marks in the lecture log (daily note) | no | | | | left out: the log line is unchanged |
+
+### 0.28 — boxnum: numbered boxes and an index of definitions and theorems (roadmap #205; steps 3280-3299)
+
+Settings, Pages: *Number definitions and theorems* (on), *Chapter prefix* (on), *One counter for all kinds* (off). Implemented, not verified on hardware. The numbers are worked out from the document each time and are never stored (no format change). All actions, Share group (or the command palette): *Definitions and theorems…*.
+
+3280. **Label.** Place a Definition box, then a second one lower on the page: their tabs read "Def. 1" and "Def. 2" (Italian: "Def."; Theorem "Thm." / "Teor.", Example "Ex." / "Es.", Remark "Rem." / "Oss."). A box with a title reads "Def. 2 · Title". Proof boxes keep the plain name "Proof".
+3281. **Order.** Drag the lower definition above the upper one: the numbers swap straight away. Delete the first definition: the second becomes "Def. 1". Undo: they come back. Numbers follow page order, then position on the page.
+3282. **Chapters.** Write two large underlined or oversized titles on different pages with boxes below each: the boxes under the second title read "Def. 2.1", "Def. 2.2"; those above the first title have no prefix. (Chapters are the large level-1 headings the outline already finds.)
+3283. **Settings.** Turn *Chapter prefix* off: plain numbers. Turn *One counter for all kinds* on: definitions, theorems, examples and remarks share one sequence. Turn *Number definitions and theorems* off: tabs go back to "Definition", "Theorem"… and the other two settings disappear.
+3284. **Exports.** Export a page with boxes as PDF, PNG and SVG, and print it: every box tab carries the same number as on screen. With redaction on, the numbers are still those of the whole notebook.
+3285. **Index.** Open *Definitions and theorems…*: every numbered box in reading order, each row with a colour bar, number, title and page chip. Tap a row: the dialog closes and the page scrolls to the box. Rows are at least 44 px tall.
+3286. **Index note.** Tap *Write index note*: "<Notebook> — Definitions.md" appears next to the notebook with one bullet per box and a link to its page. Write your own text above and below the generated part, change a box, write again: only the part between the markers changes.
+3287. **Safe note.** Rename a note of yours to the same name (no markers): the index goes to "… — Definitions (2).md" and your note is untouched.
+3288. **Redaction.** Put a redaction box over a titled definition: it is not listed or written in the index.
+3289. **Big notebook.** In a notebook with 100+ pages and many boxes scrolling stays smooth; chapter prefixes appear a moment after opening (headings are analysed in short slices).
+3290. **Phone, light, dark.** The dialog and the tabs read in light and dark and fit a phone; texts are in Italian with the plugin in Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Derived numbers: per kind or shared counter, chapter prefix, proofs unnumbered, order across pages and by position, renumbering on move/delete | yes | `tests/box-numbering.test.ts` | | | |
+| Labels on the page and in every export that draws box labels (screen, PDF, SVG, PNG, print, share) | yes | `tests/box-numbering.test.ts` (labels), harness `doc=boxnum` | | | |
+| Index dialog with jump-to; plugin-owned index note (owner markers, only the region rewritten, note of the user's never touched, recorded in plugin-written) | yes | `tests/box-numbering.test.ts`, harness `doc=boxnum` | | | |
+| Settings (on/off, chapter prefix, shared counter) en + it | yes | `tests/settings-schema.test.ts` | | | |
+| Thumbnail of each box in the index | no | | | | the box title (when typed) is shown instead |
+| Numbers in the companion note's callouts and in the markers panel | no | | | | left out in this wave |

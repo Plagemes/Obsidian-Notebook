@@ -337,6 +337,10 @@ const PAGES: SettingSpec[] = [
 	{ id: "outlineSlides", section: "pages", group: "outline", order: 20, name: "settings.outlineSlides", desc: "settings.outlineSlides.desc", control: { type: "toggle" }, keywords: "outline pdf slide diapositive" },
 	{ id: "outlineHeadings", section: "pages", group: "outline", order: 30, name: "settings.outlineHeadings", desc: "settings.outlineHeadings.desc", control: { type: "toggle" }, keywords: "outline heading titoli handwriting scrittura" },
 	{ id: "outlineMarkers", section: "pages", group: "outline", order: 40, name: "settings.outlineMarkers", desc: "settings.outlineMarkers.desc", control: { type: "toggle" }, keywords: "outline marker segnalini domande compiti" },
+	// 0.28 (#205): numbering of structured boxes ("Def. 3.2").
+	{ id: "boxNumbering", section: "pages", order: 55, name: "settings.boxNumbering", desc: "settings.boxNumbering.desc", control: { type: "toggle" }, keywords: "box definition theorem numbering number chapter definizione teorema numerazione numero capitolo" },
+	{ id: "boxNumberChapter", section: "pages", order: 56, name: "settings.boxNumberChapter", desc: "settings.boxNumberChapter.desc", control: { type: "toggle" }, parent: "boxNumbering", visible: (s) => s.boxNumbering, keywords: "box numbering chapter prefix numerazione capitolo prefisso" },
+	{ id: "boxNumberShared", section: "pages", order: 57, name: "settings.boxNumberShared", desc: "settings.boxNumberShared.desc", control: { type: "toggle" }, parent: "boxNumbering", visible: (s) => s.boxNumbering, keywords: "box numbering shared counter numerazione contatore unico" },
 	// 0.16 (#46): the outline of a PDF in the notebook outline.
 	{
 		id: "outlinePdf", section: "pages", group: "outline", order: 50, name: "settings.outlinePdf", desc: "settings.outlinePdf.desc",

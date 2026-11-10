@@ -414,7 +414,7 @@ Features for following a lecture live. Exam and review features stay in the sepa
 202. **P1** 🧪 Questions for the lecturer: mark a question on the page; it goes to a list for the end of class or office hours, with a resolved state.
 203. **P1** 🧪 Importance markers (!, !!, ★) on the page, collected per lecture.
 204. **P1** 🧪 Structured boxes: Definition, Theorem, Example, Proof, Remark — frames drawn on the fly that become callouts in the companion note.
-205. **P2** Automatic numbering of boxes (Def. 3.2) and an index of the course's definitions and theorems.
+205. **P2** 🧪 Automatic numbering of boxes (Def. 3.2) and an index of the course's definitions and theorems.
 206. **P2** 🧪 Instant axes: one gesture drops Cartesian axes with ticks for quick hand-drawn graphs.
 207. **P2** Personal shorthand: your abbreviation symbols with an automatically generated legend.
 208. **P1** 🧪 Quick textbook reference: "p. 134" becomes a link to the textbook PDF at that page.

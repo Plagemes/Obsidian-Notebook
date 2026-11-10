@@ -103,6 +103,10 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	outlineSlides: boolean;
 	outlineHeadings: boolean;
 	outlineMarkers: boolean;
+	/** 0.28 (#205): structured boxes are numbered ("Def. 3.2"); the chapter prefix; one counter for all kinds. Derived, never stored in the notebook. */
+	boxNumbering: boolean;
+	boxNumberChapter: boolean;
+	boxNumberShared: boolean;
 	/** 0.16 (#46): the outline of a PDF in the notebook outline: mixed into the list (merged), its own section, or not listed. */
 	outlinePdf: "merged" | "section" | "off";
 	/** 0.16 (#46): a tap on a link of a PDF page follows it (another page of the notebook, or a web address after a question). */
@@ -389,6 +393,9 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	outlineSlides: true,
 	outlineHeadings: true,
 	outlineMarkers: true,
+	boxNumbering: true,
+	boxNumberChapter: true,
+	boxNumberShared: false,
 	outlinePdf: "merged",
 	pdfLinks: true,
 	favouritePens: DEFAULT_FAVOURITES.map((f) => ({ ...f })),
@@ -572,6 +579,9 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.outlineSlides === "boolean") s.outlineSlides = d.outlineSlides;
 	if (typeof d.outlineHeadings === "boolean") s.outlineHeadings = d.outlineHeadings;
 	if (typeof d.outlineMarkers === "boolean") s.outlineMarkers = d.outlineMarkers;
+	if (typeof d.boxNumbering === "boolean") s.boxNumbering = d.boxNumbering;
+	if (typeof d.boxNumberChapter === "boolean") s.boxNumberChapter = d.boxNumberChapter;
+	if (typeof d.boxNumberShared === "boolean") s.boxNumberShared = d.boxNumberShared;
 	if (d.outlinePdf === "merged" || d.outlinePdf === "section" || d.outlinePdf === "off") s.outlinePdf = d.outlinePdf;
 	if (typeof d.pdfLinks === "boolean") s.pdfLinks = d.pdfLinks;
 	s.favouritePens = normaliseFavourites(d.favouritePens);

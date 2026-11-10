@@ -37,6 +37,11 @@
 ### livelecture
 - **Live lecture bar (#132).** While a lecture runs, a small floating bar at the bottom left shows the elapsed time and two quick buttons: *New page* (after the current page) and *Important moment*, which bookmarks the current page with a time stamp such as "★ 12:34" (several moments on a page are joined). The end-of-lecture panel lists the moments with their pages; tapping one jumps there. The bar folds to the timer, fades with the toolbar while writing, works in the two-page spread and can be switched off in *Settings > Study*. No format change: the stamps live in the page bookmark title.
 
+### boxnum
+- **Numbered boxes (#205).** Definition, theorem, example and remark boxes show a number on their tab ("Def. 3.2", Italian "Def.", "Teor.", "Es.", "Oss."), on screen and in every export that draws box labels (PDF, PNG, SVG, print, share). Numbers are worked out from the document each time and never stored (no format change): moving or deleting a box renumbers the rest. Order is page order, then position on the page; proofs are not numbered. The chapter prefix counts the large level-1 headings of the notebook (boxes above the first heading have none). Settings, Pages: numbering on/off (default on), chapter prefix, one counter for all kinds.
+- **Index of definitions and theorems.** A dialog lists every numbered box with its colour, number, title and page, and jumps to it; *Write index note* writes `<Notebook> — Definitions.md` next to the notebook between owner markers (same safety rules as the formula sheet: only the region is rewritten, a note of yours is never touched, boxes under a redaction box are left out).
+- **Code.** `src/model/box-numbering.ts` (pure), `src/view/box-numbers.ts` (cached labels), `src/view/box-index.ts`.
+
 ## 0.27.0 — 2026-11-09
 
 Eight features: stroke taper for the pens, two pages side by side, headings when zoomed out, macros, a layout that follows the input device, workspace presets, suggested search terms for PDFs and tasks due on planner pages. The notebook format moves to version 25 (taper): the migration from version 24 is automatic, and Notebook 0.26 and older open a v25 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).
