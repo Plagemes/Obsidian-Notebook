@@ -141,15 +141,15 @@ describe("T2: the selection takes covered ink with the rest", () => {
 
 	it("in the view only the erasers and the pen-start offers leave covered ink out; the selection paths use all the ink in view", () => {
 		const src = viewSrc;
-		const body = src.slice(src.indexOf("private inkInView(page: Page)"), src.indexOf("private hidingTapesOf("));
+		const body = src.slice(src.indexOf("private inkInView(page: Page"), src.indexOf("private hidingTapesOf("));
 		expect(body.length).toBeGreaterThan(0);
 		expect(body).not.toMatch(/hidingTapes|strokeTouchesTapes|coveredByTape/);
 		const uses = src.match(/this\.inkOutsideTapes\(/g) ?? [];
 		expect(uses.length).toBe(3); // eraser, checkbox label offer, eyedropper
 		expect(src).toContain("strokesInLasso(this.inkInView(page), lasso.points)");
-		expect(src).toContain("expandToGroups(page, { strokes, elements }, this.inkInView(page))");
+		expect(src).toContain("expandToGroups(page, { strokes, elements }, this.inkInView(page, true))"); // `true`: strikedelete S4 completes groups with struck members
 		expect(src).toContain("ink: (page) => this.inkInView(page)");
-		expect(src).toContain("selectableItems(page, sel, this.inkInView(page))");
+		expect(src).toContain("selectableItems(page, sel, this.inkInView(page, true))");
 	});
 });
 
