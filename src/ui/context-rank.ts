@@ -86,6 +86,9 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// On grid or plain paper it only leans forward in the page group: an ordinary page with the pen in hand shows no "For this page" section.
 	if (a.id === "selection-tidy" && (c.selection?.strokes ?? 0) >= 12) boost += 8;
 	if (a.id === "page-tidy" && !hasSelection && (c.page?.kind === "ruled" || c.page?.kind === "grid" || c.page?.kind === "plain")) boost += c.page.kind === "ruled" ? 16 : 10;
+	// 0.28 (#256): reordering lines fits a page of writing: it comes first while the mode is on (to turn it off), leans forward on paper made for writing
+	// when nothing is selected, and never reaches "For this page" on its own otherwise.
+	if (a.id === "page-reorder-lines") boost += c.toggles.lineHandles ? HERE_MIN_BOOST + 6 : !hasSelection && (c.page?.kind === "ruled" || c.page?.kind === "grid" || c.page?.kind === "plain") ? (c.page.kind === "ruled" ? 6 : 3) : 0;
 	// 0.26 (#66): reshaping handwriting fits a selection of strokes; a long wobbly line (underline, ruler line) on grid or plain paper is likelier meant straight.
 	if (a.id === "selection-smooth" && hasSelection) boost += 4;
 	if (a.id === "selection-straighten" && hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 6;

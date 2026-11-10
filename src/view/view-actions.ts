@@ -185,6 +185,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.26 (#238): tidy up the selection, or the page (the page in view, or the one the page sheet was opened from)
 	"selection-tidy": (v) => v.selectionTools?.tidy(),
 	"page-tidy": (v, arg) => v.selectionTools?.tidy(arg.page),
+	// 0.28 (#256): handles to drag whole handwritten lines (a toggle)
+	"page-reorder-lines": (v) => v.lineHandleTools?.toggle(),
 	"selection-smooth": (v) => v.selectionTools?.reshape("smooth"),
 	"selection-straighten": (v) => v.selectionTools?.reshape("straighten"),
 	// 0.15 (241): drawings with states

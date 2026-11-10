@@ -225,6 +225,7 @@ import { ChemTools, holdsReaction } from "./chem-tools";
 import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
+import { LineHandleTools, type LineHandleHost } from "./line-handles";
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
@@ -545,6 +546,8 @@ export class NotebookView extends FileView {
 	private groups: GroupTools | null = null;
 	/** 0.18 (#86): margin comments (markers, card, side panel). */
 	private comments: CommentTools | null = null;
+	/** 0.28 (#256): the "Reorder lines" mode (a handle at the left of every handwritten line of the page in view). */
+	private lineHandles: LineHandleTools | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
 	private colour: ColourTools | null = null;
@@ -897,6 +900,7 @@ export class NotebookView extends FileView {
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
+		this.lineHandles = new LineHandleTools(this.lineHandleHost());
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
 			body: this.body,
@@ -1318,6 +1322,8 @@ export class NotebookView extends FileView {
 		this.minimap = null;
 		this.comments?.destroy();
 		this.comments = null;
+		this.lineHandles?.destroy();
+		this.lineHandles = null;
 		this.stopNav?.();
 		this.stopNav = null;
 		this.stopMarks?.();
@@ -1693,6 +1699,8 @@ export class NotebookView extends FileView {
 		// 0.20 (#107): a reference that shows this very notebook reads its open document: it goes with it.
 		if (this.refWindow?.file === file) this.refWindow.close();
 		this.lectureMode?.closing();
+		// 0.28 (#256): the "Reorder lines" mode belongs to the notebook being edited.
+		this.lineHandles?.stop();
 		await this.closeSession();
 		const pending = this.snapshotAfterClose;
 		this.snapshotAfterClose = null;
@@ -3252,6 +3260,27 @@ export class NotebookView extends FileView {
 		return this.comments;
 	}
 
+	/** 0.28 (#256): the "Reorder lines" mode of this view (null before the view is open). */
+	get lineHandleTools(): LineHandleTools | null {
+		return this.lineHandles;
+	}
+
+	/** What the line handles need from the view. */
+	private lineHandleHost(): LineHandleHost {
+		return {
+			body: this.body,
+			doc: () => this.session?.doc ?? null,
+			editable: () => !!this.editableDocument(),
+			execute: (cmd) => this.applyCommand(cmd),
+			geometry: () => this.overlayGeometry(),
+			addOverlayListener: (fn) => this.addOverlayListener(fn),
+			currentPage: () => this.currentPageIndex(),
+			measure: measureText,
+			notify: (message) => void showNotice(message, 3500),
+			refreshUi: () => this.refreshUi(),
+		};
+	}
+
 	/** What the comment tools need from the view. */
 	private commentsHost(): CommentsHost {
 		return {
@@ -4550,7 +4579,7 @@ export class NotebookView extends FileView {
 			states: { open: !!this.statesTools?.open },
 			comments: { panel: this.comments?.panelOpen ?? false, total: this.comments?.counts.total ?? 0, open: this.comments?.counts.open ?? 0, drawing: this.comments?.drawing ?? false },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, spread: this.spreadOn, spreadRoom: canSpread(this.viewSize) || this.spreadOn, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", highlighterArea: this.tools.highlighterArea, readOnly: this.userReadOnly,
-				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused },
+				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused, lineHandles: this.lineHandles?.active === true },
 			canPrint: canPrint(),
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,

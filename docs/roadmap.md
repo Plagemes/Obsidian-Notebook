@@ -491,7 +491,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 
 ### Ink structure (foundation for many features)
 255. **P1** 🧪 Words and lines detected without OCR: double tap selects a word, triple tap a line. Basis for reflow (#92), alignment (#93) and headings (#102).
-256. **P2** Line handle: drag whole lines to reorder them.
+256. **P2** 🧪 Line handle: drag whole lines to reorder them.
 257. **P2** Overwrite: write over a word and the new one replaces the old.
 258. **P3** Smart underline: a line under a word is straightened and fitted to that word.
 259. **P3** Self-adjusting boxes: a frame around handwriting grows when lines are added.
