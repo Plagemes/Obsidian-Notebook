@@ -89,7 +89,7 @@ export async function checkLinehandle(api: LinehandleCheckApi): Promise<{ ok: bo
 	const results: CheckResult[] = [];
 	const add = (name: string, ok: unknown, detail = "") => results.push({ name, ok: !!ok, detail });
 	const page = (): Page => v.document.pages[v.currentPage()]!;
-	const handles = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[data-key^="line-handle:"]')].filter((e) => !e.classList.contains("notebook-hidden"));
+	const handles = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[data-key^="line-handle:"]')].filter((e) => !e.closest(".notebook-hidden"));
 	const bar = (): HTMLElement | null => document.querySelector<HTMLElement>('[data-key="line-handle-bar"]');
 	const barButton = (key: string): HTMLButtonElement | null => document.querySelector<HTMLButtonElement>(`[data-key="${key}"]`);
 	const centre = (el: HTMLElement): { x: number; y: number } => {

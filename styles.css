@@ -21343,10 +21343,10 @@ body.notebook-style-obsidian {
 	outline-offset: 2px;
 }
 
-/* the bar: what the mode is, the two step buttons and the way out (like the comment rectangle hint) */
+/* the bar: what the mode is, the two step buttons and the way out. At the bottom centre, above the contextual bar (the top centre belongs to the symbols strip and the slide-back pill) */
 .nb-ui.nb-lh-bar {
 	position: absolute;
-	top: calc(12px + var(--nb-top-shift, 0px));
+	bottom: calc(14px + var(--nb-ctx-lift, 0px));
 	left: 50%;
 	z-index: 9;
 	transform: translateX(-50%);
