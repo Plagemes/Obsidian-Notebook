@@ -33,6 +33,8 @@ export interface PdfActionHost {
 	folder: string;
 	/** True while the view still shows this document and it can be edited. */
 	editable(): boolean;
+	/** 0.28 (#76): whether a page has redaction boxes (or the boxes cannot be read): such a page is never turned or cropped. Optional (none when absent). */
+	hasRedaction?(pageId: string): boolean;
 	/** Runs `cmd` as one undo step and refreshes the view; false when the document can no longer be edited. */
 	run(cmd: Command, scrollTo?: number): boolean;
 }

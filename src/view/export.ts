@@ -135,6 +135,8 @@ export interface ExportOptions {
 	 * refuses to write (`withRedaction` throws), whatever the boxes would have covered: it is never known that nothing was covered.
 	 */
 	redactBlocked?: true;
+	/** 0.28 (#76): with `redactBlocked`, the reason is not an unreadable store but a page turned or cropped after its boxes were drawn (the message says so). */
+	redactStale?: true;
 	/** Review fix (P10): how many boxes the notebook keeps switched off; non-dialog exports say once that they are off. */
 	redactOff?: number;
 	/**
@@ -332,6 +334,7 @@ export async function runExport(app: App, notebook: TFile, allPages: readonly Pa
 		// Review fix (R5): excerpt chains over every page of the notebook, also when only a range is exported.
 		base.redact = withExcerptChains(allPages, request.redact, options.redactDoc) ?? request.redact;
 		delete base.redactBlocked;
+		delete base.redactStale;
 	} else delete base.redact;
 	const opts: ExportOptions = { ...base, layers: request.layers, ...(splits ? { split: request.split! } : {}) };
 	if (jobs.length === 0) return;

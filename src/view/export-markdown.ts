@@ -33,6 +33,8 @@ export interface MarkdownExportOptions {
 	redact?: Redactions;
 	/** Review fix (P4): the boxes could not be read: nothing is written. */
 	redactBlocked?: true;
+	/** 0.28 (#76): the boxes are stale (a page was turned or cropped after they were drawn): see `ExportOptions.redactStale`. */
+	redactStale?: true;
 	/** Review fix (P10): boxes kept switched off (a quiet hint says so). */
 	redactOff?: number;
 }

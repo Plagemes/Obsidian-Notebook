@@ -4,6 +4,7 @@
  * region changed; the scale of a picture; and a least-recently-used cache of pictures with a byte budget, so phones
  * never keep more than a few megabytes of them. No 'obsidian', no DOM.
  */
+import { viewKey, viewOf } from "../model/pdf-view";
 import type { ExcerptElement, Page, PageElement, Stroke } from "../model/types";
 import { elementBounds } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
@@ -105,7 +106,7 @@ export function liveContentKey(page: Page, content: RegionContent, numbers: Read
 	const eq = content.elements.filter((e) => e.type === "equation" && e.numbered).map((e) => `${e.id}=${numbers.get(e.id) ?? ""}`);
 	return [
 		content.fingerprint, page.width, page.height, page.paper.kind, page.paper.spacing,
-		bg ? `${bg.kind}:${bg.asset}:${bg.kind === "pdf" ? bg.page : 0}` : "", m ? `${m.left},${m.right},${m.bottom}` : "", eq.join(";"),
+		bg ? `${bg.kind}:${bg.asset}:${bg.kind === "pdf" ? bg.page : 0}:${viewKey(viewOf(bg))}` : "", m ? `${m.left},${m.right},${m.bottom}` : "", eq.join(";"),
 	].join("|");
 }
 

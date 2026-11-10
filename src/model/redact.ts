@@ -3,13 +3,56 @@
  * Pure: no 'obsidian', no DOM. Boxes are NOT part of the notebook document (no format change): they are an export-time choice, kept
  * per notebook on this device in bounded local storage (see ui/redact-store.ts) and given to the exporters, which leave out whatever lies
  * under them (ink/redact.ts). A box is a rectangle in page coordinates (pt), keyed by the stable page id.
+ *
+ * 0.28 (#76): a box also remembers the turn and crop of the PDF page it was drawn on (`view`, the page background's `viewKey`; absent = the
+ * whole page upright, which is also what every earlier box was drawn on). A box is in page coordinates, so when the page is turned or cropped
+ * afterwards (an undo of a turn, another device's copy, a re-published slide) it no longer covers what it covered: exports REFUSE to write
+ * such a page (`staleRedactionPages`, applied by `withRedaction` and by the export options) rather than write it unredacted, and the turn
+ * and crop actions themselves refuse a page that has boxes.
  */
+import { viewKey, viewOf } from "./pdf-view";
+import type { Page } from "./types";
 
 export interface RedactBox {
 	x: number;
 	y: number;
 	width: number;
 	height: number;
+	/** 0.28 (#76): the view (turn and crop) of the PDF page the box was drawn on; absent = upright and whole. */
+	view?: string;
+}
+
+const VIEW_KEY = /^[A-Za-z0-9.,|_-]{1,160}$/;
+
+/** The view key of a page as a box records it: "" for a page that is not turned or cropped (no PDF background included). */
+export function pageViewKey(page: Pick<Page, "background">): string {
+	return viewKey(viewOf(page.background));
+}
+
+/** Pages (by id) that have a box drawn on another turn or crop of their PDF page than the one they show now: those boxes are in the wrong place. */
+export function staleRedactionPages(pages: readonly Pick<Page, "id" | "background">[], redactions: Redactions | undefined): string[] {
+	if (!redactions) return [];
+	const out: string[] = [];
+	for (const p of pages) {
+		const list = Object.prototype.hasOwnProperty.call(redactions, p.id) ? redactions[p.id] : undefined;
+		if (!list || list.length === 0) continue;
+		const now = pageViewKey(p);
+		if (list.some((b) => (b.view ?? "") !== now)) out.push(p.id);
+	}
+	return out;
+}
+
+/** `boxes` with the boxes drawn now (those not in `before`) tagged with the view of their page; boxes that were already there keep what they had. */
+export function tagNewBoxes(boxes: Redactions, before: Redactions | undefined, pages: readonly Pick<Page, "id" | "background">[]): Redactions {
+	const out: Redactions = {};
+	const sameRect = (a: RedactBox, b: RedactBox): boolean => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+	for (const [id, list] of Object.entries(boxes)) {
+		const page = pages.find((p) => p.id === id);
+		const key = page ? pageViewKey(page) : "";
+		const had = Object.prototype.hasOwnProperty.call(before ?? {}, id) ? before![id]! : [];
+		out[id] = list.map((b) => (b.view !== undefined || key === "" || had.some((h) => sameRect(h, b)) ? b : { ...b, view: key }));
+	}
+	return out;
 }
 
 /** The boxes of a notebook by page id (a page without boxes has no entry). */
@@ -39,7 +82,10 @@ export function cleanBox(v: unknown): RedactBox | null {
 	if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number" || typeof height !== "number") return null;
 	if (![x, y, width, height].every((n) => Number.isFinite(n) && Math.abs(n) <= COORD_LIMIT)) return null;
 	if (width < REDACT_MIN_SIDE || height < REDACT_MIN_SIDE) return null;
-	return { x: round2(x), y: round2(y), width: round2(width), height: round2(height) };
+	const box: RedactBox = { x: round2(x), y: round2(y), width: round2(width), height: round2(height) };
+	// A view key that is not one of ours is dropped (the box is then read as drawn on the upright page, which an export checks against the page).
+	if (typeof o.view === "string" && VIEW_KEY.test(o.view)) box.view = o.view;
+	return box;
 }
 
 /**
@@ -60,7 +106,7 @@ export function normaliseRedactions(data: unknown, pageIds?: ReadonlySet<string>
 			if (boxes.length >= REDACT_MAX_PER_PAGE || total + boxes.length >= REDACT_MAX_TOTAL) break;
 			const box = cleanBox(raw);
 			if (!box) continue;
-			const key = `${box.x}|${box.y}|${box.width}|${box.height}`;
+			const key = `${box.x}|${box.y}|${box.width}|${box.height}|${box.view ?? ""}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
 			boxes.push(box);
@@ -96,7 +142,7 @@ export function addBox(r: Redactions, pageId: string, box: RedactBox): Redaction
 	const have = boxesOf(r, pageId);
 	if (have.length >= REDACT_MAX_PER_PAGE || countBoxes(r) >= REDACT_MAX_TOTAL) return r;
 	if (have.length === 0 && countPages(r) >= REDACT_MAX_PAGES) return r;
-	if (have.some((b) => b.x === clean.x && b.y === clean.y && b.width === clean.width && b.height === clean.height)) return r;
+	if (have.some((b) => b.x === clean.x && b.y === clean.y && b.width === clean.width && b.height === clean.height && b.view === clean.view)) return r;
 	return { ...r, [pageId]: [...have, clean] };
 }
 

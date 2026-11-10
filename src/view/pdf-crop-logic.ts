@@ -53,14 +53,15 @@ export function cropToFrame(crop: PdfCrop | undefined, rotate: 0 | 90 | 180 | 27
 	return { x: r.x, y: r.y, width: r.width, height: r.height };
 }
 
-/** The crop of the PDF page a frame in the page shown with `rotate` stands for; null when the frame is (within a point) the whole page. */
-export function frameToCrop(frame: Frame, rotate: 0 | 90 | 180 | 270, source: Size): PdfCrop | null {
+/** The crop of the PDF page a frame in the page shown with `rotate` stands for; null when the frame is (within a point) the whole page, undefined when it is too small to be a crop. */
+export function frameToCrop(frame: Frame, rotate: 0 | 90 | 180 | 270, source: Size): PdfCrop | null | undefined {
 	const view = rotate === 0 ? undefined : { rotate };
 	const r = mapRect(viewToSource(view, source), frame);
 	const x = Math.max(0, r.x), y = Math.max(0, r.y);
 	const width = Math.min(source.width - x, r.width), height = Math.min(source.height - y, r.height);
 	if (x < 1 && y < 1 && width > source.width - 1 && height > source.height - 1) return null;
-	return normalizePdfCrop({ x, y, width, height }) ?? null;
+	// undefined: the frame cannot be stored as a crop (a side under the smallest crop): the caller refuses it, it is NOT "no crop" (review Q12).
+	return normalizePdfCrop({ x, y, width, height });
 }
 
 /** Whether two frames are the same to the hundredth of a point. */

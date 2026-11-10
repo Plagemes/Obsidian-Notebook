@@ -397,7 +397,8 @@ export class PdfReading {
 	/** The boxes of a hit on its notebook page (page coordinates), cached while the page's PDF box is unchanged. */
 	private rectsOf(hit: SearchHit, page: Page): Rect[] {
 		const { asset, pdfPage } = hit.target;
-		const cached = this.cache.peek(asset, pdfPage);
+		// The text the page SHOWS: a hit in a run a crop leaves out has no box (review Q5).
+		const cached = this.cache.peekView(asset, pdfPage, viewOf(page.background));
 		if (!cached) {
 			void this.cache.get(asset, pdfPage).then(() => this.requestDraw());
 			return [];
@@ -508,7 +509,7 @@ export class PdfReading {
 	snapStroke(page: Page, stroke: Stroke): Stroke[] | null {
 		const bg = page.background;
 		if (!this.host.settings().snapHighlighter || stroke.tool !== "highlighter" || bg?.kind !== "pdf") return null;
-		const cached = this.cache.peek(bg.asset, bg.page);
+		const cached = this.cache.peekView(bg.asset, bg.page, viewOf(bg));
 		if (!cached || cached.content.items.length === 0) return null;
 		const boxes = boxesOnPage(cached.content, backgroundRect(page), viewOf(bg)).filter((b) => b.str.length > 0);
 		const bands = snapHighlight(stroke.points, boxes, this.measure);
