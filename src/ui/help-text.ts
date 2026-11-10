@@ -81,6 +81,13 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"selection-straighten": "help.straighten",
 	// 0.26 related (#422)
 	"related-pages": "help.relatedPanel",
+	// 0.28 tables (#41)
+	"insert-table": "help.table.insert",
+	"table-add-row": "help.table.addRow",
+	"table-add-col": "help.table.addCol",
+	"table-remove-row": "help.table.removeRow",
+	"table-remove-col": "help.table.removeCol",
+	"table-even": "help.table.even",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

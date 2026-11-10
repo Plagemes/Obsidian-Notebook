@@ -21565,3 +21565,78 @@ body.notebook-style-obsidian {
 		transition: none;
 	}
 }
+
+
+/* ===== 0.28 tables ===== */
+.nb-ui.nb-table-dialog .nb-table-stepper {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.nb-ui.nb-table-dialog .nb-table-stepper .nb-modal-input {
+	width: 72px;
+	min-height: 44px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui.nb-table-dialog .nb-table-step {
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-panel);
+	box-shadow: none;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	cursor: pointer;
+}
+
+.nb-ui.nb-table-dialog .nb-table-seg {
+	max-width: 100%;
+}
+
+.nb-ui.nb-table-dialog .nb-table-seg .nb-segment {
+	min-width: 0;
+	flex: 1 1 0;
+	padding: 0 10px;
+}
+
+.nb-ui.nb-table-dialog .nb-table-colours {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.nb-ui.nb-table-dialog .nb-table-swatch {
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 2px solid var(--nb-border);
+	border-radius: 50%;
+	background: var(--nb-table-swatch, var(--nb-text));
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-table-dialog .nb-table-swatch.is-active {
+	border-color: var(--nb-accent);
+	box-shadow: 0 0 0 2px var(--nb-accent-bg);
+}
+
+.nb-ui.nb-table-dialog .nb-table-preview {
+	display: flex;
+	justify-content: center;
+	padding: 10px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-card);
+	background: var(--nb-panel);
+}
+
+.nb-ui.nb-table-dialog .nb-table-preview-svg {
+	width: 100%;
+	max-width: 240px;
+	height: auto;
+}

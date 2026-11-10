@@ -189,6 +189,8 @@ for (const device of ["tabletLandscape", "phone"]) for (const theme of ["light",
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "macros", theme, device, lowLatency: false });
 // 0.28 linehandle (#256): Reorder lines (dev/harness/linehandle-check.ts), dist/shots/design/linehandle-*.png.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "linehandle", theme, device, lowLatency: false });
+// 0.28 tables (#41): the insert dialog and a table with writing in it (dev/harness/tables-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tables", theme, device, lowLatency: false });
 // 0.26 tidy (#238): Tidy up (dev/harness/tidy-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "tidy", theme, device, lowLatency: false });
 // 0.23 welcomeback (#420): the welcome-back card (dev/harness/welcomeback-check.ts).
@@ -472,6 +474,7 @@ async function main() {
 				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
 				else if (s.doc === "macros") report = await cdp.evaluate("window.harness.checkMacros()", 120000); // 0.27 macros
 				else if (s.doc === "linehandle") report = await cdp.evaluate("window.harness.checkLinehandle()", 90000); // 0.28 linehandle
+				else if (s.doc === "tables") report = await cdp.evaluate("window.harness.checkTables()", 120000); // 0.28 tables
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
 				else if (s.doc === "spread") report = await cdp.evaluate("window.harness.checkSpread()", 120000); // 0.27 spread
 				else if (s.doc === "pdfcopy") report = await cdp.evaluate("window.harness.checkPdfcopy()", 90000);
@@ -728,6 +731,19 @@ async function main() {
 						writeFileSync(join(designDir, `spread-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`spread ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.28 tables: screenshots of the insert dialog and of a table with writing in it.
+			if (s.doc === "tables") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["dialog", "table"]) {
+					try {
+						await cdp.evaluate(`window.harness.tablesShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `tables-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`tables ${state} screenshot: ${e.message}`);
 					}
 				}
 			}

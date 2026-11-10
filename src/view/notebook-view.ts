@@ -221,6 +221,8 @@ import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
 import { AxesTools, type AxesHost } from "./axes-tools";
+import { TableTools, type TableHost } from "./table-tools";
+import { tableOfSelection } from "../ink/table";
 import { ChemTools, holdsReaction } from "./chem-tools";
 import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
@@ -540,6 +542,8 @@ export class NotebookView extends FileView {
 	private checklist: ChecklistTools | null = null;
 	/** 0.22 (#206): instant axes (an L or a + drawn by hand, the insert). */
 	private axes: AxesTools | null = null;
+	/** 0.28 (#41): hand-drawn tables (insert, add / remove rows and columns, even cells). */
+	private tables: TableTools | null = null;
 	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
 	private chem: ChemTools | null = null;
 	/** 0.20 (#39): groups and locked elements (Group, Ungroup, Lock, the Unlock chip, the list of locked elements). */
@@ -897,6 +901,7 @@ export class NotebookView extends FileView {
 		this.sticky = new StickyTools(this.stickyHost());
 		this.checklist = new ChecklistTools(this.checklistHost());
 		this.axes = new AxesTools(this.axesHost());
+		this.tables = new TableTools(this.tableHost());
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
@@ -1338,6 +1343,7 @@ export class NotebookView extends FileView {
 		this.checklist?.destroy();
 		this.axes?.destroy();
 		this.axes = null;
+		this.tables = null;
 		this.chem = null;
 		this.checklist = null;
 		this.groups?.destroy();
@@ -3408,6 +3414,21 @@ export class NotebookView extends FileView {
 		};
 	}
 
+	/** What the table tools need from the view (0.28, #41). */
+	private tableHost(): TableHost {
+		const c = this.checklistHost();
+		return {
+			app: this.app, doc: () => c.doc(), editable: () => c.editable(), execute: (cmd) => c.execute(cmd), insertTarget: () => c.insertTarget(),
+			selection: () => (this.selection ? this.selectionParts(this.selection) : null),
+			select: (p, s, e) => c.select(p, s, e), penColor: () => c.penColor(), inkOf: (page) => c.inkOf(page), refresh: () => c.refresh(),
+		};
+	}
+
+	/** 0.28 (#41): hand-drawn tables of this view (null before the view is open). */
+	get tableTools(): TableTools | null {
+		return this.tables;
+	}
+
 	/** 0.22 (#206): instant axes of this view (null before the view is open). */
 	get axesTools(): AxesTools | null {
 		return this.axes;
@@ -4619,6 +4640,8 @@ export class NotebookView extends FileView {
 			// 0.20 (#39): Group works within one page (a group never spans pages); Ungroup and Lock work on every page of the selection.
 			canGroup: !sel.others?.length && canGroup({ strokes: sel.strokes, elements: sel.elements }),
 			grouped: parts.reduce((n, p) => n + p.strokes.filter((s) => s.group !== undefined).length + p.elements.filter((e) => e.group !== undefined).length, 0),
+			// 0.28 (#41): the selection is exactly one hand-drawn table (the table actions show then).
+			table: parts.length === 1 && !!parts[0] && tableOfSelection(parts[0].strokes, parts[0].elements.length) !== null,
 		};
 	}
 

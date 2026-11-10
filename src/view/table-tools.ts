@@ -1,0 +1,118 @@
+import type { App } from "obsidian";
+import { t } from "../i18n";
+import {
+	cellIndexAt, colsOf, evenCells, gridAt, insertCol, insertRow, normaliseSpec, removeLastCol, removeLastRow, rowsOf, tableOfSelection,
+	type DetectedTable, type GridEdit,
+} from "../ink/table";
+import { editTableCommand, insertTableCommand } from "../ink/table-edit";
+import type { Command } from "../model/history";
+import type { NotebookDocument, Page, PageElement, Stroke } from "../model/types";
+import { showNotice } from "./notice";
+import { askTable } from "./table-dialog";
+import type { SelectedPart } from "./group-tools";
+
+/**
+ * View side of hand-drawn tables (0.28, roadmap #41): the "Insert table" dialog and the edits of a selected table (add a row or a column,
+ * remove the last one, even out the cells). The geometry is in ink/table.ts and the undoable commands in ink/table-edit.ts; every action here
+ * is ONE undo step through the view's history, which refuses it on a locked page. Nothing is added to the document format.
+ */
+export interface TableHost {
+	app: App;
+	doc(): NotebookDocument | null;
+	editable(): boolean;
+	/** Runs a command as one undo step (false when it was refused: a locked page, a read-only notebook). */
+	execute(cmd: Command): boolean;
+	/** The selected items, page by page; null when nothing is selected. */
+	selection(): SelectedPart[] | null;
+	select(pageIndex: number, strokes: Stroke[], elements: PageElement[]): void;
+	/** The visible centre of the page in view, in page units. */
+	insertTarget(): { pageIndex: number; x: number; y: number } | null;
+	penColor(): string;
+	/** The ink of a page that is in view (hidden ink and the ink a collapsed note keeps hidden are not in it). */
+	inkOf(page: Page): readonly Stroke[];
+	refresh(): void;
+}
+
+export class TableTools {
+	constructor(private readonly host: TableHost) {}
+
+	/** "Table" in the insert sheet: asks for the size and look, then draws the table at the centre of the view as one group. */
+	async insert(): Promise<void> {
+		if (!this.host.editable()) return;
+		const target = this.host.insertTarget();
+		const page = target ? this.host.doc()?.pages[target.pageIndex] : undefined;
+		if (!target || !page) return;
+		const choice = await askTable(this.host.app, this.host.penColor());
+		if (!choice) return;
+		// The notebook can have changed while the dialog was open: look again.
+		const now = this.host.doc()?.pages[target.pageIndex];
+		if (!now || now.id !== page.id || !this.host.editable()) return;
+		const spec = normaliseSpec(choice.spec, now.width);
+		const grid = gridAt(spec, target.x, target.y, now);
+		const made = insertTableCommand(now, grid, choice.style);
+		if (!this.host.execute(made.cmd)) return;
+		const after = this.host.doc()?.pages[target.pageIndex];
+		if (after) this.host.select(target.pageIndex, after.strokes.filter((s) => s.group === made.group), []);
+		this.host.refresh();
+	}
+
+	/** The table the selection is (one page, nothing but the lines of one group), with its page. */
+	private current(): { part: SelectedPart; page: Page; table: DetectedTable } | null {
+		const sel = this.host.selection();
+		const part = sel && sel.length === 1 ? sel[0] : undefined;
+		const page = part ? this.host.doc()?.pages[part.pageIndex] : undefined;
+		if (!part || !page) return null;
+		const table = tableOfSelection(part.strokes, part.elements.length);
+		return table ? { part, page, table } : null;
+	}
+
+	/** Whether the selection is a table (the actions show only then). */
+	isTableSelected(): boolean {
+		return this.current() !== null;
+	}
+
+	/** The row and column a new line goes after: those under the centre of the view when it is over the table, else the last ones. */
+	private anchor(pageIndex: number, table: DetectedTable): { row: number; col: number } {
+		const target = this.host.insertTarget();
+		const over = target && target.pageIndex === pageIndex ? target : null;
+		return { row: cellIndexAt(table.grid.ys, over?.y ?? Infinity), col: cellIndexAt(table.grid.xs, over?.x ?? Infinity) };
+	}
+
+	addRow(): void {
+		this.edit((table, pageIndex) => insertRow(table.grid, this.anchor(pageIndex, table).row), "table.row.added", "table.row.max");
+	}
+
+	addColumn(): void {
+		this.edit((table, pageIndex) => insertCol(table.grid, this.anchor(pageIndex, table).col), "table.col.added", "table.col.max");
+	}
+
+	removeRow(): void {
+		this.edit((table) => removeLastRow(table.grid), "table.row.removed", "table.row.last");
+	}
+
+	removeColumn(): void {
+		this.edit((table) => removeLastCol(table.grid), "table.col.removed", "table.col.last");
+	}
+
+	evenOut(): void {
+		this.edit((table) => evenCells(table.grid), "table.even.done", "table.even.already");
+	}
+
+	private edit(make: (table: DetectedTable, pageIndex: number) => GridEdit | null, done: Parameters<typeof t>[0], refused: Parameters<typeof t>[0]): void {
+		if (!this.host.editable()) return;
+		const cur = this.current();
+		if (!cur) return;
+		const edit = make(cur.table, cur.part.pageIndex);
+		if (!edit) {
+			showNotice(t(refused), 2500);
+			return;
+		}
+		const made = editTableCommand(cur.page, cur.table, edit, this.host.inkOf(cur.page));
+		if (!made || !this.host.execute(made.cmd)) return;
+		const group = cur.table.strokes[0]?.group;
+		const after = this.host.doc()?.pages[cur.part.pageIndex];
+		if (after && group !== undefined) this.host.select(cur.part.pageIndex, after.strokes.filter((s) => s.group === group), []);
+		this.host.refresh();
+		showNotice(t(done, { rows: String(rowsOf(edit.grid)), cols: String(colsOf(edit.grid)) }), 2200);
+	}
+}

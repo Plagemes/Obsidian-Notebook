@@ -140,7 +140,7 @@ Continues the M7 numbering. Priority **P1** next, **P2** very useful, **P3** nic
 38. **P2** 🧪 Align and distribute the selection.
 39. **P2** 🧪 Group elements and lock elements (for example a background image that must not move). (0.20, format v18: an optional `group` on strokes and elements and `locked` on elements. *Group* / *Ungroup* / *Lock* in the selection bar; a tap or the lasso on one member picks the whole group; the lasso, a tap and the area eraser skip a locked element; a *Locked · Unlock* chip on a tap and *Locked elements…* in the page menu unlock.)
 40. **P2** Layers: annotations on a layer separate from the PDF, which can be hidden or locked.
-41. **P2** Hand-drawn tables: insert a grid of cells and write inside it.
+41. **P2** 🧪 Hand-drawn tables: insert a grid of cells and write inside it.
 42. **P3** Symbol keyboard (Greek, maths) for text boxes.
 
 ### PDF

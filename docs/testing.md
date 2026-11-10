@@ -4529,3 +4529,32 @@ Manual steps (real Obsidian; nothing here is verified on Android hardware). Use 
 | Setting *Undo on this page only* (default off), button names and help in en and it | yes | `tests/page-undo-panel.test.ts`, `tests/settings-schema.test.ts`, harness `doc=pageundo` | | | |
 | Undo on the page last touched in a two-page spread | yes | uses `currentPageIndex` (not run in the harness) | | | |
 | S Pen side-button replay while a page-undone step waits for redo | no | | | | `retractStroke` still needs an empty redo list |
+
+### 0.28 — tables: hand-drawn tables (roadmap #41; steps 3200-3219)
+
+*Table* in the insert sheet, and *Add row*, *Add column*, *Remove last row*, *Remove last column* and *Even out cells* in the All actions sheet while a table is selected (on a phone they are in the sheet, not on the selection bar). Implemented, not verified on hardware. A table is plain vector ink: straight shape lines of one group (no new element kind, no format change). Needs a notebook page and the S Pen.
+
+3200. **Insert.** Insert sheet > *Table*: a dialog with Rows, Columns, Cell size, Line width, Line style, Line colour and *Thicker line under the first row*, and a small picture of the grid that follows every choice. Choose 4 rows, 3 columns, Medium, Insert: the grid appears at the centre of the view, selected, as one group (one tap on a line selects all of it).
+3201. **One step.** Undo once: the whole table goes. Redo: it is back. Open the history panel: one entry, *Table inserted*.
+3202. **Look.** Insert one dashed, thick and red, with the header line on: every line is dashed and red, the line under the first row is clearly thicker. With the header off all lines are alike. On a narrow page with 12 columns the cells shrink to fit the page; the dialog never makes a table wider than the page.
+3203. **Write in it.** With the pen write a word in each cell: it is ordinary ink (it does not select the table, it is not part of its group). Move the table with the lasso: the table moves, the writing stays (select both to move both).
+3204. **Add row.** Select the table (tap a line), All actions > *Add row*: a row as tall as its neighbour appears under the row at the centre of the view (at the bottom when the centre is not over the table). Writing below the new line moves down with the table lines; writing above it and writing outside the table do not move. One undo puts everything back, including the writing.
+3205. **Add column.** The same with *Add column*: writing to the right of the new line moves right.
+3206. **Remove.** *Remove last row* and *Remove last column* take the last line away; writing is left where it is (even if it now lies outside the table). A one-row or one-column table says it keeps at least one.
+3207. **Even out.** Scale the table with the lasso handles so that the cells are no longer even (or add a row, which is as tall as its neighbour, to a table whose rows differ), then *Even out cells*: every row is as tall and every column as wide as the others, the outer frame is unchanged. On an already even table it says so and changes nothing.
+3208. **Limits.** Keep adding rows until a notice says the table cannot have more rows (30); the same for columns (16).
+3209. **Not offered.** Select a table together with other ink, or only some of its lines: the table actions are not in the sheet. With nothing selected they are not either.
+3210. **Locks.** On a locked page *Table* and the table actions do nothing (the page's lock notice). A table inside a sticky note that is collapsed: ink the note hides is not moved.
+3211. **Snap.** With snap on (Settings > Writing), drag a text box or a drawing near the table: the dragged box snaps to the row and column lines of the table, not only to the table's outline.
+3212. **Exports.** Export the page as PDF, PNG, SVG and interactive HTML: the table is drawn like any shape (dashes included); the line width is the same everywhere.
+3213. **Copy and move.** Copy the table to another page and to another notebook: it arrives as one group of its own (fresh ids) and is still a table (the actions are offered when it is selected).
+3214. **Dark, light, phone, Italian.** The dialog reads in both themes with 44 px targets, fits a phone, and is in Italian with the plugin in Italian; the long-press help of *Table* and each table action says what it does.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Table geometry, build / detect / edit grid, ink shift on row and column insert | yes | `tests/table.test.ts` | | | |
+| Insert and edit commands (one undo step, locked page refuses) | yes | `tests/table.test.ts` | | | |
+| Insert dialog, table actions in the sheet, context rule, help, history titles | yes | harness `doc=tables` | | | |
+| Snap to cell lines | yes | `tests/table.test.ts` | | | |
+| Dragging a single line to resize a row or column | no | | | | use the lasso handles then *Even out cells* |
+| Writing moves with the cells on resize (merged cells, per-cell text) | no | | | | left out in this wave |
