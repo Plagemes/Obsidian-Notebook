@@ -121,7 +121,7 @@ export function planTableEdit(
 		const locked = (page.elements ?? []).filter((el): el is TapeElement => el.type === "tape" && el.locked === true);
 		if (locked.length > 0 && pushed.some((s) => strokeTouchesTapes(s, locked))) return { ok: false, reason: "tapeLocked" };
 		// Round-3 review (Z6): the tapes over the pushed answers go with them (same step), and obey the same edge and redaction rules.
-		tapes =tapesToShift(page, ink.filter((s) => !mine.has(s.id)), new Set(pushed.map((s) => s.id)));
+		tapes = tapesToShift(page, ink.filter((s) => !mine.has(s.id)), new Set(pushed.map((s) => s.id)));
 		const movedTapes = tapes.map((tp) => shiftTape(tp, axis, by));
 		for (const tp of movedTapes) {
 			if (!insidePage(page, tp.x, tp.y, tp.x + tp.width, tp.y + tp.height)) return { ok: false, reason: "edge" };
