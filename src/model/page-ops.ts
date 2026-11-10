@@ -7,7 +7,7 @@
 import { removeBookmark, setBookmark } from "./bookmarks";
 import { cloneMeta } from "./document";
 import { Batch, DeletePage, InsertPages, SetMeta, SetPageSize, SetPaper, type Command } from "./history";
-import { duplicatePage } from "./pages";
+import { duplicatePages } from "./pages";
 import { SetPageLocked } from "./page-lock";
 import { normalizePageTag, sameTags, SetPageTags, unionPageTags } from "./page-tags";
 import { DEFAULT_META, PAPER_SPACING, type NotebookDocument, type Page, type PaperKind } from "./types";
@@ -164,7 +164,8 @@ export function duplicateCommand(doc: NotebookDocument, ids: Iterable<string>): 
 	const pages = selectedPages(doc, ids);
 	if (pages.length === 0) return null;
 	const index = doc.pages.indexOf(pages[pages.length - 1]!) + 1;
-	return { command: new InsertPages(pages.map((p) => duplicatePage(p)), index), index };
+	// 0.29 (#248) review fix (F2): the captions of the copies name the copies of their pictures.
+	return { command: new InsertPages(duplicatePages(pages), index), index };
 }
 
 /** Deletes the selected pages. Null when nothing is selected or when it would leave the notebook without pages. */
