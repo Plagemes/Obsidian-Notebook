@@ -53,6 +53,31 @@ export function redoSurvives(undone: StepScope, fresh: StepScope): boolean {
 	return true;
 }
 
+/**
+ * The step is global or registers an entry of a shared table (a file, a slide entry): the undone steps below it in the redo list (redone
+ * after it) may need what it would put back.
+ */
+export function sharesTables(scope: StepScope): boolean {
+	return !scope.local || scope.registers.length > 0;
+}
+
+/**
+ * 0.28 review (R2-1): the undone steps of `stack` (the redo list, next Redo last) that stay after a new edit `fresh`. Walks from the next
+ * Redo down: a step is kept when `redoSurvives`, but once a DROPPED step is global or registers a shared entry, every step below it is
+ * dropped too: the redo barrier that protected them (`History.redoOnPage`) goes with it, and they may point at an entry nothing would put
+ * back. `cut` true drops the whole list (a step that shares the tables was dropped above all of it). The order is kept.
+ */
+export function survivingRedo<T>(stack: readonly T[], scopeOf: (cmd: T) => StepScope, fresh: StepScope, cut = false): T[] {
+	const kept: T[] = [];
+	for (let i = stack.length - 1; i >= 0 && !cut; i--) {
+		const cmd = stack[i]!;
+		const scope = scopeOf(cmd);
+		if (redoSurvives(scope, fresh)) kept.push(cmd);
+		else if (sharesTables(scope)) cut = true;
+	}
+	return kept.reverse();
+}
+
 /** What Undo / Redo on one page did. */
 export type PageStepResult =
 	/** The newest step of the page was undone (or redone). */
