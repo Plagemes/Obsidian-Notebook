@@ -88,6 +88,9 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	if (a.id === "selection-straighten" && hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 6;
 	// 0.27 (#170): a macro fits where its first step can start: one that starts on the selection comes first when something is selected (enough for "For this page");
 	// one that starts somewhere it cannot (nothing selected, a locked page) steps back; any other leans forward a little.
+	// 0.28 (#41): the table actions fit a selected table above all (enough for "For this page"); inserting one leans forward a little on grid and plain paper.
+	if (a.id.startsWith("table-") && c.selection?.table === true) boost += HERE_MIN_BOOST + 4;
+	if (a.id === "insert-table" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 4;
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
 	return boost;
 }

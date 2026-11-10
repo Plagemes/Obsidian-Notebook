@@ -231,6 +231,13 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	// 0.19 (#103): handwritten checklists
 	"insert-checkbox": (v) => v.checklistTools?.insert(),
 	"insert-axes": (v) => v.axesTools?.insert(),
+	// 0.28 (#41): hand-drawn tables
+	"insert-table": (v) => void v.tableTools?.insert(),
+	"table-add-row": (v) => v.tableTools?.addRow(),
+	"table-add-col": (v) => v.tableTools?.addColumn(),
+	"table-remove-row": (v) => v.tableTools?.removeRow(),
+	"table-remove-col": (v) => v.tableTools?.removeColumn(),
+	"table-even": (v) => v.tableTools?.evenOut(),
 	"checkbox-toggle": (v) => v.checklistTools?.toggleSelected(),
 	"checkbox-select-label": (v) => v.checklistTools?.selectWithLabel(),
 	"checkbox-label": (v) => v.checklistTools?.editLabel(),

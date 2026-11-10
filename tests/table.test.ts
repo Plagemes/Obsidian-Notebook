@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	buildTable, cellIndexAt, colsOf, detectTable, evenCells, gridAt, insertCol, insertRow, inkToShift, normaliseSpec, removeLastCol, removeLastRow,
-	rowsOf, tableOfSelection, TABLE_MAX_COLS, TABLE_MAX_ROWS,
+	rowsOf, tableOfSelection, tableSnapLines, TABLE_MAX_COLS, TABLE_MAX_ROWS,
 } from "../src/ink/table";
 import { editTableCommand, insertTableCommand } from "../src/ink/table-edit";
 import { createDocument, createStroke, quantizePoint } from "../src/model/document";
@@ -195,4 +195,15 @@ describe("table commands (#41)", () => {
 		expect(p.strokes).toHaveLength(0);
 		expect(refused.length).toBe(1);
 	});
+});
+
+describe("table snapping (#41)", () => {
+  it("offers every row and column line of a table as an alignment line, and skips groups that are not tables", () => {
+    const grid = gridAt(spec, 300, 400, page);
+    const strokes = [...buildTable(grid, style, "t", ids), line(0, 0, 50, 50)];
+    const lines = tableSnapLines(strokes);
+    expect(lines.vertical.map((l) => l.pos)).toEqual(grid.xs);
+    expect(lines.horizontal.map((l) => l.pos)).toEqual(grid.ys);
+    expect(tableSnapLines(strokes.slice(2))).toEqual({ vertical: [], horizontal: [] });
+  });
 });

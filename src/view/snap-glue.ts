@@ -6,6 +6,7 @@
 import { clusterStrokes } from "../ink/align";
 import { elementBounds, type MeasureText } from "../ink/elements";
 import { strokeBounds, type BBox } from "../ink/hit-test";
+import { tableSnapLines } from "../ink/table";
 import { estimateMeasure } from "../ink/text-layout";
 import { multiply, scaleAbout, scaleFactor, translate, type Matrix } from "../ink/transform";
 import { gridOf, snapMove, snapScale, snapTargets, transformedBox, usesGrid, usesGuides, type SnapGrid, type SnapGuide, type SnapMode, type SnapTargets } from "../model/snap";
@@ -44,6 +45,12 @@ export function buildSnapSession(
 			}
 		}
 		targets = snapTargets(page, boxes);
+		// 0.28 (#41): the row and column lines of a hand-drawn table on the page are alignment lines too (not only its outline).
+		if (page.strokes.length <= MAX_SNAP_STROKES) {
+			const cells = tableSnapLines(page.strokes.filter((s) => !selectedStrokes.has(s)));
+			targets.vertical.push(...cells.vertical);
+			targets.horizontal.push(...cells.horizontal);
+		}
 	}
 	return grid || targets ? { targets, grid } : null;
 }

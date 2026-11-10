@@ -1,4 +1,5 @@
 import { createId, quantizePoint } from "../model/document";
+import type { SnapLine } from "../model/snap";
 import { RENDER_FREEHAND, type ShapeDash, type Stroke } from "../model/types";
 import { SHAPE_PRESSURE } from "./shapes";
 
@@ -245,4 +246,28 @@ export function inkToShift(grid: TableGrid, shift: InsertShift, ink: readonly In
 		if ((shift.axis === "y" ? b.minY : b.minX) >= shift.from - EPS) out.push(b.id);
 	}
 	return out;
+}
+
+/**
+ * The cell lines of every table among `strokes` as alignment lines for the snap engine (model/snap.ts): a moved box can be pulled to a
+ * row or column line of a table that is on the page, in addition to the table's outline. Strokes that are not a whole table are skipped.
+ */
+export function tableSnapLines(strokes: readonly Stroke[]): { vertical: SnapLine[]; horizontal: SnapLine[] } {
+	const vertical: SnapLine[] = [];
+	const horizontal: SnapLine[] = [];
+	const byGroup = new Map<string, Stroke[]>();
+	for (const s of strokes) {
+		if (s.group === undefined || s.tool !== "shape") continue;
+		const list = byGroup.get(s.group);
+		if (list) list.push(s);
+		else byGroup.set(s.group, [s]);
+	}
+	for (const list of byGroup.values()) {
+		const t = detectTable(list);
+		if (!t) continue;
+		const box = tableBox(t.grid);
+		for (const x of t.grid.xs) vertical.push({ pos: x, lo: box.minY, hi: box.maxY, kind: "edge" });
+		for (const y of t.grid.ys) horizontal.push({ pos: y, lo: box.minX, hi: box.maxX, kind: "edge" });
+	}
+	return { vertical, horizontal };
 }
