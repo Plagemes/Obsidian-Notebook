@@ -33,8 +33,11 @@ const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 async function openDialog(api: TablesCheckApi): Promise<HTMLElement | null> {
 	const v = api.view as TablesView;
 	v.runAction("insert-table");
-	for (let i = 0; i < 20 && !q(".nb-table-dialog"); i++) await sleep(50);
-	await api.frames(3);
+	for (let i = 0; i < 40 && !q(".nb-table-dialog"); i++) await sleep(50);
+	if (!q(".nb-table-dialog")) {
+		(v as unknown as { tableTools?: { insert(): Promise<void> } }).tableTools?.insert().catch(() => undefined);
+		for (let i = 0; i < 40 && !q(".nb-table-dialog"); i++) await sleep(50);
+	}
 	return q<HTMLElement>(".nb-table-dialog");
 }
 
@@ -97,6 +100,8 @@ export async function checkTables(api: TablesCheckApi): Promise<{ ok: boolean; r
 	// --- writing in a cell, then editing ---
 	const t0 = detectTable(lines())!.grid;
 	const cx = (t0.xs[0]! + t0.xs[1]!) / 2;
+	api.setTool("pen");
+	await frames(2);
 	await api.penStroke([frac(cx - 10, t0.ys[2]! + 10), frac(cx, t0.ys[2]! + 16), frac(cx + 10, t0.ys[2]! + 10)]);
 	const written = page().strokes.find((s) => s.group === undefined && s.tool !== "shape");
 	const y0 = written?.points[0]?.[1] ?? 0;
@@ -152,7 +157,7 @@ export async function tablesShot(api: TablesCheckApi, state: "dialog" | "table")
 	v.clearSelection();
 	await api.frames(3);
 	if (state === "dialog") {
-		await openDialog(api);
+		if (!(await openDialog(api))) throw new Error("the table dialog did not open");
 		return;
 	}
 	const dlg = await openDialog(api);
@@ -167,6 +172,8 @@ export async function tablesShot(api: TablesCheckApi, state: "dialog" | "table")
 			const box = v.layout.boxes[v.currentPage()]!;
 			return [(v.viewport.offsetX + (box.x + x) * v.viewport.scale) / r.width, (v.viewport.offsetY + (box.y + y) * v.viewport.scale) / r.height];
 		};
+		api.setTool("pen");
+		await api.frames(2);
 		for (let r = 0; r < 3; r++) {
 			const x = table.grid.xs[0]! + 8;
 			const y = (table.grid.ys[r]! + table.grid.ys[r + 1]!) / 2;
