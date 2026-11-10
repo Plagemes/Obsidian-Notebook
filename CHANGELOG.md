@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### chartreg
+- **Trend line on line charts (completes #295).** The *Chart from table* dialog has a *Trend line* choice for the Line type: a dashed least-squares line through the first series (x is the row position 1, 2, 3 ...) with its equation and R² as a small label inside the chart. The choice is kept by *Update chart* (stored as a trailing `r` in the chart group id; ids made by 0.29 read as before; no document format change). Code: `src/math/chart-regression.ts`.
+
 ## 0.29.0 — 2026-11-11
 
 Seven roadmap features: study tape (#10), charts from table data (#244), figure captions and numbering (#248), an advanced calculator (#182), strike-through as logical deletion (#96), Zettelkasten card templates (Z9) and Zettelkasten hygiene (Z10), plus table statistics (part of #295, still partial: no chart regression line) and redaction hardening for undo and redo, page geometry and merges. The notebook format moves to version 27 (study tape): the migration from version 26 is automatic, and Notebook 0.28 and older open a v27 notebook read-only and never overwrite it. Four review rounds are folded in (see Review fixes).
