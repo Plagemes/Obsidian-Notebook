@@ -516,6 +516,128 @@ describe("format v28: history", () => {
 		expect("sections" in doc).toBe(false);
 	});
 
+	/** Pages named `names`; `starts`: section id → its first page (title `Section <id>`, one colour each). */
+	function laidOut(names: string[], starts: Record<string, string>): NotebookDocument {
+		const doc = createDocument(new Date(stamp));
+		const first = doc.pages[0]!;
+		first.id = names[0]!;
+		for (const id of names.slice(1)) doc.pages.push({ ...first, id, strokes: [] });
+		const colours = ["#2f80f7", "#16c2a3", "#f0565e", "#8b5cf6"];
+		doc.sections = Object.entries(starts).map(([id, page], i) => section(id, page, { color: colours[i % colours.length]! }));
+		return doc;
+	}
+	/** Which section each page is in, in page order ("-" for none). */
+	const membership = (doc: NotebookDocument): string[] => doc.pages.map((p) => sectionOfPage(doc, p.id)?.section.id ?? "-");
+	/** Same, by look (title and colour), for sections that a continuation carries on. */
+	const looks = (doc: NotebookDocument): string[] => doc.pages.map((p) => sectionOfPage(doc, p.id)?.section.title ?? "-");
+
+	it("review S1: Move up of a one-page section keeps the pages around it in their sections, and a second Move up puts the host back together", () => {
+		const doc = laidOut(["x1", "x2", "s1", "y1"], { x: "x1", s: "s1", y: "y1" });
+		const history = historyOf(doc);
+		const start = [...doc.sections!];
+		expect(history.execute(new MovePage("s1", 2, 1))).toBe(true);
+		expect(ids(doc)).toEqual(["x1", "s1", "x2", "y1"]);
+		// x2 did not move: it keeps the look of X through a continuation (same title and colour), and y1 keeps Y.
+		expect(looks(doc)).toEqual(["Section x", "Section s", "Section x", "Section y"]);
+		const cont = doc.sections!.find((s) => s.page === "x2")!;
+		expect(cont.id).not.toBe("x");
+		expect(cont).toMatchObject({ title: "Section x", color: "#2f80f7" });
+		expect(checkContent(doc)).toBeNull();
+		const afterFirst = anchors(doc);
+		history.undo();
+		expect(ids(doc)).toEqual(["x1", "x2", "s1", "y1"]);
+		expect(doc.sections).toEqual(start);
+		history.redo();
+		expect(anchors(doc)).toEqual(afterFirst); // the continuation gets the same id on redo
+		// A second Move up: S is now first, and X is one section again (the continuation is gone).
+		expect(history.execute(new MovePage("s1", 1, 0))).toBe(true);
+		expect(ids(doc)).toEqual(["s1", "x1", "x2", "y1"]);
+		expect(membership(doc)).toEqual(["s", "x", "x", "y"]);
+		expect(anchors(doc)).toEqual(["x@x1", "s@s1", "y@y1"]);
+		history.undo();
+		expect(anchors(doc)).toEqual(afterFirst);
+		history.undo();
+		expect(doc.sections).toEqual(start);
+	});
+
+	it("review S1: Move down of a one-page section keeps the section it passes, and undo is exact", () => {
+		const doc = laidOut(["x1", "s1", "y1", "y2"], { x: "x1", s: "s1", y: "y1" });
+		const history = historyOf(doc);
+		const start = [...doc.sections!];
+		expect(history.execute(new MovePage("s1", 1, 2))).toBe(true);
+		expect(ids(doc)).toEqual(["x1", "y1", "s1", "y2"]);
+		expect(looks(doc)).toEqual(["Section x", "Section y", "Section s", "Section y"]);
+		expect(membership(doc).slice(0, 3)).toEqual(["x", "y", "s"]);
+		history.undo();
+		expect(ids(doc)).toEqual(["x1", "s1", "y1", "y2"]);
+		expect(doc.sections).toEqual(start);
+		// Down to the end: nothing to split, Y keeps both its pages.
+		expect(history.execute(new MovePage("s1", 1, 3))).toBe(true);
+		expect(membership(doc)).toEqual(["x", "y", "y", "s"]);
+		expect(anchors(doc)).toEqual(["x@x1", "s@s1", "y@y1"]);
+		history.undo();
+		expect(doc.sections).toEqual(start);
+	});
+
+	it("review S1: a whole section moved to the start in front of pages in no section takes them (the anchor model has no 'none' after a section)", () => {
+		const doc = sectionDoc();
+		const history = historyOf(doc);
+		const start = [...doc.sections!];
+		expect(history.execute(moveCommand(doc, ["p2", "p3"], "start")!)).toBe(true);
+		expect(ids(doc)).toEqual(["p2", "p3", "p1", "p4", "p5", "p6"]);
+		// B's pages keep B; p1 can no longer be in no section and joins A, the only thing it can show.
+		expect(membership(doc)).toEqual(["a", "a", "a", "b", "b", "b"]);
+		expect(anchors(doc)).toEqual(["a@p2", "b@p4"]);
+		history.undo();
+		expect(ids(doc)).toEqual(["p1", "p2", "p3", "p4", "p5", "p6"]);
+		expect(doc.sections).toEqual(start);
+		history.redo();
+		expect(anchors(doc)).toEqual(["a@p2", "b@p4"]);
+	});
+
+	it("review S1: a whole section dropped into the middle of another splits it; the host's tail keeps its look and undo is exact", () => {
+		const doc = sectionDoc();
+		const history = historyOf(doc);
+		const start = [...doc.sections!];
+		// B (p4..p6) between p2 and p3, both in A.
+		const cmd = new ReorderPages(ids(doc), ["p1", "p2", "p4", "p5", "p6", "p3"], ["p4", "p5", "p6"]);
+		expect(history.execute(cmd)).toBe(true);
+		expect(looks(doc)).toEqual(["-", "Chemistry", "Physics", "Physics", "Physics", "Chemistry"]);
+		expect(membership(doc).slice(0, 5)).toEqual(["-", "a", "b", "b", "b"]);
+		expect(doc.sections).toHaveLength(3);
+		expect(checkContent(doc)).toBeNull();
+		const split = anchors(doc);
+		history.undo();
+		expect(doc.sections).toEqual(start);
+		expect(membership(doc)).toEqual(["-", "a", "a", "b", "b", "b"]);
+		history.redo();
+		expect(anchors(doc)).toEqual(split);
+		// Moving B back to the end puts A back together: the continuation is removed.
+		expect(history.execute(new ReorderPages(ids(doc), ["p1", "p2", "p3", "p4", "p5", "p6"], ["p4", "p5", "p6"]))).toBe(true);
+		expect(membership(doc)).toEqual(["-", "a", "a", "b", "b", "b"]);
+		expect(anchors(doc)).toEqual(["a@p2", "b@p4"]);
+		history.undo();
+		expect(anchors(doc)).toEqual(split);
+	});
+
+	it("review S1: with a full list there is no continuation (the host's tail joins the block), and nothing the writer refuses", () => {
+		const doc = sectionDoc();
+		const pages = ids(doc);
+		const list: Section[] = [section("a", "p2"), section("b", "p4", { title: "Other", color: "#16c2a3" })];
+		for (let i = list.length; i < SECTIONS_MAX; i++) list.push(section(`d${i}`, `gone${i}`));
+		const next = sectionsAfterReorder(list, pages, ["p1", "p2", "p4", "p5", "p6", "p3"], new Set(["p4", "p5", "p6"]));
+		expect(next).toHaveLength(SECTIONS_MAX);
+		expect(next.slice(0, 2).map((s) => `${s.id}@${s.page}`)).toEqual(["a@p2", "b@p4"]);
+	});
+
+	it("review S1: two sections that already sat next to each other with the same look are not joined by a move", () => {
+		const same = { title: "Same", color: "#2f80f7" };
+		const list = [section("a", "p2", same), section("b", "p4", same), section("c", "p6", { title: "Other" })];
+		const before = ["p1", "p2", "p3", "p4", "p5", "p6"];
+		// c (p6) moved to the start: a and b stay as they were.
+		expect(sectionsAfterReorder(list, before, ["p6", "p1", "p2", "p3", "p4", "p5"], new Set(["p6"]))).toBe(list);
+	});
+
 	it("is classified as a global step for per-page undo, and the panel has a title for it", () => {
 		expect(CLASSIFIED).toContain("SetSections");
 		const scope = computeScope(new SetSections([], [section("a", "p1")], "New section"));

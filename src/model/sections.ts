@@ -10,9 +10,11 @@
  * - The page commands of the history keep the sections consistent in the same step (so undo puts them back exactly):
  *   - Deleting a page that starts a section moves the start to the next page when that page is in the same section; when the deleted page
  *     was the only page of its section (the next page starts another section, or there is none), the section disappears with it.
- *   - Moving pages: a section stays where its pages stay. When the first page of a section is moved away while other pages of the section
- *     stay, the section now starts at the first of those that stay (in the new order) and the moved page takes the section of the place it
- *     lands in; when every page of the section moves (a whole section moved as a block), the section goes with them.
+ *   - Moving pages: a page that did not move keeps its section. When the first page of a section is moved away while other pages of the
+ *     section stay, the section now starts at the first of those that stay (in the new order) and the moved page takes the section of the
+ *     place it lands in; when every page of the section moves (a whole section moved as a block), the section goes with exactly those
+ *     pages. A block dropped inside another section splits it: the pages after the block keep their look through a continuation section
+ *     (same title and colour). Details and the limits of the anchor model in `sectionsAfterReorder`.
  *   - Adding, inserting and duplicating pages changes nothing: a new page belongs to the section of the place it is put in (a copy of a page
  *     lands right after it, so it is in the same section).
  * - A section whose page the notebook does not have (a page taken away by a path that bypasses the history, a damaged file) stays in the list
@@ -178,40 +180,110 @@ export function sectionsAfterDelete(sections: readonly Section[], deletedId: str
 	return sections.map((s, i) => (i === at ? Object.freeze({ ...s, page: nextId }) : s));
 }
 
-/**
- * The pages of each shown section in the page order `order` (section id → page ids, first page first). Dormant sections have no entry.
- */
-function membersIn(order: readonly string[], sections: readonly Section[]): Map<string, string[]> {
-	const out = new Map<string, string[]>();
-	for (const r of resolveSections(order.map((id) => ({ id })), sections)) out.set(r.section.id, order.slice(r.start, r.end + 1));
-	return out;
+/** A small deterministic generator (mulberry32) seeded from a string, so a continuation gets the same id on every redo. */
+function seededRandom(seed: string): () => number {
+	let h = 2166136261;
+	for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+	let a = h >>> 0;
+	return () => {
+		a = (a + 0x6d2b79f5) >>> 0;
+		let t = a;
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
 }
 
 /**
- * The sections after the pages were put in the order `after` (ids) from the order `before`, `moved` being the pages the person moved. A
- * section whose first page moved while some of its pages stayed starts at the first of those that stayed (in the new order); a section whose
- * pages all moved goes with them; any other section is unchanged. The same list when nothing changes.
+ * The sections after the pages were put in the order `after` (ids) from the order `before`, `moved` being the pages the person moved. The
+ * rule is that a page the person did not move keeps the section it had, as far as the anchor model can show it:
+ * - A section whose pages all moved goes with them (a whole section moved as a block).
+ * - Any other moved page takes the section of the place it lands in (the page before it; no section at the very start).
+ * - Every page that did not move keeps its section. A section whose first page moved away while others stayed starts at the first of those
+ *   that stayed (in the new order). When a moved block lands inside another section, that section's pages after the block keep their
+ *   section through a continuation: a new section with the same title and colour (a deterministic id, so a redo makes the same one),
+ *   starting at the first of them. When the list is full, or the page id cannot be stored, there is no continuation and they join the
+ *   section before them.
+ * - Pages that were in no section can stay so only at the start of the notebook: when a moved section lands in front of them, they join it.
+ * - Two sections with the same title and colour that the move puts next to each other (they were not before) become one: the second is
+ *   removed and its pages join the first. This is what puts a section back together when a block that split it moves out again.
+ * Dormant sections, and a second section on a page that already starts one, are kept as they are. The same list when nothing changes.
  */
 export function sectionsAfterReorder(sections: readonly Section[], before: readonly string[], after: readonly string[], moved: ReadonlySet<string>): readonly Section[] {
 	if (sections.length === 0 || moved.size === 0) return sections;
 	if (!sections.some((s) => moved.has(s.page))) return sections;
-	const members = membersIn(before, sections);
-	const pos = new Map<string, number>();
-	after.forEach((id, i) => pos.set(id, i));
-	let changed = false;
-	const out = sections.map((s) => {
-		if (!moved.has(s.page)) return s;
-		const list = members.get(s.id);
-		if (!list) return s;
-		let first: string | null = null;
-		for (const id of list) {
-			if (moved.has(id) || !pos.has(id)) continue;
-			if (first === null || pos.get(id)! < pos.get(first)!) first = id;
+	const shown = resolveSections(before.map((id) => ({ id })), sections);
+	const had = new Map<string, Section>();
+	const whole = new Set<string>();
+	for (const r of shown) {
+		let all = true;
+		for (let i = r.start; i <= r.end; i++) {
+			had.set(before[i]!, r.section);
+			if (!moved.has(before[i]!)) all = false;
 		}
-		if (first === null || first === s.page) return s;
-		changed = true;
-		return Object.freeze({ ...s, page: first });
-	});
+		if (all) whole.add(r.section.id);
+	}
+	const known = new Set(before);
+	// Runs of the section each page should have, in the new order (null: no section).
+	const runs: Array<{ section: Section | null; first: string }> = [];
+	let current: Section | null = null;
+	for (const id of after) {
+		const was = had.get(id) ?? null;
+		const want = !known.has(id) || moved.has(id) ? (was && whole.has(was.id) ? was : current) : was;
+		if (runs.length === 0 || want !== current) runs.push({ section: want, first: id });
+		current = want;
+	}
+	// Where each section starts now; a second run of a section becomes a continuation, or joins the section before it.
+	const taken = new Set(sections.map((s) => s.id));
+	const placed: Array<{ section: Section; first: string; was: Section }> = [];
+	const start = new Map<string, string>();
+	const extra: Section[] = [];
+	for (const run of runs) {
+		const s = run.section;
+		const last = placed[placed.length - 1];
+		if (!s || (last && last.was === s)) continue;
+		if (!start.has(s.id)) {
+			start.set(s.id, run.first);
+			placed.push({ section: s, first: run.first, was: s });
+			continue;
+		}
+		if (sections.length + extra.length >= SECTIONS_MAX || !isUsableSectionPage(run.first)) continue;
+		const id = newSectionId(taken, seededRandom(`${s.id}\n${run.first}`));
+		taken.add(id);
+		const copy = Object.freeze({ id, title: s.title, color: s.color, page: run.first });
+		extra.push(copy);
+		placed.push({ section: copy, first: run.first, was: s });
+	}
+	// Sections with the same look that the move made neighbours become one.
+	const neighbours = new Set<string>();
+	for (let i = 1; i < shown.length; i++) neighbours.add(`${shown[i - 1]!.section.id}\n${shown[i]!.section.id}`);
+	const gone = new Set<string>();
+	let prev: Section | null = null;
+	for (const p of placed) {
+		const s = p.section;
+		if (prev && prev.title === s.title && prev.color === s.color && !neighbours.has(`${prev.id}\n${s.id}`)) {
+			gone.add(s.id);
+			continue;
+		}
+		prev = s;
+	}
+	const shownIds = new Set(shown.map((r) => r.section.id));
+	let changed = sections.some((s) => gone.has(s.id)) || extra.some((s) => !gone.has(s.id));
+	const out: Section[] = [];
+	for (const s of sections) {
+		if (!shownIds.has(s.id)) {
+			out.push(s);
+			continue;
+		}
+		if (gone.has(s.id)) continue;
+		const page = start.get(s.id) ?? s.page;
+		if (page === s.page) out.push(s);
+		else {
+			changed = true;
+			out.push(Object.freeze({ ...s, page }));
+		}
+	}
+	for (const s of extra) if (!gone.has(s.id)) out.push(s);
 	return changed ? out : sections;
 }
 
