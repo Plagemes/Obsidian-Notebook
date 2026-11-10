@@ -1,4 +1,4 @@
-import { chartDataFromCells, countNumbers, layoutChart, type ChartBox, type ChartData, type ChartKind, type ChartLayout } from "../math/chart-layout";
+import { chartDataFromCells, countNumbers, LABEL_SIZE, layoutChart, VALUE_SIZE, type ChartBox, type ChartData, type ChartKind, type ChartLayout } from "../math/chart-layout";
 import { createId } from "../model/document";
 import { isLockedElement } from "../model/groups";
 import { AddElement, AddStroke, Batch, RemoveElement, removeStrokes, type Command } from "../model/history";
@@ -156,11 +156,14 @@ const pointsBox = (strokes: readonly Stroke[]): ChartBox | null => {
 	return minX <= maxX ? { x: r2(minX), y: r2(minY), width: r2(maxX - minX), height: r2(maxY - minY) } : null;
 };
 
-/** The text of the topmost (then leftmost) text box: a chart's title. */
+/**
+ * The text of the topmost (then leftmost) text box: a chart's title. Boxes in the size of an axis, value or legend label are never the
+ * title, so a deleted title box leaves the chart untitled instead of promoting a label.
+ */
 function titleOf(elements: readonly PageElement[]): string {
 	let best: TextElement | null = null;
 	for (const e of elements) {
-		if (e.type !== "text") continue;
+		if (e.type !== "text" || e.fontSize === LABEL_SIZE || e.fontSize === VALUE_SIZE) continue;
 		if (!best || e.y < best.y || (e.y === best.y && e.x < best.x)) best = e;
 	}
 	return best ? best.text.replace(/\s+/g, " ").trim() : "";
@@ -271,8 +274,9 @@ export function planChartUpdate(
 	const mine = (s: Stroke): boolean => s.group === chart.group;
 	if (chart.strokes.length === 0 || chart.strokes.some((s) => !page.strokes.includes(s)) || chart.elements.some((e) => !elements.includes(e))) return { ok: false, reason: "gone" };
 	if (page.strokes.filter(mine).length !== chart.strokes.length || inView.filter(mine).length !== chart.strokes.length) return { ok: false, reason: "gone" };
+	// a locked box is never in a selection, so look at the whole group on the page before the count check
+	if (elements.some((e) => e.group === chart.group && isLockedElement(e))) return { ok: false, reason: "locked" };
 	if (elements.filter((e) => e.group === chart.group).length !== chart.elements.length) return { ok: false, reason: "gone" };
-	if (chart.elements.some(isLockedElement)) return { ok: false, reason: "locked" };
 	const inPart = new Set<string>();
 	for (const part of page.states?.parts ?? []) for (const id of part.items) inPart.add(id);
 	if (chart.strokes.some((s) => inPart.has(s.id)) || chart.elements.some((e) => inPart.has(e.id))) return { ok: false, reason: "states" };
@@ -288,8 +292,9 @@ export function planChartUpdate(
 	if (sameChart(chart.strokes, chart.elements, built.strokes, built.elements)) return { ok: false, reason: "same" };
 	const removedStrokes = removeStrokes(page.id, page.strokes, chart.strokes, "Update chart");
 	if (!removedStrokes) return { ok: false, reason: "gone" };
-	const sBase = page.strokes.length - chart.strokes.length;
-	const eBase = elements.length - chart.elements.length;
+	// the new chart takes the z-order slot of the old one (ink written over it stays over it)
+	const sBase = Math.max(0, Math.min(...chart.strokes.map((s) => page.strokes.indexOf(s))));
+	const eBase = chart.elements.length === 0 ? elements.length : Math.max(0, Math.min(...chart.elements.map((e) => elements.indexOf(e))));
 	const cmd = new Batch("Update chart", [
 		removedStrokes,
 		...chart.elements.map((e) => new RemoveElement(page.id, e)),
