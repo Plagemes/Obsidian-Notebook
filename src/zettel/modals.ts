@@ -1,5 +1,5 @@
-import { FuzzySuggestModal, Modal, Notice, type App, type FuzzyMatch } from "obsidian";
-import { LinkSuggestField, linkWhenCreated } from "./link-suggest-ui";
+import { FuzzySuggestModal, Modal, type App, type FuzzyMatch } from "obsidian";
+import { LinkSuggestField } from "./link-suggest-ui";
 import { t, type MessageKey } from "../i18n";
 import { setIconSafe, subjectVars } from "../ui/components/dom";
 import { CARD_TYPES, parseTagInput, type CardRecord, type CardType } from "./card-content";
@@ -16,6 +16,8 @@ export interface CardAnswer {
 	parent: string;
 	/** Z9: the card template chosen (empty or "blank": none). */
 	template?: string;
+	/** Z5: the cards chosen from the suggestions; linked to the note that is made from this answer, never written to its YAML. */
+	links?: CardRecord[];
 }
 
 const TYPE_LABEL: Record<CardType, MessageKey> = {
@@ -189,13 +191,8 @@ export class CardModal extends Modal {
 		this.answer.tags = parseTagInput(this.tagText);
 		const chosen = this.suggest?.chosenCards() ?? [];
 		this.close();
-		// Z5: the links are added by the zettel service's own writer once the note exists
-		if (chosen.length > 0) {
-			linkWhenCreated(this.app, chosen, (n) => {
-				new Notice(n === null ? t("zettel.suggest.linkFailed") : t("zettel.suggest.linked", { n: String(n) }));
-			});
-		}
-		this.finish({ ...this.answer });
+		// Z5: the chosen cards travel with the answer; the service links them in the same task that creates the note (review Z1).
+		this.finish({ ...this.answer, links: chosen.length > 0 ? chosen : undefined });
 	}
 
 	onClose(): void {

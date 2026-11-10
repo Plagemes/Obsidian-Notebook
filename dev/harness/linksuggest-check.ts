@@ -1,8 +1,8 @@
 /**
  * 0.30 linksuggest (Z5): the "Cards to link" part of the New card dialog, in the browser harness (`doc=linksuggest`,
  * HARNESS_DOC=linksuggest npm run harness:check). The real CardModal is driven with synthetic taps and typing against a small
- * fake slip-box: suggestions follow what is typed, one tap chooses, the setting turns it off, and the chosen cards are linked
- * with the service writer once the new note appears. `linksuggestShot` leaves each state open for the screenshots.
+ * fake slip-box: suggestions follow what is typed, one tap chooses, the setting turns it off, and the chosen cards come back
+ * with the answer (the service links them in the task that makes the note). `linksuggestShot` leaves each state open for the screenshots.
  */
 import type { App } from "./obsidian-stub";
 import { CardModal, type CardAnswer } from "../../src/zettel/modals";
@@ -49,7 +49,6 @@ const CARDS: Array<{ id: string; title: string; tags: string[] }> = [
 
 let open: { close(): void; modalEl: HTMLElement } | null = null;
 let backdrop: HTMLElement | null = null;
-const linked: string[] = [];
 
 function closeAll(): void {
 	open?.close();
@@ -72,13 +71,7 @@ async function seed(api: LinksuggestApi, on: boolean, count = 4): Promise<CardRe
 	}
 	setLinkSuggestHost({
 		settings: () => ({ zettelLinkSuggest: on, zettelLinkSuggestCount: count }),
-		service: () => ({
-			allCards: () => records,
-			linkCardPair: (a, b) => {
-				linked.push(`${a.path}->${b.path}`);
-				return Promise.resolve(true);
-			},
-		}),
+		service: () => ({ allCards: () => records }),
 	});
 	return records;
 }
@@ -151,18 +144,11 @@ export async function checkLinksuggest(api: LinksuggestApi): Promise<{ ok: boole
 		tap(rows(el)[0]);
 		await frames(2);
 
-		linked.length = 0;
 		tap(el.querySelector<HTMLElement>(".nb-zk-footer .mod-cta"));
 		await frames(2);
-		add("Create returns the answer", answer?.title === "Memory techniques", JSON.stringify(answer));
-		// the note appears: the cache reports a new card
-		const path = "Zettelkasten/20260105-0005 Memory techniques.md";
-		const made = await api.app.vault.create(path, "x");
-		const cache = { frontmatter: { "zettel-id": "20260105-0005", title: "Memory techniques", "zettel-notebook-id": "nb", "page-id": "p9" } };
-		api.app.metadataCache.caches.set(path, cache);
-		api.app.metadataCache.trigger("changed", made, "", cache);
-		await wait(50);
-		add("the chosen card is linked to the new one with the service writer", linked.length === 1 && linked[0]!.startsWith(path), linked.join());
+		add("Create returns the answer", answer?.title === "Memory techniques", JSON.stringify(answer?.title));
+		// review Z1: the chosen card travels with the answer; the service links it in the task that makes the note (no watcher)
+		add("the answer carries the chosen card, to link to the note made from it", answer?.links?.length === 1 && CARDS.some((c) => c.id === answer?.links?.[0]?.id), JSON.stringify(answer?.links?.map((c) => c.id)));
 		closeAll();
 
 		await seed(api, false);

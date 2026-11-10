@@ -1,19 +1,20 @@
 /**
- * Z5: the "Cards to link" part of the card dialog and the linking that follows the creation of the card.
+ * Z5: the "Cards to link" part of the card dialog. The linking itself is done by the zettel service, in the task that creates
+ * the card (`CardAnswer.links`), so the links always go to the note that was made from this dialog.
  *
  * Cheap on purpose: the candidates are read once, when the dialog opens, from the card index already in memory and the
  * metadata cache (no note is read); typing only re-ranks that bounded list, a moment after the last key.
  */
-import { type App, type EventRef } from "obsidian";
+import { type App } from "obsidian";
 import { t } from "../i18n";
 import { setIconSafe } from "../ui/components/dom";
-import { isCardFrontmatter, readCard, type CardRecord } from "./card-content";
+import type { CardRecord } from "./card-content";
 import { boundCandidates, clampCount, rankLinkSuggestions, type LinkCandidate, type LinkQuery, type LinkSuggestion } from "./link-suggest";
 
 /** What the dialog needs from the plugin; registered once from onload. */
 export interface LinkSuggestHost {
 	settings(): { zettelLinkSuggest: boolean; zettelLinkSuggestCount: number };
-	service(): { allCards(): CardRecord[]; linkCardPair(a: CardRecord, b: CardRecord): Promise<boolean> } | undefined;
+	service(): { allCards(): CardRecord[] } | undefined;
 }
 
 let host: LinkSuggestHost | null = null;
@@ -134,40 +135,4 @@ export class LinkSuggestField {
 			this.paint();
 		});
 	}
-}
-
-const WATCH_MS = 30000;
-
-/**
- * Links a card that is about to be created to the chosen ones. The card note does not exist yet when the dialog closes, so
- * this waits (at most 30 s) for the first new card in the metadata cache, then uses the zettel service's own two-way writer.
- */
-export function linkWhenCreated(app: App, chosen: readonly CardRecord[], onDone: (linked: number | null) => void): void {
-	const service = host?.service();
-	if (!service || chosen.length === 0) return;
-	const before = new Set(service.allCards().map((c) => c.path));
-	let ref: EventRef | null = null;
-	let timeout = 0;
-	const stop = () => {
-		if (ref) app.metadataCache.offref(ref);
-		ref = null;
-		window.clearTimeout(timeout);
-	};
-	timeout = window.setTimeout(stop, WATCH_MS);
-	ref = app.metadataCache.on("changed", (file, _data, cache) => {
-		const fm = cache.frontmatter;
-		if (before.has(file.path) || !isCardFrontmatter(fm)) return;
-		const made = readCard(file.path, fm);
-		if (!made) return;
-		stop();
-		void (async () => {
-			let n = 0;
-			try {
-				for (const other of chosen) if (await service.linkCardPair(made, other)) n++;
-				onDone(n);
-			} catch {
-				onDone(null);
-			}
-		})();
-	});
 }

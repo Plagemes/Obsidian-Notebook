@@ -479,6 +479,7 @@ export default class NotebookPlugin extends Plugin {
 		stop("gallery", () => this.gallery?.dispose());
 		stop("library", () => this.host?.dispose());
 		stop("appearance", () => activeDocument.body.removeClass("notebook-style-obsidian"));
+		stop("zettel link suggestions", () => setLinkSuggestHost(null));
 	}
 
 	async saveSettings(): Promise<void> {

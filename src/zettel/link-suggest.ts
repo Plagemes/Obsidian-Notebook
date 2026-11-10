@@ -86,3 +86,29 @@ export function rankLinkSuggestions(q: LinkQuery, candidates: readonly LinkCandi
 	out.sort((a, b) => b.score - a.score || b.candidate.mtime - a.candidate.mtime || a.candidate.path.localeCompare(b.candidate.path));
 	return out.slice(0, clampCount(limit));
 }
+
+/** The minimum a chosen card needs to be found again after the dialog (a card record has more). */
+export interface ChosenCard {
+	path: string;
+	id: string;
+}
+
+/**
+ * The cards to link to the note just made, from the ones chosen in its dialog: each is looked up by its path, else by its id
+ * (the card may have been renamed or moved while the dialog was open); the new note itself, cards that are gone and doubles
+ * are left out.
+ */
+export function resolveChosen<T extends ChosenCard>(chosen: readonly ChosenCard[], byPath: ReadonlyMap<string, T>, byId: ReadonlyMap<string, T>, madePath: string): T[] {
+	const out = new Map<string, T>();
+	for (const c of chosen) {
+		const found = byPath.get(c.path) ?? byId.get(c.id.toLowerCase());
+		if (found && found.path !== madePath) out.set(found.path, found);
+	}
+	return [...out.values()];
+}
+
+/** What to tell the person after linking: failed (some link could not be written), none (all were linked already), one, or many. */
+export function linkOutcome(linked: number, failed: number): "failed" | "none" | "one" | "many" {
+	if (failed > 0) return "failed";
+	return linked <= 0 ? "none" : linked === 1 ? "one" : "many";
+}

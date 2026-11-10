@@ -112,9 +112,10 @@ export function neighbours(id: string, ids: Iterable<string>): Neighbours {
  * with a gap, `1a` and `1c` → `1b`, which also keeps the cards in order). A top-level number goes to the next free number.
  * Null when `id` is not Luhmann-style.
  */
-export function followUpId(id: string, taken: ReadonlySet<string>): string | null {
+export function followUpId(id: string, takenIds: ReadonlySet<string>): string | null {
 	const s = id.trim().toLowerCase();
 	if (!parseLuhmann(s)) return null;
+	const taken = occupiedIds(takenIds);
 	const tail = /(\d+|[a-z]+)$/.exec(s)![0];
 	const stem = s.slice(0, s.length - tail.length);
 	const numeric = /^\d/.test(tail);
@@ -130,7 +131,22 @@ export function followUpId(id: string, taken: ReadonlySet<string>): string | nul
  */
 export function branchId(id: string, taken: ReadonlySet<string>): string | null {
 	// One past the largest existing branch, so it cannot be taken (`taken` holds lower-case ids, see `idSet`).
-	return nextLuhmannChild(id.trim().toLowerCase(), taken);
+	// An id above a taken one counts too (`1a` above `1a1`), so the branch is never the parent of a card that already exists.
+	return nextLuhmannChild(id.trim().toLowerCase(), occupiedIds(taken));
+}
+
+/**
+ * The ids that count as taken: the given ones and every id above them (`1b1` takes `1b` and `1`). A new card never gets such an
+ * id, or it would become the parent of the card below it, which belongs to another card of the same name (one that was deleted).
+ */
+export function occupiedIds(taken: Iterable<string>): Set<string> {
+	const out = new Set<string>();
+	for (const raw of taken) {
+		const id = raw.trim().toLowerCase();
+		out.add(id);
+		for (let p = parentId(id); p && !out.has(p); p = parentId(p)) out.add(p);
+	}
+	return out;
 }
 
 /**
