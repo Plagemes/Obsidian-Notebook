@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### hygiene
+- **Zettelkasten system hygiene (Z10).** The command *Check Zettelkasten hygiene* opens a report with three lists: cards nothing links to and that link to nothing (links in the card property or in any note, both directions), likely duplicates (same title, the same page and region, or nearly the same text) and cards without a typed title. Each row has *Open*. Reading and scanning write nothing; the scan runs in idle slices with a progress line, so a large vault stays responsive, and at most 100 rows per list are drawn.
+- **Fixes always ask first.** *Add title…* (the same writer as *Set card title*), *Link…* (pick a card, confirm, both notes get the link) and *Move to trash* (confirmation naming the note; `fileManager.trashFile`, the notebook page is untouched). No format change. Code: `src/zettel/hygiene.ts` (pure detection), `hygiene-view.ts`.
+
 ## 0.28.0 — 2026-11-10
 
 Eight features: rotate and crop PDF pages (#76), per-page undo (#98, a setting, off by default), hand-drawn tables (#41), a paint bucket (#184), a line handle to reorder lines (#256), a live lecture mode (#132), numbered boxes with an index (#205) and actions suggested by the selection's geometry (#403). The notebook format moves to version 26 (PDF page rotation and crop): the migration from version 25 is automatic, and Notebook 0.27 and older open a v26 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).

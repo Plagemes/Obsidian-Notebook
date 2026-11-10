@@ -551,7 +551,7 @@ A complete Zettelkasten workflow where handwriting is first-class. Everything go
 - **Z7 P2** Sequences and branches (Luhmann style 1, 1a, 1a1), optional, with previous/next/children navigation.
 - **Z8 P2** Slip-box view in the library: browse cards like index cards, filter by tag, "draw a random card" to rediscover ideas.
 - **Z9 P2** Card templates: concept, question, quote, definition.
-- **Z10 P2** System hygiene: orphan cards (no links), duplicates, cards without a typed title.
+- **Z10 P2** 🧪 System hygiene: orphan cards (no links), duplicates, cards without a typed title. (0.29: command *Check Zettelkasten hygiene* opens a read-only report on the modal shell: unlinked cards (no link to or from another note), likely duplicates (same title, same page and region, or nearly the same text) and cards without a title, each with *Open*; scanning runs in idle slices and writes nothing. Fixes (*Add title…*, *Link…*, *Move to trash*) each ask first and go through the card writer or `fileManager.trashFile`. No format change; waiting for hardware verification.)
 - **Z11 P1** 🧪 Title and transcription: each card has a typed title (search and graph) and a transcription field, filled by hand or later by handwriting recognition (M5).
 - **Z12 P1** 🧪 Container-proof: built on the companion note (O1) and the format layer.
 

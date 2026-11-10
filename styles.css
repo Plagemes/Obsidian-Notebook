@@ -21874,3 +21874,65 @@ body.notebook-style-obsidian {
 	width: 16px;
 	height: 16px;
 }
+
+/* ===== 0.29 hygiene ===== */
+.nb-ui.nb-hygiene-modal .nb-hyg-group {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-tile);
+	background: var(--nb-tile);
+}
+
+.nb-ui.nb-hygiene-modal .nb-hyg-reasons {
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.nb-ui.nb-hygiene-modal .nb-hyg-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 10px;
+	min-height: var(--nb-target);
+	padding: 6px 4px;
+}
+
+.nb-ui.nb-hygiene-modal .nb-hyg-text {
+	flex: 1 1 160px;
+	min-width: 0;
+}
+
+.nb-ui.nb-hygiene-modal .nb-hyg-title {
+	overflow: hidden;
+	color: var(--nb-text);
+	font-size: var(--nb-fs-row);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-hygiene-modal .nb-hyg-path {
+	overflow: hidden;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-chip);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui.nb-hygiene-modal .nb-hyg-actions {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.nb-ui.nb-hygiene-modal .nb-hyg-actions .nb-modal-btn {
+	padding: 0 12px;
+	font-size: 13px;
+}
