@@ -66,7 +66,8 @@ const clip = (s: string): string => {
 
 /** A page nothing was written or put on (ink that is hidden does not count as written), with no PDF or picture under it. */
 export function isBlankForHandIn(page: Page): boolean {
-	return !page.strokes.some((s) => !s.hidden) && (page.elements?.length ?? 0) === 0 && !page.background;
+	// 0.29 (#10, review fix T7): study tapes are left out of what is handed in, so a page that holds only tapes is blank.
+	return !page.strokes.some((s) => !s.hidden) && !(page.elements ?? []).some((e) => e.type !== "tape") && !page.background;
 }
 
 /** A structured box (a template box) with nothing inside it: no visible ink touching it and no other element over it. */

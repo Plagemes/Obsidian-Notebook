@@ -333,7 +333,8 @@ function cutArea<T extends AreaElement | TapeElement>(el: T, boxes: readonly Red
 	for (const p of parts) {
 		const width = p.maxX - p.minX;
 		const height = p.maxY - p.minY;
-		if (width < 0.5 || height < 0.5) continue;
+		// Review fix (T4): a sliver of tape is kept however thin (what the tape covers next to a box stays covered); an area sliver is not.
+		if (el.type === "tape" ? !(width > 0 && height > 0) : width < 0.5 || height < 0.5) continue;
 		const { group: _group, locked: _locked, lockAt: _lockAt, ...rest } = el;
 		void _group;
 		void _locked;
