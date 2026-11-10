@@ -132,7 +132,7 @@ export class SectionTools implements SectionsApi, NavigatorSections {
 		const hidden = new Set(hiddenSections(doc.pages, sectionsOf(doc)));
 		if (hidden.size === 0) return false;
 		if (!this.run(doc, sectionsOf(doc).filter((s) => !hidden.has(s)), "Remove hidden sections")) return false;
-		showNotice(t("sections.notice.hiddenRemoved", { count: String(hidden.size) }), 4000);
+		showNotice(hidden.size === 1 ? t("sections.notice.hiddenRemovedOne") : t("sections.notice.hiddenRemoved", { count: String(hidden.size) }), 4000);
 		return true;
 	}
 

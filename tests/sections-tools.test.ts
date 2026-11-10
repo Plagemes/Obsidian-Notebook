@@ -72,6 +72,24 @@ describe("review S4: sections that show nowhere count toward the limit, and can 
 	});
 });
 
+describe("review R7: the hidden-sections texts", () => {
+	it("say one section in the singular, in English and Italian, and name both reasons a section shows nowhere", async () => {
+		const { Notice } = (await import("obsidian")) as unknown as { Notice: { shown: string[] } };
+		const { doc, tools } = setup();
+		doc.sections = [section("a", "p1"), section("g", "gone")];
+		Notice.shown.length = 0;
+		expect(tools.removeHidden()).toBe(true);
+		expect(Notice.shown.join("\n")).toContain("1 section that showed nowhere removed");
+		const { en } = await import("../src/i18n/en");
+		const { it: itMessages } = await import("../src/i18n/it");
+		for (const m of [en, itMessages]) {
+			expect(m["sections.hidden.noteOne"]).not.toContain("{count}");
+			expect(m["sections.notice.hiddenRemovedOne"]).not.toContain("{count}");
+		}
+		expect(en["sections.hidden.note"]).toContain("another section already starts there");
+	});
+});
+
 describe("review S6: the New section dialog keeps the page id", () => {
 	it("starts the section at the page the dialog showed, even when the pages moved meanwhile", () => {
 		const { doc, tools } = setup();
