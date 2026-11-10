@@ -8,7 +8,7 @@
  */
 import { parseChartGroup } from "../../src/ink/chart";
 import { detectTable } from "../../src/ink/table";
-import { AddElement, ReplaceElement } from "../../src/model/history";
+import { AddElement, Batch, RemoveElement, removeStrokes, ReplaceElement } from "../../src/model/history";
 import type { Page, PageElement, Stroke, TextElement } from "../../src/model/types";
 import type { HarnessView } from "./harness-types";
 import type { CheckResult } from "./reading-check";
@@ -29,11 +29,22 @@ interface ChartsView extends HarnessView {
 const q = <T extends Element>(sel: string): T | null => document.querySelector<T>(sel);
 const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
-const SALES = [["Month", "Sales", "Cost"], ["Jan", "12", "5"], ["Feb", "18", "7"], ["Mar", "9", "6"]];
+/** Ids of the text boxes written in the cells are unique per table made in this page load. */
+let serial = 0;
+const cellPrefix = (): string => `cell${serial}`;
+
+const SALES =[["Month", "Sales", "Cost"], ["Jan", "12", "5"], ["Feb", "18", "7"], ["Mar", "9", "6"]];
 
 async function waitFor(sel: string): Promise<HTMLElement | null> {
 	for (let i = 0; i < 40 && !q(sel); i++) await sleep(50);
-	return q<HTMLElement>(sel);
+	const all = document.querySelectorAll<HTMLElement>(sel);
+	return all[all.length - 1] ?? null;
+}
+
+/** Closes every dialog that is open (one left by an earlier screenshot belongs to a view that is gone). */
+async function closeDialogs(api: ChartsCheckApi): Promise<void> {
+	for (const b of Array.from(document.querySelectorAll<HTMLElement>(".nb-modal-close"))) b.click();
+	await api.frames(2);
 }
 
 const press = async (api: ChartsCheckApi, el: Element | null | undefined): Promise<void> => {
@@ -44,7 +55,7 @@ const press = async (api: ChartsCheckApi, el: Element | null | undefined): Promi
 /** Inserts a 4 x 3 table through the real dialog and writes SALES into its cells as text boxes; selects the table. */
 async function tableWithNumbers(api: ChartsCheckApi): Promise<void> {
 	const v = api.view as ChartsView;
-	for (const m of Array.from(document.querySelectorAll(".modal-container"))) m.querySelector<HTMLElement>(".nb-modal-close")?.click();
+	await closeDialogs(api);
 	v.clearSelection();
 	await api.frames(2);
 	v.runAction("insert-table");
@@ -60,12 +71,14 @@ async function tableWithNumbers(api: ChartsCheckApi): Promise<void> {
 	await sleep(100);
 	await api.frames(3);
 	const page = v.document.pages[v.currentPage()]!;
-	const table = detectTable(page.strokes.filter((s) => s.tool === "shape" && s.group !== undefined));
+	const group = lastTableGroup(page);
+	const table = detectTable(page.strokes.filter((s) => s.group === group));
 	if (!table) throw new Error("no table was drawn");
+	serial++;
 	SALES.forEach((row, r) => row.forEach((text, c) => {
 		const x = (table.grid.xs[c]! + table.grid.xs[c + 1]!) / 2;
 		const y = (table.grid.ys[r]! + table.grid.ys[r + 1]!) / 2;
-		const el: TextElement = { id: `cell-${r}-${c}`, type: "text", x: x - 14, y: y - 7, width: 40, text, fontSize: 11, color: "#1f2430" };
+		const el: TextElement = { id: `${cellPrefix()}-${r}-${c}`, type: "text", x: x - 14, y: y - 7, width: 40, text, fontSize: 11, color: "#1f2430" };
 		v.history.execute(new AddElement(page.id, el, (page.elements ?? []).length));
 	}));
 	v.renderer.invalidate();
@@ -75,15 +88,24 @@ async function tableWithNumbers(api: ChartsCheckApi): Promise<void> {
 
 const pageOf = (v: ChartsView): Page => v.document.pages[v.currentPage()]!;
 
+/** The group of the newest table on the page (a notebook that was opened again may already hold one from an earlier run). */
+function lastTableGroup(page: Page): string | undefined {
+	for (let i = page.strokes.length - 1; i >= 0; i--) {
+		const s = page.strokes[i]!;
+		if (s.tool === "shape" && s.group !== undefined && parseChartGroup(s.group) === null) return s.group;
+	}
+	return undefined;
+}
+
 function selectTable(v: ChartsView): void {
 	const page = pageOf(v);
-	const group = page.strokes.find((s) => s.tool === "shape" && s.group !== undefined && parseChartGroup(s.group) === null)?.group;
+	const group = lastTableGroup(page);
 	v.selectItems(v.currentPage(), page.strokes.filter((s) => s.group === group), []);
 }
 
 function selectChart(v: ChartsView): void {
 	const page = pageOf(v);
-	const group = page.strokes.find((s) => parseChartGroup(s.group) !== null)?.group;
+	const group = [...page.strokes].reverse().find((s) => parseChartGroup(s.group) !== null)?.group;
 	v.selectItems(v.currentPage(), page.strokes.filter((s) => s.group === group), (page.elements ?? []).filter((e) => e.group === group));
 }
 
@@ -147,7 +169,7 @@ export async function checkCharts(api: ChartsCheckApi): Promise<{ ok: boolean; r
 	await frames(3);
 	add("Update chart with the numbers unchanged says so and changes nothing", JSON.stringify(chartStrokes().map((s) => s.points)) === before && pageOf(v).strokes.length === base + made.length);
 	const page = pageOf(v);
-	const cell = (page.elements ?? []).find((e): e is TextElement => e.type === "text" && e.id === "cell-1-1")!;
+	const cell = (page.elements ?? []).find((e): e is TextElement => e.type === "text" && e.id === `${cellPrefix()}-1-1`)!;
 	v.history.execute(new ReplaceElement(page.id, cell, { ...cell, text: "30" }));
 	v.renderer.invalidate();
 	selectChart(v);
@@ -166,7 +188,7 @@ export async function checkCharts(api: ChartsCheckApi): Promise<{ ok: boolean; r
 	selectChart(v);
 	await frames(2);
 	const edited = JSON.stringify(chartStrokes().map((s) => s.points));
-	const cell2 = (pageOf(v).elements ?? []).find((e): e is TextElement => e.type === "text" && e.id === "cell-2-1")!;
+	const cell2 = (pageOf(v).elements ?? []).find((e): e is TextElement => e.type === "text" && e.id === `${cellPrefix()}-2-1`)!;
 	v.history.execute(new ReplaceElement(pageOf(v).id, cell2, { ...cell2, text: "2" }));
 	pageOf(v).locked = true;
 	v.runAction("chart-update");
@@ -182,13 +204,26 @@ export async function checkCharts(api: ChartsCheckApi): Promise<{ ok: boolean; r
 
 /** Leaves the harness notebook with the dialog (`dialog`) or a chart beside its table (`chart`) for the screenshot. */
 export async function chartsShot(api: ChartsCheckApi, state: "dialog" | "chart"): Promise<void> {
+	await closeDialogs(api);
 	await api.open("charts");
 	const v = api.view as ChartsView;
+	// The notebook may hold what an earlier run left: start from an empty page.
+	const page = pageOf(v);
+	const clear = removeStrokes(page.id, page.strokes, page.strokes, "Clear");
+	const commands = [...(clear ? [clear] : []), ...(page.elements ?? []).map((e) => new RemoveElement(page.id, e))];
+	if (commands.length > 0) v.history.execute(new Batch("Clear", commands));
+	v.renderer.invalidate();
 	await tableWithNumbers(api);
 	v.runAction("chart-from-table");
 	const dlg = await waitFor(".nb-chart-dialog");
 	if (!dlg) throw new Error("the chart dialog did not open");
-	if (state === "dialog") return;
+	if (state === "dialog") {
+		// The stand-in appends the modal at the end of the body; the harness frames it as a centred overlay.
+		if (!dlg.closest(".harness-modal-container")) document.body.createDiv({ cls: "harness-modal-container" }).appendChild(dlg);
+		await api.frames(3);
+		if (!dlg.isConnected || dlg.getBoundingClientRect().height < 50) throw new Error(`the chart dialog is not on screen (${dlg.getBoundingClientRect().height}px)`);
+		return;
+	}
 	const title = dlg.querySelector<HTMLInputElement>("#nb-chart-title");
 	if (title) {
 		title.value = "Sales";
@@ -199,4 +234,6 @@ export async function chartsShot(api: ChartsCheckApi, state: "dialog" | "chart")
 	await api.frames(4);
 	v.clearSelection();
 	await api.frames(3);
+	const n = pageOf(v).strokes.filter((s) => parseChartGroup(s.group) !== null).length;
+	if (n === 0) throw new Error(`no chart was drawn (${pageOf(v).strokes.length} strokes, dialog open: ${!!q(".nb-chart-dialog")}, notes: ${q(".nb-chart-notes")?.textContent ?? ""}, button disabled: ${String(q<HTMLButtonElement>(".nb-chart-dialog .mod-cta")?.disabled)}, texts: ${(pageOf(v).elements ?? []).length})`);
 }
