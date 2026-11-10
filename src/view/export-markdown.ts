@@ -37,6 +37,8 @@ export interface MarkdownExportOptions {
 	redactStale?: true;
 	/** Review fix (P10): boxes kept switched off (a quiet hint says so). */
 	redactOff?: number;
+	/** 0.29 (#96): leave the struck-out words (and their lines) out of the page pictures: see `ExportOptions.struck`. */
+	struck?: true;
 }
 
 /** The folder suggested for the export of `notebook`: next to it, named after it. */
@@ -84,7 +86,7 @@ export async function exportMarkdown(app: App, notebook: TFile, source: Notebook
 	const working = showNotice(t("export.working"), 0);
 	// 0.26 (#285): the text boxes, equations, notes and comments under a box are not written, nor are the bookmark titles of a covered page
 	// (nor, review fix P2, an excerpt of a covered region).
-	const covered = withRedaction(source.pages, options.redact ? { redact: options.redact } : {}).pages;
+	const covered = withRedaction(source.pages, { ...(options.redact ? { redact: options.redact } : {}), ...(options.struck ? { struck: true as const } : {}) }).pages;
 	const doc: NotebookDocument = covered === source.pages ? source : { ...source, pages: [...covered], meta: metaWithoutRedactedTitles(source.meta, covered) ?? source.meta };
 	let written = 0;
 	const renderer = new PageImageRenderer(media, {
