@@ -6,6 +6,7 @@
 // edge of the mask, and the outline is simplified to a capped number of points. It runs once per tap, never on the frame path.
 import { RENDER_FREEHAND, type Point, type Stroke } from "../model/types";
 import { isFilled } from "./shape-style";
+import { polygonPoints } from "./shapes";
 
 /**
  * Width (pt) of the line of a bucket fill. The shape is drawn as a fill with a hairline in the fill colour; the polygon runs under the ink, so
@@ -343,8 +344,10 @@ export function paintBucket(input: BucketInput): BucketResult {
 	const simple = simplifyTo(outline, 0.9, MAX_POINTS);
 	const area = polygonArea(simple) / (scale * scale);
 	if (simple.length < 3 || area < MIN_AREA_PT2) return { ok: false, reason: "tooSmall" };
-	const points: Point[] = simple.map(([px, py]) => [round2(input.originX + px / scale), round2(input.originY + py / scale), 0.5]);
-	points.push([points[0]![0], points[0]![1], 0.5]);
+	// Resampled like every shape (a point at least every SHAPE_STEP pt): the hairline is drawn from these points by the same outline code as a
+	// rectangle's, which needs them dense (a few far-apart corners would be smoothed into a swoosh). The last point equals the first.
+	const vertices = simple.map(([px, py]): [number, number] => [round2(input.originX + px / scale), round2(input.originY + py / scale)]);
+	const points = polygonPoints(vertices, true);
 	return { ok: true, points, area };
 }
 

@@ -114,7 +114,7 @@ export async function checkBucket(api: BucketCheckApi): Promise<{ ok: boolean; r
 	add("a tap inside the square adds one filled shape, at the back", page().strokes.length === 7 && page().strokes[0] === first && !!first);
 	add("it is a closed shape stroke with a tint fill in the pen colour", !!first && first.tool === "shape" && first.fill === "#e03131" && first.fillTint === true && first.color === "#e03131", JSON.stringify({ tool: first?.tool, fill: first?.fill, tint: first?.fillTint }));
 	const fb = first ? bounds(first) : { minX: 0, maxX: 0, minY: 0, maxY: 0 };
-	add("its polygon (page coordinates) follows the inside of the square", !!first && first.points.length >= 4 && first.points.length <= 12 && fb.minX > 38 && fb.minX < 44 && fb.maxX > 176 && fb.maxX < 182 && fb.minY > 58 && fb.minY < 64 && fb.maxY > 196 && fb.maxY < 202, JSON.stringify(fb));
+	add("its polygon (page coordinates) follows the inside of the square", !!first && first.points.length >= 4 && first.points.length <= 200 && fb.minX > 38 && fb.minX < 44 && fb.maxX > 176 && fb.maxX < 182 && fb.minY > 58 && fb.minY < 64 && fb.maxY > 196 && fb.maxY < 202, JSON.stringify(fb));
 	add("the mode ended with the fill", v.paintBucket?.armed === false);
 	add("the page shows the fill", differs(before, pixelAt(110, 130)), `${before.join(",")} -> ${pixelAt(110, 130).join(",")}`);
 	add("the fill took well under the budget", took < 2500, `${took.toFixed(0)} ms`);
@@ -158,7 +158,7 @@ export async function checkBucket(api: BucketCheckApi): Promise<{ ok: boolean; r
 	v.runAction("paint-bucket");
 	await tap(110, 320);
 	const round = fills().find((s) => s !== first && s !== gapFill);
-	add("the setting makes a solid fill, and a circle is filled with a simplified outline", !!round && round.fill === "#e03131" && round.fillTint === undefined && round.points.length > 8 && round.points.length < 200, `${round?.points.length} points`);
+	add("the setting makes a solid fill, and a circle is filled with a simplified outline", !!round && round.fill === "#e03131" && round.fillTint === undefined && round.points.length > 8 && round.points.length < 400, `${round?.points.length} points`);
 	v.host.settings.bucketTint = true;
 
 	// --- nested shapes ---

@@ -75,15 +75,16 @@ describe("paint bucket: a closed shape", () => {
 		expect(b.maxY).toBeLessThanOrEqual(160);
 		expect(r.area).toBeGreaterThan(110 * 110);
 		expect(r.area).toBeLessThan(120 * 120);
-		// A square is four corners (plus the closing point), not a staircase.
-		expect(r.points.length).toBeLessThanOrEqual(6);
+		// A square is four corners resampled every 3 pt (like any shape), not a staircase of cells: about 4 * 118 / 3 points.
+		expect(r.points.length).toBeLessThan(200);
+		for (let i = 1; i < r.points.length; i++) expect(Math.hypot(r.points[i]![0] - r.points[i - 1]![0], r.points[i]![1] - r.points[i - 1]![1])).toBeLessThanOrEqual(3.05);
 	});
 
-	it("the polygon is vector data: finite numbers, pressure 0.5, at most MAX_POINTS", () => {
+	it("the polygon is vector data: finite numbers, pressure 0.5, closed", () => {
 		const r = run(g, 60, 70);
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;
-		expect(r.points.length).toBeLessThanOrEqual(MAX_POINTS + 1);
+		expect(r.points[0]).toEqual(r.points[r.points.length - 1]);
 		for (const p of r.points) {
 			expect(Number.isFinite(p[0]) && Number.isFinite(p[1])).toBe(true);
 			expect(p[2]).toBe(0.5);
@@ -173,7 +174,7 @@ describe("paint bucket: a round shape", () => {
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;
 		expect(r.points.length).toBeGreaterThan(8);
-		expect(r.points.length).toBeLessThan(150);
+		expect(r.points.length).toBeLessThan(400);
 		expect(r.area).toBeGreaterThan(Math.PI * 66 * 66);
 		expect(r.area).toBeLessThan(Math.PI * 72 * 72);
 	});
@@ -331,7 +332,8 @@ describe("work is bounded", () => {
 		const r = paintBucket({ mask: g.mask, cols: g.cols, rows: g.rows, scale: s, originX: 0, originY: 0, x: 400, y: 400 });
 		const ms = Date.now() - t0;
 		expect(r.ok).toBe(true);
-		if (r.ok) expect(r.points.length).toBeLessThanOrEqual(MAX_POINTS + 1);
+		// At most MAX_POINTS corners, resampled every 3 pt: bounded by the perimeter (about 2000 pt here).
+		if (r.ok) expect(r.points.length).toBeLessThanOrEqual(MAX_POINTS + 2200 / 3);
 		expect(ms).toBeLessThan(5000);
 	});
 });

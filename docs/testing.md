@@ -4446,7 +4446,7 @@ Settings, Writing: *Tasks on planner pages* (on by default). Implemented, not ve
 
 | Feature | implemented | automated test | verified on hardware | experimental | to do |
 |---|---|---|---|---|---|
-| Paint bucket: low-resolution mask of the page ink (2 to 4 cells per pt, capped at 2 million cells; a window around the tap on a huge page), gap tolerance 1.5 pt, scanline flood with time budget, outline traced to a simplified polygon (at most 400 points) in page coordinates | yes | `tests/paint-bucket.test.ts`, timing `tests/paint-bucket.perf.ts` | | | |
+| Paint bucket: low-resolution mask of the page ink (2 to 4 cells per pt, capped at 2 million cells; a window around the tap on a huge page), gap tolerance 1.5 pt, scanline flood with time budget, outline traced to a simplified polygon (at most 400 corners, resampled every 3 pt like any shape) in page coordinates | yes | `tests/paint-bucket.test.ts`, timing `tests/paint-bucket.perf.ts` | | | |
 | Stored as a filled shape stroke (tool `shape`, `fill`, optional `fillTint` and `opacity`), hairline, inserted after the earlier fills and before all ink; one History step "Fill area" | yes | `tests/paint-bucket.test.ts`, harness `doc=bucket` | | | |
 | Refusals: not closed / too large, on a line, too small, as large as the page, too much ink; one notice, nothing added | yes | `tests/paint-bucket.test.ts`, harness `doc=bucket` | | | |
 | Action, colour-row button, command, long-press help, context rule, setting (tint or solid), en + it | yes | `tests/long-press-help.test.ts`, `tests/ui-registry.test.ts`, `tests/i18n.test.ts` | | | |
