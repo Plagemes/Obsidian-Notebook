@@ -20,6 +20,7 @@ import { isMinimapMode, type MinimapMode } from "./model/minimap-geometry";
 import { parsePosition, type SavedPosition } from "./ink/view-position";
 import { normaliseRecentColours } from "./ink/colour";
 import { PAGE_SIZES, PAPER_KINDS, type PageSizeName, type PaperKind } from "./model/types";
+import { DEFAULT_TAPE_COLOR, isTapeColorName, type TapeColorName } from "./model/tape";
 import { DEFAULT_COMPANION_SETTINGS, readCompanionSettings, type CompanionSettings } from "./storage/companion-path";
 import { DEFAULT_TRASH_SETTINGS, readTrashSettings, type TrashSettings } from "./storage/trash-settings";
 import { DEFAULT_LECTURE_SETTINGS, readLectureSettings, type LectureSettings } from "./timetable/lecture-mode";
@@ -365,6 +366,9 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	slideInkLink: boolean;
 	/** #226: a small badge next to ink written beside a slide; tapping it shows the slide again. */
 	slideInkBadges: boolean;
+	// 0.29 studytape (#10)
+	/** The colour of new study tapes (a name of `TAPE_COLORS`). */
+	tapeColor: TapeColorName;
 }
 
 export const DEFAULT_SETTINGS: NotebookSettings = {
@@ -525,6 +529,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	// 0.14 slides
 	slideInkLink: true,
 	slideInkBadges: true,
+	tapeColor: DEFAULT_TAPE_COLOR, // 0.29 studytape (#10)
 	...DEFAULT_COMPANION_SETTINGS,
 	...DEFAULT_GESTURE_SETTINGS,
 	...DEFAULT_PEN_GESTURE_SETTINGS,
@@ -723,6 +728,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	// 0.14 slides
 	if (typeof d.slideInkLink === "boolean") s.slideInkLink = d.slideInkLink;
 	if (typeof d.slideInkBadges === "boolean") s.slideInkBadges = d.slideInkBadges;
+	if (isTapeColorName(d.tapeColor)) s.tapeColor = d.tapeColor; // 0.29 studytape (#10)
 	s.lastNotebookPos = parsePosition(d.lastNotebookPos);
 
 	if (typeof d.timetableOffer === "boolean") s.timetableOffer = d.timetableOffer;

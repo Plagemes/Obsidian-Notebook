@@ -82,6 +82,8 @@ export function pageSignature(page: Page): string {
 		else if (el.type === "sticky") parts.push(el.id, el.x, el.y, el.width, el.height, el.color, el.fontSize, el.text ?? "", el.collapsed ? 1 : 0, el.ink?.length ?? 0);
 		else if (el.type === "checkbox") parts.push(el.id, el.x, el.y, el.size, el.color, el.checked ? 1 : 0);
 		else if (el.type === "area") parts.push(el.id, el.x, el.y, el.width, el.height, el.color, el.opacity ?? 1);
+		// v27 (#10): a thumbnail draws every study tape hidden, so its reveal (view-only) is not part of the signature.
+		else if (el.type === "tape") parts.push(el.id, "tape", el.x, el.y, el.width, el.height, el.color);
 		else parts.push(el.id, el.x, el.y, el.kind, el.done ? 1 : 0);
 	}
 	const bg = page.background;

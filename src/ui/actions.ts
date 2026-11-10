@@ -88,6 +88,8 @@ export interface UiContext {
 	canPrint?: boolean;
 	/** wave 0.8: invisible-ink pen mode and the view-only "Show solutions" toggles (notebook, page in view). Optional. */
 	markers?: { invisibleInk: boolean; solutions: boolean; pageSolutions: boolean };
+	/** 0.29 (#10): the "Study tape" mode is on, how many study tapes the notebook has and how many are revealed (view-only). Optional (absent: none). */
+	tapes?: { drawing: boolean; total: number; revealed: number };
 	/** wave 0.9: view-only night mode (367) and cropped PDF margins (376). Optional (both off when absent). */
 	display?: { night: boolean; crop: boolean };
 	/** 0.15 (241): the state strip is open. Optional (closed when absent). */
@@ -464,6 +466,10 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "invisible-ink", label: "markers.command.invisible", icon: "eye-off", group: "view", surfaces: ["sheet"], priority: 35, scope: "view", command: true, checked: (c) => !!c.markers?.invisibleInk, keywords: "hidden solutions self-test" },
 	{ id: "show-solutions", label: "markers.command.solutions", icon: "eye", group: "view", surfaces: ["sheet"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.solutions, keywords: "invisible ink hidden" },
 	{ id: "show-page-solutions", label: "markers.menu.pageSolutions", icon: "eye", group: "page", surfaces: ["page"], priority: 30, scope: "view", command: true, readOnly: true, checked: (c) => !!c.markers?.pageSolutions, keywords: "invisible ink hidden" },
+	// 0.29 (#10): study tape: a mode that lays opaque strips over parts of a page, and the view-only "reveal all" / "hide all" of the tapes.
+	{ id: "study-tape", label: "tape.action.draw", icon: "rectangle-horizontal", group: "view", surfaces: ["sheet"], priority: 36, scope: "view", command: true, checked: (c) => !!c.tapes?.drawing, keywords: "study tape cover hide reveal answers self-test quiz nastro studio copri nascondi rivela risposte" },
+	{ id: "tapes-reveal-all", label: "tape.action.revealAll", icon: "eye", group: "view", surfaces: ["sheet"], priority: 33, scope: "view", command: true, readOnly: true, when: (c) => !!c.tapes && c.tapes.revealed < c.tapes.total, keywords: "study tape reveal show answers nastro studio rivela mostra risposte" },
+	{ id: "tapes-hide-all", label: "tape.action.hideAll", icon: "eye-off", group: "view", surfaces: ["sheet"], priority: 32, scope: "view", command: true, readOnly: true, when: (c) => !!c.tapes && c.tapes.revealed > 0, keywords: "study tape hide cover answers nastro studio nascondi copri risposte" },
 
 	// --- wave 0.10 (363): tabs of the open notebooks (the strip and the toolbar swipe call the same step).
 	// Roadmap #19: a copy of this notebook in the templates folder (works on a read-only notebook too: it only reads).

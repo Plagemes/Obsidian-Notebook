@@ -3610,7 +3610,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"map.state.checklist": "Voci aperte",
 	// 0.19 cleanexport
 	"export.clean": "Copia pulita",
-	"export.clean.desc": "Lascia fuori segnaposto e altri segnalibri di studio, commenti a margine e note adesive chiuse (con l'inchiostro che nascondono), pronta da condividere. Il quaderno non cambia.",
+	"export.clean.desc": "Lascia fuori segnaposto e altri segnalibri di studio, commenti a margine, note adesive chiuse (con l'inchiostro che nascondono) e nastri di studio, pronta da condividere. Il quaderno non cambia.",
 	"export.clean.stickies": "Escludi anche le note adesive aperte",
 	"export.clean.stickies.desc": "L'inchiostro scritto sopra una nota resta sulla pagina.",
 	// 0.26 redact (#285): oscurare prima di esportare
@@ -5386,4 +5386,24 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.geoLink": "Collega la selezione a una nota: toccandola con la penna si apre quella nota.",
 	"settings.suggestSelection": "Suggerisci azioni dalla selezione",
 	"settings.suggestSelection.desc": "Chip per una riga di parole, una freccia tra due gruppi o un cerchio. Solo regole, no IA.",
+	// 0.29 studytape (#10): nastro di studio, strisce opache che nascondono parte della pagina e si rivelano con un tocco
+	"tape.action.draw": "Nastro di studio",
+	"tape.action.revealAll": "Rivela tutti i nastri di studio",
+	"tape.action.hideAll": "Nascondi tutti i nastri di studio",
+	"tape.help.draw": "Trascina sopra risposte, formule o parole per coprirle con un nastro opaco. Tocca un nastro per sbirciare, toccalo di nuovo per coprire.",
+	"tape.help.revealAll": "Scopre tutti i nastri di studio del quaderno (solo su questo schermo: tornano coperti quando lo riapri).",
+	"tape.help.hideAll": "Copre di nuovo tutti i nastri di studio del quaderno.",
+	"tape.mode.on": "Nastro di studio attivo: trascina sopra ciò che vuoi nascondere. Tocca un nastro per rivelarlo.",
+	"tape.mode.off": "Nastro di studio disattivato.",
+	"tape.hint.drag": "Trascina da un angolo all'altro per stendere un nastro di studio.",
+	"tape.info": "{n} nastri di studio",
+	"histpanel.thing.tape": "nastro di studio",
+	"groups.kind.tape": "Nastro di studio",
+	"settings.tapeColor": "Colore del nastro di studio",
+	"settings.tapeColor.desc": "Colore dei nuovi nastri di studio. Tornano coperti ogni volta che apri il quaderno.",
+	"tape.color.mint": "Menta",
+	"tape.color.sky": "Cielo",
+	"tape.color.rose": "Rosa",
+	"tape.color.sand": "Sabbia",
+	"tape.color.slate": "Ardesia",
 };

@@ -422,6 +422,10 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"invisible-ink": (v) => v.markerTools?.toggleInvisibleInk(),
 	"show-solutions": (v) => v.markerTools?.toggleSolutions(),
 	"show-page-solutions": (v, arg) => v.markerTools?.togglePageSolutions(arg.page),
+	// 0.29 (#10): study tape.
+	"study-tape": (v) => v.tapeTools?.toggleDrawing(),
+	"tapes-reveal-all": (v) => v.tapeTools?.revealAll(),
+	"tapes-hide-all": (v) => v.tapeTools?.hideAll(),
 
 	// view and input
 	"toggle-pages-panel": (v) => v.toggleNavigator(),

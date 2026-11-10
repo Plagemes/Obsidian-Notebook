@@ -3608,7 +3608,7 @@ export const en = {
 	"map.state.checklist": "Open items",
 	// 0.19 cleanexport
 	"export.clean": "Clean copy",
-	"export.clean.desc": "Leaves out placeholders and other markers, margin comments and collapsed sticky notes (with the ink they hide), ready to share. Your notebook is not changed.",
+	"export.clean.desc": "Leaves out placeholders and other markers, margin comments, collapsed sticky notes (with the ink they hide) and study tapes, ready to share. Your notebook is not changed.",
 	"export.clean.stickies": "Also leave out open sticky notes",
 	"export.clean.stickies.desc": "The ink written over a note stays on the page.",
 	// 0.26 redact (#285): redaction before export
@@ -5385,6 +5385,26 @@ export const en = {
 	"help.geoLink": "Link the selection to a note, so a tap on it with the pen opens that note.",
 	"settings.suggestSelection": "Suggest actions from the selection",
 	"settings.suggestSelection.desc": "Chips for a row of words, an arrow between two groups or a loop. Rules only, no AI.",
+	// 0.29 studytape (#10): study tape, opaque strips that hide part of a page and reveal on tap
+	"tape.action.draw": "Study tape",
+	"tape.action.revealAll": "Reveal all study tapes",
+	"tape.action.hideAll": "Hide all study tapes",
+	"tape.help.draw": "Drag over answers, formulas or words to cover them with an opaque tape. Tap a tape to peek, tap again to cover it.",
+	"tape.help.revealAll": "Uncover every study tape of this notebook (only on this screen: they are covered again when you reopen it).",
+	"tape.help.hideAll": "Cover every study tape of this notebook again.",
+	"tape.mode.on": "Study tape on: drag over what you want to hide. Tap a tape to reveal it.",
+	"tape.mode.off": "Study tape off.",
+	"tape.hint.drag": "Drag from corner to corner to lay a study tape.",
+	"tape.info": "{n} study tapes",
+	"histpanel.thing.tape": "study tape",
+	"groups.kind.tape": "Study tape",
+	"settings.tapeColor": "Study tape colour",
+	"settings.tapeColor.desc": "Colour of new study tapes. Tapes are covered again each time the notebook opens.",
+	"tape.color.mint": "Mint",
+	"tape.color.sky": "Sky",
+	"tape.color.rose": "Rose",
+	"tape.color.sand": "Sand",
+	"tape.color.slate": "Slate",
 } as const;
 
 export type MessageKey = keyof typeof en;

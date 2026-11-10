@@ -8,6 +8,7 @@ import type { Page } from "../model/types";
 import { drawSticky } from "../ink/sticky-render";
 import { drawCheckbox } from "../ink/checkbox-render";
 import { drawArea } from "../ink/area-render";
+import { drawTape } from "../ink/tape-render";
 
 export interface ThumbnailOptions {
 	/** Draws under the paper pattern and the ink (e.g. a PDF page). `scale` is canvas px per pt. */
@@ -113,6 +114,13 @@ export function renderThumbnail(page: Page, width: number, options: ThumbnailOpt
 	ctx.globalAlpha = 1;
 	ctx.globalCompositeOperation = "source-over";
 	for (const el of page.elements ?? []) if (el.type === "checkbox") drawCheckbox(ctx, el);
+	// v27 (#10) study tapes on top, hidden: a card never shows what a tape covers (like invisible ink, it is the answers).
+	for (const el of page.elements ?? []) {
+		if (el.type !== "tape") continue;
+		ctx.save();
+		drawTape(ctx, el);
+		ctx.restore();
+	}
 	ctx.restore();
 
 	return canvas.toDataURL(options.mime ?? "image/png", options.quality);

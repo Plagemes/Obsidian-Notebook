@@ -21,7 +21,7 @@ export interface PageInfo {
 	strokes: { total: number; byTool: Record<"pen" | "highlighter" | "shape", number>; /** Invisible-ink strokes (they are in the total). */ hidden: number };
 	/** Points of all strokes. */
 	points: number;
-	elements: { total: number; text: number; image: number; marker: number; box: number; /** v9 */ equation: number; graph: number; /** v10 */ excerpt: number; /** v15 */ sticky: number; /** v17 */ checkbox: number; /** v23 */ area: number };
+	elements: { total: number; text: number; image: number; marker: number; box: number; /** v9 */ equation: number; graph: number; /** v10 */ excerpt: number; /** v15 */ sticky: number; /** v17 */ checkbox: number; /** v23 */ area: number; /** v27 */ tape: number };
 	/** Distinct files the page uses (its PDF or image background and its images), and their size when known. */
 	assets: { count: number; bytes: number; /** Files the document has no record of. */ unknown: number };
 	tags: string[];
@@ -71,7 +71,7 @@ export function pageInfo(doc: NotebookDocument, index: number, editedHere: numbe
 		points += s.points.length;
 		if (s.hidden) hidden++;
 	}
-	const elements = { total: 0, text: 0, image: 0, marker: 0, box: 0, equation: 0, graph: 0, excerpt: 0, sticky: 0, checkbox: 0, area: 0 };
+	const elements = { total: 0, text: 0, image: 0, marker: 0, box: 0, equation: 0, graph: 0, excerpt: 0, sticky: 0, checkbox: 0, area: 0, tape: 0 };
 	const byKind: Partial<Record<MarkerKind, number>> = {};
 	let markers = 0;
 	let open = 0;

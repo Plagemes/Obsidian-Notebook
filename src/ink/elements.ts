@@ -1,7 +1,8 @@
 import { boxBounds, markerBounds, MARKER_BADGE } from "../model/markers";
-import type { AreaElement, BoxElement, CheckboxElement, EquationElement, ExcerptElement, GraphElement, ImageElement, MarkerElement, PageElement, StickyElement, TextElement } from "../model/types";
+import type { AreaElement, BoxElement, CheckboxElement, EquationElement, ExcerptElement, GraphElement, ImageElement, MarkerElement, PageElement, StickyElement, TapeElement, TextElement } from "../model/types";
 import { checkboxBounds, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE } from "../model/checklist";
 import { AREA_MAX_SIDE, AREA_MIN_SIDE, areaBounds } from "../model/area";
+import { TAPE_MAX_SIDE, TAPE_MIN_SIDE, tapeBounds } from "../model/tape";
 import { STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STICKY_MIN_SIZE, stickyBounds } from "../model/sticky";
 import { scaleOutline } from "../math/outline";
 import { EQUATION_OUTLINE_MAX, GRAPH_MAX_SIDE } from "../model/math-elements";
@@ -40,6 +41,8 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 	if (el.type === "checkbox") return checkboxBounds(el);
 	// v23: an area is its rectangle.
 	if (el.type === "area") return areaBounds(el);
+	// v27: a study tape is its rectangle.
+	if (el.type === "tape") return tapeBounds(el);
 	const c = imageCorners(el);
 	const xs = c.map((p) => p[0]);
 	const ys = c.map((p) => p[1]);
@@ -47,7 +50,7 @@ export function elementBounds(el: PageElement, measure: MeasureText = estimateMe
 }
 
 function hits(el: PageElement, x: number, y: number, tolerance: number, measure: MeasureText): boolean {
-	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky" || el.type === "checkbox" || el.type === "area") {
+	if (el.type === "marker" || el.type === "box" || el.type === "equation" || el.type === "graph" || el.type === "excerpt" || el.type === "sticky" || el.type === "checkbox" || el.type === "area" || el.type === "tape") {
 		const b = elementBounds(el, measure);
 		return x >= b.minX - tolerance && x <= b.maxX + tolerance && y >= b.minY - tolerance && y <= b.maxY + tolerance;
 	}
@@ -72,6 +75,11 @@ function hits(el: PageElement, x: number, y: number, tolerance: number, measure:
 export function hitElement(
 	elements: readonly PageElement[], x: number, y: number, tolerance: number, measure: MeasureText = estimateMeasure, locked = false,
 ): PageElement | null {
+	// v27: study tapes are drawn above everything else, so a tap on one finds it first.
+	for (let i = elements.length - 1; i >= 0; i--) {
+		const el = elements[i]!;
+		if (el.type === "tape" && (el.locked === true) === locked && hits(el, x, y, tolerance, measure)) return el;
+	}
 	for (let i = elements.length - 1; i >= 0; i--) {
 		const el = elements[i]!;
 		if ((el.locked === true) === locked && hits(el, x, y, tolerance, measure)) return el;
@@ -234,7 +242,16 @@ function transformCheckbox(el: CheckboxElement, m: Matrix): CheckboxElement {
  * with the selection) and only its centre goes where the turn takes it, like a text box. A side never gets smaller or larger than the format allows.
  */
 function transformArea(el: AreaElement, m: Matrix): AreaElement {
-	const clamp = (v: number) => Math.min(AREA_MAX_SIDE, Math.max(AREA_MIN_SIDE, v));
+	return transformRect(el, m, AREA_MIN_SIDE, AREA_MAX_SIDE);
+}
+
+/** v27 study tape: an axis-aligned rectangle like an area (same rules), with the tape's own side limits. */
+function transformTape(el: TapeElement, m: Matrix): TapeElement {
+	return transformRect(el, m, TAPE_MIN_SIDE, TAPE_MAX_SIDE);
+}
+
+function transformRect<T extends AreaElement | TapeElement>(el: T, m: Matrix, min: number, max: number): T {
+	const clamp = (v: number) => Math.min(max, Math.max(min, v));
 	const eps = 1e-9;
 	const axisAligned = (Math.abs(m[1]) < eps && Math.abs(m[2]) < eps) || (Math.abs(m[0]) < eps && Math.abs(m[3]) < eps);
 	if (axisAligned) {
@@ -252,6 +269,7 @@ function transformArea(el: AreaElement, m: Matrix): AreaElement {
 export function transformElement(el: PageElement, m: Matrix, measure: MeasureText = estimateMeasure): PageElement {
 	if (el.type === "checkbox") return transformCheckbox(el, m);
 	if (el.type === "area") return transformArea(el, m);
+	if (el.type === "tape") return transformTape(el, m);
 	if (el.type === "marker") return transformMarker(el, m);
 	if (el.type === "box") return transformBox(el, m);
 	if (el.type === "equation") return transformEquation(el, m);

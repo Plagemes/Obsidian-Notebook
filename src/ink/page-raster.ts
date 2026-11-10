@@ -15,6 +15,7 @@ import { hiddenStickyInk } from "../model/sticky";
 import { drawSticky } from "./sticky-render";
 import { drawCheckbox } from "./checkbox-render";
 import { drawArea } from "./area-render";
+import { drawTape } from "./tape-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { inkAlpha, inkBlend, strokeSvgPath } from "./stroke-shape";
@@ -121,6 +122,13 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 		for (const el of elements) if (el.type === "marker") drawMarker(ctx, el);
 		// v17: checkboxes above the ink, like marker badges.
 		for (const el of elements) if (el.type === "checkbox") drawCheckbox(ctx, el);
+		// v27 (#10): study tapes last of all, hidden (the way a notebook opens); a clean export has left them out already.
+		for (const el of elements) {
+			if (el.type !== "tape") continue;
+			ctx.save();
+			drawTape(ctx, el);
+			ctx.restore();
+		}
 	} finally {
 		ctx.restore();
 	}
