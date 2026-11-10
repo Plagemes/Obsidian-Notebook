@@ -619,6 +619,7 @@ export const ACTIONS: readonly ActionDef[] = [
 	external("zettel-toggle-slip-box", "zettel.command.toggleSlipBox", "archive", "zettel", "zettel/index.ts", ["notebook", "palette"]),
 	external("zettel-new-slip-box", "zettel.command.newSlipBox", "archive", "zettel", "zettel/index.ts"),
 	external("zettel-orphans", "zettel.command.orphans", "unlink", "zettel", "zettel/index.ts"),
+	external("zettel-hygiene", "hygiene.command", "shield-check", "zettel", "zettel/index.ts"), // 0.29 (Z10)
 	external("zettel-toggle-regions", "zettel.command.toggleRegions", "scan", "zettel", "zettel/index.ts"),
 	// wave 0.8: processing flow (Z4): the Inbox view; quick textbook reference (208)
 	global("zettel-inbox", "inbox.command.open", "inbox", "zettel", ["sheet", "palette"], 30),
