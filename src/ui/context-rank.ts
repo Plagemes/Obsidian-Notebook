@@ -2,7 +2,7 @@
 // plugin, so the "All actions" sheet does it: what suits the view in front of the person (a selection, a PDF page, a
 // lecture, the side pane, a presentation, the current tool) comes first, and a short "For this page" section tops the
 // sheet. Pure and deterministic: no 'obsidian' import, unit-tested.
-import { activeContexts, canOpacity, isChecked, isEnabled, isRelevant, type ActionDef, type ToolId, type UiContext } from "./actions";
+import { activeContexts, canOpacity, isChecked, isEnabled, isOneFigure, isRelevant, type ActionDef, type ToolId, type UiContext } from "./actions";
 import { isMacroActionId, startOfMacroAction } from "./macros";
 import { usageBoost, type UsageMap } from "./usage";
 
@@ -98,6 +98,10 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// one that starts somewhere it cannot (nothing selected, a locked page) steps back; any other leans forward a little.
 	// 0.28 (#41): the table actions fit a selected table above all (enough for "For this page"); inserting one leans forward a little on grid and plain paper.
 	if (a.id.startsWith("table-") && c.selection?.table === true) boost += HERE_MIN_BOOST + 4;
+	// 0.29 (#248): captioning fits a selected picture above all (enough for "For this page"); a reference fits once the notebook has a captioned
+	// figure, and most with the text tool in hand (it puts a text box), but it only leans forward in the list: it never crowds "For this page".
+	if (a.id === "figure-caption" && isOneFigure(c)) boost += HERE_MIN_BOOST;
+	if (a.id === "figure-ref") boost += (c.figures?.captioned ?? 0) > 0 && !hasSelection ? (c.tool === "text" ? 12 : 6) : 0;
 	if (a.id === "insert-table" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 4;
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
 	// 0.28 (#184): the paint bucket fills shapes: with the shape tool in hand it is the next thing wanted (enough for "For this page"); with a selection

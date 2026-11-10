@@ -14,6 +14,7 @@ import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { drawLinkedLines, shownText } from "./link-text";
+import { hasFigureTokens } from "./figure-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
 import { memoColors, nightHighlighter, nightInk, nightLine, NIGHT_BACKGROUND_VEIL, NIGHT_HIGHLIGHTER_ALPHA, NIGHT_PAPER } from "./night";
@@ -74,7 +75,7 @@ export function drawTextElement(ctx: CanvasRenderingContext2D, el: TextElement):
 		ctx.fillStyle = el.color;
 		ctx.textBaseline = "top";
 		// A link ([[Note|alias]]) shows its label, not its markup (ink/wikilink.ts); the layout is of what is shown.
-		const shown = el.text.includes("[[") ? shownText(el.text) : null;
+		const shown = el.text.includes("[[") || hasFigureTokens(el.text) ? shownText(el.text) : null;
 		const layout = layoutText(shown ? shown.text : el.text, el.fontSize, el.width, (str) => ctx.measureText(str).width);
 		// Links are drawn in their own colour (ink/link-text.ts); text without any takes the plain path.
 		if (shown && shown.links.length > 0) {

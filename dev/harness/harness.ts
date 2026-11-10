@@ -96,6 +96,7 @@ import { dropApi } from "./dropfiles-check";
 import { checkTask } from "./task-check";
 import { checkQr } from "./qr-check";
 import { checkSyncprov } from "./syncprov-check";
+import { checkFigcaptions } from "./figcaptions-check"; // 0.29 figcaptions
 import { checkAnnotate } from "./annotate-check";
 import { checkInbox, inboxShot } from "./inbox-check";
 import { checkHints } from "./hints-check";
@@ -2240,6 +2241,7 @@ harnessApi.relatedShot = (state: "results" | "empty" | "none") => relatedShot({ 
 harnessApi.inboxShot = (state: "list" | "close") => inboxShot(state);
 // 0.22 syncprov (#126): the cloud sign-in dialog (dev/harness/syncprov-check.ts).
 harnessApi.checkSyncprov = () => checkSyncprov({ errors, notices });
+harnessApi.checkFigcaptions = () => checkFigcaptions({ errors, notices }); // 0.29 figcaptions
 harnessApi.checkLayout = checkLayout; // 0.14 layout
 harnessApi.home2State = (state: string) => (libraryHarness ? home2State(libraryHarness, state) : false);
 // 0.14 sections: the dynamic sections (sections-check.ts).
@@ -2278,6 +2280,7 @@ async function main(): Promise<void> {
 	if (params.get("doc") === "inbox") return;
 	if (params.get("doc") === "plugin" || params.get("doc") === "hints" || params.get("doc") === "daily" || params.get("doc") === "backups" || params.get("doc") === "synccore" ||params.get("doc") === "task" || params.get("doc") === "lookup" || params.get("doc") === "bookindex" || params.get("doc") === "formulasheet" || params.get("doc") === "boxnum" || params.get("doc") === "qr"|| params.get("doc") === "annotate" || params.get("doc") === "tplnote" || params.get("doc") === "gallery" || params.get("doc") === "snapshot" || params.get("doc") === "vdiff") return;
 	if (params.get("doc") === "syncprov") return; // 0.22 syncprov: a dialog only, no notebook
+	if (params.get("doc") === "figcaptions") return; // 0.29 figcaptions: dialogs only, no notebook
 	await seed();
 	await open();
 	if (params.get("check") === "1") {

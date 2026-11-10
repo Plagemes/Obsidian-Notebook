@@ -11,7 +11,7 @@ import { cloneMeta } from "../model/document";
 import { AddPage, DeletePage, MovePage, SetMeta, SetPageInfinite, SetPageSize, SetPaper } from "../model/history";
 import { duplicatePage } from "../model/pages";
 import { DEFAULT_META, PAGE_SIZES, PAPER_KINDS, PAPER_SPACING, type Page, type PageSizeName, type PaperKind } from "../model/types";
-import { actionById } from "../ui/actions";
+import { actionById, isOneFigure } from "../ui/actions";
 import { exportPdf, exportSvg } from "./export";
 import { GotoPageModal } from "./goto-page";
 import type { NotebookView } from "./notebook-view";
@@ -53,6 +53,8 @@ export function commandApplies(view: NotebookView, id: string): boolean {
 	if (SELECTION_ONLY.test(id)) return !!view.uiContext().selection;
 	// v10: "Go to source" needs a selected excerpt.
 	if (id === "excerpt-open-source") return (view.uiContext().selection?.excerpts ?? 0) > 0;
+	// 0.29 (#248): captioning needs exactly one picture selected.
+	if (id === "figure-caption") return isOneFigure(view.uiContext());
 	// wave 0.10 (362): copying to the other devices needs a selection (pasting does not).
 	if (id === "selection-copy-devices") return !!view.uiContext().selection;
 	// 0.20 (#39): there has to be a locked element on the page in view.
@@ -160,6 +162,9 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"book-index": (v) => v.openBookIndex(),
 	"formula-sheet": (v) => v.openFormulaSheet(),
 	"box-index": (v) => v.openBoxIndex(),
+	// 0.29 (#248)
+	"figure-caption": (v) => v.captionSelectedFigure(),
+	"figure-ref": (v) => v.openFigureRefs(),
 	// 0.18 (#59): the selection as a picture in a note
 	"selection-insert-note": (v) => v.insertSelectionIntoNote("png"),
 	"selection-insert-note-svg": (v) => v.insertSelectionIntoNote("svg"),

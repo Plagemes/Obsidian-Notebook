@@ -10,6 +10,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"nav-back": "help.navBack",
 	"nav-forward": "help.navForward",
 	"box-index": "help.boxIndex",
+	"figure-caption": "help.figureCaption",
+	"figure-ref": "help.figureRef",
 	"toggle-page-mode": "help.pageMode",
 	"toggle-spread": "help.spread",
 	"insert-image": "help.insertImage",

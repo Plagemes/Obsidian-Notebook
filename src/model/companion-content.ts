@@ -16,7 +16,9 @@
  * The output depends only on the document and the notebook path (no clock, time zone, language or vault
  * name), so two synced devices generate byte-identical notes and never rewrite each other's copy.
  */
+import { resolveFigureMarkers } from "../ink/figure-text";
 import { cardSubpath, clampRegion, validPageId } from "../zettel/subpath";
+import { withFigureLabels } from "./figure-captions";
 import { headingLines } from "./companion-headings";
 import { fitSearchBudget, SEARCH_NOTE_MAX, searchLines } from "./companion-search";
 import { cleanMarkerText, isBoxKind, isIsoDate } from "./markers";
@@ -123,7 +125,7 @@ function textBlocks(elements: readonly unknown[] | undefined): string[] {
 		(Number(a.e.y) || 0) - (Number(b.e.y) || 0) || (Number(a.e.x) || 0) - (Number(b.e.x) || 0) || a.i - b.i);
 	const out: string[] = [];
 	for (const { e } of ordered) {
-		const lines = e.text.replace(/\r\n?/g, "\n").split("\n").map(escapeLine);
+		const lines = resolveFigureMarkers(e.text.replace(/\r\n?/g, "\n")).split("\n").map(escapeLine);
 		while (lines.length > 0 && lines[0] === "") lines.shift();
 		while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
 		// Several empty lines in a row would end the paragraph anyway: one is enough.
@@ -250,6 +252,11 @@ export function pageHeading(page: number): string {
  * (`homeworkFromNote`), so that ticks made in the note are kept; without it the notebook alone decides.
  */
 export function companionContent(doc: NotebookDocument, ctx: CompanionContext, homework?: HomeworkNote): CompanionContent {
+	// 0.29 (#248): figure captions and references are written with their current numbers (the document alone decides them).
+	return withFigureLabels(Array.isArray(doc.pages) ? doc.pages : [], () => companionContentOf(doc, ctx, homework));
+}
+
+function companionContentOf(doc: NotebookDocument, ctx: CompanionContext, homework?: HomeworkNote): CompanionContent {
 	const pages = Array.isArray(doc.pages) ? doc.pages : [];
 	const name = ctx.notebookPath.slice(ctx.notebookPath.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
 	const properties: Properties = {

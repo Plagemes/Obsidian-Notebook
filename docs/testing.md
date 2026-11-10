@@ -4664,3 +4664,33 @@ Rules only, no AI. Chips appear in a row above the selection bar; they run exist
 | *Highlight* action (area behind the selection, one undo step) | yes | harness `doc=geosuggest` | | | |
 | Flashcards / a "Make card" action | no | | | | none exists in the plugin: the row offers *Insert into note* instead |
 | Region-to-region link | no | | | | the plugin has links from a selection to a note only: the arrow offers *Link to a note…* |
+
+### 0.29 — figcaptions: figure captions and self-updating references (roadmap #248; steps 3360-3379)
+
+Not verified on hardware. No document format change: a caption is an ordinary text box whose text starts with `{{figcap:<picture id>}}` and a reference is a text box holding `{{figref:<picture id>}}`. The number is worked out from the document each time and shown in its place (like a wikilink's label); the stored text never changes. Only pictures *with a caption* are numbered, in reading order (page order, then top to bottom and left to right).
+
+3360. **Caption.** Place a photo, select it, open *All actions* and choose *Caption figure…*. Type "Lake at dawn" and tap *Add caption*: a text box under the picture reads "Fig. 1 — Lake at dawn" and a notice says "Caption added: Fig. 1." One undo removes the box. With no room under the picture the box goes above it.
+3361. **Edit.** Select the same picture and choose *Caption figure…* again: the dialog shows "Now Fig. 1." and the words; change them and save: the same box changes (one undo step). Editing the box with the text tool shows the raw `{{figcap:…}}` marker, which you can leave alone.
+3362. **Renumbering.** Caption a second picture lower on the page: "Fig. 2". Caption a third on an earlier page: it becomes "Fig. 1" and the others move to 2 and 3 at once. Drag the lower picture above the upper one: their numbers swap. Delete a captioned picture: the ones after it count down; undo restores them.
+3363. **Reference.** *All actions*, *Figure reference…*: pick "Fig. 2 — …" (rows are at least 44 px tall, with the page). A small text box "Fig. 2" appears where the pen last touched (or in the middle of the page) and is selected. Add text next to it with the text tool ("see ") if you like.
+3364. **Follows renumbering.** Do 3362 again with the reference on the page: it always shows the figure's current number, also after closing and reopening the notebook.
+3365. **Tap to jump.** Tap the reference with a finger (or Ctrl/Cmd+click with a mouse, or select it and use *Open link*): the view goes to the picture and outlines it. Back (the page history) returns.
+3366. **Deleted figure.** Delete the captioned picture (or its caption box): the reference reads "Fig. ?" in a dimmed, dashed link style; tapping it says the figure is gone or has no caption. Undo brings the number back. The picker shows "N references show Fig. ?".
+3367. **Exports.** Export a page with captions and references as PDF, SVG and PNG, and print it: each shows the same numbers as the screen (a reference is underlined in the link colour). The Markdown export and the companion note write "Fig. 2 — …" and "Fig. 2", never the markers.
+3368. **Figures gallery.** Open *Figures…*: a captioned figure shows its number ("Fig. 2") in the top-left of its card; the card's menu has *Caption…* (or *Edit caption…*) and, for a captioned one, *Insert reference*.
+3369. **Locked and read-only.** On a locked page, or in read-only mode, adding or changing a caption or a reference is refused with the usual message; the gallery shows no caption items in read-only mode.
+3370. **Cut-outs and large notebooks.** A figure cut-out (an anchored excerpt with a picture) can be captioned like a photo. In a notebook with 100+ pages and many captions scrolling and writing stay smooth (the numbers are cached and recomputed only after an edit).
+3371. **Italian, phone, light, dark.** With the plugin in Italian the dialog and picker read in Italian ("Fig." stays); both fit a phone and read in light and dark and with *Follow Obsidian theme*. Hold a finger on the *Caption figure…* / *Figure reference…* entries of the All actions sheet: the bubble shows the name and one line.
+3372. **Ranking.** With one picture selected, *Caption figure…* is under *For this page*. *Figure reference…* is not offered under *For this page*, but sits higher in the list once the notebook has a captioned figure.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Caption box and reference markers (no format change); parsing, building, `Fig. ?` for a missing figure | yes | `tests/figure-captions.test.ts` | | | |
+| Numbering in reading order across the notebook; renumbering on add, remove, move, page reorder | yes | `tests/figure-captions.test.ts`, harness `doc=figcaptions` | | | |
+| Display-time resolution on the page, PDF, SVG, PNG, print, Markdown export and companion note (stored text unchanged) | yes | `tests/figure-captions.test.ts`, harness `doc=figcaptions` | | | |
+| Tap on a reference jumps to the figure (finger tap, Ctrl/Cmd+click, *Open link*) | yes | `tests/figure-captions.test.ts` (hit area) | | | |
+| *Caption figure…* (selection) and *Figure reference…* actions, gallery card number and menu items, picker and caption dialog | yes | `tests/figure-captions.test.ts`, harness `doc=figcaptions`, `tests/actions*.test.ts` | | | |
+| History: uses the existing AddElement / ReplaceElement commands (already classified for per-page undo); no new command | yes | `tests/page-undo-*.test.ts` | | | |
+| Reference to a picture that has no caption yet | no | | | | the picker lists captioned figures only |
+| Numbers of figures in a notebook that is not open (library thumbnails, hover previews of other notebooks) | no | | | | show "Fig. ?" there; open notebooks, exports, the API PDF, Markdown and the companion note compute them |
+| References as links in the interactive HTML export | no | | | | the number is shown, the link is not added |

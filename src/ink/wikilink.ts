@@ -3,6 +3,7 @@
  * sees instead of the markup. Pure: no 'obsidian', and no layout code, so `text-layout.ts` can use it without a cycle.
  * Nothing here is persisted: a link is just text in a text element, so the file format is unchanged.
  */
+import { captionShown, figureLabel, figureTokens, FIGURE_TARGET_PREFIX, hasFigureTokens, type FigureToken } from "./figure-text";
 
 export interface TextLink {
 	/** Index of `[[` in the text (line endings normalised to `\n`) and one past the closing `]]`. */
@@ -92,16 +93,34 @@ export interface ShownText {
 export function shownText(text: string): ShownText {
 	const src = normalize(text);
 	const links = parseLinks(src);
-	if (links.length === 0) return { text: src, links: [] };
+	// 0.29 (#248): figure markers inside a link are part of the link; the others show the figure's current number.
+	const tokens = hasFigureTokens(src) ? figureTokens(src).filter((t) => !links.some((l) => t.start >= l.start && t.start < l.end)) : [];
+	if (links.length === 0 && tokens.length === 0) return { text: src, links: [] };
+	interface Piece { start: number; end: number; link?: TextLink; token?: FigureToken }
+	const pieces: Piece[] = [
+		...links.map((link): Piece => ({ start: link.start, end: link.end, link })),
+		...tokens.map((token): Piece => ({ start: token.start, end: token.end, token })),
+	].sort((a, b) => a.start - b.start);
 	let out = "";
 	let at = 0;
 	const shown: TextLink[] = [];
-	for (const link of links) {
-		out += src.slice(at, link.start);
-		const label = linkLabel(link);
-		shown.push({ ...link, start: out.length, end: out.length + label.length });
-		out += label;
-		at = link.end;
+	for (const piece of pieces) {
+		out += src.slice(at, piece.start);
+		if (piece.link) {
+			const label = linkLabel(piece.link);
+			shown.push({ ...piece.link, start: out.length, end: out.length + label.length });
+			out += label;
+		} else if (piece.token && piece.token.kind === "cap") {
+			out += captionShown(piece.token.id, src.slice(piece.end));
+		} else if (piece.token) {
+			const label = figureLabel(piece.token.id);
+			shown.push({
+				start: out.length, end: out.length + label.length, inner: piece.token.id, target: FIGURE_TARGET_PREFIX + piece.token.id,
+				subpath: "", alias: label, display: label,
+			});
+			out += label;
+		}
+		at = piece.end;
 	}
 	return { text: out + src.slice(at), links: shown };
 }

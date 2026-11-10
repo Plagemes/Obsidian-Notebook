@@ -120,6 +120,9 @@ import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
 import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
 import { FiguresModal } from "./figures";
+import { FigureCaptionModal, FigureNumbers, FigureRefModal } from "./figure-captions";
+import { brokenReferences, captionBoxes, captionElement, markerSafeId, referenceElement, withCaptionWords } from "../model/figure-captions";
+import { collectFigures, type FigureEntry } from "../model/figures";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
 import { QuickTabsStrip } from "./quick-tabs";
@@ -527,6 +530,8 @@ export class NotebookView extends FileView {
 		tick: () => this.editTick,
 		redraw: () => this.renderer?.invalidate(),
 	});
+	/** 0.29 (#248): the numbers of the captioned figures ("Fig. 3"); derived from the document, never stored. */
+	private readonly figureNumbers = new FigureNumbers({ pages: () => this.shownDoc()?.pages ?? [], tick: () => this.editTick });
 	/** Roadmap 50: the fast scrollbar with a page preview (view/scrollbar.ts). */
 	private scrollbar: FastScrollbar | null = null;
 	/** 0.17 (#173): the floating overview of the page in view (view/minimap.ts). */
@@ -771,6 +776,7 @@ export class NotebookView extends FileView {
 	async onOpen(): Promise<void> {
 		this.contentEl.empty();
 		this.contentEl.addClass("notebook-view");
+		this.figureNumbers.register();
 		this.toolbar = new Toolbar(this.contentEl, this.tools, {
 			change: (state) => this.onToolsChanged(state),
 			undo: () => this.runAction("undo"),
@@ -1321,6 +1327,7 @@ export class NotebookView extends FileView {
 		this.mentions = null;
 		this.headingWarm.dispose();
 		this.boxNumbers.dispose();
+		this.figureNumbers.dispose();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer, this.heavyTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
 		this.pens?.destroy();
@@ -2968,12 +2975,13 @@ export class NotebookView extends FileView {
 			assetIds: () => new Set(Object.values(this.shownDoc()?.assets ?? {}).filter((a) => a.kind === "image").map((a) => a.id)),
 			current: () => this.currentPageIndex(),
 			readAsset: (id) => (this.media ? this.media.readAsset(id) : Promise.reject(new Error("no media"))),
-			goTo: (entry) => {
-				const index = docPages().findIndex((p) => p.id === entry.pageId);
-				if (index < 0) return;
-				this.recordArrival(index);
-				if (!this.excerpts?.reveal(index, { x: entry.x, y: entry.y, width: entry.width, height: entry.height })) this.scrollToPage(index);
-			},
+			goTo: (entry) => this.goToFigureEntry(entry),
+			// 0.29 (#248): the figure's number when it has a caption, and the caption actions (only on a notebook that can be edited).
+			captionNumber: (entry) => this.figureNumbers.numberOf(entry.elementId),
+			...(this.editable() ? {
+				caption: (entry: FigureEntry) => this.captionFigure(entry),
+				insertReference: (entry: FigureEntry) => this.insertFigureReference(entry.elementId),
+			} : {}),
 			insertIntoNote: (entry) => {
 				const doc = this.session?.doc;
 				const index = docPages().findIndex((p) => p.id === entry.pageId);
@@ -3128,6 +3136,127 @@ export class NotebookView extends FileView {
 		new BoxIndexModal({
 			app: this.app, file, docId: this.shownDoc()?.id, items, goTo: (index, y) => this.scrollToPage(index, y),
 		}, this.host.settings.boxNumbering).open();
+	}
+
+	// --- 0.29 (#248) figure captions and references ---
+
+	/** Scrolls to a figure of the gallery or of a reference, and outlines it for a moment. */
+	private goToFigureEntry(entry: FigureEntry): void {
+		const index = (this.shownDoc()?.pages ?? []).findIndex((p) => p.id === entry.pageId);
+		if (index < 0) return;
+		this.recordArrival(index);
+		if (!this.excerpts?.reveal(index, { x: entry.x, y: entry.y, width: entry.width, height: entry.height })) this.scrollToPage(index);
+	}
+
+	/** A tap on "Fig. 3" in the text: goes to the figure; a figure that is gone (or lost its caption) says so. */
+	private openFigureReference(figureId: string): void {
+		const found = this.figureNumbers.forFigure(figureId);
+		if (!found) {
+			showNotice(t("figcap.gone"), 5000);
+			return;
+		}
+		this.goToFigureEntry(found.figure);
+	}
+
+	/** The picture in the selection as a gallery entry, or null when the selection is not exactly one picture. */
+	private selectedFigure(): FigureEntry | null {
+		const sel = this.selection;
+		const doc = this.shownDoc();
+		if (!sel || !doc || sel.others?.length || sel.strokes.length > 0 || sel.elements.length !== 1) return null;
+		const el = sel.elements[0];
+		const page = doc.pages[sel.pageIndex];
+		if (!el || !page || (el.type !== "image" && el.type !== "excerpt")) return null;
+		return collectFigures(doc.pages, [sel.pageIndex]).find((f) => f.elementId === el.id) ?? null;
+	}
+
+	/** "Caption figure…" for the selected picture. */
+	captionSelectedFigure(): void {
+		const entry = this.selectedFigure();
+		if (!entry) {
+			showNotice(t("figcap.notFigure"), 5000);
+			return;
+		}
+		this.captionFigure(entry);
+	}
+
+	/** Asks for the words of a figure's caption, then adds the caption under the picture (or changes the words of the one it has). */
+	private captionFigure(entry: FigureEntry): void {
+		if (!this.editableDocument()) return;
+		if (!markerSafeId(entry.elementId)) {
+			showNotice(t("figcap.badId"), 6000);
+			return;
+		}
+		this.commitText();
+		const existing = this.figureNumbers.forFigure(entry.elementId);
+		new FigureCaptionModal(this.app, {
+			number: existing?.number ?? null,
+			words: existing?.captions[0]?.text ?? "",
+			save: (words) => this.saveCaption(entry, words),
+		}).open();
+	}
+
+	private saveCaption(entry: FigureEntry, words: string): void {
+		const doc = this.editableDocument();
+		if (!doc) return;
+		const page = doc.pages.find((p) => p.id === entry.pageId);
+		const figure = page ? collectFigures(doc.pages, [doc.pages.indexOf(page)]).find((f) => f.elementId === entry.elementId) : undefined;
+		if (!page || !figure) {
+			showNotice(t("figcap.gone"), 5000);
+			return;
+		}
+		const existing = captionBoxes(doc.pages).find((b) => b.figureId === entry.elementId);
+		let ok = false;
+		let added: TextElement | null = null;
+		if (existing) {
+			const home = doc.pages[existing.pageIndex];
+			const before = home?.elements?.find((e) => e.id === existing.boxId);
+			const text = before?.type === "text" ? withCaptionWords(before.text, words) : null;
+			if (!home || before?.type !== "text" || text === null) return;
+			if (text === before.text) return;
+			ok = this.history.execute(new ReplaceElement(home.id, before, { ...before, text }));
+		} else {
+			added = captionElement(figure, page, words, this.tools.textSize, this.tools.penColor);
+			ok = this.history.execute(new AddElement(page.id, added, page.elements?.length ?? 0));
+		}
+		if (!ok) return;
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+		const n = this.figureNumbers.numberOf(entry.elementId);
+		if (added && n !== null) showNotice(t("figcap.added", { n: String(n) }), 3000);
+	}
+
+	/** "Figure reference…": picks a captioned figure and puts a reference to it on the page. */
+	openFigureRefs(): void {
+		if (!this.editableDocument()) return;
+		this.commitText();
+		new FigureRefModal(this.app, {
+			items: () => this.figureNumbers.items(),
+			broken: () => brokenReferences(this.shownDoc()?.pages ?? [], this.figureNumbers.items()).length,
+			insert: (id) => this.insertFigureReference(id),
+		}).open();
+	}
+
+	/** A text box holding a reference to the figure, where the pen last touched (or the middle of the page in view), selected so it can be moved. */
+	private insertFigureReference(figureId: string): void {
+		const doc = this.editableDocument();
+		if (!doc) return;
+		this.commitText();
+		const found = this.figureNumbers.forFigure(figureId);
+		if (!found) {
+			showNotice(t("figcap.noCaption"), 6000);
+			return;
+		}
+		const pen = this.lastPen;
+		const penIndex = pen ? doc.pages.findIndex((p) => p.id === pen.pageId) : -1;
+		const spot = stampSpot(pen && penIndex >= 0 ? { pageIndex: penIndex, x: pen.x, y: pen.y, at: pen.at } : null, Date.now(), doc.pages, this.currentPageIndex());
+		const page = spot ? doc.pages[spot.pageIndex] : undefined;
+		if (!spot || !page) return;
+		const el = referenceElement(figureId, page, spot.x, spot.y, this.tools.textSize, this.tools.penColor, measureText, t("figcap.abbr"));
+		if (!this.history.execute(new AddElement(page.id, el, page.elements?.length ?? 0))) return;
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+		this.selectItems(spot.pageIndex, [], [el]);
+		showNotice(t("figcap.inserted", { n: String(found.number) }), 3000);
 	}
 
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */
@@ -4754,6 +4883,7 @@ export class NotebookView extends FileView {
 			},
 			nav: this.navState(),
 			history: this.historyCounts(),
+			figures: { captioned: this.figureNumbers.items().length },
 			narrow: this.body?.hasClass("is-narrow") ?? false,
 			openNotebooks: this.tabs?.count ?? 0,
 		};
@@ -5240,6 +5370,7 @@ export class NotebookView extends FileView {
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
 		this.headingWarm.touch(8000);
 		this.boxNumbers.reset();
+		this.figureNumbers.reset();
 		this.active = null;
 		this.jumping = null;
 		this.erasing = null;
@@ -5426,6 +5557,7 @@ export class NotebookView extends FileView {
 	}
 
 	private afterHistoryChange(): void {
+		this.figureNumbers.touch();
 		// The save is scheduled first (review W21 D6): if the layout or the viewport below throws, the recorded step is still written.
 		if (!this.userReadOnly) this.session?.markChanged();
 		this.renderer?.setGhost(null);
@@ -7591,6 +7723,7 @@ export class NotebookView extends FileView {
 			tool: () => this.tools.tool,
 			labelColor: () => this.tools.penColor,
 			register: (ref) => this.registerEvent(ref),
+			openFigure: (id) => this.openFigureReference(id),
 		});
 		this.penLinks.bindEditor(editor);
 	}
