@@ -1,8 +1,9 @@
 import { createId, quantizePoint } from "../model/document";
 import { UpdateItems } from "../model/groups";
 import { AddStroke, Batch, removeStrokes, type Command } from "../model/history";
-import type { Page, Stroke } from "../model/types";
+import type { Page, Stroke, TapeElement } from "../model/types";
 import { movesUnderRedaction, type RedactGuard } from "./redact";
+import { strokeTouchesTapes } from "./tape-guard";
 import { buildTable, inkToShift, tableBox, type DetectedTable, type GridEdit, type InkBox, type TableGrid, type TableStyle } from "./table";
 
 /**
@@ -46,7 +47,7 @@ export type TableEditRefusal =
 
 export type TableEditPlan = { ok: true; cmd: Command; strokes: Stroke[] } | { ok: false; reason: TableEditRefusal };
 
-type EditPage = Pick<Page, "id" | "strokes"> & Partial<Pick<Page, "width" | "height" | "infinite" | "states">>;
+type EditPage = Pick<Page, "id" | "strokes"> & Partial<Pick<Page, "width" | "height" | "infinite" | "states" | "elements">>;
 
 /** Points this far beyond the page edge are still on it (rounding of the grid). */
 const EDGE_TOL = 0.01;
@@ -55,6 +56,23 @@ const shiftStroke = (s: Stroke, axis: "x" | "y", by: number): Stroke => ({
 	...s,
 	points: s.points.map((p) => (axis === "y" ? quantizePoint(p[0], p[1] + by, p[2]) : quantizePoint(p[0] + by, p[1], p[2]))),
 });
+
+const shiftTape = (t: TapeElement, axis: "x" | "y", by: number): TapeElement => ({ ...t, [axis]: Math.round((t[axis] + by) * 100) / 100 });
+
+/**
+ * Round-3 review (Z6): the study tapes that follow the ink an insert pushes: those that cover at least one stroke of `ink` (the table's own
+ * lines left out) and whose covered strokes are all pushed. A tape over a pushed answer moves with it, so the answer stays covered and the
+ * tape does not end up over the answer of the row before.
+ */
+function tapesToShift(page: EditPage, ink: readonly Stroke[], pushed: ReadonlySet<string>): TapeElement[] {
+	// A locked tape never moves (0.20 rule): it stays where it is, like any locked element.
+	const tapes = (page.elements ?? []).filter((el): el is TapeElement => el.type === "tape" && el.locked !== true);
+	if (tapes.length === 0 || pushed.size === 0) return [];
+	return tapes.filter((tape) => {
+		const covered = ink.filter((s) => strokeTouchesTapes(s, [tape]));
+		return covered.length > 0 && covered.every((s) => pushed.has(s.id));
+	});
+}
 
 const insidePage = (page: EditPage, minX: number, minY: number, maxX: number, maxY: number): boolean => {
 	if (page.width === undefined || page.height === undefined) return true;
@@ -78,6 +96,7 @@ export function planTableEdit(
 	for (const part of page.states?.parts ?? []) for (const id of part.items) inPart.add(id);
 	if (table.strokes.some((s) => inPart.has(s.id))) return { ok: false, reason: "states" };
 	let pushed: Stroke[] = [];
+	let tapes: TapeElement[] = [];
 	if (edit.shift) {
 		const mine = new Set(table.strokes.map((s) => s.id));
 		const ids = new Set(inkToShift(table.grid, edit.shift, ink.filter((s) => !mine.has(s.id)).map(inkBox)));
@@ -92,7 +111,13 @@ export function planTableEdit(
 			const b = inkBox(s);
 			if (!insidePage(page, b.minX, b.minY, b.maxX, b.maxY)) return { ok: false, reason: "edge" };
 		}
-		if (guard && movesUnderRedaction(guard, { strokes: pushed, elements: [] }, { strokes: moved, elements: [] })) return { ok: false, reason: "redacted" };
+		// Round-3 review (Z6): the tapes over the pushed answers go with them (same step), and obey the same edge and redaction rules.
+		tapes = tapesToShift(page, ink.filter((s) => !mine.has(s.id)), new Set(pushed.map((s) => s.id)));
+		const movedTapes = tapes.map((tp) => shiftTape(tp, axis, by));
+		for (const tp of movedTapes) {
+			if (!insidePage(page, tp.x, tp.y, tp.x + tp.width, tp.y + tp.height)) return { ok: false, reason: "edge" };
+		}
+		if (guard && movesUnderRedaction(guard, { strokes: pushed, elements: tapes }, { strokes: moved, elements: movedTapes })) return { ok: false, reason: "redacted" };
 	}
 	const removed = removeStrokes(page.id, page.strokes, table.strokes, "Edit table");
 	if (!removed) return { ok: false, reason: "gone" };
@@ -102,7 +127,8 @@ export function planTableEdit(
 	const commands: Command[] = [removed, ...strokes.map((s, i) => new AddStroke(page.id, s, base + i))];
 	if (edit.shift && pushed.length > 0) {
 		const { axis, by } = edit.shift;
-		commands.push(new UpdateItems(page.id, new Set(pushed.map((s) => s.id)), (item) => shiftStroke(item as Stroke, axis, by), "Edit table"));
+		const ids = new Set([...pushed.map((s) => s.id), ...tapes.map((tp) => tp.id)]);
+		commands.push(new UpdateItems(page.id, ids, (item) => ("points" in item ? shiftStroke(item, axis, by) : item.type === "tape" ? shiftTape(item, axis, by) : item), "Edit table"));
 	}
 	return { ok: true, cmd: new Batch("Edit table", commands), strokes };
 }
