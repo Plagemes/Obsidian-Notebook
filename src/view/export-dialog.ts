@@ -178,6 +178,8 @@ export class ExportModal extends Modal {
 		this.fileDesc = shellNote(contentEl, "");
 		this.fileDesc.addClass("notebook-export-note");
 		shellNote(contentEl, t("export.dialog.hidden")).addClass("notebook-export-note");
+		// 0.29 (#10, review T3): a study tape is a visual study aid, not a redaction: said where the export is chosen, when there is one.
+		if (this.host.pages?.().some((p) => p.elements?.some((e) => e.type === "tape"))) shellNote(contentEl, t("tape.export.note")).addClass("notebook-export-note");
 		this.problem = shellNote(contentEl, "", "error");
 		this.problem.addClass("notebook-export-problem");
 		shellButton(shell.foot, "secondary", t("export.dialog.cancel"), () => this.close());

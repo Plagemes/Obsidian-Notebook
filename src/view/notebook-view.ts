@@ -17,7 +17,7 @@ import {
 	captureCrossPageClip, frameOffset, inkFollowers, pagesTouchedBy, partsBounds, planCrossPageTransform, selectAcrossPages, type PagePart,
 } from "../ink/cross-page";
 import { elementsInLasso, hitElement, hitLockedElement } from "../ink/elements";
-import { eraseAreaCommand } from "../ink/erase-area";
+import { cutOutsidePolygon, eraseAreaCommand } from "../ink/erase-area";
 import { filterErasable } from "../ink/erase-filter";
 import { AreaEraseGesture, areasUnderEraser } from "../ink/area-erase";
 import { createArea } from "../model/area";
@@ -76,7 +76,7 @@ import { newStrokeTaper, strokeTaper } from "../model/taper";
 import {
 	DEFAULT_META, isLinePen, isNewPen, PAPER_SPACING,
 	type Asset, type ImageElement, type NotebookDocument, type NotebookMeta, type Page, type PageElement,
-	type PaperKind, type Point, type Stroke, type TextElement, type Tool, RENDER_FREEHAND, RENDER_INK,
+	type PaperKind, type Point, type Stroke, type TapeElement, type TextElement, type Tool, RENDER_FREEHAND, RENDER_INK,
 } from "../model/types";
 import type { JournalStore } from "../storage/journal";
 import { DocumentSession, type SaveState, type SessionMode } from "../storage/session";
@@ -226,7 +226,8 @@ import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
 import { TapeTools } from "./tape-tools";
-import { coveredByTape, hidingTapes, tapeColorOf } from "../model/tape";
+import { hidingTapes, tapeColorOf } from "../model/tape";
+import { elementTouchesTapes, strokeTouchesTapes } from "../ink/tape-guard";
 import { AxesTools, type AxesHost } from "./axes-tools";
 import { TableTools, type TableHost } from "./table-tools";
 import { tableOfSelection } from "../ink/table";
@@ -304,6 +305,8 @@ const NARROW_PX = 720;
 const THUMB_PDF_SCALE = 0.75;
 /** Page thumbnails are at most this many CSS px wide (the panel asks for 60, 120 or, in the large layout, 240). */
 const THUMB_CSS_WIDTH = 240;
+/** 0.29 (#10): the notice that the eraser left ink under a hidden study tape alone comes at most this often (ms). */
+const TAPE_NOTICE_MS = 5000;
 
 export interface NotebookHost {
 	settings: NotebookSettings;
@@ -560,6 +563,8 @@ export class NotebookView extends FileView {
 	private checklist: ChecklistTools | null = null;
 	/** 0.29 (#10): study tapes (the mode that lays them, taps that reveal them; the reveal is view-only). */
 	private tapes: TapeTools | null = null;
+	/** 0.29 (#10): when the eraser last said it left ink under a hidden study tape alone. */
+	private tapeNoticeAt = -Infinity;
 	/** 0.22 (#206): instant axes (an L or a + drawn by hand, the insert). */
 	private axes: AxesTools | null = null;
 	/** 0.28 (#41): hand-drawn tables (insert, add / remove rows and columns, even cells). */
@@ -3502,7 +3507,7 @@ export class NotebookView extends FileView {
 			selection: () => (this.selection ? { pageIndex: this.selection.pageIndex, strokes: this.selection.strokes, elements: this.selection.elements } : null),
 			select: (pageIndex, strokes, elements) => this.selectItems(pageIndex, strokes, elements),
 			penColor: () => this.tools.penColor,
-			inkOf: (page) => this.inkInView(page),
+			inkOf: (page) => this.inkOutsideTapes(page), // 0.29 (#10): a checkbox label is what the reader can see
 			sendTask: (pageIndex, bounds, request) => this.sendChecklistTask(pageIndex, bounds, request),
 			refresh: () => this.refreshUi(),
 		};
@@ -3640,7 +3645,8 @@ export class NotebookView extends FileView {
 		const box = index < 0 ? null : layout.boxes[index];
 		if (!page || !box) return null;
 		const [x, y] = toPageLocal(box, dx, dy);
-		return { strokes: this.inkInView(page), x, y, scale: this.viewport.scale };
+		// 0.29 (#10): the eyedropper never picks the style of ink a hidden study tape covers.
+		return { strokes: this.inkOutsideTapes(page), x, y, scale: this.viewport.scale };
 	}
 
 	/** Markers, boxes and invisible ink of this view (null before the view is open). */
@@ -3687,11 +3693,33 @@ export class NotebookView extends FileView {
 		const ink = noteInk ? shown.filter((s) => !noteInk.has(s.id)) : shown;
 		// 0.15 (241): a shown state moved some strokes away from where they were drawn: the ink tools leave them alone.
 		const moved = this.statesTools?.displaced(page);
-		const placed = moved ? ink.filter((s) => !moved.has(s.id)) : ink;
-		// 0.29 (#10): ink a hidden study tape covers whole is not there to erase, select or offer (nobody can see it).
-		const tapes = this.tapes ? hidingTapes(page, this.tapes.reveal) : [];
+		// 0.29 (#10, review fix T2): ink under a hidden study tape stays in: the lasso, groups and "ink follows objects" take it with the rest, so
+		// what is saved never depends on which tapes are revealed on this screen (see inkOutsideTapes for the erasers).
+		return moved ? ink.filter((s) => !moved.has(s.id)) : ink;
+	}
+
+	/** 0.29 (#10): the study tapes of `page` that hide what is under them on this screen. */
+	private hidingTapesOf(page: Page): TapeElement[] {
+		return this.tapes ? hidingTapes(page, this.tapes.reveal) : [];
+	}
+
+	/**
+	 * 0.29 (#10, review fix T1): the ink in view without every stroke a hidden study tape reaches over, even in part (all the hidden tapes
+	 * together): what the erasers and the pen-start offers may touch. Nobody can see that ink, so nothing may change it until it is revealed.
+	 */
+	private inkOutsideTapes(page: Page): readonly Stroke[] {
+		const ink = this.inkInView(page);
+		const tapes = this.hidingTapesOf(page);
 		const bounds = this.renderer?.boundsOf;
-		return tapes.length > 0 && bounds ? placed.filter((s) => !coveredByTape(bounds(s), tapes)) : placed;
+		return tapes.length > 0 ? ink.filter((s) => !strokeTouchesTapes(s, tapes, bounds?.(s))) : ink;
+	}
+
+	/** 0.29 (#10): says (at most every few seconds) that the eraser left ink under a hidden study tape alone. */
+	private tapeKeptNotice(): void {
+		const now = performance.now();
+		if (now - this.tapeNoticeAt < TAPE_NOTICE_MS) return;
+		this.tapeNoticeAt = now;
+		showNotice(t("tape.erase.kept"));
 	}
 
 	/** v10: anchored excerpts of this view (null before the view is open). */
@@ -6675,7 +6703,11 @@ export class NotebookView extends FileView {
 		if (!this.host.settings.scribbleErase || !isLinePen(active.stroke.tool) || active.snap || active.recognized || !this.renderer) return false;
 		const stroke = freezeStroke({ ...active.stroke, points: this.ink.toPoints() });
 		// v8: hidden ink (the solutions) is never scratched out while it is not shown.
-		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, this.renderer.boundsOf, {}, this.markers?.isRevealed(page) ?? false);
+		// 0.29 (#10, review fix T1): nor is ink a hidden study tape reaches over.
+		const tapes = this.hidingTapesOf(page);
+		const boundsOf = this.renderer.boundsOf;
+		const spare = tapes.length > 0 ? (s: Stroke) => strokeTouchesTapes(s, tapes, boundsOf(s)) : undefined;
+		const steps = scribbleEraseSteps(page, stroke, performance.now() - this.strokeStart, boundsOf, {}, this.markers?.isRevealed(page) ?? false, spare);
 		if (!steps) return false;
 		this.clearSelection();
 		this.renderer.cancelWet();
@@ -6902,7 +6934,14 @@ export class NotebookView extends FileView {
 		}
 		const [ax, ay] = toPageLocal(box, from[0], from[1]);
 		const [bx, by] = toPageLocal(box, to[0], to[1]);
-		const hits = findHitStrokes(filterErasable(this.inkInView(page), this.eraseFilter()), ax, ay, bx, by, radius, renderer.boundsOf);
+		// 0.29 (#10, review fix T1): ink a hidden study tape reaches over, even in part, is never erased (the segment eraser would cut its hidden
+		// part); the user reveals the tape to erase there.
+		const tapes = this.hidingTapesOf(page);
+		const hits = findHitStrokes(filterErasable(this.inkOutsideTapes(page), this.eraseFilter()), ax, ay, bx, by, radius, renderer.boundsOf);
+		if (tapes.length > 0) {
+			const kept = filterErasable(this.inkInView(page), this.eraseFilter()).filter((s) => strokeTouchesTapes(s, tapes, renderer.boundsOf(s)));
+			if (kept.length > 0 && findHitStrokes(kept, ax, ay, bx, by, radius, renderer.boundsOf).length > 0) this.tapeKeptNotice();
+		}
 		let changed = false;
 		for (const stroke of hits) {
 			if (erasing.spare?.has(stroke.id)) continue;
@@ -6924,7 +6963,8 @@ export class NotebookView extends FileView {
 		// reached ink comes back. The selective eraser applies; a locked area stays.
 		const filter = this.eraseFilter();
 		if (changed) erasing.areas.inkErased(doc, filter);
-		if (erasing.areas.allowed(filter) && erasing.areas.eraseAreas(doc, page.id, areasUnderEraser(page.elements ?? [], ax, ay, bx, by, radius, filter), filter)) changed = true;
+		const areas = areasUnderEraser(page.elements ?? [], ax, ay, bx, by, radius, filter).filter((a) => !elementTouchesTapes(a, tapes));
+		if (erasing.areas.allowed(filter) && erasing.areas.eraseAreas(doc, page.id, areas, filter)) changed = true;
 		return changed;
 	}
 
@@ -6937,15 +6977,24 @@ export class NotebookView extends FileView {
 	private eraseArea(lasso: Lasso, page: Page): void {
 		const revealed = this.markers?.isRevealed(page) ?? false;
 		const spare = lasso.spare;
-		// 0.29 (#10): ink a hidden study tape covers whole is left alone (nobody can see what would be erased).
-		const tapes = this.tapes ? hidingTapes(page, this.tapes.reveal) : [];
-		const underTape = (s: Stroke): boolean => tapes.length > 0 && !!this.renderer && coveredByTape(this.renderer.boundsOf(s), tapes);
+		// 0.29 (#10, review fix T1): strokes and elements a hidden study tape reaches over, even in part, are left alone (all the hidden tapes
+		// together): nobody can see what would be erased, and a cut would take the hidden part.
+		const tapes = this.hidingTapesOf(page);
+		const boundsOf = this.renderer?.boundsOf;
+		const spared = { any: false };
+		const underTape = (s: Stroke): boolean => {
+			if (tapes.length === 0 || !strokeTouchesTapes(s, tapes, boundsOf?.(s))) return false;
+			if (!spared.any && cutOutsidePolygon(s, lasso.points) !== null) spared.any = true;
+			return true;
+		};
 		const cmd = eraseAreaCommand(page, lasso.points, {
 			filter: this.eraseFilter(),
 			skip: revealed && !spare && tapes.length === 0 ? undefined : (s) => (!revealed && !!s.hidden) || !!spare?.has(s.id) || underTape(s),
+			...(tapes.length > 0 ? { skipElement: (el: PageElement) => elementTouchesTapes(el, tapes, measureText) } : {}),
 			includeElements: this.host.settings.eraseAreaElements,
 			measure: measureText,
 		});
+		if (spared.any) this.tapeKeptNotice();
 		if (!cmd) return;
 		// 0.15 (241): the pieces a cut stroke left stay in its part, in the same undo step.
 		const doc = this.session?.doc;
@@ -7233,7 +7282,8 @@ export class NotebookView extends FileView {
 		if (extent * this.viewport.scale < TAP_SLOP_PX) {
 			const p = lasso.points[0]!;
 			const tol = 6 / this.viewport.scale;
-			const el = hitElement(page.elements ?? [], p[0], p[1], tol, measureText);
+			// 0.29 (#10, review fix T9): a revealed study tape does not hide what is under it, so a tap picks that first.
+			const el = hitElement(page.elements ?? [], p[0], p[1], tol, measureText, false, (id) => this.tapes?.reveal.isRevealed(id) ?? false);
 			if (el) elements = [el];
 			else {
 				// 0.20 (#39): a member of a group that is hit by the tap is picked too (loose ink is not selected by a tap), and a locked

@@ -3,7 +3,7 @@ import { Batch, RemoveElement, ReplaceStroke, type Command } from "../model/hist
 import { areaMatchesFilter } from "./area-erase";
 import { strokePieces } from "../model/groups";
 import { hiddenStickyInk } from "../model/sticky";
-import type { Page, Point, Stroke } from "../model/types";
+import type { Page, PageElement, Point, Stroke } from "../model/types";
 import { elementsInLasso, type MeasureText } from "./elements";
 import { filterErasable, type EraseFilter } from "./erase-filter";
 import { strokeBounds, type BBox } from "./hit-test";
@@ -96,6 +96,8 @@ export interface EraseAreaOptions {
 	newId?: () => string;
 	/** v8: strokes the eraser must leave alone (hidden ink while the solutions are not shown). */
 	skip?: (stroke: Stroke) => boolean;
+	/** v27 (review fix T1): elements the eraser must leave alone (what a hidden study tape covers, even in part). */
+	skipElement?: (el: PageElement) => boolean;
 }
 
 /**
@@ -121,6 +123,7 @@ export function eraseAreaCommand(page: Pick<Page, "id" | "strokes" | "elements">
 	const removed = new Set<string>();
 	if (options.includeElements && options.filter.kind === "all") {
 		for (const el of elementsInLasso(page.elements ?? [], poly, options.measure ?? estimateMeasure)) {
+			if (options.skipElement?.(el)) continue;
 			commands.push(new RemoveElement(page.id, el));
 			removed.add(el.id);
 		}
@@ -128,7 +131,7 @@ export function eraseAreaCommand(page: Pick<Page, "id" | "strokes" | "elements">
 	// v23: an area highlighter is highlighter ink, not an object: the area eraser removes the ones whose centre is inside the outline (the
 	// selective eraser applies: a highlighter of that colour), whatever the setting for text boxes and images says. Locked ones stay.
 	for (const el of elementsInLasso(page.elements ?? [], poly, options.measure ?? estimateMeasure)) {
-		if (el.type === "area" && !removed.has(el.id) && areaMatchesFilter(el.color, options.filter)) commands.push(new RemoveElement(page.id, el));
+		if (el.type === "area" && !removed.has(el.id) && !options.skipElement?.(el) && areaMatchesFilter(el.color, options.filter)) commands.push(new RemoveElement(page.id, el));
 	}
 	return commands.length > 0 ? new Batch("Erase area", commands) : null;
 }

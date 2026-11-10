@@ -5389,7 +5389,7 @@ export const en = {
 	"tape.action.draw": "Study tape",
 	"tape.action.revealAll": "Reveal all study tapes",
 	"tape.action.hideAll": "Hide all study tapes",
-	"tape.help.draw": "Drag over answers, formulas or words to cover them with an opaque tape. Tap a tape to peek, tap again to cover it.",
+	"tape.help.draw": "Drag over answers, formulas or words to cover them with an opaque tape. Tap a tape to peek, tap again to cover it. Study tapes only cover content visually; text under them can still be found in exported files. Use Redact to remove content from exports.",
 	"tape.help.revealAll": "Uncover every study tape of this notebook (only on this screen: they are covered again when you reopen it).",
 	"tape.help.hideAll": "Cover every study tape of this notebook again.",
 	"tape.mode.on": "Study tape on: drag over what you want to hide. Tap a tape to reveal it.",
@@ -5405,6 +5405,8 @@ export const en = {
 	"tape.color.rose": "Rose",
 	"tape.color.sand": "Sand",
 	"tape.color.slate": "Slate",
+	"tape.erase.kept": "Ink under a covered study tape is kept. Tap the tape to reveal it, then erase.",
+	"tape.export.note": "Study tapes only cover content visually; text under them can still be found in exported files. Use Redact to remove content from exports.",
 } as const;
 
 export type MessageKey = keyof typeof en;
