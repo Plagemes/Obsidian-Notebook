@@ -21874,3 +21874,52 @@ body.notebook-style-obsidian {
 	width: 16px;
 	height: 16px;
 }
+
+/* ===== 0.29 figcaptions ===== */
+/* The number of a captioned figure on its card of the Figures gallery (#248): top left, in the accent, over the picture. */
+.nb-ui .nb-figures-capno {
+	position: absolute;
+	left: var(--nb-space-3);
+	top: var(--nb-space-3);
+	display: inline-flex;
+	align-items: center;
+	height: 22px;
+	padding: 0 8px;
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent-bg);
+	border: 1px solid var(--nb-accent);
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	box-shadow: var(--nb-shadow-1);
+	pointer-events: none;
+}
+
+/* The caption dialog and the reference picker. */
+.nb-ui.nb-figcap-modal .nb-figcap-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.nb-ui.nb-figcap-modal .nb-figcap-row .nb-modal-row-label {
+	font-variant-numeric: tabular-nums;
+}
+
+.nb-ui.nb-figcap-modal .nb-figcap-number {
+	margin-bottom: var(--nb-space-2);
+	color: var(--nb-accent);
+	font-size: var(--nb-fs-label);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Dev harness only: the strip of drawn boxes under the reference picker. */
+.nb-ui .nb-figcap-preview {
+	display: block;
+	max-width: 100%;
+	margin-top: var(--nb-space-3);
+	border-radius: var(--nb-radius-sm, 8px);
+	background: #fff;
+}

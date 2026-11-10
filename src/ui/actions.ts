@@ -108,6 +108,8 @@ export interface UiContext {
 	nav?: { back: boolean; forward: boolean };
 	/** 0.25 (#84): how many steps the undo history holds (to take back) and how many were undone (to bring back). Optional (absent: none). */
 	history?: { undo: number; redo: number };
+	/** 0.29 (#248): how many figures of the notebook have a caption (and so a number). Optional (none when absent). */
+	figures?: { captioned: number };
 	/** Phone-sized view (the page panel is a drawer, the toolbar has two rows). */
 	narrow: boolean;
 }
@@ -157,6 +159,8 @@ const pageOpen = (c: UiContext) => c.editable && !c.page?.locked;
 const pdfPage = (c: UiContext) => c.page?.background === "pdf";
 const backgroundPage = (c: UiContext) => !!c.page && c.page.background !== "none";
 const hasSelection = (c: UiContext) => !!c.selection && c.selection.strokes + c.selection.elements > 0;
+/** 0.29 (#248): the selection is exactly one picture or figure cut-out (the figure caption action). */
+export const isOneFigure = (c: UiContext): boolean => !!c.selection && c.selection.strokes === 0 && c.selection.elements === 1 && (c.selection.images ?? 0) + (c.selection.excerpts ?? 0) === 1;
 /** wave 0.10: how many things are selected (strokes and elements), and whether the selection holds ink. */
 const itemCount = (c: UiContext) => (c.selection?.strokes ?? 0) + (c.selection?.elements ?? 0);
 const lassoOrSelection = (c: UiContext) => c.tool === "lasso" || itemCount(c) > 0;
@@ -634,6 +638,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "formula-sheet", label: "formulasheet.menu", icon: "sigma", group: "share", surfaces: ["sheet", "notebook"], priority: 21, scope: "view", command: "command.formulaSheet", readOnly: true, keywords: "formula sheet equations latex maths collect formulario formule equazioni raccolta" },
 	// 0.28 (#205): index of the numbered definitions and theorems.
 	{ id: "box-index", label: "boxindex.menu", icon: "list-ordered", group: "share", surfaces: ["sheet", "notebook"], priority: 20, scope: "view", command: "command.boxIndex", readOnly: true, keywords: "definitions theorems index numbered boxes list definizioni teoremi indice numerati riquadri elenco" },
+	// 0.29 (#248): figure captions ("Fig. 3 — text") numbered by reading order, and references that always show the current number.
+	{ id: "figure-caption", label: "figcap.caption.menu", icon: "quote", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.1, scope: "view", command: "command.figureCaption", when: isOneFigure, enabled: pageOpen, keywords: "figure caption number picture photo label legenda didascalia numero figura immagine" },
+	{ id: "figure-ref", label: "figcap.refs.menu", icon: "link", group: "insert", surfaces: ["sheet", "palette"], priority: 44, scope: "view", command: "command.figureRef", enabled: pageOpen, keywords: "figure reference cross-reference see fig number link riferimento figura rimando numero collegamento" },
 	// 0.18 (#86): margin comments: a comment anchored to the selection's region, or to a rectangle drawn on the page; the side panel lists them.
 	{ id: "comment-selection", label: "comments.action", icon: "message-square-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40, scope: "view", command: "comments.command.selection", when: hasSelection, enabled: pageOpen, keywords: "comment note margin review annotation commento nota margine revisione" },
 	{ id: "comment-region", label: "comments.region", icon: "square-dashed", group: "insert", surfaces: ["sheet", "palette"], priority: 46, scope: "view", command: true, enabled: pageOpen, keywords: "comment region rectangle margin note review commento regione rettangolo margine" },

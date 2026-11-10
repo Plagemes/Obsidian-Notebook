@@ -1,6 +1,7 @@
 import { normalizePath, type App, type Plugin, type TFile } from "obsidian";
 import { pagesToPdf } from "../ink/export-pdf";
 import { withExcerptChains } from "../ink/redact";
+import { withFigureLabels } from "../model/figure-captions";
 import { Batch } from "../model/history";
 import { lockedPageIds } from "../model/page-lock";
 import { parse, serializeChecked } from "../model/serialize";
@@ -482,7 +483,8 @@ class NotebookApiImpl implements NotebookApi {
 			if (skipped > 0 && options?.strict) {
 				throw new NotebookApiError("export-incomplete", `${skipped} PDF page(s) or image(s) could not be loaded, so no PDF was written.`, { skipped });
 			}
-			const bytes = pagesToPdf(pages, { paper: true, title: f.basename, images: (p) => images.get(p) ?? [] });
+			// 0.29 (#248): the notebook is not open in a view here, so its figure numbers are made known for the export.
+			const bytes = withFigureLabels(pages, () => pagesToPdf(pages, { paper: true, title: f.basename, images: (p) => images.get(p) ?? [] }));
 			const path = freePath(this.app, f, "", "pdf");
 			recordPluginWrite(this.app, [path]);
 			await this.app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);

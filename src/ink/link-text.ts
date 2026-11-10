@@ -2,6 +2,7 @@ import type { TextElement } from "../model/types";
 import type { BBox } from "./hit-test";
 import { estimateMeasure, layoutText, LINE_HEIGHT, textElementBounds, type MeasureText } from "./text-layout";
 import { parseLinks, shownText, type ShownText, type TextLink } from "./wikilink";
+import { figureIdOfTarget, figureNumber, hasFigureTokens } from "./figure-text";
 
 /**
  * Links written in text boxes (O8): `[[Note]]`, `[[Note|alias]]`, `[[Note#Heading]]`. Pure: no 'obsidian'. Nothing here is
@@ -119,7 +120,7 @@ function inside(b: BBox, x: number, y: number, tol: number): boolean {
 export function hitLink(elements: readonly unknown[], x: number, y: number, tol: number, measure: MeasureText = estimateMeasure): LinkHit | null {
 	for (let i = elements.length - 1; i >= 0; i--) {
 		const el = elements[i] as TextElement;
-		if (!el || el.type !== "text" || typeof el.text !== "string" || !el.text.includes("[[")) continue;
+		if (!el || el.type !== "text" || typeof el.text !== "string" || !(el.text.includes("[[") || hasFigureTokens(el.text))) continue;
 		const sole = soleLink(el.text);
 		if (sole) {
 			if (inside(textElementBounds(el, measure), x, y, tol)) return { element: el, link: sole, whole: true };
@@ -302,7 +303,9 @@ export function drawLinkedLines(
 		for (const run of line) {
 			const w = ctx.measureText(run.text).width;
 			if (run.link) {
-				const ok = resolves ? resolves(run.link.target) : true;
+				// 0.29 (#248): a figure reference is dimmed and dashed ("Fig. ?") when its figure is gone.
+				const figure = figureIdOfTarget(run.link.target);
+				const ok = figure !== null ? figureNumber(figure) !== null : resolves ? resolves(run.link.target) : true;
 				ctx.save();
 				ctx.globalAlpha = ok ? 1 : 0.45;
 				ctx.fillStyle = LINK_COLOR;

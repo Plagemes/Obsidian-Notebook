@@ -1,8 +1,10 @@
 // wave 0.9 (382): "Export as Markdown with page images", for people who do not use Obsidian. Pure: the Markdown text,
 // the file names (never an existing one) and the size of the page renders. The view side (view/export-markdown.ts)
 // draws the pages and writes the files through the vault API. No 'obsidian' import.
+import { resolveFigureMarkers } from "../ink/figure-text";
 import { outlineEntries } from "./bookmarks";
 import { orderedNotes, repliesOf } from "./comments";
+import { withFigureLabels } from "./figure-captions";
 import { equationNumbers } from "./math-elements";
 import type { CheckboxElement, EquationElement, NotebookMeta, Page, StickyElement, TextElement } from "./types";
 
@@ -120,7 +122,7 @@ export function pageTexts(page: Pick<Page, "elements">, numbers: ReadonlyMap<str
 		if (e.type === "checkbox") return `- [${e.checked === true ? "x" : " "}] ${escapeMarkdownLine(e.label ?? "")}`;
 		if (e.type === "equation") return equationMarkdown(e, numbers.get(e.id));
 		if (e.type === "sticky") return lines(e.text ?? "").map((l) => `> ${escapeMarkdownLine(l)}`).join("\n");
-		return lines(e.text).map(escapeMarkdownLine).join("  \n");
+		return lines(resolveFigureMarkers(e.text)).map(escapeMarkdownLine).join("  \n");
 	});
 }
 
@@ -174,6 +176,11 @@ export interface NotebookMarkdownInput {
  * starts with a heading (the bookmark's title, or "Page n"). Hidden ink is not part of it: the images are drawn without.
  */
 export function buildNotebookMarkdown(input: NotebookMarkdownInput): string {
+	// 0.29 (#248): a figure caption or reference is written with its current number.
+	return withFigureLabels(input.pages, () => notebookMarkdownOf(input));
+}
+
+function notebookMarkdownOf(input: NotebookMarkdownInput): string {
 	const title = input.title.replace(/\s+/g, " ").trim();
 	const out: string[] = [`# ${title === "" ? "Notebook" : title.replace(/^#+\s*/, "")}`];
 	const bookmarks = new Map(outlineEntries(input.pages, input.meta).map((e) => [e.pageId, e]));

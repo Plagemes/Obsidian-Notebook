@@ -4,8 +4,9 @@ import { penLinkCandidate, type PenLinkCandidate } from "../ink/bracket-detect";
 import type { BBox } from "../ink/hit-test";
 import {
 	completeLink, hitLink, inkLinkElement, linkTrigger, linktextOf, newNotePath, rankHeadings, rankNotes, setLinkResolver, soleLink,
-	parseLinks, type LinkTrigger, type NoteEntry, type TextLink,
+	parseLinks, shownText, type LinkTrigger, type NoteEntry, type TextLink,
 } from "../ink/link-text";
+import { figureIdOfTarget } from "../ink/figure-text";
 import { measureText } from "../ink/renderer";
 import { candidatePaths } from "../integration/links";
 import { AddElement, type Command } from "../model/history";
@@ -44,6 +45,8 @@ export interface PenLinksHost {
 	/** Colour for the labels of new links. */
 	labelColor(): string;
 	register(ref: EventRef): void;
+	/** 0.29 (#248): a tap on a figure reference goes to the figure (its element id). */
+	openFigure?(figureId: string): void;
 }
 
 /** Events a floating control must not leak to the page below: they would start strokes or pans. */
@@ -381,6 +384,12 @@ export class PenLinks {
 
 	/** Opens the note a link points to in a new tab; a note that does not exist is offered for creation. */
 	open(link: TextLink): void {
+		// 0.29 (#248): a figure reference jumps to the figure, it is not a note.
+		const figure = figureIdOfTarget(link.target);
+		if (figure !== null) {
+			this.host.openFigure?.(figure);
+			return;
+		}
 		const file = this.index.resolve(link.target);
 		if (!file) {
 			new UnresolvedLinkModal(this.host.app, link, () => this.createNote(link)).open();
@@ -415,7 +424,8 @@ export class PenLinks {
 		for (const el of elements) {
 			if (el.type !== "text") continue;
 			const sole = soleLink(el.text);
-			const link = sole ?? parseLinks(el.text)[0];
+			// 0.29 (#248): a figure reference counts as a link too (the contextual bar offers Open link).
+			const link = sole ?? parseLinks(el.text)[0] ?? shownText(el.text).links.find((l) => figureIdOfTarget(l.target) !== null);
 			if (link) return link;
 		}
 		return null;
