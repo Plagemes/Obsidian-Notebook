@@ -7,7 +7,7 @@
 import { t } from "../i18n";
 import { withFigureScope } from "../ink/figure-text";
 import { hasRedactions, headerAfterRedaction, redactPages } from "../ink/redact";
-import { cleanPagesForExport } from "../model/clean-export";
+import { cleanPagesForExport, STRUCK_ONLY } from "../model/clean-export";
 import { boxesOf, countBoxes, staleRedactionPages } from "../model/redact";
 import type { Page } from "../model/types";
 import type { ExportOptions } from "./export";
@@ -60,8 +60,6 @@ export function withRedaction(pages: readonly Page[], options: ExportOptions): {
 	return redactCleaned(pages, options);
 }
 
-/** The clean copy that only leaves out struck words (nothing of the study layers: the study tapes stay, as every export draws them). */
-export const STRUCK_ONLY = { markers: false, comments: false, collapsedStickies: false, tapes: false, struck: true } as const;
 
 function redactCleaned(pages: readonly Page[], options: ExportOptions): { pages: readonly Page[]; options: ExportOptions } {
 	const boxes = options.redact;

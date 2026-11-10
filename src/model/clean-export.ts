@@ -17,7 +17,20 @@
 import { withoutPinnedInk } from "../ink/attach";
 import { struckInk } from "../ink/strikethrough";
 import { pageCopy } from "./states";
-import type { Page, PageElement } from "./types";
+import type { Page, PageElement, Stroke } from "./types";
+
+/**
+ * Round-2 review (H2): the ink of the page before a clean copy left any of it out (struck words, the ink of a collapsed note), kept on the copy
+ * under a symbol (never saved, never drawn). The redaction decides on it what a box covers that is not drawn as ink: the typed label of a
+ * checkbox goes when a box touches its handwritten label (ink/redact.ts, P13), also when that handwriting was struck out and left out of the copy.
+ */
+const SOURCE_INK = Symbol("notebook.sourceInk");
+type Cleaned = Page & { [SOURCE_INK]?: readonly Stroke[] };
+
+/** The ink of `page` as it was before any clean copy left strokes out (`page.strokes` for a page that is not such a copy). */
+export function sourceInk(page: Page): readonly Stroke[] {
+	return (page as Cleaned)[SOURCE_INK] ?? page.strokes;
+}
 
 export interface CleanExportOptions {
 	/** Placeholders, questions, importance badges and homework markers. Default true. */
@@ -41,6 +54,12 @@ export const DEFAULT_CLEAN_OPTIONS: Required<CleanExportOptions> = { markers: tr
 
 /** v27 (#10): only the study tapes left out, nothing else (the hand-in PDF: what is handed in is the work, not the study layer). */
 export const TAPES_ONLY: CleanExportOptions = { markers: false, comments: false, collapsedStickies: false, openStickies: false, tapes: true, struck: false };
+
+/**
+ * 0.29 (#96): only the struck words left out, nothing of the study layers: the study tapes stay too, as every export draws them (round-2
+ * review H3: the same filter for every writer, the export dialog and the share sheet included).
+ */
+export const STRUCK_ONLY: CleanExportOptions = { markers: false, comments: false, collapsedStickies: false, openStickies: false, tapes: false, struck: true };
 
 /** The options with every missing choice at its default. */
 export function resolveCleanOptions(options: CleanExportOptions = {}): Required<CleanExportOptions> {
@@ -94,6 +113,7 @@ export function cleanPageForExport(page: Page, options: CleanExportOptions = {})
 	}
 	if (struck && dropStruck) next.strokes = next.strokes.filter((s) => !struck.has(s.id));
 	if (dropComments) delete next.comments;
+	if (next.strokes !== page.strokes) (next as Cleaned)[SOURCE_INK] = sourceInk(page);
 	return next;
 }
 
