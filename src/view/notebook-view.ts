@@ -233,6 +233,7 @@ import { GroupTools, type GroupHost } from "./group-tools";
 import { canGroup, expandToGroups, lockedElementsOf, selectableItems, strokePieces, unlockedElements } from "../model/groups";
 import { CommentTools, pdfCommentLabels, type CommentsHost } from "./comments-tools";
 import { LineHandleTools, type LineHandleHost } from "./line-handles";
+import { StrikeHide } from "./strike-hide"; // 0.29 (#96)
 import { equationNumbers } from "../model/math-elements";
 import { eraserRadiusPt, stepEraserSize, type FavouritePen } from "./favourites";
 import { PenControls, type PenStore } from "./pen-controls";
@@ -568,6 +569,8 @@ export class NotebookView extends FileView {
 	private comments: CommentTools | null = null;
 	/** 0.28 (#256): the "Reorder lines" mode (a handle at the left of every handwritten line of the page in view). */
 	private lineHandles: LineHandleTools | null = null;
+	/** 0.29 (#96): hides the words that are struck through (view-only; null before the view is open). */
+	private strikeHide: StrikeHide | null = null;
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
 	private colour: ColourTools | null = null;
@@ -926,6 +929,17 @@ export class NotebookView extends FileView {
 		this.groups = new GroupTools(this.groupHost());
 		this.comments = new CommentTools(this.commentsHost());
 		this.lineHandles = new LineHandleTools(this.lineHandleHost());
+		this.strikeHide = new StrikeHide({
+			pages: () => { const doc = this.shownDoc(); return doc ? this.renderPagesOf(doc) : []; },
+			renderer: () => this.renderer,
+			enabled: () => this.host.settings.hideStruck,
+			setEnabled: (on) => {
+				this.host.settings.hideStruck = on;
+				void this.host.saveSettings?.().catch((e) => console.error("[notebook] saving settings failed", e));
+			},
+			busy: () => this.active !== null || this.erasing !== null || this.drag !== null || this.shapeDrag !== null || !!this.controller?.drawing,
+			changed: () => this.refreshUi(),
+		});
 		this.penGestures = new PenGestureLayer({
 			stage: this.stage,
 			body: this.body,
@@ -1375,6 +1389,8 @@ export class NotebookView extends FileView {
 		this.comments = null;
 		this.lineHandles?.destroy();
 		this.lineHandles = null;
+		this.strikeHide?.destroy();
+		this.strikeHide = null;
 		this.stopNav?.();
 		this.stopNav = null;
 		this.stopMarks?.();
@@ -1861,6 +1877,7 @@ export class NotebookView extends FileView {
 			this.updateHistoryButtons();
 		}
 		this.meaningTools?.refresh();
+		this.strikeHide?.sync(); // 0.29 (#96): the "hide struck words" setting
 		this.renderer?.invalidate(); // 0.28 (#205): the box numbering settings change the labels
 		this.applyInput(settings);
 		refreshSlideBadges(this); // 0.14 slides: the badges setting
@@ -2740,6 +2757,7 @@ export class NotebookView extends FileView {
 			canPrint: canPrint(),
 			...(initialFormat ? { initialFormat } : {}),
 			pages: () => this.renderPagesOf(doc),
+			struckDefault: this.host.settings.exportHideStruck,
 			// 0.26 (#285): the redaction boxes of this notebook on this device, and the dialog where they are drawn.
 			redact: {
 				state: () => this.redactState(),
@@ -2902,6 +2920,7 @@ export class NotebookView extends FileView {
 		const modal = new SharePageModal({
 			app: this.app, file, pageCount: doc.pages.length, pageIndex: index, selection: crop,
 			pages: () => this.renderPagesOf(doc), media: this.media, options: () => this.exportOptions(),
+			struck: this.host.settings.exportHideStruck,
 		});
 		if (fromSelection) modal.startOnSelection();
 		modal.open();
@@ -3359,6 +3378,11 @@ export class NotebookView extends FileView {
 		return this.lineHandles;
 	}
 
+	/** 0.29 (#96): the "Hide struck words" switch of this view (null before the view is open). */
+	get strikeTools(): StrikeHide | null {
+		return this.strikeHide;
+	}
+
 	/** What the line handles need from the view. */
 	private lineHandleHost(): LineHandleHost {
 		return {
@@ -3675,7 +3699,10 @@ export class NotebookView extends FileView {
 		const shown = visibleStrokes(page.strokes, this.markers?.isRevealed(page) ?? false);
 		// 0.17 (#20): the ink a collapsed sticky note keeps hidden is not there to erase, select or offer.
 		const noteInk = hiddenStickyInk(page.elements);
-		const ink = noteInk ? shown.filter((s) => !noteInk.has(s.id)) : shown;
+		const unnoted = noteInk ? shown.filter((s) => !noteInk.has(s.id)) : shown;
+		// 0.29 (#96): struck words that are hidden are not there to erase, select or offer either (nothing is deleted by touching empty paper).
+		const struck = this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null;
+		const ink = struck ? unnoted.filter((s) => !struck.has(s.id)) : unnoted;
 		// 0.15 (241): a shown state moved some strokes away from where they were drawn: the ink tools leave them alone.
 		const moved = this.statesTools?.displaced(page);
 		return moved ? ink.filter((s) => !moved.has(s.id)) : ink;
@@ -4746,7 +4773,7 @@ export class NotebookView extends FileView {
 			states: { open: !!this.statesTools?.open },
 			comments: { panel: this.comments?.panelOpen ?? false, total: this.comments?.counts.total ?? 0, open: this.comments?.counts.open ?? 0, drawing: this.comments?.drawing ?? false },
 			toggles: { ruler: this.tools.ruler, penOnly: !this.host.settings.fingerDrawing, navigator: !!this.pageNav?.open, pageMode: !!this.pageMode?.enabled, spread: this.spreadOn, spreadRoom: canSpread(this.viewSize) || this.spreadOn, penGestures: this.penGestures?.mode === true, selectRectangle: this.tools.selectMode === "rectangle", highlighterArea: this.tools.highlighterArea, readOnly: this.userReadOnly,
-				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused, lineHandles: this.lineHandles?.active === true },
+				snapAvailable: this.host.settings.snapMode !== "off", snap: !this.snapPaused, lineHandles: this.lineHandles?.active === true, struckHidden: this.host.settings.hideStruck },
 			canPrint: canPrint(),
 			markers: {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
@@ -5210,6 +5237,7 @@ export class NotebookView extends FileView {
 		if (this.spreadOn && this.fitMode && this.layout && widthBefore > 0 && Math.abs(this.layout.width - widthBefore) > 0.5) this.refit(true);
 		this.pushRuler();
 		this.reading?.docChanged();
+		this.strikeHide?.docChanged();
 		this.pdfText?.docChanged();
 		this.display?.docChanged();
 		this.minimap?.invalidate();
@@ -6873,9 +6901,10 @@ export class NotebookView extends FileView {
 	private eraseArea(lasso: Lasso, page: Page): void {
 		const revealed = this.markers?.isRevealed(page) ?? false;
 		const spare = lasso.spare;
+		const struck = this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null; // 0.29 (#96): hidden struck words are not erased
 		const cmd = eraseAreaCommand(page, lasso.points, {
 			filter: this.eraseFilter(),
-			skip: revealed && !spare ? undefined : (s) => (!revealed && !!s.hidden) || !!spare?.has(s.id),
+			skip: revealed && !spare && !struck ? undefined : (s) => (!revealed && !!s.hidden) || !!spare?.has(s.id) || !!struck?.has(s.id),
 			includeElements: this.host.settings.eraseAreaElements,
 			measure: measureText,
 		});

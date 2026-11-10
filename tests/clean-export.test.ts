@@ -86,7 +86,7 @@ describe("cleanPageForExport", () => {
 	});
 
 	it("resolves defaults", () => {
-		expect(resolveCleanOptions()).toEqual({ markers: true, comments: true, collapsedStickies: true, openStickies: false });
+		expect(resolveCleanOptions()).toEqual({ markers: true, comments: true, collapsedStickies: true, openStickies: false, struck: false });
 	});
 
 	it("a clean page is drawn without the markers, and a page without study layers is byte-identical", () => {

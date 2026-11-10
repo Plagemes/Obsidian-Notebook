@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### strikedelete
+- **Strike-through as logical deletion (#96).** A roughly horizontal line drawn through the middle of a handwritten word marks that word as deleted. By default nothing changes: the word stays on the page, readable and struck through. *Hide struck words* (Settings > Reading, the *All actions* sheet, the command palette) hides the struck words and their lines in the view; switch it off and they are back.
+- **Nothing is stored, nothing is deleted.** The struck state is derived from the geometry of the ink every time (no change to the document format, still v26): undo of the line un-strikes the word, erasing the line brings the word back. A line under or over a word, the bar of a t or an A, a hyphen, a diagonal, a scribble and a line across a different line of text do not count; a long line over several words of one line strikes them all; a crossed-out single letter counts. Highlighter, marker, shape and invisible ink are never strike lines.
+- **Hidden means out of reach, not erased.** While hidden, struck ink is not drawn and the eraser, the lasso and the other ink tools skip it, so touching empty paper never deletes it. It is still in the file, in undo and in the page counts.
+- **Exports.** *Leave out struck-out words* in the export dialog (off by default, with or without *Clean copy*; the setting *Leave out struck-out words from exports* decides where it starts, and the share sheet follows the setting) goes through the clean export filter, so PDF, SVG, HTML, PNG images and print all honour it. The notebook is not changed.
+- **Cheap.** Detection runs only while the setting is on, a moment after a change, one page per idle slice and never while the pen writes; the renderer only reads a per-page cache. A page without a long straight stroke costs one pass over its points. Searches and the heading index do not ignore struck words yet.
+- **Code.** Pure `src/ink/strikethrough.ts` (reads strokes with `segmentText`, `StrikeCache`), `src/view/strike-hide.ts`, `CleanExportOptions.struck`, `Renderer.setStruckInk`, settings `hideStruck` and `exportHideStruck`, the action `toggle-hide-struck`. 19 new unit tests; harness `doc=strikedelete`.
+
 ## 0.28.0 — 2026-11-10
 
 Eight features: rotate and crop PDF pages (#76), per-page undo (#98, a setting, off by default), hand-drawn tables (#41), a paint bucket (#184), a line handle to reorder lines (#256), a live lecture mode (#132), numbered boxes with an index (#205) and actions suggested by the selection's geometry (#403). The notebook format moves to version 26 (PDF page rotation and crop): the migration from version 25 is automatic, and Notebook 0.27 and older open a v26 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).

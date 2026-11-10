@@ -14,6 +14,7 @@
  * Tags, the lock and the other page fields are not drawn, so they are left alone.
  */
 import { withoutPinnedInk } from "../ink/attach";
+import { struckInk } from "../ink/strikethrough";
 import { pageCopy } from "./states";
 import type { Page, PageElement } from "./types";
 
@@ -26,9 +27,14 @@ export interface CleanExportOptions {
 	collapsedStickies?: boolean;
 	/** Open sticky notes. Default false (an open note is part of the page). */
 	openStickies?: boolean;
+	/**
+	 * 0.29 (#96): handwritten words that are struck through, with the lines that strike them (derived from the geometry of the ink,
+	 * see `ink/strikethrough.ts`; nothing is stored). Default false: a struck word stays in the copy, struck through, as on the page.
+	 */
+	struck?: boolean;
 }
 
-export const DEFAULT_CLEAN_OPTIONS: Required<CleanExportOptions> = { markers: true, comments: true, collapsedStickies: true, openStickies: false };
+export const DEFAULT_CLEAN_OPTIONS: Required<CleanExportOptions> = { markers: true, comments: true, collapsedStickies: true, openStickies: false, struck: false };
 
 /** The options with every missing choice at its default. */
 export function resolveCleanOptions(options: CleanExportOptions = {}): Required<CleanExportOptions> {
@@ -37,6 +43,7 @@ export function resolveCleanOptions(options: CleanExportOptions = {}): Required<
 		comments: options.comments ?? DEFAULT_CLEAN_OPTIONS.comments,
 		collapsedStickies: options.collapsedStickies ?? DEFAULT_CLEAN_OPTIONS.collapsedStickies,
 		openStickies: options.openStickies ?? DEFAULT_CLEAN_OPTIONS.openStickies,
+		struck: options.struck ?? DEFAULT_CLEAN_OPTIONS.struck,
 	};
 }
 
@@ -44,7 +51,8 @@ export function resolveCleanOptions(options: CleanExportOptions = {}): Required<
 export function hasCleanableContent(page: Page, options: CleanExportOptions = {}): boolean {
 	const o = resolveCleanOptions(options);
 	if (o.comments && (page.comments?.length ?? 0) > 0) return true;
-	return (page.elements ?? []).some((el) => dropsElement(el, o));
+	if ((page.elements ?? []).some((el) => dropsElement(el, o))) return true;
+	return o.struck && struckInk(page.strokes).size > 0;
 }
 
 function dropsElement(el: PageElement, o: Required<CleanExportOptions>): boolean {
@@ -63,7 +71,10 @@ export function cleanPageForExport(page: Page, options: CleanExportOptions = {})
 	const elements = page.elements ?? [];
 	const kept = elements.filter((el) => !dropsElement(el, o));
 	const dropComments = o.comments && (page.comments?.length ?? 0) > 0;
-	if (kept.length === elements.length && !dropComments) return page;
+	// 0.29 (#96): the struck words are found in the ink as it is on the page (the strikes are ink too), then left out of the copy.
+	const struck = o.struck ? struckInk(page.strokes) : null;
+	const dropStruck = struck !== null && struck.size > 0;
+	if (kept.length === elements.length && !dropComments && !dropStruck) return page;
 	// A live view of a page with states keeps its id, size and background only through its prototype: `pageCopy` keeps them.
 	const next: Page = pageCopy(page);
 	if (kept.length !== elements.length) {
@@ -73,6 +84,7 @@ export function cleanPageForExport(page: Page, options: CleanExportOptions = {})
 		if (kept.length > 0) next.elements = kept;
 		else delete next.elements;
 	}
+	if (struck && dropStruck) next.strokes = next.strokes.filter((s) => !struck.has(s.id));
 	if (dropComments) delete next.comments;
 	return next;
 }

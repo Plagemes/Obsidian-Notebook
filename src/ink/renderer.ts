@@ -333,6 +333,8 @@ export class Renderer {
 	/** 0.22 (#101): view-only "filter by meaning": ink for which this says true is drawn faint (never saved; the static layer is redrawn once when it changes). */
 	private inkDim: ((stroke: Pick<Stroke, "color">) => boolean) | null = null;
 	private dimNow = false;
+	/** 0.29 (#96): view-only "hide struck words": the ids of the struck-through ink of a page (read from the view's cache, never computed here). */
+	private struckInk: ((page: Page) => ReadonlySet<string> | null) | null = null;
 	/** wave 0.9 (367): night mode, view-only. Colours are mapped when they are drawn; the document is never touched. */
 	private night = false;
 	private readonly nightInkColor = memoColors(nightInk);
@@ -551,6 +553,16 @@ export class Renderer {
 		if (hideAnnotations === this.hideAnnotations && backgroundAlpha === this.backgroundAlpha) return;
 		this.hideAnnotations = hideAnnotations;
 		this.backgroundAlpha = backgroundAlpha;
+		this.invalidate();
+	}
+
+	/**
+	 * 0.29 (#96), view-only: the ink `ids(page)` names (struck-through words and their lines) is not drawn. The lookup must be a cheap
+	 * read of a cache (it runs once per visible page per redraw); null: everything is drawn. The ink stays in the document.
+	 */
+	setStruckInk(ids: ((page: Page) => ReadonlySet<string> | null) | null): void {
+		if (ids === this.struckInk) return;
+		this.struckInk = ids;
 		this.invalidate();
 	}
 
@@ -1053,8 +1065,9 @@ export class Renderer {
 				const clips = graphClips(page.elements);
 				// v15: the ink a collapsed sticky note keeps hidden is not drawn (it comes back when the note is opened).
 				const noteInk = bare ? null : hiddenStickyInk(page.elements);
+				const struckInk = this.struckInk?.(page) ?? null;
 				for (const stroke of page.strokes) {
-					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal) || noteInk?.has(stroke.id)) continue;
+					if (bare || this.hidden?.has(stroke) || (stroke.hidden && !reveal) || noteInk?.has(stroke.id) || struckInk?.has(stroke.id)) continue;
 					try {
 						const b = this.boundsOf(stroke);
 						// Bounds are padded by half the width; pen ink reaches 0.8 × width at full pressure, and

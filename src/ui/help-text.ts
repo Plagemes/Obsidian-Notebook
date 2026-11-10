@@ -78,6 +78,8 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"page-tidy": "help.tidy",
 	// 0.28 linehandle (#256)
 	"page-reorder-lines": "help.reorderLines",
+	// 0.29 strikedelete (#96)
+	"toggle-hide-struck": "help.hideStruck",
 	// 0.26 smooth (#66)
 	"selection-smooth": "help.smooth",
 	"selection-straighten": "help.straighten",

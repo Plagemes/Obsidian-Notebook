@@ -4664,3 +4664,32 @@ Rules only, no AI. Chips appear in a row above the selection bar; they run exist
 | *Highlight* action (area behind the selection, one undo step) | yes | harness `doc=geosuggest` | | | |
 | Flashcards / a "Make card" action | no | | | | none exists in the plugin: the row offers *Insert into note* instead |
 | Region-to-region link | no | | | | the plugin has links from a selection to a note only: the arrow offers *Link to a note…* |
+
+### 0.29 — strikedelete: strike-through as logical deletion (roadmap #96; steps 3460-3479)
+
+A line through the middle of a handwritten word marks it as deleted. The word stays; the view can hide it; exports can leave it out. Nothing is stored: the state is read from the ink, the document format is unchanged (v26).
+
+3460. **Default.** Write a few words and draw one straight, slow line through the middle of one of them (pen, fountain pen or brush). Nothing changes: the word is still there, struck through. *Settings, Reading, Hide struck-out words* is off.
+3461. **Hide.** Turn on *Hide struck words* (All actions sheet, command palette, or Settings). About half a second after the pen lifts, the struck word and its line disappear; the rest of the line of writing does not move.
+3462. **Show again.** Turn it off: the word and its line are back exactly where they were. Open the file in a text editor or check the page info: no stroke was lost.
+3463. **What does not count.** Underline a word; draw a line above a word; cross the bar of a t or an A; draw a hyphen between words; draw a diagonal slash; scribble back and forth. With the switch on none of these hides a word. (A fast scribble still erases when *Scribble to erase* is on: that is unchanged.)
+3464. **Several words.** Draw one long line through three words of one line: all three go. A line through words of two different lines hides only the words it runs through the middle of.
+3465. **One letter.** Cross out a single letter with a line a little wider than the letter: it goes. The bar of a t inside a word does not hide the t.
+3466. **Undo / erase.** With the switch on, undo the strike line: the word comes back. Redo: it goes. Turn the switch off, erase the strike line with the eraser: the word stays and is no longer struck.
+3467. **Hidden ink is safe.** With the switch on, drag the stroke eraser and the area eraser over the empty spot where a struck word was, and lasso that spot: nothing is erased or selected. Switch it off: the word is still there.
+3468. **Pen safety.** Writing is not slower and no frame is dropped while the switch is on, on a page with a lot of ink; the struck word disappears only after you stop writing. Closing and reopening the notebook with the switch on hides the words again.
+3469. **Export.** Export, tick *Leave out struck-out words*, choose PDF: the PDF has no struck words and no strike lines. Repeat with PNG, SVG, HTML and Print. Without the tick (the default) the struck words are in the export, struck through. The notebook is unchanged afterwards.
+3470. **Clean copy.** *Clean copy* alone does not drop struck words; with both ticked it does both. *Settings, Reading, Leave out struck-out words from exports* on: the export dialog opens with the tick on, and *Share page…* leaves them out too.
+3471. **Phone and tablet, Italian, themes.** The two settings, the action in All actions (with the strikethrough icon) and the export row read well on a phone width, in Italian, in light and dark and with *Follow Obsidian theme*. Long-press the action in the sheet: the help bubble explains it.
+3472. **Limits to know.** The text boxes, equations and pictures are never "struck". Search, the headings index and the Markdown digest still see struck words. A struck word on a page with states follows the state shown.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Detection of struck words from geometry (true strike, underline/overline/short bar not counted, single letter, several words, slanted lines, right-to-left, not gluing words) | yes | `tests/strikethrough.test.ts` | | | |
+| Per-page cache, recomputed only on change | yes | `tests/strikethrough.test.ts` | | | |
+| Hide struck words in the view (setting, All actions toggle, command), eraser/lasso skip hidden ink | yes | harness `doc=strikedelete` | | | |
+| Clean-export filter `struck` (PDF, SVG, HTML, PNG, print, share) | yes | `tests/strikethrough.test.ts`, `tests/clean-export.test.ts`, harness `doc=strikedelete` | | | |
+| Export dialog switch, settings en + it, help text | yes | `tests/settings-schema.test.ts`, harness `doc=strikedelete` | | | |
+| Search / headings index / digest ignore struck words | no | | | | left out: not cheap without touching those readers |
+| Thumbnails, minimap and the zoomed-out levels hide struck words | no | | | | they draw the document as it is; only the page canvas and exports honour the switch |
+| Quick exports from a page's menu (without the dialog) | no | | | | they draw the page as it is; use the export dialog |

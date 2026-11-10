@@ -573,3 +573,7 @@ A quiet glass pill at the top right (`.notebook-plantasks`, 32px) on daily and w
 
 ### 0.28 — suggestion chips on the selection bar (#403)
 Up to two accent chips (`.notebook-suggest-chip`: icon and name, pill, `--nb-accent` on `--nb-accent-bg`) in their own row above the selection bar (`.notebook-context-suggest`, `order: 5` of the column-reverse bar). The rows below keep their slots; the bar's lift (`--nb-ctx-lift`) follows its height, so pills above move up. Chips are real buttons (`data-action`), disabled when the action is, with long-press help.
+
+## Struck-out words (0.29, roadmap #96)
+
+No new surface. One switch in *Settings, Reading* (*Hide struck-out words*, toggle) with a sibling for exports (*Leave out struck-out words from exports*, toggle), both plain `Setting` rows on the Reading section's existing rhythm; the same switch as a checked row of the *All actions* sheet (`toggle-hide-struck`, icon `strikethrough`, group View, a quick-slot candidate of low priority) and a command; a Notice says what happened. In the export dialog the row *Leave out struck-out words* sits under *Clean copy*, always visible (it works with or without the clean copy), and starts from the export setting. The page itself carries no overlay and no badge: a struck word is simply not drawn while the switch is on, and the eraser, lasso and other ink tools skip it so hidden ink can never be touched by accident. All strings in English and Italian; the action has a long-press help text.
