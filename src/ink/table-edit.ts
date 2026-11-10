@@ -43,7 +43,12 @@ export type TableEditRefusal =
 	/** The grown table, or the ink the insert pushes along, would end up outside the page. */
 	| "edge"
 	/** The ink the insert pushes along is, or would land, under a redaction box (or the boxes cannot be read). */
-	| "redacted";
+	| "redacted"
+	/**
+	 * Round-4 review (Y8): ink the insert would push lies under a locked study tape. A locked tape never moves, so the answer would come out
+	 * from under it (and the tape would cover the answer of the row before): refused until the tape is unlocked.
+	 */
+	| "tapeLocked";
 
 export type TableEditPlan = { ok: true; cmd: Command; strokes: Stroke[] } | { ok: false; reason: TableEditRefusal };
 
@@ -65,7 +70,8 @@ const shiftTape = (t: TapeElement, axis: "x" | "y", by: number): TapeElement => 
  * tape does not end up over the answer of the row before.
  */
 function tapesToShift(page: EditPage, ink: readonly Stroke[], pushed: ReadonlySet<string>): TapeElement[] {
-	// A locked tape never moves (0.20 rule): it stays where it is, like any locked element.
+	// A locked tape never moves (0.20 rule): it stays where it is, like any locked element (round-4 review Y8: an insert that would push ink
+	// from under a locked tape is refused before this, `tapeLocked`).
 	const tapes = (page.elements ?? []).filter((el): el is TapeElement => el.type === "tape" && el.locked !== true);
 	if (tapes.length === 0 || pushed.size === 0) return [];
 	return tapes.filter((tape) => {
@@ -111,8 +117,11 @@ export function planTableEdit(
 			const b = inkBox(s);
 			if (!insidePage(page, b.minX, b.minY, b.maxX, b.maxY)) return { ok: false, reason: "edge" };
 		}
+		// Round-4 review (Y8): a locked tape over ink the insert pushes stays where it is: refused, so no covered answer is uncovered.
+		const locked = (page.elements ?? []).filter((el): el is TapeElement => el.type === "tape" && el.locked === true);
+		if (locked.length > 0 && pushed.some((s) => strokeTouchesTapes(s, locked))) return { ok: false, reason: "tapeLocked" };
 		// Round-3 review (Z6): the tapes over the pushed answers go with them (same step), and obey the same edge and redaction rules.
-		tapes = tapesToShift(page, ink.filter((s) => !mine.has(s.id)), new Set(pushed.map((s) => s.id)));
+		tapes =tapesToShift(page, ink.filter((s) => !mine.has(s.id)), new Set(pushed.map((s) => s.id)));
 		const movedTapes = tapes.map((tp) => shiftTape(tp, axis, by));
 		for (const tp of movedTapes) {
 			if (!insidePage(page, tp.x, tp.y, tp.x + tp.width, tp.y + tp.height)) return { ok: false, reason: "edge" };

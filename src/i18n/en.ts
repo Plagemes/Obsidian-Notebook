@@ -5774,6 +5774,10 @@ export const en = {
 	// 0.29 review round 3
 	"tape.text.hidden": "This spot is under a covered study tape. Reveal the tape first (tap it with the pen), then write or edit text there.",
 	"merge.redacted": "it would move or stretch the background of a page with redaction boxes, so they would no longer cover what they cover. Remove or redo the boxes of that page first (Export… › Redact…).",
+	// 0.29 review round 4
+	"merge.redactUnreadable": "the redaction boxes stored on this device cannot be read, so a change that moves or stretches the background of a page cannot be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done).",
+	"redactmove.unreadable": "This change was not made: the redaction boxes stored on this device cannot be read, so a change that moves or stretches the background of a page cannot be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done).",
+	"table.noTapeLocked": "Ink this insert would push lies under a locked study tape, which stays where it is: the answer would come out from under it. Unlock the tape first.",
 } as const;
 
 export type MessageKey = keyof typeof en;
