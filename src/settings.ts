@@ -71,6 +71,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	lowLatencyInk: boolean;
 	/** 0.26 (#350): new strokes look the chosen width on screen at any zoom (stored width = chosen / zoom). Off = the width is in page units. */
 	penWidthFollowsZoom: boolean;
+	/** 0.28 (#184): the paint bucket fills with a translucent tint of the colour (on) or with the solid colour (off). */
+	bucketTint: boolean;
 	/** 0–10: strength of the adaptive position filter (one-euro.ts); 0 turns it off. */
 	stabilization: number;
 	/** Touch contacts larger than this (CSS px) are ignored as palms; 0 = off. */
@@ -365,6 +367,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	inkPrediction: false,
 	lowLatencyInk: false,
 	penWidthFollowsZoom: false,
+	bucketTint: true,
 	stabilization: 2,
 	palmContactPx: 0,
 	perfOverlay: false,
@@ -545,6 +548,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.inkPrediction === "boolean") s.inkPrediction = d.inkPrediction;
 	if (typeof d.lowLatencyInk === "boolean") s.lowLatencyInk = d.lowLatencyInk;
 	if (typeof d.penWidthFollowsZoom === "boolean") s.penWidthFollowsZoom = d.penWidthFollowsZoom;
+	if (typeof d.bucketTint === "boolean") s.bucketTint = d.bucketTint;
 	if (typeof d.stabilization === "number" && d.stabilization >= 0 && d.stabilization <= 10) s.stabilization = d.stabilization;
 	if (typeof d.palmContactPx === "number" && d.palmContactPx >= 0 && d.palmContactPx <= 200) s.palmContactPx = d.palmContactPx;
 	if (typeof d.perfOverlay === "boolean") s.perfOverlay = d.perfOverlay;

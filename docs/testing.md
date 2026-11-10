@@ -4424,3 +4424,31 @@ Settings, Writing: *Tasks on planner pages* (on by default). Implemented, not ve
 | Chip, list, open at line, incremental updates, setting, stacking | yes | harness `doc=plannertasks` and `doc=pillstack` | | | |
 | Tick a task from the chip | no | | | | read only by design (no safe block-id writer for ordinary notes) |
 | Overlay in exports | no | | | | left out in this wave |
+
+### 0.28 — bucket: paint bucket, fill a closed area (roadmap #184; steps 3220-3239)
+
+*Paint bucket* is the last button of the colour row of the pen, highlighter and shape options (also in the command palette and the All actions sheet). Settings, Writing: *Paint bucket fills as a tint* (on by default). Implemented, not verified on hardware. Needs a page with a few closed outlines drawn by hand (a box, a circle, a map outline) and one with a gap. No format change: the fill is an ordinary filled shape stroke (format 22) with a hairline.
+
+3220. **Fill a box.** Draw a closed box with the pen, pick a colour, open the pen options and tap *Paint bucket*; a notice says to tap inside an area. Tap inside the box: it fills with a light tint of the colour in use, behind your lines (the lines stay crisp on top). The button is one-shot: the mode ends with the fill.
+3221. **One step.** Undo once: the fill goes and nothing else; redo brings it back. The history panel calls the step *Area filled*.
+3222. **Gap.** Draw a box and leave a small gap (about the width of the pen) in one side. Fill it: the fill stays inside the box. Open a gap of a finger's width: the tap says the area is not closed (or too large) and adds nothing; the mode stays on so you can close the gap and tap again; Escape (or any other tool or button) ends it.
+3223. **On a line.** Tap exactly on a line: a notice tells you to tap inside the area. Tap a very small pocket (a couple of millimetres wide): "too small".
+3224. **Round and nested.** Fill a hand-drawn circle: the fill follows it (a few dozen points, no staircase). Draw a box with a smaller box inside it: tapping between them fills the outer area, tapping inside the inner one fills that with its own colour on top.
+3225. **Holes (known limit).** A shape inside the area that is itself closed (a ring, an island) gets coloured inside too: the fill is one polygon and a filled shape has no holes. Tap the ring's inside afterwards to give it its own colour. Text and strokes inside the area are drawn over the fill, as usual.
+3226. **Solid or tint.** Turn *Paint bucket fills as a tint* off: new fills are the solid colour (still behind the ink). Turn the pen *Opacity* down before filling: the fill is lighter.
+3227. **Behind everything.** Fill an area, then write across it: the new ink is on top. Select the fill with the lasso (tap inside it) and move or recolour it like any filled shape; the stroke eraser removes the fill (tap inside) without touching your lines.
+3228. **Large page, heavy page.** On an infinite page or a page with a lot of ink the fill still answers within about a second; if the page has too much ink it says so and adds nothing. Nothing freezes the pen.
+3229. **Page edge.** On a page with an outline that touches the page edge, tapping outside it says "not closed". A frame around the whole page says the area is as large as the page.
+3230. **Exports and reopening.** Export the page as PDF, PNG and SVG: the fill is there, under the lines. Close and reopen the notebook: the fills are still there and look the same.
+3231. **Locked page and read-only.** On a locked page, in read-only mode: the button is disabled or the step is refused with the usual notice.
+3232. **Long press and Italian.** A finger held on the button explains it; with the plugin in Italian the button, the notices, the setting and the history title are in Italian.
+3233. **Light, dark, phone.** The button sits in the colour row and fits on a phone; a fill reads on light and dark paper.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Paint bucket: low-resolution mask of the page ink (2 to 4 cells per pt, capped at 2 million cells; a window around the tap on a huge page), gap tolerance 1.5 pt, scanline flood with time budget, outline traced to a simplified polygon (at most 400 points) in page coordinates | yes | `tests/paint-bucket.test.ts`, timing `tests/paint-bucket.perf.ts` | | | |
+| Stored as a filled shape stroke (tool `shape`, `fill`, optional `fillTint` and `opacity`), hairline, inserted after the earlier fills and before all ink; one History step "Fill area" | yes | `tests/paint-bucket.test.ts`, harness `doc=bucket` | | | |
+| Refusals: not closed / too large, on a line, too small, as large as the page, too much ink; one notice, nothing added | yes | `tests/paint-bucket.test.ts`, harness `doc=bucket` | | | |
+| Action, colour-row button, command, long-press help, context rule, setting (tint or solid), en + it | yes | `tests/long-press-help.test.ts`, `tests/ui-registry.test.ts`, `tests/i18n.test.ts` | | | |
+| Holes: an inner closed shape is not left unfilled | no | | | | a shape fill is one nonzero polygon (no holes); documented limit |
+| Stay armed for several fills | no | | | | one-shot like the eyedroppers |

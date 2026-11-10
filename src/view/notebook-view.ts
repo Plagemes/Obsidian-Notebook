@@ -237,6 +237,8 @@ import { NotebookTabs } from "./notebook-tabs";
 import { DEFAULT_TOOLS, Toolbar, type ToolName, type ToolbarState } from "./toolbar";
 import { hasBackgrounds, hasPdfPages } from "./reading-logic";
 import { ColourTools, type PageColourContext, type PageInk } from "./colour-tools";
+import { PaintBucket, type BucketTarget } from "./paint-bucket";
+import { currentColour } from "../ink/colour";
 import { commandApplies, runViewAction, sizeName, type ActionArg } from "./view-actions";
 import { ViewUi } from "./view-ui";
 import { pageKindOf } from "../ui/page-kind";
@@ -545,6 +547,8 @@ export class NotebookView extends FileView {
 	private rulerGesture: RulerGesture | null = null;
 	private radial: PenRadial | null = null;
 	private colour: ColourTools | null = null;
+	/** 0.28 (#184): the paint bucket (null before the view is open). */
+	private bucket: PaintBucket | null = null;
 	/** Pen gestures (roadmap 139, view/pen-gestures.ts): gesture mode and the gesture in progress. */
 	private penGestures: PenGestureLayer | null = null;
 	/** Long-press trigger: the ink stroke that may turn into a gesture if the pen rests, and its timer. */
@@ -1120,6 +1124,19 @@ export class NotebookView extends FileView {
 			inkAt: (x, y) => this.inkAtPoint(x, y),
 			pageContext: () => this.paletteContext(), // 0.26 ctxpalette (#394)
 		});
+		this.bucket = new PaintBucket({
+			stage: this.stage,
+			editable: () => this.editable() && !this.controller?.drawing,
+			tool: () => this.tools.tool,
+			notify: (text) => showNotice(text, 3500),
+			target: (x, y) => this.bucketTarget(x, y),
+			look: () => ({
+				colour: currentColour(this.tools),
+				tint: this.host.settings.bucketTint,
+				opacity: normaliseOpacity(this.tools.tool === "highlighter" ? this.tools.highlighterOpacity : this.tools.penOpacity),
+			}),
+			add: (target, stroke, index) => this.addBucketFill(target, stroke, index),
+		});
 		this.lastTool.note(this.tools.tool);
 		this.gestures = new GestureInput(this.stage, {
 			policy: this.policy,
@@ -1300,6 +1317,8 @@ export class NotebookView extends FileView {
 		this.radial = null;
 		this.colour?.destroy();
 		this.colour = null;
+		this.bucket?.destroy();
+		this.bucket = null;
 		this.gestures?.destroy();
 		this.gestures = null;
 		this.rulerGesture?.destroy();
@@ -3368,6 +3387,35 @@ export class NotebookView extends FileView {
 		return this.colour;
 	}
 
+	/** The paint bucket of this view (null before the view is open). */
+	get paintBucket(): PaintBucket | null {
+		return this.bucket;
+	}
+
+	/** 0.28 (#184): the page under a screen point with the ink the bucket treats as walls; null off the pages. */
+	private bucketTarget(clientX: number, clientY: number): BucketTarget | null {
+		const layout = this.layout;
+		if (!layout) return null;
+		const r = this.stage.getBoundingClientRect();
+		const [dx, dy] = screenToPage(this.viewport, clientX - r.left, clientY - r.top);
+		const index = pageAt(layout, dx, dy, PAGE_TOLERANCE);
+		const page = index < 0 ? null : this.pageAtIndex(index);
+		const box = index < 0 ? null : layout.boxes[index];
+		if (!page || !box) return null;
+		const [x, y] = toPageLocal(box, dx, dy);
+		if (x < 0 || y < 0 || x > page.width || y > page.height) return null;
+		return { page, pageIndex: index, ink: this.inkInView(page), x, y };
+	}
+
+	/** 0.28 (#184): puts a fill at the back of the page's ink as one undo step ("Fill area"). */
+	private addBucketFill(target: BucketTarget, stroke: Stroke, index: number): boolean {
+		const cmd = new Batch("Fill area", [new AddStroke(target.page.id, freezeStroke(stroke), index)]);
+		if (!this.history.execute(cmd)) return false;
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+		return true;
+	}
+
 	/** 0.26 ctxpalette (#394): the page in view and its background for the colour picker's context rows (nothing is rendered for it). */
 	private paletteContext(): PageColourContext | null {
 		const page = this.session?.doc?.pages[this.currentPageIndex()];
@@ -5225,6 +5273,7 @@ export class NotebookView extends FileView {
 		this.syncZoomHint();
 		this.radial?.noteTools(state);
 		this.colour?.noteTools(state);
+		this.bucket?.noteTool(state.tool);
 		this.lastTool.note(state.tool);
 		// v10: an armed excerpt region is for the tool it was armed with.
 		if (state.tool !== before.tool) this.excerpts?.disarm();

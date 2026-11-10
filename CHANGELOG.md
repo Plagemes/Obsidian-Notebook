@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### bucket
+- **Paint bucket (#184).** A *Paint bucket* button at the end of the colour row (pen, highlighter and shape options; also a command and in the All actions sheet): tap it, then tap inside an area closed by ink and the area is filled with the colour in use, behind your lines. A light tint by default (Settings, Writing: *Paint bucket fills as a tint*; off = solid), with the pen's opacity. Gaps of about a pen width in the outline are closed; an outline that is not closed, a tap on a line, a tiny pocket, an area as large as the page or a page with too much ink gives one clear notice and adds nothing. One undo step ("Area filled"). The mode ends with each fill, like the eyedropper.
+- **Stays vector, no format change.** The ink of the page is drawn into a low-resolution mask (2 to 4 cells per pt, at most 2 million cells; a window around the tap on a huge page), the area under the tap is flooded against a time budget, and its outline is traced and simplified to a polygon of at most 400 points in page coordinates. That polygon is stored as an ordinary filled shape stroke (format 22 `fill`, `fillTint`, format 24 `opacity`) with a hairline, placed after the earlier fills and before all the ink, so every renderer and export already draws it under the lines. Known limit: the fill is one polygon without holes, so a closed shape inside the area is coloured inside too (tap it to give it its own colour).
+- **Code.** `src/ink/paint-bucket.ts` (pure: mask, dilation, flood, tracing, simplification), `src/view/paint-bucket.ts` (armed tap, mask drawing), registry action `paint-bucket`, `bucketTint` setting. Tests: `tests/paint-bucket.test.ts`, timing in `tests/paint-bucket.perf.ts`; harness `doc=bucket` (`dev/harness/bucket-check.ts`). Not verified on Android hardware.
+
 ## 0.27.0 — 2026-11-09
 
 Eight features: stroke taper for the pens, two pages side by side, headings when zoomed out, macros, a layout that follows the input device, workspace presets, suggested search terms for PDFs and tasks due on planner pages. The notebook format moves to version 25 (taper): the migration from version 24 is automatic, and Notebook 0.26 and older open a v25 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).

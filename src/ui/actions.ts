@@ -210,6 +210,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "colour-picker", label: "command.colourPicker", icon: "palette", group: "tool", surfaces: ["options", "radial", "palette"], priority: 45, scope: "view", command: true, keywords: "colour color custom hex hue recent" },
 	{ id: "colour-eyedropper", label: "command.colourEyedropper", icon: "pipette", group: "tool", surfaces: ["options", "radial", "palette"], priority: 44, scope: "view", command: true, keywords: "colour color pick sample" },
 	{ id: "style-eyedropper", label: "command.styleEyedropper", icon: "droplets", group: "tool", surfaces: ["options", "palette"], priority: 43, scope: "view", command: true, keywords: "style pen width tool copy format stroke" },
+	// 0.28 (#184): the paint bucket (view/paint-bucket.ts): a tap inside an area closed by ink fills it behind the ink; last button of the colour row.
+	{ id: "paint-bucket", label: "command.paintBucket", icon: "paint-bucket", group: "tool", surfaces: ["options", "palette"], priority: 42, scope: "view", command: true, keywords: "fill area colour color flood bucket closed shape diagram map riempi area secchiello" },
 	...[1, 2, 3, 4, 5, 6].map(favourite),
 
 	// --- history: fixed in the toolbar, also in the radial menu and as gestures.

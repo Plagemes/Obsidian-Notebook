@@ -5188,4 +5188,17 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"help.searchSuggest.outline": "Dall'indice del PDF.",
 	"help.searchSuggest.heading": "Da un titolo o un'etichetta di questo quaderno.",
 	"help.searchSuggest.text": "Una parola che usi spesso in questo quaderno.",
+	// 0.28 bucket (#184): il secchiello
+	"command.paintBucket": "Secchiello: riempi un'area chiusa dall'inchiostro",
+	"help.paintBucket": "Tocca dentro un'area chiusa dall'inchiostro per riempirla con il colore in uso, dietro l'inchiostro.",
+	"bucket.hint": "Tocca dentro un'area chiusa dall'inchiostro per riempirla.",
+	"bucket.open": "Quest'area non è chiusa, oppure è troppo grande. Chiudi il suo contorno e riprova.",
+	"bucket.onInk": "Hai toccato una linea. Tocca invece dentro l'area.",
+	"bucket.tooSmall": "Quest'area è troppo piccola per essere riempita.",
+	"bucket.tooBig": "Quest'area è grande quanto la pagina. Non è stato riempito nulla.",
+	"bucket.busy": "Questa pagina ha troppo inchiostro per trovare l'area in fretta. Non è stato riempito nulla.",
+	"bucket.noPage": "Tocca una pagina per riempire un'area.",
+	"histpanel.t.fillArea": "Area riempita",
+	"settings.bucketTint": "Il secchiello riempie con una tinta",
+	"settings.bucketTint.desc": "Attivo: tinta chiara, la pagina resta leggibile. Spento: colore pieno.",
 };

@@ -694,6 +694,11 @@ export class Toolbar {
 				const style = this.button(this.colorGroup, t("command.styleEyedropper"), () => this.runColourAction("style-eyedropper"));
 				setIcon(style, "droplets");
 				style.disabled = !this.editable;
+				// 0.28 (#184): the paint bucket fills the area under the next tap with the colour in use.
+				const bucket = this.button(this.colorGroup, t("command.paintBucket"), () => this.runColourAction("paint-bucket"));
+				setIcon(bucket, "paint-bucket");
+				bucket.dataset.help = "help.paintBucket";
+				bucket.disabled = !this.editable;
 			}
 		}
 

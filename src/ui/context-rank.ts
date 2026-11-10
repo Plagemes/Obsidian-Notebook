@@ -89,6 +89,9 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.27 (#170): a macro fits where its first step can start: one that starts on the selection comes first when something is selected (enough for "For this page");
 	// one that starts somewhere it cannot (nothing selected, a locked page) steps back; any other leans forward a little.
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
+	// 0.28 (#184): the paint bucket fills shapes: with the shape tool in hand it is the next thing wanted (enough for "For this page"); with a selection
+	// it steps back (the person is editing, not colouring); otherwise it only leans forward a little on a page that can be edited.
+	if (a.id === "paint-bucket") boost += hasSelection ? 0 : c.tool === "shape" ? HERE_MIN_BOOST + 2 : c.page && !c.page.locked ? 3 : 0;
 	return boost;
 }
 

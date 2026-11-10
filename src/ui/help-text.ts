@@ -6,6 +6,7 @@ import type { MessageKey } from "../i18n/en";
 export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	undo: "help.undo",
 	redo: "help.redo",
+	"paint-bucket": "help.paintBucket",
 	"nav-back": "help.navBack",
 	"nav-forward": "help.navForward",
 	"toggle-page-mode": "help.pageMode",
