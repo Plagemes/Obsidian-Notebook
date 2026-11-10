@@ -5777,7 +5777,7 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"zettel.suggest.linkFailed": "La scheda è stata creata, ma non è stato possibile aggiungere i collegamenti.",
 	"zettel.suggest.chosen": "Verrà collegata",
 	"settings.zettelLinkSuggest": "Suggerisci schede da collegare",
-	"settings.zettelLinkSuggest.desc": "Mentre crei una scheda, elenca le schede affini (tag e parole del titolo in comune) da collegare con un tocco. Legge solo la cache dei metadati.",
+	"settings.zettelLinkSuggest.desc": "Elenca schede affini mentre ne crei una, da collegare con un tocco.",
 	"settings.zettelLinkSuggestCount": "Suggerimenti mostrati",
 	"settings.zettelLinkSuggestCount.desc": "Quante schede affini elencare al massimo.",
 	"redactundo.unreadable": "{step} non eseguito: i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi nessun passo che sposta la scrittura può essere verificato. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto); il passo resta nella cronologia.",

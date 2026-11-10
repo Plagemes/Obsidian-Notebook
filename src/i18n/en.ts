@@ -5776,7 +5776,7 @@ export const en = {
 	"zettel.suggest.linkFailed": "The card was created, but its links could not be added.",
 	"zettel.suggest.chosen": "Will link",
 	"settings.zettelLinkSuggest": "Suggest cards to link",
-	"settings.zettelLinkSuggest.desc": "While you make a card, list related cards (shared tags and title words) you can link with one tap. Reads only the metadata cache.",
+	"settings.zettelLinkSuggest.desc": "List related cards while you make one, to link with a tap.",
 	"settings.zettelLinkSuggestCount": "Suggestions shown",
 	"settings.zettelLinkSuggestCount.desc": "How many related cards to list at most.",
 	"redactundo.unreadable": "{step} was not done: the redaction boxes stored on this device cannot be read, so no step that moves writing can be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done); the step stays in the history.",

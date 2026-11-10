@@ -155,7 +155,7 @@ export function linkWhenCreated(app: App, chosen: readonly CardRecord[], onDone:
 	};
 	timeout = window.setTimeout(stop, WATCH_MS);
 	ref = app.metadataCache.on("changed", (file, _data, cache) => {
-		const fm = cache.frontmatter as Record<string, unknown> | undefined;
+		const fm = cache.frontmatter;
 		if (before.has(file.path) || !isCardFrontmatter(fm)) return;
 		const made = readCard(file.path, fm);
 		if (!made) return;
