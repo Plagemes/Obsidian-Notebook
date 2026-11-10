@@ -42,18 +42,13 @@ export { redoSurvives, touchesPage, type PageRules, type PageStepResult, type Sc
 /** Commands that only change the content or the settings of ONE page, found by its id. */
 type PageLeaf =
 	| AddStroke | EraseStrokes | ReplaceStroke | AddElement | RemoveElement | ReplaceElement | ReorderLayer | SetPaper | SetPageSize | SetPageMargins
-	| SetPageBackground | SetPageInfinite | SetPageLocked | SetPageTags | SetPageTimes | SetPageComments | SetPageStates | UpdateCheckbox | SetMarkerDone | UpdateItems
-	| SetPdfView;
+	| SetPageBackground | SetPageInfinite | SetPageLocked | SetPageTags | SetPageTimes | SetPageComments | SetPageStates | UpdateCheckbox | SetMarkerDone | UpdateItems;
 
 function isPageLeaf(cmd: Command): cmd is PageLeaf {
 	return cmd instanceof AddStroke || cmd instanceof EraseStrokes || cmd instanceof ReplaceStroke || cmd instanceof AddElement || cmd instanceof RemoveElement
 		|| cmd instanceof ReplaceElement || cmd instanceof ReorderLayer || cmd instanceof SetPaper || cmd instanceof SetPageSize || cmd instanceof SetPageMargins
 		|| cmd instanceof SetPageBackground || cmd instanceof SetPageInfinite || cmd instanceof SetPageLocked || cmd instanceof SetPageTags || cmd instanceof SetPageTimes
-		|| cmd instanceof SetPageComments || cmd instanceof SetPageStates || cmd instanceof UpdateCheckbox || cmd instanceof SetMarkerDone || cmd instanceof UpdateItems
-		// 0.28 (#76): turning / cropping a PDF page rewrites that one page (background fields, size, margins, items, states, comments) and
-		// reads or writes no shared table (the PDF asset is only named, never added or changed), so it is page-local. The "all pages of this
-		// PDF" form is a Batch of one SetPdfView per page and so a multi-page, global step.
-		|| cmd instanceof SetPdfView;
+		|| cmd instanceof SetPageComments || cmd instanceof SetPageStates || cmd instanceof UpdateCheckbox || cmd instanceof SetMarkerDone || cmd instanceof UpdateItems;
 }
 
 /** The commands a step is made of: batches and the lock-exempt wrapper opened up. */
@@ -98,6 +93,11 @@ export function computeScope(cmd: Command): StepScope {
 			global = true;
 		} else if (leaf instanceof ReorderPages) {
 			all = true;
+			global = true;
+		} else if (leaf instanceof SetPdfView) {
+			// 0.28 (#76): turning / cropping a PDF page changes the geometry of the page (size, margins, every item) and, in its step, the excerpts
+			// and saved views of other pages that point into it; it is never undone out of order, whatever else the step holds (when in doubt: global).
+			pages.add(leaf.pageId);
 			global = true;
 		} else if (leaf instanceof SetMeta || leaf instanceof SetViews) {
 			global = true;

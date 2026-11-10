@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import { UpdateItems } from "../src/model/groups";
 import { SetPageComments } from "../src/model/comments";
 import { createDocument, createPage } from "../src/model/document";
-import { AddElement, AddStroke, Batch, History, SetMeta, type Command } from "../src/model/history";
+import { AddElement, AddStroke, Batch, History, ReplaceElement, SetMeta, type Command } from "../src/model/history";
+import { SetViews } from "../src/model/views";
 import { pageRules, pageScope } from "../src/model/page-undo";
 import { SetPdfView } from "../src/model/pdf-view-command";
 import { transformStroke } from "../src/ink/lasso";
@@ -13,7 +14,7 @@ import { IDENTITY, translate } from "../src/ink/transform";
 import { bucketStroke } from "../src/ink/paint-bucket";
 import { gridAt, insertRow, tableOfSelection } from "../src/ink/table";
 import { editTableCommand, insertTableCommand } from "../src/ink/table-edit";
-import type { AreaElement, NotebookDocument, Page, PageComment } from "../src/model/types";
+import type { AreaElement, NotebookDocument, Page, PageComment, PageElement } from "../src/model/types";
 import { line } from "./helpers";
 
 const NOW = new Date("2026-10-29T10:00:00.000Z");
@@ -42,10 +43,15 @@ function expectLocal(cmd: Command, pageId: string): void {
 }
 
 describe("per-page undo scopes of the 0.28 commands", () => {
-	it("pdfrotate: SetPdfView is a step of its one page and registers nothing in the shared tables", () => {
+	it("pdfrotate: SetPdfView changes the geometry of its page, so it is global (it names its page, blocks no other)", () => {
 		const { a } = setup();
-		expectLocal(new SetPdfView(a.id, plan(a), "rotate"), a.id);
-		expectLocal(new SetPdfView(a.id, plan(a), "crop"), a.id);
+		for (const kind of ["rotate", "crop"] as const) {
+			const scope = pageScope(new SetPdfView(a.id, plan(a), kind));
+			expect(scope.local).toBe(false);
+			expect(scope.all).toBe(false);
+			expect([...scope.pages]).toEqual([a.id]);
+			expect(scope.registers).toEqual([]);
+		}
 	});
 
 	it("pdfrotate: the all-pages form (one SetPdfView per page, in a Batch) is a global, multi-page step", () => {
@@ -53,6 +59,16 @@ describe("per-page undo scopes of the 0.28 commands", () => {
 		const scope = pageScope(new Batch("PDF page rotated", [new SetPdfView(a.id, plan(a)), new SetPdfView(b.id, plan(b))]));
 		expect(scope.local).toBe(false);
 		expect(scope.all).toBe(false);
+		expect([...scope.pages].sort()).toEqual([a.id, b.id].sort());
+	});
+
+	it("pdfrotate: the step with followers (excerpts on another page, saved views) is global and names every page it touches", () => {
+		const { doc, a, b } = setup();
+		const excerpt = { id: "ex1", type: "excerpt" } as unknown as PageElement;
+		const scope = pageScope(new Batch("PDF page rotated", [
+			new ReplaceElement(b.id, excerpt, { ...excerpt }), new SetPdfView(a.id, plan(a)), new SetViews(doc.views ?? [], doc.views ?? []),
+		]));
+		expect(scope.local).toBe(false);
 		expect([...scope.pages].sort()).toEqual([a.id, b.id].sort());
 	});
 
@@ -85,7 +101,7 @@ describe("per-page undo scopes of the 0.28 commands", () => {
 
 	it("livelecture: a bookmark (SetMeta) stays a step of the whole notebook", () => {
 		const { doc } = setup();
-		const scope = pageScope(new SetMeta(doc.meta, { ...doc.meta, bookmarks: [doc.pages[0]!.id] }));
+		const scope = pageScope(new SetMeta(doc.meta!, { ...doc.meta!, bookmarks: [doc.pages[0]!.id] }));
 		expect(scope.local).toBe(false);
 		expect(scope.pages.size).toBe(0);
 	});
@@ -135,27 +151,33 @@ describe("taper and opacity survive the 0.28 edits", () => {
 });
 
 describe("per-page undo on the 0.28 commands", () => {
-	it("undoes a PDF rotation on its page without touching what was written on another page", () => {
-		const { doc, history, a, b } = setup();
+	it("a PDF rotation is not undone from its page (global): the plain Undo takes it back, another page is untouched", () => {
+		const { history, a, b } = setup();
 		expect(history.execute(new AddStroke(a.id, line(0, 0, 50, 0), 0))).toBe(true);
 		expect(history.execute(new SetPdfView(a.id, plan(a)))).toBe(true);
 		expect(a.background).toEqual({ kind: "pdf", asset: "pdf1", page: 1, rotate: 90 });
 		expect(history.execute(new AddStroke(b.id, line(0, 0, 50, 0), 0))).toBe(true);
-		expect(history.undoOnPage(a.id).kind).toBe("done");
-		expect(a.background).toBeUndefined();
+		// page b still undoes its own stroke
+		expect(history.undoOnPage(b.id).kind).toBe("done");
+		expect(b.strokes).toHaveLength(0);
+		// page a: its newest step is the rotation, which is global
+		expect(history.undoOnPage(a.id).kind).toBe("global");
+		expect(a.background).toEqual({ kind: "pdf", asset: "pdf1", page: 1, rotate: 90 });
 		expect(a.strokes).toHaveLength(1);
-		expect(b.strokes).toHaveLength(1);
-		expect(doc.pages[1]).toBe(b);
+		expect(history.undo()).not.toBeNull();
+		expect(a.background).toBeUndefined();
+		expect(history.undoOnPage(a.id).kind).toBe("done");
+		expect(a.strokes).toHaveLength(0);
 	});
 
 	it("a bookmark is never undone from a page (it needs the plain history) and does not block the page's own steps", () => {
 		const { doc, history, a } = setup();
 		expect(history.execute(new AddStroke(a.id, line(0, 0, 50, 0), 0))).toBe(true);
-		expect(history.execute(new SetMeta(doc.meta, { ...doc.meta, bookmarks: [a.id] }))).toBe(true);
+		expect(history.execute(new SetMeta(doc.meta!, { ...doc.meta!, bookmarks: [a.id] }))).toBe(true);
 		expect(history.undoOnPage(a.id).kind).toBe("done");
 		expect(a.strokes).toHaveLength(0);
-		expect(doc.meta.bookmarks).toEqual([a.id]);
+		expect(doc.meta!.bookmarks).toEqual([a.id]);
 		expect(history.undoOnPage(a.id).kind).toBe("nothing");
-		expect(doc.meta.bookmarks).toEqual([a.id]);
+		expect(doc.meta!.bookmarks).toEqual([a.id]);
 	});
 });
