@@ -8,6 +8,7 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	redo: "help.redo",
 	"nav-back": "help.navBack",
 	"nav-forward": "help.navForward",
+	"box-index": "help.boxIndex",
 	"toggle-page-mode": "help.pageMode",
 	"toggle-spread": "help.spread",
 	"insert-image": "help.insertImage",

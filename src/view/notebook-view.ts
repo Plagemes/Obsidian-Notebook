@@ -172,7 +172,10 @@ import type { PdfActionHost } from "./pdf-actions";
 import { pickFile } from "./pick";
 import { pdfSideState, referencePane, referenceSlideOf, runPdfSideAction, type PageSyncHooks } from "./pdf-sync";
 import { attachSlideBadges, linkToSlide, refreshSlideBadges } from "./slide-ink";
-import { MarkerTools, translatedBoxLabel } from "./markers";
+import { MarkerTools } from "./markers";
+import { BoxNumbers } from "./box-numbers";
+import { BoxIndexModal } from "./box-index";
+import type { NumberedBox } from "../model/box-numbering";
 import { ExcerptTools } from "./excerpts";
 import { PdfTextTools } from "./pdf-text";
 import { PdfLinks } from "./pdf-links";
@@ -505,6 +508,14 @@ export class NotebookView extends FileView {
 	private readonly headingThumbs = new HeadingThumbs();
 	/** 0.20 (#102): headings are looked for in the background (idle), not when the outline or the map opens. */
 	private readonly headingWarm = new HeadingWarmer(this.outlineBuilder, () => this.session?.doc?.pages ?? [], () => this.host.settings.outlineHeadings);
+	/** 0.28 (#205): the derived numbers of the structured boxes ("Def. 3.2"); never stored. */
+	private readonly boxNumbers = new BoxNumbers({
+		pages: () => this.shownDoc()?.pages ?? [],
+		settings: () => this.host.settings,
+		headingIndex: () => this.outlineBuilder.headingIndex(),
+		tick: () => this.editTick,
+		redraw: () => this.renderer?.invalidate(),
+	});
 	/** Roadmap 50: the fast scrollbar with a page preview (view/scrollbar.ts). */
 	private scrollbar: FastScrollbar | null = null;
 	/** 0.17 (#173): the floating overview of the page in view (view/minimap.ts). */
@@ -1264,6 +1275,7 @@ export class NotebookView extends FileView {
 		this.mentions?.destroy();
 		this.mentions = null;
 		this.headingWarm.dispose();
+		this.boxNumbers.dispose();
 		for (const timer of [this.navTimer, this.thumbTimer, this.snapFlashTimer, this.heavyTimer]) if (timer !== null) window.clearTimeout(timer);
 		this.navTimer = this.thumbTimer = this.snapFlashTimer = this.heavyTimer = null;
 		this.pens?.destroy();
@@ -1788,6 +1800,7 @@ export class NotebookView extends FileView {
 
 	applySettings(settings: NotebookSettings): void {
 		this.meaningTools?.refresh();
+		this.renderer?.invalidate(); // 0.28 (#205): the box numbering settings change the labels
 		this.applyInput(settings);
 		refreshSlideBadges(this); // 0.14 slides: the badges setting
 		this.pressure.mode = settings.pressureMode;
@@ -2977,6 +2990,25 @@ export class NotebookView extends FileView {
 		}).open();
 	}
 
+	/** 0.28 (#205): the index of the numbered definitions and theorems (dialog, and a plugin-owned note next to the notebook). */
+	openBoxIndex(): void {
+		const file = this.file;
+		if (!this.shownDoc() || !file) return;
+		// A box under a redaction box is not listed or written; nothing is offered when the boxes cannot be read.
+		if (!this.redactedPages([])) return;
+		const items = (): readonly NumberedBox[] => {
+			const all = this.boxNumbers.itemsAlways();
+			const kept = this.redactedPages(this.shownDoc()?.pages ?? [], true);
+			if (!kept) return [];
+			const ids = new Set<string>();
+			for (const p of kept) for (const e of p.elements ?? []) if (e.type === "box") ids.add(e.id);
+			return all.filter((i) => ids.has(i.id));
+		};
+		new BoxIndexModal({
+			app: this.app, file, docId: this.shownDoc()?.id, items, goTo: (index, y) => this.scrollToPage(index, y),
+		}, this.host.settings.boxNumbering).open();
+	}
+
 	/** 0.18 (O7): the sheet of notes that link to the page in view. */
 	openMentions(): void {
 		this.mentions?.open();
@@ -3095,7 +3127,7 @@ export class NotebookView extends FileView {
 		const doc = this.session?.doc;
 		const header = this.exportHeader();
 		return {
-			hiddenInk: (page) => this.markers?.isRevealed(page) ?? false, boxLabel: translatedBoxLabel,
+			hiddenInk: (page) => this.markers?.isRevealed(page) ?? false, boxLabel: this.boxNumbers.label,
 			// v9: equations without a cached outline are typeset first; numbers count over the whole notebook.
 			prepare: (pages) => this.math?.prepareExport(pages) ?? Promise.resolve(),
 			...(doc ? { equationNumbers: equationNumbers(doc.pages) } : {}),
@@ -3617,7 +3649,7 @@ export class NotebookView extends FileView {
 			scale: () => this.viewport.scale,
 		});
 		this.renderer?.setHiddenInk((page) => this.markers?.isRevealed(page) ?? false);
-		this.renderer?.setBoxLabel(translatedBoxLabel);
+		this.renderer?.setBoxLabel(this.boxNumbers.label);
 	}
 
 	private pageCommand(cmd: Command, scrollTo: number, page: Page): void {
@@ -4967,6 +4999,7 @@ export class NotebookView extends FileView {
 
 	private onDocumentLoaded(doc: NotebookDocument | null, mode: SessionMode, problem: string | null): void {
 		this.headingWarm.touch(8000);
+		this.boxNumbers.reset();
 		this.active = null;
 		this.jumping = null;
 		this.erasing = null;
@@ -5103,7 +5136,7 @@ export class NotebookView extends FileView {
 		const header = this.exportHeader();
 		return {
 			file, doc, pages: [...this.renderPagesOf(doc)],
-			options: { boxLabel: translatedBoxLabel, equationNumbers: equationNumbers(doc.pages), ...(header ? { header } : {}) },
+			options: { boxLabel: this.boxNumbers.label, equationNumbers: equationNumbers(doc.pages), ...(header ? { header } : {}) },
 			stamp: () => this.editTick,
 			unsaved: () => from.dirty,
 		};
