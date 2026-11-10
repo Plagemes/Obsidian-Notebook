@@ -4475,6 +4475,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"merge.summary.viewsFull": "{count} viste salvate della copia non sono state aggiunte: questo quaderno ne ha già il massimo. La copia resta dov'è",
 	// 0.30 sections
 	"merge.summary.sections": "{count} sezioni aggiunte",
+	"merge.summary.sectionsDiffer": "{count} sezioni sono diverse nella copia (rinominate, ricolorate o su una pagina dove questo quaderno ne inizia già una): si tengono quelle di questo quaderno; le versioni della copia restano nella copia",
+	"merge.summary.sectionsFull": "{count} sezioni della copia non sono state aggiunte: questo quaderno ne ha già il massimo. La copia resta dov'è",
 	"histpanel.t.sections": "Sezioni cambiate",
 	"sections.title": "Sezioni",
 	"sections.subtitle": "Divisori colorati che dividono il quaderno, come le schede di un raccoglitore.",

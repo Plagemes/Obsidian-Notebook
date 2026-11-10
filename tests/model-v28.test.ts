@@ -19,7 +19,7 @@ import { applyRemoval } from "../src/model/notebook-transfer";
 import { CURRENT_VERSION, FORMAT_ID, SECTIONS_MAX, SECTION_TITLE_MAX, type NotebookDocument, type Section } from "../src/model/types";
 import {
 	isSectionColor, isStoredSectionTitle, makeSection, mergedSections, movedPages, newSectionId, normalizeSectionTitle, resolveSections, sameSections,
-	sectionAtIndex, sectionOfPage, sectionsAfterDelete, sectionsAfterReorder, sectionsForCopy, sectionsOf, sectionStartingAt, SetSections, setSections,
+	sectionAtIndex, sectionOfPage, sectionsAfterDelete, sectionsAfterReorder, sectionsForCopy, sectionsMergeReport, sectionsOf, sectionStartingAt, SetSections, setSections,
 	withSectionAdded, withSectionRecoloured, withSectionRemoved, withSectionRenamed,
 } from "../src/model/sections";
 import { getAt, parseRaw, setAt } from "./raw-json";
@@ -673,6 +673,50 @@ describe("format v28: merge, templates and transfers", () => {
 		const plan = planMerge(main, other);
 		expect(plan.summary.sectionsAdded).toBe(0);
 		expect(mergeCovers(main, other)).toBe(true);
+	});
+
+	it("review S2: counts the copy's sections that differ (renamed, recoloured, moved, or another one on a page main already starts)", () => {
+		const { main, other } = twin();
+		other.sections = [
+			section("a", "p2", { title: "Theirs" }), // renamed
+			section("b", "p5", { title: "Physics", color: "#16c2a3" }), // moved
+			section("x", "p4", { title: "Other on B's page" }), // blocked by B's anchor
+			section("z", "gone", { title: "Elsewhere" }), // a page the result lacks: not counted
+		];
+		const plan = planMerge(main, other);
+		expect(plan.summary.sectionsAdded).toBe(0);
+		expect(plan.summary.sectionsDiffer).toBe(3);
+		expect(plan.summary.sectionsFull).toBe(0);
+		expect(mergeChangeCount(plan.summary)).toBe(0);
+		expect(plan.command).toBeNull();
+		// The same look on the same page is not a difference.
+		const same = twin();
+		same.other.sections = [section("y", "p2", { title: "Chemistry" })];
+		expect(planMerge(same.main, same.other).summary.sectionsDiffer).toBe(0);
+		// Identical sections are not counted.
+		const twins = twin();
+		expect(planMerge(twins.main, twins.other).summary.sectionsDiffer).toBe(0);
+	});
+
+	it("review S8: counts the copy's sections that did not fit a full list, and the copy is not covered", () => {
+		const { main, other } = twin();
+		const full: Section[] = [...main.sections!];
+		for (let i = full.length; i < SECTIONS_MAX; i++) full.push(section(`d${i}`, `gone${i}`));
+		main.sections = full;
+		other.sections = [section("a", "p2", { title: "Chemistry" }), section("b", "p4", { title: "Physics", color: "#16c2a3" }), section("n", "p6", { title: "New" })];
+		const plan = planMerge(main, other);
+		expect(plan.summary.sectionsAdded).toBe(0);
+		expect(plan.summary.sectionsFull).toBe(1);
+		expect(plan.summary.sectionsDiffer).toBe(0);
+		expect(plan.command).toBeNull();
+		expect(mergeCovers(main, other)).toBe(false);
+	});
+
+	it("review S2: the report is pure and agrees with mergedSections", () => {
+		const main = [section("a", "p1")];
+		const other = [section("a", "p1", { color: "#f0565e" }), section("c", "p2"), section("d", "p9")];
+		const pages = new Set(["p1", "p2"]);
+		expect(sectionsMergeReport(main, other, mergedSections(main, other, pages), pages)).toEqual({ differ: 1, full: 0 });
 	});
 
 	it("a notebook template keeps its sections on the copies of their pages", () => {

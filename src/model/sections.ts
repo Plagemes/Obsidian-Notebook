@@ -350,6 +350,42 @@ export function mergedSections(main: readonly Section[], other: readonly Section
 	return out;
 }
 
+export interface SectionsMergeReport {
+	/**
+	 * Sections of the copy (on pages the result has) that the main notebook keeps its own version of: the same id with another title, colour
+	 * or page, or another section on a page where the main notebook already starts one (with another title or colour).
+	 */
+	differ: number;
+	/** Sections of the copy (on pages the result has) that were not added because the list is full (`SECTIONS_MAX`). */
+	full: number;
+}
+
+/**
+ * What `mergedSections` left out of the copy, for the merge summary (review S2, S8): sections the main notebook has its own version of, and
+ * sections that did not fit. `united` is what `mergedSections` returned for the same arguments.
+ */
+export function sectionsMergeReport(main: readonly Section[], other: readonly Section[], united: readonly Section[], pageIds: ReadonlySet<string>): SectionsMergeReport {
+	const mine = new Map(main.map((s) => [s.id, s]));
+	const at = new Map<string, Section>();
+	for (const s of main) if (!at.has(s.page)) at.set(s.page, s);
+	const have = new Set(united.map((s) => s.id));
+	let differ = 0;
+	let full = 0;
+	for (const s of other) {
+		if (!pageIds.has(s.page)) continue;
+		const own = mine.get(s.id);
+		if (own) {
+			if (!sameSections([own], [s])) differ++;
+			continue;
+		}
+		const there = at.get(s.page);
+		if (there) {
+			if (there.title !== s.title || there.color !== s.color) differ++;
+		} else if (!have.has(s.id)) full++;
+	}
+	return { differ, full };
+}
+
 // ------------------------------------------------------------------ the command
 
 function put(doc: NotebookDocument, sections: readonly Section[]): void {
