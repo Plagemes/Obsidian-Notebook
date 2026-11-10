@@ -4534,6 +4534,11 @@ export const en = {
 	"sections.notice.last": "This is the last section.",
 	"sections.notice.first": "This is the first section.",
 	"sections.notice.readOnly": "This notebook is read-only: sections cannot be changed now.",
+	"sections.notice.fullHidden": "This notebook already has {max} sections, the most it can keep; {count} of them start at pages it no longer has. Remove those from the Sections list to make room.",
+	"sections.notice.hiddenRemoved": "{count} sections without a page removed. Undo brings them back.",
+	"sections.notice.pageGone": "That page is no longer in the notebook: no section was made.",
+	"sections.hidden.note": "{count} sections start at pages this notebook no longer has: they show nowhere but still count toward the limit.",
+	"sections.hidden.remove": "Remove sections without a page ({count})",
 	// 0.23 exportarea
 	"exportArea.menu": "Export written area…",
 	"command.exportArea": "Export the written area as a transparent picture…",

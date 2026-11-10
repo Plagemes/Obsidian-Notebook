@@ -4976,6 +4976,9 @@ A section starts at a page and runs to the page before the next section; pages b
 | Navigator tab strip, dividers, colour edges | yes | harness `doc=sections` | | | |
 | Sections dialog and new / edit dialog (title, eight colours, preview) | yes | harness `doc=sections` | | | |
 | Actions: list, new, rename, recolour, delete, next, previous; help; context ranking | yes | `tests/sections-logic.test.ts`, `tests/ui-registry.test.ts` | | | |
+| One count for the 200 limit: sections that show nowhere (page gone, or a second one on a page) count; the dialog says how many and offers *Remove sections without a page* (one undo step) (review S4) | yes | `tests/sections-tools.test.ts` | | | the removal row only appears with such sections, so the harness never shows it |
+| The *New section* dialog keeps the page id: a page list that changes while it is open does not move the new section; a page that is gone makes none, with a notice (review S6) | yes | `tests/sections-tools.test.ts` | | | |
+| Known limits (review S5, S7, S9) | | | | | a page inserted in front of a section's first page joins the section before it (anchor model); deleting or moving a section's first page when the next page has an id over 200 characters (only from another tool) is refused by the save check; every 0.30 save writes version 28, so a synced device still on 0.29 opens the notebook read-only (with a backup) |
 | Drag a section's tab to reorder, or drag a divider to move a section's start | no | | | | not planned for 0.30: a section is moved by moving its pages |
 | Sections in exports (PDF outline, Markdown headings) | no | | | | to do |
 

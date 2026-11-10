@@ -4535,6 +4535,11 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"sections.notice.last": "Questa è l'ultima sezione.",
 	"sections.notice.first": "Questa è la prima sezione.",
 	"sections.notice.readOnly": "Questo quaderno è in sola lettura: ora non si possono modificare le sezioni.",
+	"sections.notice.fullHidden": "Questo quaderno ha già {max} sezioni, il massimo che può tenere; {count} iniziano da pagine che non ha più. Rimuovile dall'elenco Sezioni per fare spazio.",
+	"sections.notice.hiddenRemoved": "{count} sezioni senza pagina rimosse. Annulla le riporta.",
+	"sections.notice.pageGone": "Quella pagina non è più nel quaderno: nessuna sezione creata.",
+	"sections.hidden.note": "{count} sezioni iniziano da pagine che questo quaderno non ha più: non si vedono ma contano nel limite.",
+	"sections.hidden.remove": "Rimuovi le sezioni senza pagina ({count})",
 	// 0.23 exportarea
 	"exportArea.menu": "Esporta area scritta…",
 	"command.exportArea": "Esporta l'area scritta come immagine trasparente…",

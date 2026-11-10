@@ -116,6 +116,16 @@ export function resolveSections(pages: readonly { id: string }[], sections: read
 	});
 }
 
+/**
+ * The sections that show nowhere (review S4): dormant ones (their page is not in `pages`) and a second section on a page another one already
+ * starts. They still count toward `SECTIONS_MAX` (the list keeps them), so the UI offers to remove them.
+ */
+export function hiddenSections(pages: readonly { id: string }[], sections: readonly Section[]): Section[] {
+	if (sections.length === 0) return [];
+	const shown = new Set(resolveSections(pages, sections).map((r) => r.section));
+	return sections.filter((s) => !shown.has(s));
+}
+
 /** The section page `index` (0-based) belongs to, or null (before the first section, or no sections). */
 export function sectionAtIndex(resolved: readonly ResolvedSection[], index: number): ResolvedSection | null {
 	for (const r of resolved) if (index >= r.start && index <= r.end) return r;
@@ -229,7 +239,7 @@ export function sectionsAfterReorder(sections: readonly Section[], before: reado
 	let current: Section | null = null;
 	for (const id of after) {
 		const was = had.get(id) ?? null;
-		const want = !known.has(id) || moved.has(id) ? (was && whole.has(was.id) ? was : current) : was;
+		const want: Section | null = !known.has(id) || moved.has(id) ? (was && whole.has(was.id) ? was : current) : was;
 		if (runs.length === 0 || want !== current) runs.push({ section: want, first: id });
 		current = want;
 	}
