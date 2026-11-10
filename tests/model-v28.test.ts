@@ -156,12 +156,20 @@ describe("format v28: sections in the file", () => {
 			expect(r.doc.sections).toBeUndefined();
 			expect(r.dropped).toBe(1);
 		});
-		it("ignores unknown keys of an entry (tolerated, not written back)", () => {
-			const r = edited((raw) => setAt(raw, ["sections", 0, "icon"], "flask"));
+		it("review S3: leaves out unknown keys of an entry and counts them, so a backup is kept before the save that loses them", () => {
+			const r = edited((raw) => {
+				setAt(raw, ["sections", 0, "icon"], "flask");
+				setAt(raw, ["sections", 0, "note"], "x");
+			});
 			expect(r.ok).toBe(true);
 			if (!r.ok) return;
-			expect(r.dropped).toBeUndefined();
+			expect(r.doc.sections!.map((s) => s.id)).toEqual(["a", "b"]);
+			expect(r.dropped).toBe(1); // one per entry
 			expect(serialize(r.doc)).not.toContain('"icon"');
+			// The strict check of what the plugin holds never sees such a key.
+			expect(checkContent(r.doc)).toBeNull();
+			// A file without them reads with nothing dropped.
+			expect(parsed(serialize(sectionDoc())).dropped).toBeUndefined();
 		});
 	});
 });
