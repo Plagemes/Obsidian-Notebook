@@ -7,7 +7,10 @@
  * notebook: pages in order, then inside a page top to bottom and left to right (the same order as the figures gallery, `collectFigures`).
  * So adding a captioned figure above, deleting one, or moving a page renumbers everything that follows, and every reference follows.
  */
-import { addFigureLabelSource, captionText, DEFAULT_FIGURE_ABBR, figureTokens, hasFigureTokens, parseCaption, referenceToken } from "../ink/figure-text";
+import {
+	captionText, DEFAULT_FIGURE_ABBR, figureTokens, frozenFigureSource, hasFigureTokens, parseCaption, referenceToken, withFigureScope,
+	type FigureLabelSource,
+} from "../ink/figure-text";
 import { stampElement } from "../ink/date-stamp";
 import { LINE_HEIGHT, type MeasureText } from "../ink/text-layout";
 import { createId } from "./document";
@@ -113,20 +116,20 @@ export function brokenReferences(pages: readonly Page[], list: readonly Numbered
 	return referencesOf(pages).filter((r) => !known.has(r.figureId));
 }
 
+/** The numbers of `pages` as they are now, frozen: later edits (or the view closing) change none of the answers. Review fix (F3). */
+export function figureLabelSourceOf(pages: readonly Page[], abbr: string = DEFAULT_FIGURE_ABBR): FigureLabelSource {
+	return frozenFigureSource(numberMapOf(numberFigures(pages)), abbr);
+}
+
 /**
- * Runs `fn` with the numbers of `pages` known to every text that is shown meanwhile (exports of a notebook that is not open in a view).
- * `fn` must be synchronous: the numbers are forgotten when it returns.
+ * Runs `fn` with the numbers of `pages` as the ONLY ones known to every text that is shown meanwhile (outputs of a notebook that is not
+ * open in a view: companion note, Markdown, API PDF). Review fix (F1): the scope is exclusive, so an unknown figure is "Fig. ?" whatever
+ * other notebooks are open, and the output depends on the document alone. `fn` must be synchronous: the numbers are forgotten when it returns.
  */
-export function withFigureLabels<T>(pages: readonly Page[], fn: () => T, abbr: () => string = () => DEFAULT_FIGURE_ABBR): T {
+export function withFigureLabels<T>(pages: readonly Page[], fn: () => T, abbr: string = DEFAULT_FIGURE_ABBR): T {
 	const hasMarkers = pages.some((p) => (p.elements ?? []).some((e) => e.type === "text" && typeof e.text === "string" && hasFigureTokens(e.text)));
 	if (!hasMarkers) return fn();
-	const map = numberMapOf(numberFigures(pages));
-	const remove = addFigureLabelSource({ abbr, number: (id) => map.get(id) ?? null });
-	try {
-		return fn();
-	} finally {
-		remove();
-	}
+	return withFigureScope(figureLabelSourceOf(pages, abbr), fn);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

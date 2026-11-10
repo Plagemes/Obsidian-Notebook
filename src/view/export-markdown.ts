@@ -5,6 +5,7 @@
 import { normalizePath, TFile, TFolder, type App } from "obsidian";
 import { t } from "../i18n";
 import type { PdfCommentLabels } from "../ink/export-pdf";
+import type { FigureLabelSource } from "../ink/figure-text";
 import type { BoxLabel } from "../ink/marker-render";
 import { metaWithoutRedactedTitles } from "../ink/redact";
 import { buildNotebookMarkdown, planMarkdownFiles, type MarkdownDpi } from "../model/export-markdown";
@@ -37,6 +38,8 @@ export interface MarkdownExportOptions {
 	redactStale?: true;
 	/** Review fix (P10): boxes kept switched off (a quiet hint says so). */
 	redactOff?: number;
+	/** 0.29 (#248) review fix (F1): the figure numbers of the notebook, frozen when the export started (the page images and the redaction use them). */
+	figures?: FigureLabelSource;
 }
 
 /** The folder suggested for the export of `notebook`: next to it, named after it. */
@@ -84,13 +87,14 @@ export async function exportMarkdown(app: App, notebook: TFile, source: Notebook
 	const working = showNotice(t("export.working"), 0);
 	// 0.26 (#285): the text boxes, equations, notes and comments under a box are not written, nor are the bookmark titles of a covered page
 	// (nor, review fix P2, an excerpt of a covered region).
-	const covered = withRedaction(source.pages, options.redact ? { redact: options.redact } : {}).pages;
+	const covered = withRedaction(source.pages, { ...(options.redact ? { redact: options.redact } : {}), ...(options.figures ? { figures: options.figures } : {}) }).pages;
 	const doc: NotebookDocument = covered === source.pages ? source : { ...source, pages: [...covered], meta: metaWithoutRedactedTitles(source.meta, covered) ?? source.meta };
 	let written = 0;
 	const renderer = new PageImageRenderer(media, {
 		...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}),
 		...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 		...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
+		...(options.figures ? { figures: options.figures } : {}),
 	});
 	try {
 		const { dir, prefix, exists } = await prepareExportFolder(app, options.folder);
@@ -107,7 +111,7 @@ export async function exportMarkdown(app: App, notebook: TFile, source: Notebook
 			written++;
 		}
 		const text = buildNotebookMarkdown({
-			title: notebook.basename, pages: doc.pages, meta: doc.meta, images: names.images,
+			title: notebook.basename, pages: doc.pages, meta: doc.meta, images: names.images, ...(options.figures ? { figures: options.figures } : {}),
 			pageLabel: (n) => t("export.markdown.pageHeading", { n: String(n) }),
 			// 0.18 review (J6): comments, with the names of the devices that wrote them, leave the vault only when the setting asks for them.
 			...(options.comments ? { comments: { heading: t("comments.markdown.heading"), resolved: options.comments.resolved, sketch: options.comments.sketch, when: options.comments.when } } : {}),

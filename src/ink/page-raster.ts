@@ -9,6 +9,7 @@ import { defaultBoxLabel, drawBox, drawMarker, type BoxLabel } from "./marker-re
 import { drawHeader, type HeaderLayout } from "./page-header";
 import { PAPER_COLORS, paperPattern } from "./paper";
 import { drawElement, drawTextElement } from "./renderer";
+import { withFigureScope, type FigureLabelSource } from "./figure-text";
 import { drawEquation, drawGraph } from "./math-render";
 import { drawExcerpt } from "./excerpt-render";
 import { hiddenStickyInk } from "../model/sticky";
@@ -28,6 +29,8 @@ export interface RasterInputs {
 	hiddenInk?: boolean;
 	boxLabel?: BoxLabel;
 	layers?: ExportLayers;
+	/** 0.29 (#248) review fix (F1): the figure numbers of the notebook this page belongs to (absent: the ambient fallback). */
+	figures?: FigureLabelSource;
 	/** 0.15 (#75): the automatic page header or footer of the page (null: none). */
 	header?: HeaderLayout | null;
 	/** v9: numbers of the numbered equations (default: counted on this page). */
@@ -89,7 +92,9 @@ export function drawPageRaster(ctx: CanvasRenderingContext2D, page: Page, scale:
 		const noteInk = hiddenStickyInk(elements);
 		const numbers = inputs.equationNumbers ?? equationNumbers([page]);
 		for (const el of elements) if (el.type === "equation") drawEquation(ctx, el, numbers.get(el.id));
-		for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		withFigureScope(inputs.figures, () => {
+			for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		});
 		const clips = graphClips(inputs.clipElements ?? page.elements);
 		for (const stroke of page.strokes) {
 			if ((stroke.hidden && !inputs.hiddenInk) || noteInk?.has(stroke.id)) continue;

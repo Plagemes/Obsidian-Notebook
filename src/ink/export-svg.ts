@@ -17,6 +17,7 @@ import { inkAlpha, strokeSvgPath } from "./stroke-shape";
 import { opacityOf } from "../model/opacity";
 import { fillAlpha, fillPathD, isFilled } from "./shape-style";
 import { LINK_COLOR, lineRuns, shownText } from "./link-text";
+import { withFigureScope, type FigureLabelSource } from "./figure-text";
 
 /** Line widths of the paper pattern, pt. Shared with the PDF exporter. */
 export const PAPER_LINE_WIDTH: Readonly<Record<PaperLineKind, number>> = { minor: 0.3, major: 0.5, margin: 0.5 };
@@ -69,6 +70,8 @@ export interface SvgOptions {
 	equationOutline?: (el: EquationElement) => { polys: Polygon[]; sx: number; sy: number } | null;
 	/** wave 0.9 (381): "ink" has no white sheet (transparent), PDF/picture background or paper; "background" has no ink. Default "both". */
 	layers?: ExportLayers;
+	/** 0.29 (#248) review fix (F1): the figure numbers of the notebook (absent: the ambient fallback). */
+	figures?: FigureLabelSource;
 }
 
 /** Line height of text elements as a multiple of the font size (same as the PDF export). */
@@ -92,6 +95,11 @@ function headerTag(h: HeaderLayout): string {
 }
 
 export function pageToSvg(page: Page, options: SvgOptions = {}): string {
+	// 0.29 (#248) review fix (F1): the figure numbers of the notebook the page belongs to, never those of another open one.
+	return withFigureScope(options.figures, () => pageToSvgOf(page, options));
+}
+
+function pageToSvgOf(page: Page, options: SvgOptions): string {
 	const { width, height } = page;
 	const out: string[] = [];
 	out.push(

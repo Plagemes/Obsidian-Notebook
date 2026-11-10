@@ -121,7 +121,8 @@ import { policySettings } from "./input-settings";
 import { NotebookMedia, resolveAssetFile, storeAsset } from "./media";
 import { FiguresModal } from "./figures";
 import { FigureCaptionModal, FigureNumbers, FigureRefModal } from "./figure-captions";
-import { brokenReferences, captionBoxes, captionElement, markerSafeId, referenceElement, withCaptionWords } from "../model/figure-captions";
+import { withFigureScope } from "../ink/figure-text";
+import { brokenReferences, captionBoxes, captionElement, figureLabelSourceOf, markerSafeId, referenceElement, withCaptionWords } from "../model/figure-captions";
 import { collectFigures, type FigureEntry } from "../model/figures";
 import { HeavyPageBanner } from "./heavy-page-banner";
 import { ViewSyncSafety, type SyncSafetyService } from "./sync-safety";
@@ -865,6 +866,7 @@ export class NotebookView extends FileView {
 					render: {
 						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 						...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 					},
 					...(options.prepare ? { prepare: options.prepare } : {}),
 				};
@@ -991,6 +993,7 @@ export class NotebookView extends FileView {
 		this.symbols?.sync();
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
+		this.renderer.setFigureLabels(this.figureNumbers.liveSource); // 0.29 (#248) review fix (F1): this notebook's numbers only
 		this.mountMarkers();
 		this.mountStates();
 		this.lectureHeader = new LectureHeaderService({
@@ -2853,6 +2856,7 @@ export class NotebookView extends FileView {
 				render: {
 					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 				},
 			},
 		};
@@ -2934,6 +2938,7 @@ export class NotebookView extends FileView {
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 			},
 		});
 	}
@@ -2958,6 +2963,7 @@ export class NotebookView extends FileView {
 				render: {
 					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 				},
 				...(options.prepare ? { prepare: options.prepare } : {}),
 			}, request);
@@ -2997,6 +3003,7 @@ export class NotebookView extends FileView {
 					render: {
 						...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 						...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 					},
 				});
 			},
@@ -3056,6 +3063,7 @@ export class NotebookView extends FileView {
 				render: {
 					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 				},
 				...(options.prepare ? { prepare: options.prepare } : {}),
 			}, word);
@@ -3328,6 +3336,7 @@ export class NotebookView extends FileView {
 				render: {
 					...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 					...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 				},
 				...(options.prepare ? { prepare: options.prepare } : {}),
 			}, request),
@@ -3388,6 +3397,9 @@ export class NotebookView extends FileView {
 			...(this.host.settings.commentsInPdf ? { comments: pdfCommentLabels() } : {}),
 			// Review fix (U1): tells the excerpts of this notebook from those of another, also for the boxes of the export dialog.
 			...(doc ? { redactDoc: doc.id } : {}),
+			// 0.29 (#248) review fix (F1, F3): the figure numbers of this notebook as they are now, frozen: every writer resolves its pages
+			// against them (also across the awaits of a long export), never against another open view.
+			figures: this.figureNumbers.snapshot(),
 			...this.redactOptions(),
 		};
 	}
@@ -3687,6 +3699,7 @@ export class NotebookView extends FileView {
 			render: {
 				...(options.hiddenInk ? { hiddenInk: options.hiddenInk } : {}), ...(options.boxLabel ? { boxLabel: options.boxLabel } : {}),
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}), ...(options.header ? { header: options.header } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 			},
 			...(options.prepare ? { prepare: options.prepare } : {}),
 		}, request);
@@ -5508,7 +5521,8 @@ export class NotebookView extends FileView {
 		const header = this.exportHeader();
 		return {
 			file, doc, pages: [...this.renderPagesOf(doc)],
-			options: { boxLabel: this.boxNumbers.label, equationNumbers: equationNumbers(doc.pages), ...(header ? { header } : {}) },
+			// 0.29 (#248) review fix (F1, F3): the figure numbers of this document, frozen now (the view may be gone when the copy is built).
+			options: { boxLabel: this.boxNumbers.label, equationNumbers: equationNumbers(doc.pages), figures: figureLabelSourceOf(doc.pages, t("figcap.abbr")), ...(header ? { header } : {}) },
 			stamp: () => this.editTick,
 			unsaved: () => from.dirty,
 		};
@@ -5830,7 +5844,9 @@ export class NotebookView extends FileView {
 			if (!img) incomplete = true;
 			drawElement(ctx, el, img);
 		}
-		for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		withFigureScope(this.figureNumbers.liveSource, () => {
+			for (const el of elements) if (el.type === "text") drawTextElement(ctx, el);
+		});
 		if (incomplete) this.thumbPending.add(page.id);
 	}
 

@@ -5,6 +5,7 @@
 // writer that goes through here refuses to write (`RedactionUnavailableError`, with a message the reader can act on) instead of writing the
 // pages as they are. An excerpt of a region covered on another page is left out too (ink/redact.ts `coveredExcerpt`).
 import { t } from "../i18n";
+import { withFigureScope } from "../ink/figure-text";
 import { hasRedactions, headerAfterRedaction, redactPages } from "../ink/redact";
 import { boxesOf, countBoxes, staleRedactionPages } from "../model/redact";
 import type { Page } from "../model/types";
@@ -50,10 +51,13 @@ export function withRedaction(pages: readonly Page[], options: ExportOptions): {
 	const boxes = options.redact;
 	// 0.28 (#76), fail closed: a page turned or cropped after its boxes were drawn is never written (its boxes are where the old page was).
 	if (boxes && staleRedactionPages(pages, boxes).length > 0) throw new RedactionUnavailableError(true);
-	if (!boxes || countBoxes(boxes) === 0 || !hasRedactions(pages, boxes)) return { pages, options };
+	if (!boxes || countBoxes(boxes) === 0) return { pages, options };
+	// Review fix (F4): the boxes are worked out on the text as the file will show it ("Fig. 12", not "Fig. ?"): the same figure scope as the writer.
+	const covered = withFigureScope(options.figures, () => (hasRedactions(pages, boxes) ? redactPages(pages, boxes) : null));
+	if (!covered) return { pages, options };
 	const header = options.header;
 	return {
-		pages: redactPages(pages, boxes),
+		pages: covered,
 		options: { ...options, ...(header ? { header: (p: Page) => headerAfterRedaction(header(p), p) } : {}) },
 	};
 }

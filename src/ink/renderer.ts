@@ -14,7 +14,7 @@ import { drawEquation, drawGraph, type GraphPalette } from "./math-render";
 import { graphClips, strokeClip } from "./attach";
 import { equationNumbers } from "../model/math-elements";
 import { drawLinkedLines, shownText } from "./link-text";
-import { hasFigureTokens } from "./figure-text";
+import { hasFigureTokens, withFigureScope, type FigureLabelSource } from "./figure-text";
 import { layoutText, type MeasureText } from "./text-layout";
 import { strokeBounds, type BBox } from "./hit-test";
 import { memoColors, nightHighlighter, nightInk, nightLine, NIGHT_BACKGROUND_VEIL, NIGHT_HIGHLIGHTER_ALPHA, NIGHT_PAPER } from "./night";
@@ -334,6 +334,7 @@ export class Renderer {
 	/** 0.22 (#101): view-only "filter by meaning": ink for which this says true is drawn faint (never saved; the static layer is redrawn once when it changes). */
 	private inkDim: ((stroke: Pick<Stroke, "color">) => boolean) | null = null;
 	private dimNow = false;
+	private figureLabels: FigureLabelSource | null = null;
 	/** wave 0.9 (367): night mode, view-only. Colours are mapped when they are drawn; the document is never touched. */
 	private night = false;
 	private readonly nightInkColor = memoColors(nightInk);
@@ -552,6 +553,13 @@ export class Renderer {
 		if (hideAnnotations === this.hideAnnotations && backgroundAlpha === this.backgroundAlpha) return;
 		this.hideAnnotations = hideAnnotations;
 		this.backgroundAlpha = backgroundAlpha;
+		this.invalidate();
+	}
+
+	/** 0.29 (#248) review fix (F1): the source of the figure numbers of the notebook this renderer draws (null: the ambient fallback). */
+	setFigureLabels(source: FigureLabelSource | null): void {
+		if (source === this.figureLabels) return;
+		this.figureLabels = source;
 		this.invalidate();
 	}
 
@@ -1183,7 +1191,8 @@ export class Renderer {
 		}
 		for (const el of elements) {
 			if (el.type !== "text" || skip(el)) continue;
-			this.guarded(ctx, "text element", () => drawTextElement(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el));
+			// Review fix (F1): the figure numbers of THIS notebook only, never those of another open view.
+			this.guarded(ctx, "text element", () => withFigureScope(this.figureLabels, () => drawTextElement(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el)));
 		}
 	}
 

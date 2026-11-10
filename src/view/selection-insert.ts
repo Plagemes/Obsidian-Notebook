@@ -77,6 +77,7 @@ async function drawPicture(host: InsertHost): Promise<ArrayBuffer | null> {
 			...(options.header ? { header: options.header(host.page) } : {}),
 			...(options.layers ? { layers: options.layers } : {}),
 			...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
+			...(options.figures ? { figures: options.figures } : {}),
 		});
 		const cropped = cropSvg(svg, host.crop);
 		return cropped ? new TextEncoder().encode(cropped).buffer : null;

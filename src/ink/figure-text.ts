@@ -36,6 +36,25 @@ export function figureTokens(text: string): FigureToken[] {
 	return out;
 }
 
+/**
+ * Review fix (F2): `text` with the picture id of every marker that is in `ids` replaced by the new one (a copy of a captioned picture and
+ * of its caption, made in one operation, must caption the COPY). A marker whose picture is not in `ids` is left as it is (it keeps
+ * naming the original); so is a marker written inside a `[[link]]`. The same string back when nothing changes.
+ */
+export function remapFigureMarkers(text: string, ids: ReadonlyMap<string, string>): string {
+	if (ids.size === 0 || !hasFigureTokens(text)) return text;
+	const inLinks = [...text.matchAll(/\[\[[^[\]\n]*\]\]/g)].map((m) => [m.index, m.index + m[0].length] as const);
+	let out = "";
+	let at = 0;
+	for (const tok of figureTokens(text)) {
+		const to = ids.get(tok.id);
+		if (to === undefined || to === tok.id || !/^[A-Za-z0-9_-]{1,80}$/.test(to) || inLinks.some(([s, e]) => tok.start >= s && tok.start < e)) continue;
+		out += text.slice(at, tok.start) + (tok.kind === "cap" ? captionToken(to) : referenceToken(to));
+		at = tok.end;
+	}
+	return at === 0 ? text : out + text.slice(at);
+}
+
 export const captionToken = (id: string): string => `{{figcap:${id}}}`;
 export const referenceToken = (id: string): string => `{{figref:${id}}}`;
 
@@ -71,7 +90,13 @@ export interface FigureLabelSource {
 	number(id: string): number | null;
 }
 
+/** Review fix (F1): the ambient fallback, used only by a text drawn outside any scope (the most recently opened view answers). */
 const sources: FigureLabelSource[] = [];
+/**
+ * Review fix (F1): the scopes in force. A scope is EXCLUSIVE: while one is on top, only its source is asked, so a figure it does not know
+ * is "Fig. ?" and never gets the number another open notebook (a copy with the same element ids) gives it.
+ */
+const scopes: FigureLabelSource[] = [];
 
 /** Adds a source; the returned function removes it. */
 export function addFigureLabelSource(source: FigureLabelSource): () => void {
@@ -82,8 +107,40 @@ export function addFigureLabelSource(source: FigureLabelSource): () => void {
 	};
 }
 
+/**
+ * Runs `fn` with `source` as the only one that numbers figures (a renderer or an export of ONE notebook). `fn` must be synchronous: a
+ * writer that yields between pages enters the scope again for each chunk (`enterFigureScope`). No source: `fn` runs unchanged.
+ */
+export function withFigureScope<T>(source: FigureLabelSource | null | undefined, fn: () => T): T {
+	if (!source) return fn();
+	const leave = enterFigureScope(source);
+	try {
+		return fn();
+	} finally {
+		leave();
+	}
+}
+
+/** Puts `source` on top of the scopes; the returned function takes that very frame off again (also when others were pushed since). */
+export function enterFigureScope(source: FigureLabelSource): () => void {
+	const frame: FigureLabelSource = { abbr: () => source.abbr(), number: (id) => source.number(id) };
+	scopes.push(frame);
+	return () => {
+		const i = scopes.lastIndexOf(frame);
+		if (i >= 0) scopes.splice(i, 1);
+	};
+}
+
+/** A source that answers from the numbers (and the word) as they are now: later edits, or the view closing, change nothing. */
+export function frozenFigureSource(numbers: ReadonlyMap<string, number>, abbr: string): FigureLabelSource {
+	const copy = new Map(numbers);
+	return { abbr: () => abbr, number: (id) => copy.get(id) ?? null };
+}
+
 /** The current number of a figure (1-based), or null when no source knows it (a figure that was deleted, or a caption of nothing). */
 export function figureNumber(id: string): number | null {
+	const scope = scopes[scopes.length - 1];
+	if (scope) return scope.number(id);
 	for (let i = sources.length - 1; i >= 0; i--) {
 		const n = sources[i]!.number(id);
 		if (n !== null) return n;
@@ -94,6 +151,8 @@ export function figureNumber(id: string): number | null {
 export const DEFAULT_FIGURE_ABBR = "Fig.";
 
 export function figureAbbr(): string {
+	const scope = scopes[scopes.length - 1];
+	if (scope) return scope.abbr();
 	return sources[sources.length - 1]?.abbr() ?? DEFAULT_FIGURE_ABBR;
 }
 

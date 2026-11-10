@@ -1,7 +1,7 @@
 // wave 0.9 (382): "Export as Markdown with page images", for people who do not use Obsidian. Pure: the Markdown text,
 // the file names (never an existing one) and the size of the page renders. The view side (view/export-markdown.ts)
 // draws the pages and writes the files through the vault API. No 'obsidian' import.
-import { resolveFigureMarkers } from "../ink/figure-text";
+import { resolveFigureMarkers, withFigureScope, type FigureLabelSource } from "../ink/figure-text";
 import { outlineEntries } from "./bookmarks";
 import { orderedNotes, repliesOf } from "./comments";
 import { withFigureLabels } from "./figure-captions";
@@ -169,6 +169,11 @@ export interface NotebookMarkdownInput {
 	pageLabel: (pageNumber: number) => string;
 	/** v16: when given, the margin comments of every page are listed below its text. */
 	comments?: CommentLabels;
+	/**
+	 * 0.29 (#248) review fix (F1): the figure numbers of the notebook as the page images show them (frozen at the start of the export).
+	 * Absent: worked out from `pages`, and from nothing else (no other open notebook is asked).
+	 */
+	figures?: FigureLabelSource;
 }
 
 /**
@@ -177,6 +182,7 @@ export interface NotebookMarkdownInput {
  */
 export function buildNotebookMarkdown(input: NotebookMarkdownInput): string {
 	// 0.29 (#248): a figure caption or reference is written with its current number.
+	if (input.figures) return withFigureScope(input.figures, () => notebookMarkdownOf(input));
 	return withFigureLabels(input.pages, () => notebookMarkdownOf(input));
 }
 
