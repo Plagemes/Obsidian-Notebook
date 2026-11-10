@@ -148,7 +148,7 @@ export async function checkLinksuggest(api: LinksuggestApi): Promise<{ ok: boole
 		await frames(2);
 		add("Create returns the answer", answer?.title === "Memory techniques", JSON.stringify(answer?.title));
 		// review Z1: the chosen card travels with the answer; the service links it in the task that makes the note (no watcher)
-		add("the answer carries the chosen card, to link to the note made from it", answer?.links?.length === 1 && CARDS.some((c) => c.id === answer.links![0]!.id), JSON.stringify(answer?.links?.map((c) => c.id)));
+		add("the answer carries the chosen card, to link to the note made from it", answer?.links?.length === 1 && CARDS.some((c) => c.id === answer?.links?.[0]?.id), JSON.stringify(answer?.links?.map((c) => c.id)));
 		closeAll();
 
 		await seed(api, false);
