@@ -5304,6 +5304,19 @@ export const en = {
 	"help.table.even": "Make every row as tall and every column as wide as the others, keeping the table's outer size.",
 	"histpanel.t.tableInsert": "Table inserted",
 	"histpanel.t.tableEdit": "Table edited",
+	// 0.28 bucket (#184): the paint bucket
+	"command.paintBucket": "Paint bucket: fill an area closed by ink",
+	"help.paintBucket": "Tap inside an area closed by ink to fill it with the colour in use, behind the ink.",
+	"bucket.hint": "Tap inside an area closed by ink to fill it.",
+	"bucket.open": "That area is not closed, or it is too large. Close its outline and try again.",
+	"bucket.onInk": "You tapped on a line. Tap inside the area instead.",
+	"bucket.tooSmall": "That area is too small to fill.",
+	"bucket.tooBig": "That area is as large as the page. Nothing was filled.",
+	"bucket.busy": "This page has too much ink to find the area quickly. Nothing was filled.",
+	"bucket.noPage": "Tap on a page to fill an area.",
+	"histpanel.t.fillArea": "Area filled",
+	"settings.bucketTint": "Paint bucket fills as a tint",
+	"settings.bucketTint.desc": "On: a light tint, so the page stays readable. Off: the solid colour.",
 } as const;
 
 export type MessageKey = keyof typeof en;

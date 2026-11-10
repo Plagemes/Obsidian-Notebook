@@ -82,6 +82,7 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Edit stroke": ["histpanel.t.strokeChanged", "pencil"],
 	"Clean up strokes": ["histpanel.t.cleanUp", "sparkles"],
 	"Join broken strokes": ["histpanel.t.join", "link"],
+	"Fill area": ["histpanel.t.fillArea", "paint-bucket"],
 	"Align to baseline": ["histpanel.t.baseline", "baseline"],
 	"Tidy up page": ["histpanel.t.tidy", "align-left"],
 	"Move line": ["histpanel.t.moveLine", "arrow-up-down"],

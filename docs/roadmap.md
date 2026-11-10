@@ -385,7 +385,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
     - The result is inserted as text or as a formula element together with its expression.
     - Same safe math parser as the graphs (no code execution). Later (M5): handwritten calculations.
 183. **P3** Gentle snapping of handwriting to the lines while writing on ruled paper.
-184. **P2** Paint bucket: fill closed areas with colour (diagrams, maps).
+184. **P2** 🧪 Paint bucket: fill closed areas with colour (diagrams, maps). (0.28: tap inside an area closed by ink; the area is traced from a low-resolution mask and stored as a filled shape stroke behind the ink, tint or solid; gaps of a pen width are closed; no format change; holes are not left out.)
 185. **P1** 🧪 Erase area: draw an outline and everything inside disappears, in one gesture.
 186. **P2** 🧪 Copy a page into another notebook, with a link back to the source page.
 187. **P2** 🧪 Back-of-book index: mark terms or regions and an index page with references is generated. (0.21: *Add to index…* turns a lasso selection into an `#idx <term>` marker; *Back-of-book index…* lists the terms A-Z with page chips and writes `<Notebook> — Index.md`; no format change.)

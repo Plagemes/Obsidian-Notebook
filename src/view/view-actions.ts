@@ -128,6 +128,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"colour-picker": (v) => v.colourTools?.togglePicker(),
 	"colour-eyedropper": (v) => v.colourTools?.armEyedropper("colour"),
 	"style-eyedropper": (v) => v.colourTools?.armEyedropper("style"),
+	// 0.28 (#184): the paint bucket fills the area under the next tap
+	"paint-bucket": (v) => v.paintBucket?.arm(),
 	"undo": (v) => v.undo(),
 	"redo": (v) => v.redo(),
 	"history-panel": (v) => v.openHistoryPanel(),

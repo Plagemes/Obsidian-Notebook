@@ -233,6 +233,8 @@ const WRITING: SettingSpec[] = [
 	},
 	// 0.26 zoomwidth (#350): pen width relative to zoom
 	{ id: "penWidthFollowsZoom", section: "writing", order: 74, name: "settings.penWidthFollowsZoom", desc: "settings.penWidthFollowsZoom.desc", control: { type: "toggle" }, keywords: "pen width zoom thickness spessore penna ingrandimento" },
+	// 0.28 bucket (#184): the paint bucket's fill look (view/paint-bucket.ts)
+	{ id: "bucketTint", section: "writing", order: 75, name: "settings.bucketTint", desc: "settings.bucketTint.desc", control: { type: "toggle" }, keywords: "paint bucket fill area tint solid colour secchiello riempi area tinta" },
 	// 0.25 profiles (#219): Lecture / Study / custom writing profiles (view/writing-profiles.ts); the switcher is on the pen options chip row
 	{ id: "writingProfileOnLecture", section: "writing", order: 73, name: "settings.profileOnLecture", desc: "settings.profileOnLecture.desc", keywords: "profile lecture study fast careful switch pens stabilization paper profilo lezione studio", control: { type: "toggle" } },
 	{ id: "eraseAreaElements", section: "writing", group: ADVANCED, order: 10, name: "settings.eraseAreaElements", desc: "settings.eraseAreaElements.desc", control: { type: "toggle" } },
