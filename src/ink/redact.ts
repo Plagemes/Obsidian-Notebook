@@ -47,7 +47,7 @@ export const REDACT_COLOR = "#000000";
 /** Pt added around an element's area before it is tested against a box (the writers draw a little beyond the stored geometry). */
 const ELEMENT_PAD = 3;
 /** Pt added to the reach of a pen around a box: ink within it is cut as well, so no thickness of a line shows under the edge. */
-const INK_PAD = 1;
+export const INK_PAD = 1;
 /** Pixels added on every side of a burned rectangle (the JPEG of a background smears a little past an edge). */
 const BURN_PAD_PX = 2;
 

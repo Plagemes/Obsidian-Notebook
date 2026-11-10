@@ -5389,4 +5389,5 @@ export const it: Partial<Record<MessageKey, string>> = {
 	// 0.29 redactundo (review R3-1): un annulla o un ripeti che sposterebbe la scrittura da sotto un riquadro di oscuramento (o sotto uno)
 	"redactundo.undo": "Annulla non eseguito: sposterebbe la scrittura da sotto un riquadro di oscuramento (o sotto uno) in questa pagina. Prima rimuovi o rifai i riquadri della pagina; il passo resta nella cronologia.",
 	"redactundo.redo": "Ripeti non eseguito: sposterebbe la scrittura da sotto un riquadro di oscuramento (o sotto uno) in questa pagina. Prima rimuovi o rifai i riquadri della pagina; il passo resta nella cronologia.",
+	"redactundo.unreadable": "{step} non eseguito: i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi nessun passo che sposta la scrittura può essere verificato. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto); il passo resta nella cronologia.",
 };

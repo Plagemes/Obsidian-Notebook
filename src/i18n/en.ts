@@ -5388,6 +5388,7 @@ export const en = {
 	// 0.29 redactundo (review R3-1): an undo or a redo that would move writing out from under, or under, a redaction box
 	"redactundo.undo": "Undo was not done: it would move writing out from under a redaction box (or under one) on this page. Remove or redo the boxes on this page first; the step stays in the history.",
 	"redactundo.redo": "Redo was not done: it would move writing out from under a redaction box (or under one) on this page. Remove or redo the boxes on this page first; the step stays in the history.",
+	"redactundo.unreadable": "{step} was not done: the redaction boxes stored on this device cannot be read, so no step that moves writing can be checked against them. Open Export… › Redact… and press Reset redaction storage (or draw this notebook's boxes again and press Done); the step stays in the history.",
 } as const;
 
 export type MessageKey = keyof typeof en;
