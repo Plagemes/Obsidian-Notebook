@@ -1,12 +1,15 @@
 // Descriptive statistics and simple linear regression over plain numbers (0.29, roadmap #295). Pure: no DOM, no Obsidian.
 
+/** The minus signs typeset by keyboards and word processors (U+2212, U+2012, U+2013), built from code points so the source stays plain ASCII. */
+const MINUS_SIGNS = new RegExp("[" + String.fromCharCode(0x2212, 0x2012, 0x2013) + "]", "g");
+
 /**
  * Reads one cell of a table as a number, or null when it is not one. Accepts a decimal comma ("3,5"), the typographic minus, spaces or a
  * non-breaking space as thousands separators and, when both separators appear, takes the LAST one as the decimal mark ("1.234,5" and
  * "1,234.5" are both 1234.5). A lone comma is a decimal mark ("1,234" is 1.234). Anything else ("abc", "3 kg", "") is not a number.
  */
 export function parseCellNumber(raw: string): number | null {
-	let s = raw.replace(/[\s  ]/g, "").replace(/[−‒–]/g, "-");
+	let s = raw.replace(/\s/g, "").replace(MINUS_SIGNS, "-");
 	if (s === "") return null;
 	const comma = s.lastIndexOf(",");
 	const dot = s.lastIndexOf(".");

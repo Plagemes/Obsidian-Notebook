@@ -12,7 +12,7 @@ describe("parseCellNumber", () => {
 		expect(parseCellNumber(" 3.5 ")).toBe(3.5);
 		expect(parseCellNumber("3,5")).toBe(3.5);
 		expect(parseCellNumber("-2")).toBe(-2);
-		expect(parseCellNumber("−2,5")).toBe(-2.5);
+		expect(parseCellNumber(String.fromCharCode(0x2212) + "2,5")).toBe(-2.5);
 		expect(parseCellNumber("+4")).toBe(4);
 		expect(parseCellNumber(".5")).toBe(0.5);
 		expect(parseCellNumber("1e3")).toBe(1000);
