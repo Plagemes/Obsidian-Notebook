@@ -21,6 +21,7 @@ import { PromptModal } from "../library/library-modals";
 import { allTemplates, applyTemplate, findTemplate, templateTags, type CardTemplate } from "./card-templates";
 import { cardFileName, idSet, isUntitledCardName, localDate, nameSuffixFor, nextCardId } from "./ids";
 import { CardListModal, CardModal, ConfirmCardsModal, type CardAnswer, type CardListItem } from "./modals";
+import { linkOutcome, resolveChosen } from "./link-suggest";
 import { LocalPages } from "./local-pages";
 import { CardOverlay, type OverlaySource } from "./overlay";
 import { idsInNames, isSequenceId, neighbours, sequenceCardId, type SequenceKind } from "./sequence";
@@ -487,29 +488,111 @@ export class ZettelService implements OverlaySource {
 		this.askAndCreate(ctx.file, ctx.doc, index, null);
 	}
 
-	private askAndCreate(file: TFile, doc: NotebookDocument, pageIndex: number, region: Region | null, sequence?: SequenceRequest): void {
+	/**
+	 * The card dialog, then the card. `newPageIn`: the card goes on a NEW page added right after the page at `pageIndex` of that
+	 * view (a follow-up / branch of a card that is the whole page itself, review Z3); the page is added only when the dialog is
+	 * answered, so cancelling leaves the notebook as it was.
+	 */
+	private askAndCreate(file: TFile, doc: NotebookDocument, pageIndex: number, region: Region | null, sequence?: SequenceRequest, newPageIn?: NotebookView): void {
 		const page = doc.pages[pageIndex];
 		let preview: string | null = null;
 		try {
-			preview = page ? renderThumbnail(page, 360, region ? { region } : {}) || null : null;
+			preview = page && !newPageIn ? renderThumbnail(page, 360, region ? { region } : {}) || null : null;
 		} catch {
 			preview = null;
 		}
+		// Review Z2: while the dialog is open the page counts as being made, so the slip-box does not give it a card of its own.
+		const pageKey = page && !region && !newPageIn ? `${doc.id}/${page.id}` : null;
+		// Held only when no other dialog or write already holds it (that one releases it).
+		const held = pageKey !== null && !this.creating.has(pageKey) ? pageKey : null;
+		if (held) this.creating.add(held);
 		// Z7: the id of a follow-up / branch card follows from the card it continues, so the dialog does not ask for a parent.
 		const luhmann = this.settings.zettelIdScheme === "luhmann" && !sequence;
 		new CardModal(this.app, { luhmann, preview, templates: this.cardTemplates() }, (answer) => {
-			if (!answer) return;
-			void this.enqueue(async () => {
-				const note = await this.writeCard(file, doc, pageIndex, region, answer, undefined, sequence);
-				if (!sequence) {
-					new Notice(t("zettel.created", { name: note.basename }));
+			if (!answer) {
+				if (held) this.creating.delete(held);
+				return;
+			}
+			let target = { doc, pageIndex };
+			let key: string | null = held;
+			if (newPageIn) {
+				const added = this.addPageForCard(newPageIn, doc, page);
+				if (!added) {
+					new Notice(t("sequence.cannotAddPage"));
 					return;
 				}
-				const made = this.cards.get(note.path);
-				await this.linkSequence(sequence, made ?? null);
-				new Notice(t("sequence.created", { id: made?.id ?? note.basename, origin: sequence.origin.id, kind: t(sequence.kind === "branch" ? "sequence.kind.branch" : "sequence.kind.followUp") }));
+				target = added;
+				key = `${added.doc.id}/${added.doc.pages[added.pageIndex]!.id}`;
+				this.creating.add(key);
+			}
+			void this.enqueue(async () => {
+				try {
+					// Review Z2: the page may have got its card while the dialog was open (sync, another dialog).
+					const pageNow = target.doc.pages[target.pageIndex];
+					const existing = !region && pageNow ? this.cardsOfFile(file, target.doc.id).find((c) => c.pageId === pageNow.id && !c.region) : undefined;
+					if (existing) {
+						new Notice(t("sequence.pageHasCard", { id: existing.id }));
+						return;
+					}
+					const note = await this.writeCard(file, target.doc, target.pageIndex, region, answer, undefined, sequence);
+					if (!sequence) {
+						new Notice(t("zettel.created", { name: note.basename }));
+						await this.linkChosen(note, answer.links);
+						return;
+					}
+					const made = this.cards.get(note.path);
+					const linked = await this.linkSequence(sequence, made ?? null);
+					new Notice(t("sequence.created", { id: made?.id ?? note.basename, origin: sequence.origin.id, kind: t(sequence.kind === "branch" ? "sequence.kind.branch" : "sequence.kind.followUp") }));
+					if (!linked) new Notice(t("zettel.suggest.linkFailed"));
+					await this.linkChosen(note, answer.links);
+				} finally {
+					if (key) this.creating.delete(key);
+				}
 			});
 		}).open();
+	}
+
+	/**
+	 * Adds a page right after `after` in the view (same size and paper) for a new card and marks it as being made, so the
+	 * slip-box leaves it alone. Null when the notebook could not be changed.
+	 */
+	private addPageForCard(view: NotebookView, doc: NotebookDocument, after: NotebookDocument["pages"][number] | undefined): { doc: NotebookDocument; pageIndex: number } | null {
+		const before = view.document;
+		const index = before && after ? before.pages.findIndex((p) => p.id === after.id) : -1;
+		if (!before || before.id !== doc.id || index < 0) return null;
+		const count = before.pages.length;
+		view.addPageAfter(index);
+		const now = view.document;
+		const added = now && now.id === doc.id && now.pages.length === count + 1 ? now.pages[index + 1] : undefined;
+		if (!now || !added) return null;
+		this.localPages.know(now.id, [added.id]);
+		return { doc: now, pageIndex: index + 1 };
+	}
+
+	/**
+	 * Z5 (review Z1): links the note just made to the cards chosen in its dialog. Called inside the queued task that wrote
+	 * the note, with the exact note `writeCard` returned, so the links can never land on another card. Says what happened.
+	 */
+	private async linkChosen(note: TFile, chosen: readonly CardRecord[] | undefined): Promise<void> {
+		if (!chosen || chosen.length === 0) return;
+		const made = this.cards.get(note.path);
+		if (!made) {
+			new Notice(t("zettel.suggest.linkFailed"));
+			return;
+		}
+		let linked = 0;
+		let failed = 0;
+		// The chosen card may have been renamed or moved since the dialog opened: its id still finds it.
+		for (const other of resolveChosen(chosen, this.cards, this.cardsById(), made.path)) {
+			try {
+				if (await this.linkCards(made, other)) linked++;
+			} catch (e) {
+				failed++;
+				console.error("[notebook] zettel: link", e);
+			}
+		}
+		const outcome = linkOutcome(linked, failed);
+		new Notice(outcome === "failed" ? t("zettel.suggest.linkFailed") : outcome === "none" ? t("zettel.suggest.linkedNone") : outcome === "one" ? t("zettel.suggest.linkedOne") : t("zettel.suggest.linked", { n: String(linked) }));
 	}
 
 	// ------------------------------------------------------------------- sequences (Z7)
@@ -638,10 +721,6 @@ export class ZettelService implements OverlaySource {
 		if (!page) return;
 		const mine = this.cardsOfFile(ctx.file, ctx.doc.id);
 		const pageCard = region ? undefined : mine.find((c) => c.pageId === page.id && !c.region);
-		if (pageCard) {
-			new Notice(t("sequence.pageHasCard", { id: pageCard.id }));
-			return;
-		}
 		const numbered = (cards: CardRecord[]) => cards.filter((c) => isSequenceId(c.id) && !c.orphaned);
 		const onPage = numbered(mine.filter((c) => c.pageId === page.id));
 		const pool = origin ? [origin] : onPage.length > 0 ? onPage : numbered(mine);
@@ -649,19 +728,27 @@ export class ZettelService implements OverlaySource {
 			new Notice(t("sequence.noOrigin"));
 			return;
 		}
-		this.chooseCard(pool, (from) => this.askAndCreate(ctx.file, ctx.doc, pageIndex, region, { kind, origin: from }));
+		// Review Z3: the page in view is already a card (every page of a slip-box is), so the new card gets a new page after it.
+		const newPage = pageCard ? view : undefined;
+		this.chooseCard(pool, (from) => this.askAndCreate(ctx.file, ctx.doc, pageIndex, region, { kind, origin: from }, newPage));
 	}
 
-	/** Links a new follow-up / branch card with the card it continues (both notes get the link), when the setting is on. */
-	private async linkSequence(sequence: SequenceRequest, made: CardRecord | null): Promise<void> {
-		if (!made || !this.settings.zettelSequenceLink) return;
-		const origin = this.cards.get(sequence.origin.path);
-		if (!origin) return;
+	/**
+	 * Links a new follow-up / branch card with the card it continues (both notes get the link), when the setting is on.
+	 * False only when the link was wanted and could not be made (the card is kept; the hygiene report offers the link).
+	 */
+	private async linkSequence(sequence: SequenceRequest, made: CardRecord | null): Promise<boolean> {
+		if (!this.settings.zettelSequenceLink) return true;
+		if (!made) return false;
+		// The card it continues may have been renamed or moved while the dialog was open: its id still finds it.
+		const origin = this.cards.get(sequence.origin.path) ?? this.cardsById().get(sequence.origin.id.toLowerCase());
+		if (!origin) return false;
 		try {
 			await this.linkCards(origin, made);
+			return true;
 		} catch (e) {
-			// The card is made and kept; only its link is missing (the hygiene report offers it).
 			console.error("[notebook] zettel: could not link the sequence", e);
+			return false;
 		}
 	}
 
@@ -798,7 +885,12 @@ export class ZettelService implements OverlaySource {
 	createCardFor(file: TFile, doc: NotebookDocument, pageId: string, region: Region | null, answer: CardAnswer, transcription?: string): Promise<TFile | null> {
 		const index = doc.pages.findIndex((p) => p.id === pageId);
 		if (index < 0) return Promise.resolve(null);
-		return this.enqueue(() => this.writeCard(file, doc, index, region, answer, transcription));
+		return this.enqueue(async () => {
+			const note = await this.writeCard(file, doc, index, region, answer, transcription);
+			// Review Z1: the links chosen in the dialog go to this very note, in this very task (nothing is linked when no note is made).
+			await this.linkChosen(note, answer.links);
+			return note;
+		});
 	}
 
 	/** Z9: the card templates on offer (built-in, then the person's own), in the plugin language. */

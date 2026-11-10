@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundCandidates, clampCount, hasSignal, rankLinkSuggestions, type LinkCandidate } from "../src/zettel/link-suggest";
+import { boundCandidates, clampCount, hasSignal, linkOutcome, rankLinkSuggestions, resolveChosen, type LinkCandidate } from "../src/zettel/link-suggest";
 import { readZettelSettings } from "../src/zettel/settings";
 
 const card = (path: string, title: string, tags: string[] = [], mtime = 0): LinkCandidate => ({ path, id: path, title, tags, mtime });
@@ -52,5 +52,40 @@ describe("link suggestions (Z5)", () => {
 		expect(readZettelSettings({}).zettelLinkSuggest).toBe(true);
 		expect(readZettelSettings({ zettelLinkSuggest: false, zettelLinkSuggestCount: 50 })).toMatchObject({ zettelLinkSuggest: false, zettelLinkSuggestCount: 8 });
 		expect(readZettelSettings({ zettelLinkSuggestCount: "3" }).zettelLinkSuggestCount).toBe(4);
+	});
+
+	it("reads the sequence-link setting: a boolean only, on by default (review Z13)", () => {
+		expect(readZettelSettings({}).zettelSequenceLink).toBe(true);
+		expect(readZettelSettings({ zettelSequenceLink: false }).zettelSequenceLink).toBe(false);
+		expect(readZettelSettings({ zettelSequenceLink: true }).zettelSequenceLink).toBe(true);
+		expect(readZettelSettings({ zettelSequenceLink: "no" }).zettelSequenceLink).toBe(true);
+		expect(readZettelSettings({ zettelSequenceLink: 0 }).zettelSequenceLink).toBe(true);
+	});
+});
+
+describe("linking the chosen cards to the note just made (review Z1)", () => {
+	const rec = (path: string, id: string) => ({ path, id });
+	const a = rec("Cards/1 A.md", "1");
+	const b = rec("Cards/2 B.md", "2");
+	const byPath = new Map([a, b].map((c) => [c.path, c]));
+	const byId = new Map([a, b].map((c) => [c.id, c]));
+
+	it("resolves each chosen card, never the new note itself, and drops doubles", () => {
+		const made = rec("Cards/3 C.md", "3");
+		expect(resolveChosen([a, b, a, made], new Map([...byPath, [made.path, made]]), new Map([...byId, ["3", made]]), made.path)).toEqual([a, b]);
+	});
+
+	it("finds a card that was renamed meanwhile by its id, and drops one that is gone", () => {
+		const renamed = rec("Moved/1 A.md", "1");
+		expect(resolveChosen([a, rec("Cards/9 Gone.md", "9")], new Map([[renamed.path, renamed]]), new Map([["1", renamed]]), "x.md")).toEqual([renamed]);
+		expect(resolveChosen([rec("Old/1.md", "1A")], new Map(), new Map([["1a", rec("New/1a.md", "1a")]]), "x.md")).toEqual([rec("New/1a.md", "1a")]);
+	});
+
+	it("links nothing when nothing was chosen, and says what happened", () => {
+		expect(resolveChosen([], byPath, byId, "x.md")).toEqual([]);
+		expect(linkOutcome(0, 0)).toBe("none");
+		expect(linkOutcome(1, 0)).toBe("one");
+		expect(linkOutcome(2, 0)).toBe("many");
+		expect(linkOutcome(2, 1)).toBe("failed");
 	});
 });
