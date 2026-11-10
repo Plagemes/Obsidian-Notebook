@@ -52,7 +52,7 @@ describe("detectStrikes", () => {
 		const text = writeLine("a", "hello brave new world", { x: 40, baseY: BASE });
 		const s = strikeWord(text, 2);
 		const back = line("strike", s.points[s.points.length - 1]![0], s.points[0]![1], s.points[0]![0], s.points[0]![1]);
-		expect(idsOf(detectStrikes([back, ...text]))).toEqual(["2"]);
+		expect(idsOf(detectStrikes([...text, back]))).toEqual(["2"]);
 		expect(idsOf(detectStrikes([...text.slice().reverse(), s]))).toEqual(["2"]);
 	});
 
@@ -79,6 +79,30 @@ describe("detectStrikes", () => {
 		const r = detectStrikes([...text, long]);
 		expect(idsOf(r).sort()).toEqual(["1", "2", "3"]);
 		expect(r.words.every((w) => w.strikeIds.join() === "strike")).toBe(true);
+	});
+
+	it("strikes only what was written before the line: a line first and the word after it strikes nothing", () => {
+		const text = writeLine("a", "hello brave new world", { x: 40, baseY: BASE });
+		const strike = strikeWord(text, 1);
+		expect(detectStrikes([strike, ...text]).words).toHaveLength(0);
+		// A line between the words and the rest: only the strokes before it are struck.
+		const word1 = text.filter((s) => s.id.split(":")[1] === "1");
+		const rest = text.filter((s) => s.id.split(":")[1] !== "1");
+		const r = detectStrikes([...rest, ...word1, strike]);
+		expect(idsOf(r)).toEqual(["1"]);
+	});
+
+	it("a new word written on the place of a struck one afterwards stays visible", () => {
+		const text = writeLine("a", "hello brave new world", { x: 40, baseY: BASE });
+		const b = wordBoxes(text)[1]!;
+		const strike = strikeWord(text, 1);
+		const fresh = writeLine("n", "brave", { x: b.minX, baseY: BASE });
+		const first = detectStrikes([...text, strike]);
+		expect(first.ink.has("strike")).toBe(true);
+		const r = detectStrikes([...text, strike, ...fresh]);
+		for (const s of fresh) expect(r.ink.has(s.id), s.id).toBe(false);
+		// Whatever is still struck is only what was written before the line.
+		for (const id of r.ink) expect(id.startsWith("n:"), id).toBe(false);
 	});
 
 	it("does not glue two words together because a line passes over both", () => {
