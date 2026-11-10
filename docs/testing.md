@@ -4424,3 +4424,39 @@ Settings, Writing: *Tasks on planner pages* (on by default). Implemented, not ve
 | Chip, list, open at line, incremental updates, setting, stacking | yes | harness `doc=plannertasks` and `doc=pillstack` | | | |
 | Tick a task from the chip | no | | | | read only by design (no safe block-id writer for ordinary notes) |
 | Overlay in exports | no | | | | left out in this wave |
+
+### 0.28 — pdfrotate: rotate and crop imported PDF pages, document format 26 (roadmap #76; steps 3160-3179)
+
+Manual steps (real Obsidian; nothing here is verified on Android). You need a notebook with several pages of one PDF (a slide deck), some ink and a text box on the first one, and a second notebook with a locked PDF page. **New data format v26:** a page's PDF background may carry `rotate` and `crop`; a notebook that uses them is not readable by 0.27 and older (it opens read-only there). Keep a copy of the notebook you try this on.
+
+3160. **Rotate right.** On a PDF page open the page sheet (or *All actions*): *Rotate PDF page right*. The PDF turns a quarter turn clockwise, the page becomes landscape, and your ink, highlights and boxes stay on the same words (the ink turns with the page; a text box keeps its orientation and only its centre moves).
+3161. **Rotate left, undo, redo.** *Rotate PDF page left* from the turned page brings it back upright exactly. *Undo* after a turn puts back the same page; *Redo* turns it again. The history panel names the step *PDF page rotated* (*Pagina PDF ruotata*).
+3162. **Four turns.** Four turns right in a row end where they began (ink, highlights, page size).
+3163. **Crop dialog.** *Crop PDF page…* opens a dialog with the whole page and a frame. Drag a corner, an edge, or inside the frame (finger, S Pen, mouse); the frame cannot leave the page or get thinner than a few millimetres. Tap *Whole page* to reset. The size kept is shown in millimetres.
+3164. **Apply a crop.** *Apply*: the page shrinks to the frame, the PDF shows only that part, and your ink stays on the same words. *Undo* brings the whole page and every stroke back; the history panel says *PDF page cropped*.
+3165. **Rotate inside the dialog.** In the dialog the two turn buttons turn the preview and the frame together; *Apply* does both in one undo step.
+3166. **All pages of this PDF.** With several pages of the same PDF the dialog offers *All N pages of this PDF*: the same crop is applied to every page (each keeps its own turn plus the one you added), as ONE undo step.
+3167. **Ink outside the crop.** Write in the margin of the PDF, then crop that margin away: the page still shows your ink (the page margins grow to hold it, next to the PDF) and a notice says so. Nothing is deleted.
+3168. **Ink above the crop.** Write above the top edge area and crop below it, or turn a page that has notes in a side margin the wrong way: a notice says some pages were left as they are (ink or notes would end above the page). Move the notes and try again.
+3169. **Margins.** On a page with margins (notes beside a slide) rotate: the PDF and its notes turn together and the margins stay on the same sides of the page.
+3170. **Locked page.** A locked PDF page refuses both actions (the actions are greyed in the page sheet).
+3171. **Text.** After a turn or a crop, *Search PDF text* highlights the right words, selecting text and following a link work on the turned page, and the highlighter that follows text lines snaps to the lines.
+3172. **Exports.** Export the turned and cropped page as PDF, PNG, SVG and interactive HTML, print it, hand it in and present it: each shows the same turned, cropped page with the ink in the same places. With redaction boxes on, the burned boxes are on the turned page.
+3173. **Thumbnails and zoomed out.** The page navigator, the page grid, the zoomed-out view and the hover preview show the turned, cropped page.
+3174. **Crop PDF margins (view only).** The existing *Crop PDF margins* display option still works on a cropped page: it fits the white margins that are left inside the stored crop and writes nothing.
+3175. **Re-published slides.** *Update PDF from a new version* on a deck whose pages were turned keeps each page's turn and crop.
+3176. **Old versions.** Open the notebook in 0.27 (or tell the app to ignore the new keys): it opens read-only, and the turned pages are untouched.
+3177. **Phone and tablet.** The dialog fits a phone (the frame handles are finger-sized) and a tablet, in light and dark, and the help bubbles of the three actions (long-press) read in English and Italian.
+3178. **Big PDF.** Turning a page of a 300-page PDF is instant and does not slow scrolling (only the bitmap of the turned page is made again).
+3179. **Nothing fake.** Every control in the dialog works; the shaded area and the frame outline are decoration around the real handles.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Format v26: optional `rotate` and `crop` on a PDF page background; migration v25 to v26; lenient read (dropped and counted), strict write; schema v26 | yes | `tests/model-v26.test.ts`, `tests/format-schema.test.ts` | | | |
+| View geometry and plan (turn, crop, size, rigid matrix, margins that grow, ink that would end above the page is refused) | yes | `tests/model-v26.test.ts` | | | |
+| `SetPdfView`: ink, elements, areas, comments, states carried in one undo step; locks, groups, hidden ink, page times | yes | `tests/model-v26.test.ts`, `tests/history-panel.test.ts` | | | |
+| PDF store renders a view (whole rotation, offset), cached apart; every render path asks for the page's view | yes | `tests/model-v26.test.ts` | | | pdf.js `getViewport` rotation/offset on a real device |
+| Text boxes, links, selection and search highlights mapped through the view | yes | `tests/model-v26.test.ts` | | | |
+| Export parity (PDF re-embeds the turned, cropped picture; PNG, SVG, HTML, hand-in, presentation, redaction burn use the same page) | yes | `tests/model-v26.test.ts` (SVG and PDF sizes), harness `doc=pdfrotate` | | | |
+| Page sheet actions *Rotate PDF page right / left*, *Crop PDF page…* (dialog with handles, reset, this page or all pages), en + it, help, context rule, history titles | yes | `tests/ui-registry.test.ts`, `tests/model-v26.test.ts`, harness `doc=pdfrotate` | | | |
+| Rotating text selection by character on a turned page | partly | | | | selecting by dragging works through the turn; the caret inside a vertical run follows its box |

@@ -2,6 +2,8 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v26: rotate and crop an imported PDF page (#76): the optional `rotate` (90, 180 or 270 degrees clockwise) and `crop` (`{x, y, width, height}` in PDF points) of a
+ * page background of kind "pdf" (see `model/pdf-view.ts`); absent = the whole PDF page upright, the look of every earlier version.
  * v25: stroke taper (#351): the optional `taperStart` and `taperEnd` (0.05 to 1, a length in line widths, see `model/taper.ts`) of a stroke of a
  * line pen (pen, fountain pen, brush) drawn with the wet-ink geometry; the line thins towards that end (absent = the look of every earlier version).
  * v24: opacity (#358): the optional `opacity` (0.05 to 1) of a stroke of any pen, of an image and of an area; it multiplies the look the item has
@@ -27,7 +29,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 25;
+export const CURRENT_VERSION = 26;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -232,9 +234,13 @@ export interface Asset {
 	bytes: number;
 }
 
-/** v4: what is drawn under the paper pattern and the ink. */
+/**
+ * v4: what is drawn under the paper pattern and the ink. v26 (#76): a PDF page may be turned (`rotate`, degrees clockwise on top of the PDF's own
+ * rotation) and cropped (`crop`, the part shown, in PDF points of the unrotated page, top-left origin); the crop is applied first, then the rotation.
+ * Both are written only when set.
+ */
 export type PageBackground =
-	| { kind: "pdf"; asset: string; /** 1-based page number in the PDF */ page: number }
+	| { kind: "pdf"; asset: string; /** 1-based page number in the PDF */ page: number; rotate?: 90 | 180 | 270; crop?: { x: number; y: number; width: number; height: number } }
 	| { kind: "image"; asset: string };
 
 /**

@@ -55,6 +55,7 @@ import { checkShapefill } from "./shapefill-check";
 import { checkAreahl } from "./areahl-check";
 import { checkOpacity } from "./opacity-check"; // 0.26 opacity
 import { checkTaper } from "./taper-check"; // 0.27 taper
+import { checkPdfrotate } from "./pdfrotate-check"; // 0.28 pdfrotate
 import { checkCtxpalette } from "./ctxpalette-check"; // 0.26 ctxpalette
 import { checkStrokejoin } from "./strokejoin-check";
 import { checkProfiles } from "./profiles-check";
@@ -306,6 +307,8 @@ async function seed(): Promise<void> {
 	await app.vault.create("Notebooks/New.notebook", serialize(createDocument()));
 	// doc=pdf: three pages that show the pages of a fake PDF (fake-pdf.ts).
 	installFakePdf();
+	// 0.28 pdfrotate: the fake sheet gets a frame and a red corner mark, so a turn and a crop can be seen.
+	(window as unknown as { __harnessPdfMark?: boolean }).__harnessPdfMark = params.get("doc") === "pdfrotate";
 	await app.vault.createFolder("Notebooks/_assets");
 	await app.vault.createBinary(FAKE_PATH, new Uint8Array(8).buffer);
 	await app.vault.create("Notebooks/Slides.notebook", slidesNotebook());
@@ -359,7 +362,7 @@ async function open(doc = params.get("doc") ?? "v3"): Promise<void> {
 	leaf = new WorkspaceLeaf(app, root);
 	view = new NotebookView(asLeaf(leaf), { settings: settings(), practice: doc === "practice" ? practiceService : undefined, lectureClassFor: doc === "lecture" ? () => lectureStub.cls : undefined, lectureHeaderClassFor: doc === "lecthead" || doc === "pillstack" ? () => lectureStub.cls : undefined, nav: harnessNav, quickTabs: doc === "quicktabs" ? harnessQuickTabs(app) : undefined, bookmarks: doc === "bookmarks" || doc === "markedview" ? harnessBookmarks(app) : undefined, meanings: doc === "colours" || doc === "coloursedit" ? harnessMeanings() : undefined, statusChanged: (v) => harnessStatusBar.update(v.statusSnapshot()) });
 	await view.onOpen();
-	const path = doc === "new" || doc === "savedviews" || doc === "histpanel" || doc === "chembal" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pillstack" || doc === "welcomeback" || doc === "plannertasks" || doc === "iconhelp" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" || doc === "hookclean" || doc === "shapefill" || doc === "strokejoin" || doc === "navadapt" || doc === "baseline" || doc === "smooth" || doc === "profiles" || doc === "toolfade" || doc === "papersuggest" || doc === "markedview" || doc === "tidy" || doc === "zoomwidth" || doc === "ctxpalettew" || doc === "taper" || doc === "inputlayout" || doc === "spread" || doc === "workspaces" || doc === "macros" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" || doc === "areahl" || doc === "opacity" || doc === "ctxpalette" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "semzoom" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "bookmarks" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
+	const path = doc === "new" || doc === "savedviews" || doc === "histpanel" || doc === "chembal" || doc === "practice" || doc === "readonly" || doc === "lecture" || doc === "smartadd" || doc === "slides" || doc === "pensets" || doc === "states" || doc === "lock" || doc === "signstamp" || doc === "sticky" || doc === "comments" || doc === "checklists" || doc === "axes" || doc === "groups" || doc === "dropfiles" || doc === "ghostlines" || doc === "pagetime" || doc === "pens" || doc === "snap" || doc === "minimap" || doc === "slideback" || doc === "pillstack" || doc === "welcomeback" || doc === "plannertasks" || doc === "iconhelp" || doc === "pagerefs" || doc === "lecthead" || doc === "symbols" || doc === "hookclean" || doc === "shapefill" || doc === "strokejoin" || doc === "navadapt" || doc === "baseline" || doc === "smooth" || doc === "profiles" || doc === "toolfade" || doc === "papersuggest" || doc === "markedview" || doc === "tidy" || doc === "zoomwidth" || doc === "ctxpalettew" || doc === "taper" || doc === "inputlayout" || doc === "spread" || doc === "workspaces" || doc === "macros" ?"Notebooks/New.notebook" : doc === "pdf" || doc === "excerpt" || doc === "toolbar-pdf" || doc === "areahl" || doc === "opacity" || doc === "ctxpalette" || doc === "pdfrotate" ? "Notebooks/Slides.notebook" : doc === "outline" || doc === "semzoom" || doc === "mentions" || doc === "nbmap" || doc === "movesel" || doc === "present" || doc === "quicktabs" || doc === "bookmarks" || doc === "refwindow" ? "Notebooks/Outline.notebook" : doc === "digest" ? "Notebooks/Digest.notebook" : doc === "colours" || doc === "coloursedit" ? "Notebooks/Colours.notebook" : doc === "figures" ? "Notebooks/Figures.notebook" :doc === "pdftext" ? "Notebooks/PdfText.notebook" : "Notebooks/Old v3.notebook";
 	const file = app.vault.getFileByPath(path)!;
 	await (view as unknown as HarnessView).loadFile(file);
 	view.onResize();
@@ -2214,6 +2217,7 @@ harnessApi.checkShapefill = () => checkShapefill({ view, penStroke, setTool, ope
 harnessApi.checkAreahl = () => checkAreahl({ view, penStroke, setTool, openOptions, frames, errors, notices }); // 0.25 areahl
 harnessApi.checkOpacity = () => checkOpacity({ view, penStroke, setTool, openOptions, frames, errors, notices }); // 0.26 opacity
 harnessApi.checkTaper = () => checkTaper({ view, penStroke, setTool, openOptions, frames, errors, notices }); // 0.27 taper
+harnessApi.checkPdfrotate = () => checkPdfrotate({ view, penStroke, setTool, frames, errors, notices }); // 0.28 pdfrotate
 harnessApi.checkCtxpalette = () => checkCtxpalette({ view, frames, errors, notices }, params.get("doc") === "ctxpalettew"); // 0.26 ctxpalette
 // 0.23 savedviews (#264): its own check (dev/harness/savedviews-check.ts).
 harnessApi.checkSavedviews = () => checkSavedviews({ view, frames, errors, notices });

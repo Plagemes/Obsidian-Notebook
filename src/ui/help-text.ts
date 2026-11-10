@@ -52,6 +52,10 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"comment-selection": "help.comment",
 	"math-edit": "help.mathEdit",
 	"pdf-search": "help.pdfSearch",
+	// 0.28 (#76): turn and crop the PDF page
+	"pdf-rotate-right": "help.pdfRotateRight",
+	"pdf-rotate-left": "help.pdfRotateLeft",
+	"pdf-crop": "help.pdfCrop",
 	// 0.24 review: the actions added later in the wave
 	"page-global-bookmark": "help.globalBookmark",
 	"bookmarks-open": "help.openBookmarks",

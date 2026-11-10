@@ -570,6 +570,24 @@ function v24ToV25(raw: RawObject): RawObject {
 	return out;
 }
 
+/**
+ * v26 adds the optional `rotate` and `crop` of PDF page backgrounds (#76). Every valid v25 document is a valid v26 document: the migration is the
+ * identity apart from the version. A v25 reader ignored unknown fields, so such a key in a v25 file was never ours and never meant anything: it is
+ * dropped, not interpreted (like `taperStart` in v24 -> v25). Nothing else changes, so a large v25 file can still be read page by page (StagedParse),
+ * which ignores these keys of each background.
+ */
+function v25ToV26(raw: RawObject): RawObject {
+	const out: RawObject = { ...raw, version: 26 };
+	if (!Array.isArray(raw.pages)) return out;
+	const pages = (raw.pages as unknown[]).map((page) => {
+		if (!isRaw(page) || !isRaw(page.background) || !("rotate" in page.background || "crop" in page.background)) return page;
+		return { ...page, background: withoutKeys(page.background, ["rotate", "crop"]) };
+	});
+	// A document with nothing to drop keeps its pages as they were (the migration is the identity but the version).
+	if (pages.some((p, i) => p !== (raw.pages as unknown[])[i])) out.pages = pages;
+	return out;
+}
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -609,6 +627,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	22: v22ToV23,
 	23: v23ToV24,
 	24: v24ToV25,
+	25: v25ToV26,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

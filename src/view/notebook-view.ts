@@ -63,6 +63,7 @@ import { cloneMeta, createId, createPage, createStroke } from "../model/document
 import { newShapeStyle } from "../ink/shape-style";
 import { buildLecturePackPages, exercisePage } from "../model/lecture-pack";
 import { backgroundRect } from "../model/margins";
+import { viewKey, viewOf, type PdfView } from "../model/pdf-view";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
 	ReplaceStroke, SetMeta, SetPageSize, type Command,
@@ -3378,11 +3379,11 @@ export class NotebookView extends FileView {
 		const tolerance = TOLERANCES[this.host.settings.meaningTolerance] ?? MATCH_TOLERANCE;
 		return {
 			usage: page,
-			slideKey: bg ? `${bg.kind}:${bg.asset}:${bg.kind === "pdf" ? bg.page : 0}` : null,
+			slideKey: bg ? `${bg.kind}:${bg.asset}:${bg.kind === "pdf" ? bg.page : 0}${bg.kind === "pdf" ? `:${viewKey(viewOf(bg))}` : ""}` : null,
 			slide: () => {
 				if (!bg || !media) return null;
 				if (bg.kind === "image") return media.image(bg.asset);
-				return (media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null;
+				return (media.pdf.peek(bg.asset, bg.page, undefined, viewOf(bg))?.canvas as CanvasImageSource | undefined) ?? null;
 			},
 			labelOf: (hex) => {
 				const i = matchMeaning(hex, legend, tolerance);
@@ -5286,7 +5287,7 @@ export class NotebookView extends FileView {
 		let pdfCanvas: CanvasImageSource | undefined;
 		if (bg && bg.kind === "pdf" && this.media) {
 			try {
-				pdfCanvas = await this.media.pdf.render(bg.asset, bg.page, widthPx / Math.max(1, page.width));
+				pdfCanvas = await this.media.pdf.render(bg.asset, bg.page, widthPx / Math.max(1, page.width), viewOf(bg));
 			} catch (e) {
 				console.error("[notebook] presentation: rendering the PDF page failed", e);
 			}
@@ -5396,8 +5397,8 @@ export class NotebookView extends FileView {
 			else if (bg.kind === "image") img = media.image(bg.asset);
 			else {
 				// Never ask for another scale of a page the main view is drawing: a render in flight would be cancelled.
-				img = (media.pdf.peek(bg.asset, bg.page)?.canvas as CanvasImageSource | undefined) ?? null;
-				if (!img && !this.isPageVisible(page)) this.renderThumbPdf(bg.asset, bg.page);
+				img = (media.pdf.peek(bg.asset, bg.page, undefined, viewOf(bg))?.canvas as CanvasImageSource | undefined) ?? null;
+				if (!img && !this.isPageVisible(page)) this.renderThumbPdf(bg.asset, bg.page, viewOf(bg));
 			}
 			const r = backgroundRect(page);
 			if (img) ctx.drawImage(img, r.x, r.y, r.width, r.height);
@@ -5425,12 +5426,12 @@ export class NotebookView extends FileView {
 		if (incomplete) this.thumbPending.add(page.id);
 	}
 
-	private renderThumbPdf(asset: string, pageNumber: number): void {
+	private renderThumbPdf(asset: string, pageNumber: number, view?: PdfView): void {
 		const media = this.media;
-		const key = `${asset}|${pageNumber}`;
+		const key = `${asset}|${pageNumber}|${viewKey(view)}`;
 		if (!media || this.thumbRendering.has(key)) return;
 		this.thumbRendering.add(key);
-		media.pdf.render(asset, pageNumber, THUMB_PDF_SCALE).then(() => this.onMediaChanged(), () => undefined)
+		media.pdf.render(asset, pageNumber, THUMB_PDF_SCALE, view).then(() => this.onMediaChanged(), () => undefined)
 			.finally(() => this.thumbRendering.delete(key));
 	}
 

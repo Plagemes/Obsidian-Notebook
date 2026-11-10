@@ -13,6 +13,7 @@ import {
 	type Meaning, type MeaningItem, type MeaningRegion,
 } from "../model/colour-meaning";
 import { backgroundRect } from "../model/margins";
+import { viewOf } from "../model/pdf-view";
 import type { Page } from "../model/types";
 import { textUnderBands } from "../pdf/region-text";
 import { redactionOf } from "../ink/redact";
@@ -144,7 +145,7 @@ export async function runMeaningDigest(host: MeaningDigestHost, request: Meaning
 					texts.set(key, content);
 				}
 				const c = await content;
-				boxes = c ? boxesOnPage(c, backgroundRect(page)).filter((b) => b.str.length > 0) : null;
+				boxes = c ? boxesOnPage(c, backgroundRect(page), viewOf(page.background)).filter((b) => b.str.length > 0) : null;
 			}
 			for (let k = 0; k < list.length; k++) {
 				const region = list[k]!;

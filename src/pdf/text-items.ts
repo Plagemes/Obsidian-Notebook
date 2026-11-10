@@ -2,6 +2,7 @@
  * Text of a PDF page as positioned boxes, from pdf.js `getTextContent()`. Pure: no pdf.js, DOM or
  * 'obsidian' import, so it is tested in Node.
  */
+import { isIdentityView, mapRect, sourceToPage, type PdfView } from "../model/pdf-view";
 
 /** A run of text and its axis-aligned box, in viewport coordinates at scale 1 (pt, origin top-left). */
 export interface TextBox {
@@ -106,7 +107,21 @@ export function textBoxes(items: readonly unknown[], viewportTransform: unknown,
  * Text boxes moved from PDF viewport coordinates to the page: the PDF is drawn in `rect` (its box on the
  * page, see backgroundRect), scaled from its natural `width` × `height`.
  */
-export function boxesOnPage(content: PageTextContent, rect: { x: number; y: number; width: number; height: number }): TextBox[] {
+export function boxesOnPage(content: PageTextContent, rect: { x: number; y: number; width: number; height: number }, view?: PdfView): TextBox[] {
+	if (!isIdentityView(view)) {
+		// 0.28 (#76): the page shows a turned and/or cropped part of the PDF page; the runs go through the same transform, and the ones the
+		// crop leaves out (their box does not meet the background box) are not on the page at all.
+		const m = sourceToPage(view, content, rect);
+		const out: TextBox[] = [];
+		for (const b of content.items) {
+			const r = mapRect(m, b);
+			if (r.x + r.width <= rect.x || r.y + r.height <= rect.y || r.x >= rect.x + rect.width || r.y >= rect.y + rect.height) continue;
+			const box: TextBox = { str: b.str, x: r.x, y: r.y, width: r.width, height: r.height };
+			if (b.font) box.font = b.font;
+			out.push(box);
+		}
+		return out;
+	}
 	const sx = content.width > 0 ? rect.width / content.width : 1;
 	const sy = content.height > 0 ? rect.height / content.height : 1;
 	return content.items.map((b) => {

@@ -1,6 +1,7 @@
 import type { PdfDoc, PdfLib, PdfPage, PdfRenderTask } from "./pdfjs-types";
 import { readPageLinks, readPdfOutline, type PdfOutlineEntry, type PdfPageLinks } from "./pdf-outline";
 import { textBoxes, type PageTextContent } from "./text-items";
+import { isIdentityView, sourceToView, viewKey, viewSize, type PdfView } from "../model/pdf-view";
 
 export type CanvasLike = HTMLCanvasElement | OffscreenCanvas;
 
@@ -33,6 +34,8 @@ export interface PeekResult {
 interface CacheEntry {
 	assetId: string;
 	page: number;
+	/** 0.28 (#76): the rotation and crop it shows (`viewKey`; "" = the whole page upright). */
+	view: string;
 	scale: number;
 	canvas: CanvasLike;
 	bytes: number;
@@ -41,6 +44,7 @@ interface CacheEntry {
 interface Job {
 	key: string;
 	pageKey: string;
+	view: PdfView | undefined;
 	assetId: string;
 	promise: Promise<CanvasLike>;
 	cancelled: boolean;
@@ -59,7 +63,7 @@ export function isAbortError(e: unknown): boolean {
 }
 
 const scaleKey = (scale: number) => Math.round(scale * 1000) / 1000;
-const cacheKey = (assetId: string, page: number, scale: number) => `${assetId}|${page}|${scale}`;
+const cacheKey = (assetId: string, page: number, scale: number, view = "") => `${assetId}|${page}|${scale}${view ? `|${view}` : ""}`;
 
 /**
  * PDF page rasteriser with caches. Pure logic over injected dependencies (pdf.js, asset reader,
@@ -171,11 +175,16 @@ export class PdfStore {
 		return p;
 	}
 
-	/** Renders `page` (1-based) at `scale` device px per pt. */
-	async render(assetId: string, page: number, scale: number): Promise<CanvasLike> {
+	/**
+	 * Renders `page` (1-based) at `scale` device px per pt. 0.28 (#76): with a `view` the bitmap is the cropped part of the page, turned
+	 * (its size is the view's size times `scale`); without one (or an empty one) it is the whole page, as before.
+	 */
+	async render(assetId: string, page: number, scale: number, view?: PdfView): Promise<CanvasLike> {
 		const size = await this.pageSize(assetId, page);
-		const eff = this.clampScale(size, scale);
-		const key = cacheKey(assetId, page, eff);
+		const shown = isIdentityView(view) ? undefined : view;
+		const eff = this.clampScale(viewSize(shown, size), scale);
+		const vk = viewKey(shown);
+		const key = cacheKey(assetId, page, eff, vk);
 
 		const hit = this.cache.get(key);
 		if (hit) {
@@ -185,11 +194,11 @@ export class PdfStore {
 		const pending = this.jobs.get(key);
 		if (pending) return pending.promise;
 
-		const pageKey = `${assetId}|${page}`;
+		const pageKey = `${assetId}|${page}|${vk}`;
 		const superseded = this.jobByPage.get(pageKey);
 		if (superseded) this.cancel(superseded);
 
-		const job: Job = { key, pageKey, assetId, cancelled: false, task: null, promise: Promise.resolve(null as never) };
+		const job: Job = { key, pageKey, view: shown, assetId, cancelled: false, task: null, promise: Promise.resolve(null as never) };
 		job.promise = this.withBusy(assetId, () => this.runJob(job, page, eff)).finally(() => {
 			if (this.jobs.get(key) === job) this.jobs.delete(key);
 			if (this.jobByPage.get(pageKey) === job) this.jobByPage.delete(pageKey);
@@ -203,19 +212,20 @@ export class PdfStore {
 	 * Best cached bitmap of a page, synchronously: the smallest scale >= `minScale`, otherwise the
 	 * largest one below it (with `minScale` omitted: the largest). Null if there is none.
 	 */
-	peek(assetId: string, page: number, minScale?: number): PeekResult | null {
+	peek(assetId: string, page: number, minScale?: number, view?: PdfView): PeekResult | null {
 		const min = minScale ?? Infinity; // no minimum: the sharpest bitmap wins
+		const vk = viewKey(view);
 		let above: CacheEntry | null = null;
 		let below: CacheEntry | null = null;
 		for (const e of this.cache.values()) {
-			if (e.assetId !== assetId || e.page !== page) continue;
+			if (e.assetId !== assetId || e.page !== page || e.view !== vk) continue;
 			if (e.scale >= min) {
 				if (!above || e.scale < above.scale) above = e;
 			} else if (!below || e.scale > below.scale) below = e;
 		}
 		const best = above ?? below;
 		if (!best) return null;
-		this.touch(cacheKey(best.assetId, best.page, best.scale), best);
+		this.touch(cacheKey(best.assetId, best.page, best.scale, best.view), best);
 		return { canvas: best.canvas, scale: best.scale };
 	}
 
@@ -266,9 +276,24 @@ export class PdfStore {
 		check();
 		const page: PdfPage = await doc.getPage(pageNumber);
 		check();
-		const viewport = page.getViewport({ scale });
-		const width = Math.max(1, Math.min(MAX_BITMAP_SIDE, Math.ceil(viewport.width)));
-		const height = Math.max(1, Math.min(MAX_BITMAP_SIDE, Math.ceil(viewport.height)));
+		const view = job.view;
+		let viewport = page.getViewport({ scale });
+		let outWidth = viewport.width, outHeight = viewport.height;
+		if (view) {
+			// 0.28 (#76): the cropped part, turned. The viewport turns the page (on top of its own /Rotate: pdf.js takes the whole rotation) and
+			// is shifted so the crop's top-left corner lands at the origin of a bitmap that is only the crop's size.
+			const one = page.getViewport({ scale: 1 });
+			const source = { width: one.width, height: one.height };
+			const turned = sourceToView({ rotate: view.rotate }, source);
+			const shown = sourceToView(view, source);
+			const rotation = (((page.rotate ?? 0) + (view.rotate ?? 0)) % 360 + 360) % 360;
+			viewport = page.getViewport({ scale, rotation, offsetX: (shown[4] - turned[4]) * scale, offsetY: (shown[5] - turned[5]) * scale });
+			const size = viewSize(view, source);
+			outWidth = size.width * scale;
+			outHeight = size.height * scale;
+		}
+		const width = Math.max(1, Math.min(MAX_BITMAP_SIDE, Math.ceil(outWidth)));
+		const height = Math.max(1, Math.min(MAX_BITMAP_SIDE, Math.ceil(outHeight)));
 		const canvas = this.deps.createCanvas(width, height);
 		const ctx = (canvas as HTMLCanvasElement).getContext("2d");
 		if (!ctx) throw new Error("2d canvas context unavailable");
@@ -281,7 +306,7 @@ export class PdfStore {
 			throw e;
 		}
 		check();
-		this.insert({ assetId: job.assetId, page: pageNumber, scale, canvas, bytes: width * height * 4 });
+		this.insert({ assetId: job.assetId, page: pageNumber, view: viewKey(view), scale, canvas, bytes: width * height * 4 });
 		return canvas;
 	}
 
@@ -298,7 +323,7 @@ export class PdfStore {
 	}
 
 	private insert(e: CacheEntry): void {
-		const key = cacheKey(e.assetId, e.page, e.scale);
+		const key = cacheKey(e.assetId, e.page, e.scale, e.view);
 		const old = this.cache.get(key);
 		if (old) this.drop(key, old);
 		this.cache.set(key, e);

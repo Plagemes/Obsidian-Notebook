@@ -2,6 +2,7 @@
 // "crop the white margins" toggle. Each page is rendered once at a very low resolution and read back; the result is cached
 // for the session. Nothing is written to the notebook. The pure detection is in pdf/content-box.ts.
 import { detectContentBox, type FractionBox } from "../pdf/content-box";
+import { backgroundViewKey, viewOf, viewSize, type PdfView } from "../model/pdf-view";
 import type { Page } from "../model/types";
 import type { NotebookMedia } from "./media";
 
@@ -16,12 +17,13 @@ export interface ContentBoxesHost {
 	changed(): void;
 }
 
-const keyOf = (asset: string, page: number): string => `${asset}|${page}`;
+/** The measure of a PDF page is of what the page SHOWS (0.28, #76: the stored turn and crop come first; the white margins are found inside them). */
+const keyOf = (bg: Page["background"]): string => backgroundViewKey(bg);
 
 export class ContentBoxes {
 	/** null: measured, nothing to crop (a blank page); absent: not measured yet. */
 	private readonly boxes = new Map<string, FractionBox | null>();
-	private readonly queue: Array<{ asset: string; page: number }> = [];
+	private readonly queue: Array<{ asset: string; page: number; view: PdfView | undefined; key: string }> = [];
 	private readonly queued = new Set<string>();
 	private running = false;
 	private stopped = false;
@@ -32,12 +34,12 @@ export class ContentBoxes {
 	/** The content box of a PDF page as fractions of its background, or null when unknown, blank or not a PDF page. */
 	boxOf(page: Page): FractionBox | null {
 		const bg = page.background;
-		return bg?.kind === "pdf" ? this.boxes.get(keyOf(bg.asset, bg.page)) ?? null : null;
+		return bg?.kind === "pdf" ? this.boxes.get(keyOf(bg)) ?? null : null;
 	}
 
 	/** Whether every PDF page of `pages` has been measured. */
 	complete(pages: readonly Page[]): boolean {
-		return pages.every((p) => p.background?.kind !== "pdf" || this.boxes.has(keyOf(p.background.asset, p.background.page)));
+		return pages.every((p) => p.background?.kind !== "pdf" || this.boxes.has(keyOf(p.background)));
 	}
 
 	/** Measures the PDF pages of `pages` that are not known yet, starting at index `first` and wrapping round. */
@@ -47,10 +49,10 @@ export class ContentBoxes {
 		for (let k = 0; k < n; k++) {
 			const bg = pages[(first + k) % n]?.background;
 			if (bg?.kind !== "pdf") continue;
-			const key = keyOf(bg.asset, bg.page);
+			const key = keyOf(bg);
 			if (this.boxes.has(key) || this.queued.has(key)) continue;
 			this.queued.add(key);
-			this.queue.push({ asset: bg.asset, page: bg.page });
+			this.queue.push({ asset: bg.asset, page: bg.page, view: viewOf(bg), key });
 		}
 		if (!this.running && this.queue.length > 0) void this.run();
 	}
@@ -75,11 +77,11 @@ export class ContentBoxes {
 			while (!this.stopped) {
 				const job = this.queue.shift();
 				if (!job) break;
-				const key = keyOf(job.asset, job.page);
+				const key = job.key;
 				this.queued.delete(key);
 				let box: FractionBox | null = null;
 				try {
-					box = await this.measure(job.asset, job.page);
+					box = await this.measure(job.asset, job.page, job.view);
 				} catch (e) {
 					// Unreadable page: no crop for it; the rest goes on.
 					console.error("[notebook] content box", e);
@@ -96,13 +98,14 @@ export class ContentBoxes {
 		}
 	}
 
-	private async measure(asset: string, pageNumber: number): Promise<FractionBox | null> {
+	private async measure(asset: string, pageNumber: number, view: PdfView | undefined): Promise<FractionBox | null> {
 		const media = this.host.media();
 		if (!media) return null;
 		const sizes = await media.pdf.pageSizes(asset);
-		const size = sizes[pageNumber - 1];
-		if (!size || !(size.width > 0)) return null;
-		const canvas = await media.pdf.render(asset, pageNumber, DETECT_WIDTH_PX / size.width);
+		const source = sizes[pageNumber - 1];
+		if (!source || !(source.width > 0)) return null;
+		const size = viewSize(view, source);
+		const canvas = await media.pdf.render(asset, pageNumber, DETECT_WIDTH_PX / size.width, view);
 		// Narrowed by its members: getContext on the HTMLCanvasElement | OffscreenCanvas union resolves to the generic overload,
 		// which has no getImageData.
 		const raw = canvas.getContext("2d");

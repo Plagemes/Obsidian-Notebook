@@ -12,6 +12,7 @@ import { burnPixelRects, type BurnPlan } from "../ink/redact";
 import { burnedCanvas } from "./burn";
 import type { PdfLib } from "../pdf/pdfjs-types";
 import { isAbortError, PdfStore } from "../pdf/pdf-store";
+import { viewOf, type PdfView } from "../model/pdf-view";
 import { ensureFolder } from "../storage/vault-io";
 import { assetAvailability } from "../storage/sync-state";
 
@@ -214,9 +215,11 @@ export class NotebookMedia implements MediaSource {
 		if (bg.kind === "image") return this.waiting.has(bg.asset) ? null : this.image(bg.asset);
 		if (this.missing.has(bg.asset) || this.waiting.has(bg.asset)) return null;
 		const scale = quantizeScale(deviceScale);
-		const have = this.pdf.peek(bg.asset, bg.page, scale);
+		// 0.28 (#76): the bitmap is the part of the PDF page the background shows, turned (the whole page upright without a view).
+		const view = viewOf(bg);
+		const have = this.pdf.peek(bg.asset, bg.page, scale, view);
 		if (!have || have.scale < scale * 0.99) {
-			this.pdf.render(bg.asset, bg.page, scale).then(() => this.changed(), (e) => {
+			this.pdf.render(bg.asset, bg.page, scale, view).then(() => this.changed(), (e) => {
 				if (!isAbortError(e)) {
 					if (!this.waiting.has(bg.asset)) console.error("[notebook] PDF page", e);
 					this.missing.add(bg.asset);
@@ -341,7 +344,7 @@ export class NotebookMedia implements MediaSource {
 		if (bg) {
 			// Any bitmap of the page already rendered first: asking for another scale of a page the view is drawing would
 			// cancel its render in flight (one render per page at a time).
-			const peek = bg.kind === "pdf" && !this.missing.has(bg.asset) ? this.pdf.peek(bg.asset, bg.page, scale) : null;
+			const peek = bg.kind === "pdf" && !this.missing.has(bg.asset) ? this.pdf.peek(bg.asset, bg.page, scale, viewOf(bg)) : null;
 			background = (peek?.canvas as CanvasImageSource | undefined) ?? this.background(page, scale);
 			if (!background) return have?.picture ?? null;
 		}
@@ -440,8 +443,8 @@ export class NotebookMedia implements MediaSource {
 	 * JPEG of a PDF page at `dpi`, for exports. 0.26 (#285): with `burn` the redaction boxes are painted black on a COPY of the page picture
 	 * before it is encoded (the cached picture of the PDF store keeps its pixels), so what they cover is not in the JPEG.
 	 */
-	async pdfPageJpeg(asset: string, page: number, dpi = 200, burn?: BurnPlan): Promise<{ jpeg: Uint8Array; pixelWidth: number; pixelHeight: number }> {
-		const canvas = await this.pdf.render(asset, page, dpi / 72);
+	async pdfPageJpeg(asset: string, page: number, dpi = 200, burn?: BurnPlan, view?: PdfView): Promise<{ jpeg: Uint8Array; pixelWidth: number; pixelHeight: number }> {
+		const canvas = await this.pdf.render(asset, page, dpi / 72, view);
 		if (!burn) return canvasToJpeg(canvas);
 		const copy = burnedCanvas(canvas, canvas.width, canvas.height, burnPixelRects(burn.boxes, burn.rect, canvas.width, canvas.height));
 		try {

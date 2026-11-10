@@ -77,7 +77,7 @@ export function remapPage(page: Page, swap: ElementSwap): void {
 }
 
 /** A stroke or an element of a page: elements are mapped, strokes stay (a quiet change never replaces a stroke). */
-function swapItem<T extends Stroke | PageElement>(item: T, swap: ElementSwap): T {
+export function swapItem<T extends Stroke | PageElement>(item: T, swap: ElementSwap): T {
 	return ("type" in item ? swap(item) : item) as T;
 }
 

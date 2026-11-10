@@ -22,6 +22,7 @@ import { SetPageContent } from "./page-content";
 import { SetPageLocked } from "./page-lock";
 import { ReorderPages } from "./page-ops";
 import { ReplacePage } from "./page-restore";
+import { SetPdfView } from "./pdf-view-command";
 import { SetPageTags } from "./page-tags";
 import { SetPageTimes } from "./page-times";
 import { AddSlideRef } from "./slide-links";
@@ -146,6 +147,7 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Change page margins": ["histpanel.t.margins", "frame"],
 	"Change page background": ["histpanel.t.background", "image"],
 	"Change infinite page": ["histpanel.t.infinite", "infinity"],
+	"Rotate or crop PDF page": ["histpanel.t.pdfRotate", "rotate-cw"],
 	"Change page tags": ["histpanel.t.pageTags", "tag"],
 	"Page times": ["histpanel.t.pageTimes", "clock"],
 	"Lock page": ["histpanel.t.pageLocked", "lock"],
@@ -274,6 +276,8 @@ function leafInfo(cmd: Command): { title: Title; thing?: MessageKey } {
 	if (cmd instanceof SetPageSize) return { title: ["histpanel.t.pageSize", "expand"] };
 	if (cmd instanceof SetPageMargins) return { title: ["histpanel.t.margins", "frame"] };
 	if (cmd instanceof SetPageBackground) return { title: ["histpanel.t.background", "image"] };
+	// 0.28 (#76): turning or cropping a PDF page.
+	if (cmd instanceof SetPdfView) return { title: [cmd.kind === "crop" ? "histpanel.t.pdfCrop" : "histpanel.t.pdfRotate", cmd.kind === "crop" ? "crop" : "rotate-cw"] };
 	if (cmd instanceof SetPageInfinite) return { title: ["histpanel.t.infinite", "infinity"] };
 	if (cmd instanceof SetPageContent) return { title: ["histpanel.t.content", "move"] };
 	if (cmd instanceof SetPageLocked) return { title: ["histpanel.t.pageLocked", cmd.value ? "lock" : "lock-open"] };

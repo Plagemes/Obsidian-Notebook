@@ -654,8 +654,15 @@ function salvageSkeleton(p: RawObject, ctx: SalvageContext): { page: RawObject; 
 	}
 	if (p.background !== undefined) {
 		const withBg = { ...page, background: p.background };
+		// v26: a turn or crop that is not valid is reset; the PDF page itself stays (shown whole and upright).
+		const bare = isObj(p.background) && ("rotate" in p.background || "crop" in p.background)
+			? Object.fromEntries(Object.entries(p.background).filter(([k]) => k !== "rotate" && k !== "crop"))
+			: null;
 		if (tryDoc([withBg], ctx.assets)) page.background = p.background;
-		else ctx.summary.backgroundsLost++;
+		else if (bare && tryDoc([{ ...page, background: bare }], ctx.assets)) {
+			page.background = bare;
+			ctx.summary.fieldsReset++;
+		} else ctx.summary.backgroundsLost++;
 	}
 	if (p.margins !== undefined) {
 		// v6 margins position the background and the ink against each other: kept when they validate on this page, else reset to none.
