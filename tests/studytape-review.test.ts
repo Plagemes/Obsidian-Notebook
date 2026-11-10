@@ -145,7 +145,12 @@ describe("T2: the selection takes covered ink with the rest", () => {
 		expect(body.length).toBeGreaterThan(0);
 		expect(body).not.toMatch(/hidingTapes|strokeTouchesTapes|coveredByTape/);
 		const uses = src.match(/this\.inkOutsideTapes\(/g) ?? [];
-		expect(uses.length).toBe(3); // eraser, checkbox label offer, eyedropper
+		expect(uses.length).toBe(5); // eraser, checkbox label offer, eyedropper, and the delete-ink offer on one page and across pages (round 2 R3)
+		// Round 2 R2: the table host (also the chart host) has its own inkOf with ALL the ink, covered and hidden struck strokes included.
+		const tableHost = src.slice(src.indexOf("private tableHost(): TableHost"), src.indexOf("get tableTools()"));
+		expect(tableHost).toContain("inkOf: (page) => this.inkInView(page, true)");
+		expect(tableHost).not.toContain("c.inkOf");
+		expect(src).toContain("this.charts = new ChartTools(this.tableHost())");
 		expect(src).toContain("strokesInLasso(this.inkInView(page), lasso.points)");
 		expect(src).toContain("expandToGroups(page, { strokes, elements }, this.inkInView(page, true))"); // `true`: strikedelete S4 completes groups with struck members
 		expect(src).toContain("ink: (page) => this.inkInView(page)");
