@@ -22,7 +22,7 @@ import { filterErasable } from "../ink/erase-filter";
 import { AreaEraseGesture, areasUnderEraser } from "../ink/area-erase";
 import { createArea } from "../model/area";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
-import { growForInfinite } from "../ink/infinite";
+import { growCommand, growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
 import { rectanglePolygon, strokesInLasso } from "../ink/lasso";
 import { lineBreakTarget } from "../ink/line-break";
@@ -66,7 +66,7 @@ import { backgroundRect } from "../model/margins";
 import { viewKey, viewOf, type PdfView } from "../model/pdf-view";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
-	ReplaceStroke, SetMeta, SetPageSize, type Command, type StepCheck,
+	ReplaceStroke, SetMeta, type Command, type StepCheck,
 } from "../model/history";
 import { backgroundShifts, redactStepCheck } from "../ink/redact-step"; // 0.29 redactundo (R3-1)
 import { pageContentCommand } from "../model/page-content";
@@ -115,7 +115,7 @@ import { exportPdf, runExport, type ExportOptions } from "./export";
 import { announceRedactionOff, redactBlockedMessage, redactionRefused, withRedaction } from "./export-redact"; // 0.26 redact (#285)
 import { RedactModal } from "./redact-dialog";
 import { loadRedactState, resetRedactStorage, saveRedactState, takeRedactStoreNotice } from "../ui/redact-store";
-import { boxesOf, countBoxes, isArmed, staleRedactionPages, tagNewBoxes, type RedactState } from "../model/redact";
+import { adoptGeometry, boxesOf, countBoxes, isArmed, staleRedactionPages, tagNewBoxes, type RedactState } from "../model/redact";
 import { elementKept, headerAfterRedaction, withExcerptChains, type RedactGuard } from "../ink/redact";
 import { ViewDisplay, type DisplayHost } from "./display";
 import { policySettings } from "./input-settings";
@@ -2835,6 +2835,18 @@ export class NotebookView extends FileView {
 	/** Review fix (P4): the reader has been told that the boxes of this notebook are held for this session only. */
 	private redactSaveWarned = false;
 
+	/**
+	 * Round-3 review (Z2): boxes stored before 0.29 do not know where the background of their page was; they adopt its geometry as it is when
+	 * the notebook is opened (once: afterwards every box knows it, and an export refuses a page whose background moved since). Nothing is
+	 * written when the boxes cannot be read or none needs it.
+	 */
+	private adoptRedactGeometry(doc: NotebookDocument): void {
+		const state = loadRedactState(this.app, doc.id);
+		if (state.unreadable === true || countBoxes(state.boxes) === 0) return;
+		const boxes = adoptGeometry(state.boxes, doc.pages);
+		if (boxes !== state.boxes) this.saveRedact({ on: state.on, boxes });
+	}
+
 	/** 0.26 (#285): the dialog where boxes are drawn over the parts of the pages that must not leave the notebook (nothing in the notebook changes). */
 	private openRedact(pageIndex: number, closed: () => void): void {
 		const doc = this.session?.doc;
@@ -4549,13 +4561,24 @@ export class NotebookView extends FileView {
 		return this.editable() && !this.controller?.drawing ? (this.session?.doc ?? null) : null;
 	}
 
+	/**
+	 * Round-3 review (Z1): true when `cmd` would move, stretch or replace the background of a page with redaction boxes (or any page it names
+	 * while the boxes cannot be read): `applyCommand` refuses it. The merge dialog asks first, to say so in its own words.
+	 */
+	redactRefuses(cmd: Command): boolean {
+		const doc = this.session?.doc;
+		if (!doc) return false;
+		return backgroundShifts(doc, cmd).some((id) => { const g = this.redactGuard(id); return g.unreadable === true || g.boxes.length > 0; });
+	}
+
 	/** Runs a command built outside the view (merge, page restore) as one undo step. */
 	applyCommand(cmd: Command, scrollTo?: number): boolean {
 		const doc = this.editableDocument();
 		if (!doc) return false;
 		// Round-2 review (H1): a left margin that changes (a merge that widens a page, a page size that drops the margins) moves the background
 		// and the ink out from under the redaction boxes of the page: refused, like a PDF turn or crop (fail closed when the boxes are unreadable).
-		if (backgroundShifts(doc, cmd).some((id) => { const g = this.redactGuard(id); return g.unreadable === true || g.boxes.length > 0; })) {
+		// Round-3 review (Z1, Z2): merges, page sizes, Update PDF and page restores included (see `backgroundShifts`).
+		if (this.redactRefuses(cmd)) {
 			showNotice(t("redactmove.background"), 9000);
 			return false;
 		}
@@ -5241,6 +5264,12 @@ export class NotebookView extends FileView {
 			},
 			run: (cmd, scrollTo) => {
 				if (!this.stillHere(session) || session.doc !== doc) return false;
+				// Round-3 review (Z2): "Update PDF" switching the slide under the boxes of a page (and any other PDF action that would move or
+				// stretch a boxed background) is refused up front; the export would refuse the page anyway.
+				if (this.redactRefuses(cmd)) {
+					showNotice(t("redactmove.background"), 9000);
+					return false;
+				}
 				this.commitText();
 				this.clearSelection();
 				this.history.execute(cmd);
@@ -5615,6 +5644,7 @@ export class NotebookView extends FileView {
 			this.body.show();
 			this.toolbar.setEditable(true);
 			this.symbols?.sync();
+			this.adoptRedactGeometry(doc);
 			if (!this.media) {
 				this.media = new NotebookMedia(this.app, () => this.shownDoc(), () => this.host.settings.folder, () => this.onMediaChanged(), (page) => this.statesTools?.viewPages([page])[0] ?? page);
 				// wave 0.7: resilience (#346): in safe mode the backgrounds come after the first paint.
@@ -6205,10 +6235,14 @@ export class NotebookView extends FileView {
 			this.pagesLocked([page.id]);
 			return;
 		}
+		// 0.29 (#10, review R4): a tap on a hidden study tape never opens the text box it covers (nor its lock chip). Round-3 review (Z4): nor
+		// does it start a new box there, which would be saved under the tape and never seen: the tape is revealed first.
+		if (pointUnderTapes(this.hidingTapesOf(page), local[0], local[1])) {
+			showNotice(t("tape.text.hidden"), 5000);
+			return;
+		}
 		this.clearSelection();
-		// 0.29 (#10, review R4): a tap on a hidden study tape writes on the tape: the text box it covers is not opened (nor its lock chip shown).
-		const onTape = pointUnderTapes(this.hidingTapesOf(page), local[0], local[1]);
-		const texts = onTape ? [] : (page.elements ?? []).filter((e): e is TextElement => e.type === "text");
+		const texts = (page.elements ?? []).filter((e): e is TextElement => e.type === "text");
 		const hit = hitElement(texts, local[0], local[1], 4 / this.viewport.scale, measureText) as TextElement | null;
 		if (!hit) {
 			// 0.20 (#39): a locked text box is not edited, and no new box is started on top of it: the chip offers Unlock.
@@ -7009,7 +7043,8 @@ export class NotebookView extends FileView {
 			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
 			const height = growForInfinite(page, { maxY });
 			if (height !== null) {
-				commands.push(new SetPageSize(page.id, { width: page.width, height: page.height }, { width: page.width, height }));
+				// Round-3 review (Z3): a page with a background and no margins grows by a bottom margin (`growCommand`).
+				commands.push(growCommand(page, height));
 				grew = true;
 			}
 		}
