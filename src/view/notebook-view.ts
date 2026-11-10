@@ -225,6 +225,8 @@ import { TextEditor, type TextEditSession } from "./text-editor";
 import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
+import { TapeTools } from "./tape-tools";
+import { coveredByTape, hidingTapes, tapeColorOf } from "../model/tape";
 import { AxesTools, type AxesHost } from "./axes-tools";
 import { TableTools, type TableHost } from "./table-tools";
 import { tableOfSelection } from "../ink/table";
@@ -556,6 +558,8 @@ export class NotebookView extends FileView {
 	private sticky: StickyTools | null = null;
 	/** 0.19 (#103): handwritten checklists (taps, the square drawn by hand, send to tasks, the task lines). */
 	private checklist: ChecklistTools | null = null;
+	/** 0.29 (#10): study tapes (the mode that lays them, taps that reveal them; the reveal is view-only). */
+	private tapes: TapeTools | null = null;
 	/** 0.22 (#206): instant axes (an L or a + drawn by hand, the insert). */
 	private axes: AxesTools | null = null;
 	/** 0.28 (#41): hand-drawn tables (insert, add / remove rows and columns, even cells). */
@@ -920,6 +924,7 @@ export class NotebookView extends FileView {
 		this.math = new MathTools(this.mathHost());
 		this.sticky = new StickyTools(this.stickyHost());
 		this.checklist = new ChecklistTools(this.checklistHost());
+		this.mountTapes();
 		this.axes = new AxesTools(this.axesHost());
 		this.tables = new TableTools(this.tableHost());
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
@@ -986,6 +991,7 @@ export class NotebookView extends FileView {
 
 		this.renderer = new Renderer(this.stage, { lowLatency: this.host.settings.lowLatencyInk });
 		this.mountMarkers();
+		this.renderer.setTapeReveal(this.tapes?.reveal ?? null);
 		this.mountStates();
 		this.lectureHeader = new LectureHeaderService({
 			parent: () => this.body,
@@ -1387,6 +1393,8 @@ export class NotebookView extends FileView {
 		this.selectionActions = null;
 		this.arrange = null;
 		this.checklist?.destroy();
+		this.tapes?.destroy();
+		this.tapes = null;
 		this.axes?.destroy();
 		this.axes = null;
 		this.tables = null;
@@ -1931,6 +1939,7 @@ export class NotebookView extends FileView {
 			this.clearSelection();
 			this.markers?.disarm();
 			this.excerpts?.disarm();
+			this.tapes?.stopDrawing();
 			this.penLinks?.hideChip();
 			this.pageOffer?.cancel();
 			this.radial?.close();
@@ -3678,7 +3687,11 @@ export class NotebookView extends FileView {
 		const ink = noteInk ? shown.filter((s) => !noteInk.has(s.id)) : shown;
 		// 0.15 (241): a shown state moved some strokes away from where they were drawn: the ink tools leave them alone.
 		const moved = this.statesTools?.displaced(page);
-		return moved ? ink.filter((s) => !moved.has(s.id)) : ink;
+		const placed = moved ? ink.filter((s) => !moved.has(s.id)) : ink;
+		// 0.29 (#10): ink a hidden study tape covers whole is not there to erase, select or offer (nobody can see it).
+		const tapes = this.tapes ? hidingTapes(page, this.tapes.reveal) : [];
+		const bounds = this.renderer?.boundsOf;
+		return tapes.length > 0 && bounds ? placed.filter((s) => !coveredByTape(bounds(s), tapes)) : placed;
 	}
 
 	/** v10: anchored excerpts of this view (null before the view is open). */
@@ -3820,6 +3833,33 @@ export class NotebookView extends FileView {
 			e.clipboardData?.setData("text/plain", text);
 			e.preventDefault();
 		});
+	}
+
+	/** 0.29 (#10): the study tapes of this view (taps reveal them on any notebook; the mode lays new ones). */
+	private mountTapes(): void {
+		const c = this.checklistHost();
+		this.tapes = new TapeTools({
+			stage: () => c.stage(),
+			doc: () => c.doc(),
+			editable: () => c.editable(),
+			execute: (cmd) => c.execute(cmd),
+			color: () => tapeColorOf(this.host.settings.tapeColor),
+			scale: () => c.scale(),
+			pageAt: (x, y) => c.pageAt(x, y),
+			fingerNavigates: (e) => c.fingerNavigates(e),
+			penBusy: (t) => c.penBusy(t),
+			preview: (pageIndex, tape) => this.renderer?.setTapePreview(tape ? { pageIndex, tape } : null),
+			repaint: () => {
+				this.renderer?.invalidate();
+				this.refreshUi();
+			},
+		});
+		this.renderer?.setTapeReveal(this.tapes.reveal);
+	}
+
+	/** 0.29 (#10): study tapes of this view (null before the view is open). */
+	get tapeTools(): TapeTools | null {
+		return this.tapes;
 	}
 
 	private mountMarkers(): void {
@@ -4752,6 +4792,7 @@ export class NotebookView extends FileView {
 				invisibleInk: !!this.markers?.invisibleInk, solutions: !!this.markers?.solutionsShown,
 				pageSolutions: !!page && (this.markers?.pageSolutionsShown(page) ?? false),
 			},
+			tapes: { drawing: this.tapes?.drawing === true, ...(this.tapes?.counts() ?? { total: 0, revealed: 0 }) },
 			nav: this.navState(),
 			history: this.historyCounts(),
 			narrow: this.body?.hasClass("is-narrow") ?? false,
@@ -5264,6 +5305,9 @@ export class NotebookView extends FileView {
 		this.history.clear();
 		this.renderer?.setLive(null);
 		this.renderer?.setAreaPreview(null);
+		this.renderer?.setTapePreview(null);
+		this.tapes?.stopDrawing();
+		this.tapes?.docChanged();
 		this.renderer?.cancelWet();
 		this.renderer?.setLasso(null);
 		this.renderer?.setSpacePreview(null);
@@ -5509,6 +5553,8 @@ export class NotebookView extends FileView {
 		if (state.tool !== before.tool) this.pdfText?.exit();
 		// 0.11.2: so is "next stroke erases".
 		if (state.tool !== before.tool) this.controller?.disarmEraserNext();
+		// 0.29 (#10): choosing a tool ends the "Study tape" mode.
+		if (state.tool !== before.tool) this.tapes?.stopDrawing();
 		if (state.tool !== "lasso") this.clearSelection();
 		this.refreshUi();
 		if (before.tool === "text" && state.tool !== "text") this.commitText();
@@ -6029,7 +6075,7 @@ export class NotebookView extends FileView {
 		const tool = eraserButton ? "eraser" : held === "lasso" ? "lasso" : held === "previous" ? (this.lastTool.previous() ?? this.tools.tool) : this.tools.tool;
 
 		// An armed marker or box takes the next contact whatever the tool (see below).
-		if (tool === "eraser" && this.tools.eraserMode !== "area" && !((this.markers?.armed || this.excerpts?.armed) && !eraserButton)) {
+		if (tool === "eraser" && this.tools.eraserMode !== "area" && !((this.markers?.armed || this.excerpts?.armed || this.tapes?.drawing) && !eraserButton)) {
 			// The selection may contain strokes about to be erased (e.g. erasing with the pen button).
 			this.clearSelection();
 			const commands: Command[] = [];
@@ -6046,6 +6092,11 @@ export class NotebookView extends FileView {
 		const page = this.pageAtIndex(pageIndex);
 		if (page) this.touchedPageId = page.id; // review fix (S1): the page the page actions mean when both pages of a pair are in view
 		const local = toPageLocal(layout.boxes[pageIndex]!, dx, dy);
+		// 0.29 (#10): the "Study tape" mode lays a tape; a contact on a hidden tape reveals it (view-only, so a locked page too).
+		if (page && !eraserButton && this.tapes?.begin(pageIndex, page, local, sample, tool, page.locked === true)) {
+			this.clearSelection();
+			return true;
+		}
 		// 0.16 (#124): a locked page takes no ink, text, shape, space or eraser: only the lasso, to select and copy from it.
 		if (page?.locked && tool !== "lasso") {
 			this.clearSelection();
@@ -6182,6 +6233,14 @@ export class NotebookView extends FileView {
 		// v10: a contact that started on an excerpt's badge and moves is ink, not a tap.
 		if (this.excerpts) for (let i = 0; i < n; i++) this.excerpts.watch(NotebookView.at(samples, i));
 		if (this.checklist) for (let i = 0; i < n; i++) this.checklist.watch(NotebookView.at(samples, i));
+		// 0.29 (#10): a contact on a revealed tape that moves is ink; a tape being laid follows the pen.
+		const tapePage = this.tapes?.gesturePage ?? null;
+		if (this.tapes && tapePage === null) for (let i = 0; i < n; i++) this.tapes.move(null, NotebookView.at(samples, i));
+		if (this.tapes && tapePage !== null) {
+			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
+			this.tapes.move(last ? this.toLocal(tapePage, last) : null, last);
+			return;
+		}
 		if (this.pdfText?.dragging) {
 			const textPage = this.pdfText.gesturePage;
 			const last = n > 0 ? NotebookView.at(samples, n - 1) : null;
@@ -6386,9 +6445,13 @@ export class NotebookView extends FileView {
 		// v10: a short unmoved contact on an excerpt's badge was a tap: what it drew (a dot) is dropped, then the jump.
 		const badgeTap = this.excerpts?.takeBadgeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
 		// 0.19 (#103): the same for a checkbox: a short unmoved contact on it was a tap.
-		const boxTap = this.checklist?.takeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
-		this.endGesture(cancelled || badgeTap !== null || boxTap !== null);
+		const boxTap0 = this.checklist?.takeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
+		// 0.29 (#10): the same for a revealed study tape (a tap hides it again); the tape is on top, so it wins over a checkbox under it.
+		const tapeTap = this.tapes?.takeTap(cancelled, performance.now(), () => this.contactExtentPx()) ?? null;
+		const boxTap = tapeTap ? null : boxTap0;
+		this.endGesture(cancelled || badgeTap !== null || boxTap !== null || tapeTap !== null);
 		this.toolFade?.strokeEnd();
+		if (tapeTap) this.tapes?.toggle(tapeTap);
 		if (boxTap) this.checklist?.toggle(boxTap);
 		if (badgeTap) this.excerpts?.openSource(badgeTap);
 		// An external change seen during the gesture was postponed; check it now.
@@ -6398,7 +6461,7 @@ export class NotebookView extends FileView {
 		// 0.14: the first stroke written during an automatic lecture is what adds its page (view/lecture-mode.ts). Deferred past the
 		// pointer handler so the contact is over; the document is only touched through the usual edit context.
 		const committed = this.committedIds();
-		if (!cancelled && badgeTap === null && boxTap === null && committed) {
+		if (!cancelled && badgeTap === null && boxTap === null && tapeTap === null && committed) {
 			window.setTimeout(() => {
 				this.lectureMode?.wrote();
 				this.welcomeBack?.wrote();
@@ -6434,6 +6497,7 @@ export class NotebookView extends FileView {
 
 	private endGesture(cancelled: boolean): void {
 		if (this.pdfText?.end(cancelled)) return;
+		if (this.tapes?.end(cancelled, performance.now())) return;
 		if (this.markers?.end(cancelled)) return;
 		if (this.excerpts?.end(cancelled)) return;
 		if (this.penGestures?.active) {
@@ -6873,9 +6937,12 @@ export class NotebookView extends FileView {
 	private eraseArea(lasso: Lasso, page: Page): void {
 		const revealed = this.markers?.isRevealed(page) ?? false;
 		const spare = lasso.spare;
+		// 0.29 (#10): ink a hidden study tape covers whole is left alone (nobody can see what would be erased).
+		const tapes = this.tapes ? hidingTapes(page, this.tapes.reveal) : [];
+		const underTape = (s: Stroke): boolean => tapes.length > 0 && !!this.renderer && coveredByTape(this.renderer.boundsOf(s), tapes);
 		const cmd = eraseAreaCommand(page, lasso.points, {
 			filter: this.eraseFilter(),
-			skip: revealed && !spare ? undefined : (s) => (!revealed && !!s.hidden) || !!spare?.has(s.id),
+			skip: revealed && !spare && tapes.length === 0 ? undefined : (s) => (!revealed && !!s.hidden) || !!spare?.has(s.id) || underTape(s),
 			includeElements: this.host.settings.eraseAreaElements,
 			measure: measureText,
 		});

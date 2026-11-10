@@ -6,10 +6,11 @@ import {
 } from "./math-elements";
 import { parseOutline } from "../math/outline";
 import { EXCERPT_ID_MAX, EXCERPT_PATH_MAX } from "./excerpts";
-import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, v17OnlyElement, v23OnlyElement, withoutV11Meta, withoutV12Slides, withoutV21Views, type RawObject } from "./migrations";
+import { detectVersion, migrate, MigrationError, v10OnlyElement, v15OnlyElement, v17OnlyElement, v23OnlyElement, v27OnlyElement, withoutV11Meta, withoutV12Slides, withoutV21Views, type RawObject } from "./migrations";
 import { isStoredViewName, normalizeViewName, validRegion } from "./views";
 import { CHECKBOX_BLOCK_MAX, CHECKBOX_LABEL_MAX, CHECKBOX_MAX_SIZE, CHECKBOX_MIN_SIZE, CHECKBOX_PATH_MAX, cleanCheckboxLabel, isOurBlockId } from "./checklist";
 import { AREA_MAX_SIDE, AREA_MIN_SIDE } from "./area";
+import { TAPE_MAX_SIDE, TAPE_MIN_SIDE } from "./tape";
 import { isOpacity, normaliseOpacity, OPACITY_MAX, OPACITY_MIN } from "./opacity";
 import { canTaper, isTaper, TAPER_MAX, TAPER_MIN } from "./taper";
 import { isPdfCrop, isPdfRotation, PDF_CROP_MAX, PDF_CROP_MIN_SIDE } from "./pdf-view-format";
@@ -20,14 +21,14 @@ import { STICKY_INK_MAX, STICKY_MAX_FONT, STICKY_MAX_SIZE, STICKY_MIN_FONT, STIC
 import { normalizePosition } from "./position";
 import { pageTimesProblem } from "./page-times";
 import {
-	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, ELEMENT_TYPES_V23, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, isShapeDash, isShapeTool, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_INK, RENDER_VERSIONS, TOOLS,
+	COVER_ART_STYLES, CURRENT_VERSION, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, ELEMENT_TYPES_V23, ELEMENT_TYPES_V27, FORMAT_ID, GROUP_ID_MAX, isNewPen, isNibAngle, isNibPen, isShapeDash, isShapeTool, META_DESCRIPTION_MAX, PAPER_KINDS, RENDER_INK, RENDER_VERSIONS, TOOLS,
 	SLIDE_ID_MAX, SLIDE_PATH_MAX, SLIDE_SOURCE_MAX, type SlideRef,
 	STATES_ID_MAX, STATES_MAX_ITEMS, STATES_MAX_PARTS, STATES_MAX_ROT, STATES_MAX_SCALE, STATES_MAX_SHIFT, STATES_MAX_STATES, STATES_MIN_SCALE, STATES_NAME_MAX,
 	type PageState, type PageStates, type PartPose, type StatePart,
 	type Asset, type AreaElement, type CheckboxElement, type ElementFlags, type CoverArt, type CoverArtStyle, type AssetKind, type BookmarkInfo, type BoxElement, type EquationElement, type ExcerptElement, type ExcerptSource, type GraphElement, type GraphFunction, type GraphParam,
 	type GraphPiece, type GraphTable, type GraphViewport, type ImageElement, type MarkerElement, type NotebookDocument, type NotebookMeta, type Page,
 	type PageBackground, type PageComment, type PageElement, type PageMargins, type PaperKind, type Point, type ReadingPosition, type RenderVersion, type StickyElement, type Stroke,
-	type TextElement, type Tool,
+	type TapeElement, type TextElement, type Tool,
 	VIEWS_MAX, VIEW_ID_MAX, VIEW_PAGE_ID_MAX, type SavedView,
 } from "./types";
 
@@ -325,6 +326,11 @@ function areaLine(e: AreaElement): string {
 	return `				{"id":${j(e.id)},"type":"area","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${jc(e)}${opacity}}`;
 }
 
+/** v27 study tape: the rectangle, then the colour (one line). Whether it is revealed is view-only: never written. */
+function tapeLine(e: TapeElement): string {
+	return `				{"id":${j(e.id)},"type":"tape","x":${j(e.x)},"y":${j(e.y)},"width":${j(e.width)},"height":${j(e.height)},"color":${jc(e)}}`;
+}
+
 function elementLine(e: PageElement): string {
 	return withFlags(typedElementLine(e), e);
 }
@@ -346,6 +352,7 @@ function typedElementLine(e: PageElement): string {
 	if (e.type === "sticky") return stickyLine(e);
 	if (e.type === "checkbox") return checkboxLine(e);
 	if (e.type === "area") return areaLine(e);
+	if (e.type === "tape") return tapeLine(e);
 	return fail("element", "unknown element type");
 }
 
@@ -1004,7 +1011,21 @@ function readTypedElement(v: unknown, path: string, assets: Assets, drop: Droppe
 	if (v.type === "sticky") return readSticky(v, id, path, drop);
 	if (v.type === "checkbox") return readCheckbox(v, id, path, drop);
 	if (v.type === "area") return readArea(v, id, path, drop, withOpacity);
+	if (v.type === "tape") return readTape(v, id, path);
 	return fail(`${path}.type`, "unknown element type");
+}
+
+/**
+ * v27 study tape. The rectangle (finite corner, each side within TAPE_MIN_SIDE..TAPE_MAX_SIDE) and the colour are required: a tape with an
+ * invalid one cannot hide anything, so it fails as a whole (the caller drops and counts it when reading leniently, see ELEMENT_TYPES_V27).
+ * Nothing else is read: a stray `revealed` or `opacity` key is ignored (the reveal is view-only, a tape is always opaque).
+ */
+function readTape(v: RawObject, id: string, path: string): TapeElement {
+	const width = positive(v.width, `${path}.width`);
+	const height = positive(v.height, `${path}.height`);
+	if (width < TAPE_MIN_SIDE || width > TAPE_MAX_SIDE) fail(`${path}.width`, `expected ${TAPE_MIN_SIDE} to ${TAPE_MAX_SIDE} pt`);
+	if (height < TAPE_MIN_SIDE || height > TAPE_MAX_SIDE) fail(`${path}.height`, `expected ${TAPE_MIN_SIDE} to ${TAPE_MAX_SIDE} pt`);
+	return { id, type: "tape", x: finite(v.x, `${path}.x`), y: finite(v.y, `${path}.y`), width, height, color: colour(v.color, `${path}.color`) };
 }
 
 /**
@@ -1632,7 +1653,7 @@ function readPage(v: unknown, path: string, ids: Set<string>, assets: Assets, dr
 			// v8 markers and boxes, v9 equations and graphs, v10 excerpts are details: an invalid one is dropped and counted when
 			// reading leniently.
 			const v8 = isObject(e) && typeof e.type === "string"
-				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type) || ELEMENT_TYPES_V15.includes(e.type) || ELEMENT_TYPES_V17.includes(e.type) || ELEMENT_TYPES_V23.includes(e.type));
+				&& (ELEMENT_TYPES_V8.includes(e.type) || ELEMENT_TYPES_V9.includes(e.type) || ELEMENT_TYPES_V10.includes(e.type) || ELEMENT_TYPES_V15.includes(e.type) || ELEMENT_TYPES_V17.includes(e.type) || ELEMENT_TYPES_V23.includes(e.type) || ELEMENT_TYPES_V27.includes(e.type));
 			const el = v8 ? orDrop(drop, () => readElement(e, at, assets, drop, withGroups, withOpacity)) : readElement(e, at, assets, drop, withGroups, withOpacity);
 			if (!el) return;
 			if (ids.has(el.id)) fail(`${at}.id`, "duplicate id");
@@ -1919,6 +1940,11 @@ export class StagedParse {
 			const problem = v23OnlyElement(this.rawPages[i], i);
 			if (problem) fail(`pages[${i}]`, problem);
 		}
+		// v27: the same for a study tape (the v26 -> v27 migration refuses it).
+		if (this.from < 27) {
+			const problem = v27OnlyElement(this.rawPages[i], i);
+			if (problem) fail(`pages[${i}]`, problem);
+		}
 		// v12: the strokes of an older file have no slide of ours (an odd `slide` key is ignored, as the migration drops it).
 		const slides: SlideIds = this.from < 12 ? "ignore" : new Set((this.doc.slides ?? []).map((r) => r.id));
 		// v13: the same for the `states` of a page of an older file.
@@ -1993,7 +2019,8 @@ export function parseStaged(text: string, firstPage: number | null): StagedParse
 	// v23 → v24 only drops the `opacity` keys of strokes, images and areas (ignored page by page), so large v23 files are staged too.
 	// v24 → v25 only drops the `taperStart` and `taperEnd` keys of strokes (ignored page by page), so large v24 files are staged too.
 	// v25 → v26 only drops the `rotate` and `crop` keys of PDF backgrounds (ignored page by page), so large v25 files are staged too.
-	if (pre.version === 25 || pre.version === 9 || pre.version === 10|| pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22 || pre.version === 23 || pre.version === 24) return StagedParse.create(pre.raw, first, pre.version);
+	// v26 → v27 only refuses study tapes (checked page by page as they are read), so large v26 files are staged too.
+	if (pre.version === 26 || pre.version === 25 ||pre.version === 9 || pre.version === 10|| pre.version === 11 || pre.version === 12 || pre.version === 13 || pre.version === 14 || pre.version === 15 || pre.version === 16 || pre.version === 17 || pre.version === 18 || pre.version === 19 || pre.version === 20 || pre.version === 21 || pre.version === 22 || pre.version === 23 || pre.version === 24) return StagedParse.create(pre.raw, first, pre.version);
 	if (pre.version !== CURRENT_VERSION) return parseRaw(pre.raw, pre.version, true);
 	return StagedParse.create(pre.raw, first);
 }

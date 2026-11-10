@@ -1,5 +1,5 @@
 import { createId, quantizePoint } from "./document";
-import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, ELEMENT_TYPES_V23, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND, TOOLS_V20 } from "./types";
+import { A4_HEIGHT, A4_WIDTH, DEFAULT_META, ELEMENT_TYPES_V8, ELEMENT_TYPES_V9, ELEMENT_TYPES_V10, ELEMENT_TYPES_V15, ELEMENT_TYPES_V17, ELEMENT_TYPES_V23, ELEMENT_TYPES_V27, FORMAT_ID, GRID_5MM, PAPER_KINDS_V7, RENDER_FREEHAND, TOOLS_V20 } from "./types";
 
 export type RawObject = Record<string, unknown>;
 
@@ -588,6 +588,35 @@ function v25ToV26(raw: RawObject): RawObject {
 	return out;
 }
 
+/**
+ * v27 adds the element type "tape" (study tape, #10). Every valid v26 document is a valid v27 document: the migration is the identity apart from
+ * the version. A v26 reader rejected unknown element types, so a v26 file that holds a tape was never written by this plugin: it is refused
+ * (like an area in a v22 file), never guessed at. Nothing else changes, so a large v26 file can still be read page by page (StagedParse), which
+ * applies the same check to each page (`v27OnlyElement`).
+ */
+function v26ToV27(raw: RawObject): RawObject {
+	if (Array.isArray(raw.pages)) {
+		(raw.pages as unknown[]).forEach((page, i) => {
+			const problem = v27OnlyElement(page, i);
+			if (problem) throw new MigrationError(problem);
+		});
+	}
+	return { ...raw, version: 27 };
+}
+
+/**
+ * Why page `index` (0-based) of a v26 (or older) file cannot be read as v27 (it holds an element type that exists only from v27), or null.
+ * Everything else of a v26 page is a valid v27 page, so staged loading reads large v26 files page by page with this check.
+ */
+export function v27OnlyElement(page: unknown, index: number): string | null {
+	if (!isRaw(page) || !Array.isArray(page.elements)) return null;
+	for (const el of page.elements as unknown[]) {
+		const type = isRaw(el) ? el.type : undefined;
+		if (typeof type === "string" && ELEMENT_TYPES_V27.includes(type)) return `v26: element type '${type}' (page ${index + 1}) exists only from v27`;
+	}
+	return null;
+}
+
 function isRaw(v: unknown): v is RawObject {
 	return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -628,6 +657,7 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
 	23: v23ToV24,
 	24: v24ToV25,
 	25: v25ToV26,
+	26: v26ToV27,
 };
 
 /** Version declared by the file; an object without `version` but with `strokes` is treated as v0. */

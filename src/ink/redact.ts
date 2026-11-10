@@ -27,7 +27,7 @@ import { isCheckbox } from "../model/checklist";
 import { pageCopy } from "../model/states";
 import { countBoxes, rectsOverlap, type RedactBox, type Redactions, boxesOf } from "../model/redact";
 import { pieceTaper } from "../model/taper";
-import { RENDER_INK, type AreaElement, type CommentRegion, type ExcerptElement, type NotebookMeta, type Page, type PageComment, type PageElement, type Point, type Stroke } from "../model/types";
+import { RENDER_INK, type AreaElement, type CommentRegion, type ExcerptElement, type NotebookMeta, type Page, type PageComment, type PageElement, type Point, type Stroke, type TapeElement } from "../model/types";
 import { boundGraphId } from "./attach";
 import { checkboxLabelBounds } from "./checklist";
 import { elementBounds } from "./elements";
@@ -321,11 +321,15 @@ function subtractBox(r: BBox, box: RedactBox): BBox[] {
 	return out;
 }
 
-function cutArea(el: AreaElement, boxes: readonly RedactBox[]): AreaElement[] {
+/**
+ * An area highlighter, or (v27, #10) a study tape, with the parts under the boxes cut away: a tape is drawn above all the ink, so it is cut
+ * like an area and never covers a black box (the box stays on top of everything; what the tape covered elsewhere stays covered).
+ */
+function cutArea<T extends AreaElement | TapeElement>(el: T, boxes: readonly RedactBox[]): T[] {
 	let parts: BBox[] = [{ minX: el.x, minY: el.y, maxX: el.x + el.width, maxY: el.y + el.height }];
 	for (const box of boxes) parts = parts.flatMap((p) => subtractBox(p, box));
 	if (parts.length === 1 && parts[0]!.minX === el.x && parts[0]!.minY === el.y && parts[0]!.maxX === el.x + el.width && parts[0]!.maxY === el.y + el.height) return [el];
-	const out: AreaElement[] = [];
+	const out: T[] = [];
 	for (const p of parts) {
 		const width = p.maxX - p.minX;
 		const height = p.maxY - p.minY;
@@ -334,7 +338,9 @@ function cutArea(el: AreaElement, boxes: readonly RedactBox[]): AreaElement[] {
 		void _group;
 		void _locked;
 		void _lockAt;
-		out.push({ ...rest, id: out.length === 0 ? el.id : `${el.id}.r${out.length}`, x: p.minX, y: p.minY, width, height });
+		// The piece is the same kind as `el` (an area or a tape) without its group and lock: only the rectangle and the id change.
+		const piece = { ...rest, id: out.length === 0 ? el.id : `${el.id}.r${out.length}`, x: p.minX, y: p.minY, width, height };
+		out.push(piece as T);
 	}
 	return out;
 }
@@ -396,8 +402,8 @@ export function redactPage(page: Page, boxes: readonly RedactBox[], notebook?: R
 	const goneGraphs = new Set<string>();
 	const keptEls: PageElement[] = [];
 	for (const el of elements) {
-		if (el.type === "area") {
-			keptEls.push(...cutArea(el, all));
+		if (el.type === "area" || el.type === "tape") {
+			keptEls.push(...cutArea<typeof el>(el, all));
 			continue;
 		}
 		if (overlaps(redactBounds(el), all) || coveredExcerpt(el, notebook)) {

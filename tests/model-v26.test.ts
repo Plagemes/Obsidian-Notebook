@@ -333,12 +333,12 @@ describe("format v26: migration from v25", () => {
 		expect(r.doc.pages[0]!.background).toEqual({ kind: "pdf", asset: ASSET, page: 1 });
 	});
 
-	it("reads a v25 file and writes it as v26", () => {
+	it("reads a v25 file and writes it at the current version", () => {
 		const r = parsed(JSON.stringify(v25Raw()));
 		expect(r.migratedFrom).toBe(25);
 		expect(r.doc.version).toBe(CURRENT_VERSION);
-		expect(CURRENT_VERSION).toBe(26);
-		expect(getAt(parseRaw(serialize(r.doc)), ["version"])).toBe(26);
+		expect(CURRENT_VERSION).toBeGreaterThanOrEqual(26);
+		expect(getAt(parseRaw(serialize(r.doc)), ["version"])).toBe(CURRENT_VERSION);
 	});
 
 	it("reads files of older versions through the chain", () => {

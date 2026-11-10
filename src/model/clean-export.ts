@@ -6,7 +6,8 @@
  * - markers: gaps (placeholders), questions, importance badges and homework (`marker` elements, see markers.ts);
  * - margin comments (`page.comments`; the PDF notes strip is dropped by the caller, see `view/export.ts`);
  * - collapsed sticky notes, together with the ink they keep hidden (`withoutPinnedInk`: a removed note would otherwise show it);
- * - optionally the open sticky notes too (the note is left out, the ink written over it stays: it is ordinary page ink).
+ * - optionally the open sticky notes too (the note is left out, the ink written over it stays: it is ordinary page ink);
+ * - v27 study tapes (#10): a clean copy shows what the tapes cover (every other export draws them hidden, the way a notebook opens).
  *
  * Kept on purpose: structured boxes (definitions, theorems: they are content), text, pictures, equations, graphs, excerpts,
  * drawings with states, the paper and the background, the page header (a layout decoration the reader chose for exports), and
@@ -26,9 +27,14 @@ export interface CleanExportOptions {
 	collapsedStickies?: boolean;
 	/** Open sticky notes. Default false (an open note is part of the page). */
 	openStickies?: boolean;
+	/** v27 (#10): study tapes. Default true (a clean copy shows what they cover). */
+	tapes?: boolean;
 }
 
-export const DEFAULT_CLEAN_OPTIONS: Required<CleanExportOptions> = { markers: true, comments: true, collapsedStickies: true, openStickies: false };
+export const DEFAULT_CLEAN_OPTIONS: Required<CleanExportOptions> = { markers: true, comments: true, collapsedStickies: true, openStickies: false, tapes: true };
+
+/** v27 (#10): only the study tapes left out, nothing else (the hand-in PDF: what is handed in is the work, not the study layer). */
+export const TAPES_ONLY: CleanExportOptions = { markers: false, comments: false, collapsedStickies: false, openStickies: false, tapes: true };
 
 /** The options with every missing choice at its default. */
 export function resolveCleanOptions(options: CleanExportOptions = {}): Required<CleanExportOptions> {
@@ -37,6 +43,7 @@ export function resolveCleanOptions(options: CleanExportOptions = {}): Required<
 		comments: options.comments ?? DEFAULT_CLEAN_OPTIONS.comments,
 		collapsedStickies: options.collapsedStickies ?? DEFAULT_CLEAN_OPTIONS.collapsedStickies,
 		openStickies: options.openStickies ?? DEFAULT_CLEAN_OPTIONS.openStickies,
+		tapes: options.tapes ?? DEFAULT_CLEAN_OPTIONS.tapes,
 	};
 }
 
@@ -50,6 +57,7 @@ export function hasCleanableContent(page: Page, options: CleanExportOptions = {}
 function dropsElement(el: PageElement, o: Required<CleanExportOptions>): boolean {
 	if (el.type === "marker") return o.markers;
 	if (el.type === "sticky") return el.collapsed === true ? o.collapsedStickies : o.openStickies;
+	if (el.type === "tape") return o.tapes;
 	return false;
 }
 

@@ -94,6 +94,10 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"table-remove-row": "help.table.removeRow",
 	"table-remove-col": "help.table.removeCol",
 	"table-even": "help.table.even",
+	// 0.29 studytape (#10)
+	"study-tape": "tape.help.draw",
+	"tapes-reveal-all": "tape.help.revealAll",
+	"tapes-hide-all": "tape.help.hideAll",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

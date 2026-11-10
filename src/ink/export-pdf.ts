@@ -8,6 +8,7 @@ import { graphClips, strokeClip } from "./attach";
 import { hiddenStickyInk, stickyColours } from "../model/sticky";
 import { stickyShapes, stickyTextBox } from "./sticky-render";
 import { checkboxPaths } from "./checkbox-render";
+import { TAPE_EDGE, tapeEdge } from "./tape-render";
 import type { Polygon } from "../math/outline";
 import type { BBox } from "./hit-test";
 import { PAPER_DOT_RADIUS, PAPER_LINE_WIDTH } from "./export-svg";
@@ -488,6 +489,14 @@ function pageContent(
 	}
 	// v17 checkboxes above the ink, like marker badges.
 	for (const el of page.elements ?? []) if (el.type === "checkbox") ops.push(checkboxOps(el));
+	// v27 (#10) study tapes last of all, hidden (the way a notebook opens): an opaque strip and its edge, at full opacity. A clean export
+	// leaves them out (model/clean-export.ts).
+	for (const el of page.elements ?? []) {
+		if (el.type !== "tape") continue;
+		const e = TAPE_EDGE;
+		ops.push(`q\n${rgb(el.color)} rg\n${num(el.x)} ${num(el.y)} ${num(el.width)} ${num(el.height)} re f\n${rgb(tapeEdge(el.color))} RG\n${num(e)} w\n`
+			+ `${num(el.x + e / 2)} ${num(el.y + e / 2)} ${num(Math.max(0, el.width - e))} ${num(Math.max(0, el.height - e))} re S\nQ`);
+	}
 	return ops.join("\n");
 }
 

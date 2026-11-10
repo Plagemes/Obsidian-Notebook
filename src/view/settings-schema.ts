@@ -29,6 +29,12 @@ import { DEFAULT_SETTINGS, type NotebookSettings } from "../settings";
 import { SYMBOL_COUNT_MAX, SYMBOL_COUNT_MIN } from "../ui/symbol-rank";
 import { TOOL_FADE_SECONDS_MAX, TOOL_FADE_SECONDS_MIN } from "../ui/tool-fade";
 import { CLOUD_INTERVAL_MAX, CLOUD_LARGE_MAX_MB, CLOUD_MOBILE_MAX_MB, CLOUD_MOBILE_MIN_MB } from "../sync/settings";
+import { TAPE_COLOR_NAMES, type TapeColorName } from "../model/tape";
+
+/** 0.29 studytape (#10): the names of the study tape colours. */
+const TAPE_COLOR_LABELS: Readonly<Record<TapeColorName, MessageKey>> = {
+	mint: "tape.color.mint", sky: "tape.color.sky", rose: "tape.color.rose", sand: "tape.color.sand", slate: "tape.color.slate",
+};
 
 export type SettingKey = keyof NotebookSettings;
 
@@ -610,6 +616,11 @@ const STUDY: SettingSpec[] = [
 		control: { type: "dropdown", options: options([["timestamp", "settings.zettelIdScheme.timestamp"], ["luhmann", "settings.zettelIdScheme.luhmann"]]) },
 	},
 	{ id: "zettelShowRegions", section: "study", group: "zettel", order: 30, name: "settings.zettelShowRegions", desc: "settings.zettelShowRegions.desc", control: { type: "toggle" } },
+	// 0.29 studytape (#10): the colour of new study tapes (a main option of the section: the tape is a study tool of every notebook)
+	{
+		id: "tapeColor", section: "study", order: 10, name: "settings.tapeColor", desc: "settings.tapeColor.desc", keywords: "study tape hide reveal cover answers colour nastro studio nascondi rivela copri risposte colore",
+		control: { type: "dropdown", options: options(TAPE_COLOR_NAMES.map((n) => [n, TAPE_COLOR_LABELS[n]] as const)) },
+	},
 ];
 
 const APPEARANCE: SettingSpec[] = [

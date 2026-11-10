@@ -2,6 +2,8 @@
 
 export const FORMAT_ID = "obsidian-notebook";
 /**
+ * v27: study tape (#10): the page element "tape" (an opaque axis-aligned rectangle in a tape colour, drawn above all the ink, that hides what is
+ * under it until it is tapped; whether a tape is revealed is view-only and never saved, see `model/tape.ts`).
  * v26: rotate and crop an imported PDF page (#76): the optional `rotate` (90, 180 or 270 degrees clockwise) and `crop` (`{x, y, width, height}` in PDF points) of a
  * page background of kind "pdf" (see `model/pdf-view.ts`); absent = the whole PDF page upright, the look of every earlier version.
  * v25: stroke taper (#351): the optional `taperStart` and `taperEnd` (0.05 to 1, a length in line widths, see `model/taper.ts`) of a stroke of a
@@ -29,7 +31,7 @@ export const FORMAT_ID = "obsidian-notebook";
  * around a background; v5: per-stroke render version; v4: library metadata, assets, backgrounds, elements,
  * infinite pages, "shape" tool; v3: paper kinds and page sizes).
  */
-export const CURRENT_VERSION = 26;
+export const CURRENT_VERSION = 27;
 export const FILE_EXTENSION = "notebook";
 
 /** A4 in pt (210 × 297 mm). */
@@ -571,7 +573,23 @@ export interface AreaElement extends ElementFlags {
 	opacity?: number;
 }
 
-export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement | ExcerptElement | StickyElement | CheckboxElement | AreaElement;
+/**
+ * v27 study tape (#10): an opaque rectangle (`x`, `y` top-left corner, `width` × `height`, page coordinates, pt) in the tape colour `color`
+ * (`#rrggbb`), drawn above all the ink and every other element, so what is under it is hidden until the tape is tapped. Whether a tape is
+ * revealed is view-only (it resets when the notebook is opened again) and never stored. It never rotates and has no opacity: a translucent
+ * tape would not hide anything.
+ */
+export interface TapeElement extends ElementFlags {
+	id: string;
+	type: "tape";
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	color: string;
+}
+
+export type PageElement = TextElement | ImageElement | MarkerElement | BoxElement | EquationElement | GraphElement | ExcerptElement | StickyElement | CheckboxElement | AreaElement | TapeElement;
 /** Element types that exist only from format v8: an older file that uses one was not written by this plugin. */
 export const ELEMENT_TYPES_V8: readonly string[] = ["marker", "box"];
 /** Element types that exist only from format v9. */
@@ -584,6 +602,8 @@ export const ELEMENT_TYPES_V15: readonly string[] = ["sticky"];
 export const ELEMENT_TYPES_V17: readonly string[] = ["checkbox"];
 /** Element types that exist only from format v23. */
 export const ELEMENT_TYPES_V23: readonly string[] = ["area"];
+/** Element types that exist only from format v27. */
+export const ELEMENT_TYPES_V27: readonly string[] = ["tape"];
 
 /**
  * v6: blank space added around a page's background (a PDF page or a scan), in pt. The background is

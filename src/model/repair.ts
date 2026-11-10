@@ -29,6 +29,7 @@ import { normalizeBookmarkInfo, normalizeBookmarkInfoMap } from "./bookmarks";
 import { CHECKBOX_DEFAULT_COLOR } from "./checklist";
 import { createId } from "./document";
 import { STICKY_DEFAULT_COLOR } from "./sticky";
+import { DEFAULT_TAPE_COLOR, TAPE_COLORS } from "./tape";
 import { cleanMarkerText, isBoxKind, isIsoDate, isMarkerKind } from "./markers";
 import { parseLenient } from "./lenient-json";
 import { detectVersion, migrate, type RawObject } from "./migrations";
@@ -485,7 +486,8 @@ function fixElement(v: unknown, assets: Record<string, Asset>): RawObject | null
 	// v15 sticky notes too: an invalid text or list of hidden strokes is left out, the note is kept.
 	// v17 checkboxes too: an invalid tick time, label or task link is left out, the checkbox is kept.
 	// v23 areas too (the lenient reader refuses one whose rectangle or colour is invalid: it is lost, it stays in the original).
-	if (v.type === "equation" || v.type === "graph" || v.type === "excerpt" || v.type === "sticky" || v.type === "checkbox" || v.type === "area") return fixMathElement(v, assets);
+	// v27 study tapes too, by the same rule.
+	if (v.type === "equation" || v.type === "graph" || v.type === "excerpt" || v.type === "sticky" || v.type === "checkbox" || v.type === "area" || v.type === "tape") return fixMathElement(v, assets);
 	return null;
 }
 
@@ -1029,6 +1031,8 @@ export function repairNotebookText(text: string, now: Date = new Date()): Repair
 /** Colour given to an item whose own is missing or invalid: what a new one of its kind starts with (strokes and text boxes: black, like the repair of a file). */
 const MISSING_COLOUR: Readonly<Record<string, string>> = {
 	text: "#000000", checkbox: CHECKBOX_DEFAULT_COLOR, sticky: STICKY_DEFAULT_COLOR, area: "#facc15", equation: "#000000",
+	// v27: a study tape without a colour gets the default tape colour (it must stay opaque to hide what it covers).
+	tape: TAPE_COLORS[DEFAULT_TAPE_COLOR],
 };
 
 /**

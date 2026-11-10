@@ -1,5 +1,6 @@
 import { BOX_LABEL_HEIGHT, MARKER_BADGE, markerRegion } from "../model/markers";
-import type { AreaElement, BoxElement, CheckboxElement, EquationElement, MarkerElement, Page, StickyElement, TextElement } from "../model/types";
+import type { AreaElement, BoxElement, CheckboxElement, EquationElement, MarkerElement, Page, StickyElement, TapeElement, TextElement } from "../model/types";
+import { TAPE_EDGE, tapeEdge } from "./tape-render";
 import { EQUATION_NUMBER_GAP, equationNumberLabel, equationNumbers } from "../model/math-elements";
 import { graphScene, GRAPH_STYLE, type GraphScene } from "../math/graph-scene";
 import type { Polygon } from "../math/outline";
@@ -185,8 +186,17 @@ export function pageToSvg(page: Page, options: SvgOptions = {}): string {
 	for (const el of page.elements ?? []) if (el.type === "marker") out.push(markerTag(el));
 	// v17 checkboxes above the ink, like marker badges.
 	for (const el of page.elements ?? []) if (el.type === "checkbox") out.push(checkboxTag(el));
+	// v27 (#10) study tapes last of all, hidden (the way a notebook opens): an opaque strip with its edge. A clean export leaves them out.
+	for (const el of page.elements ?? []) if (el.type === "tape") out.push(tapeTag(el));
 	out.push("</svg>");
 	return out.join("\n") + "\n";
+}
+
+/** v27 study tape: an opaque strip in its colour with a darker edge (the canvas adds faint stripes; the cover is the same). */
+function tapeTag(el: TapeElement): string {
+	const e = TAPE_EDGE;
+	return `<rect x="${num(el.x)}" y="${num(el.y)}" width="${num(el.width)}" height="${num(el.height)}" fill="${escapeAttr(el.color)}"/>`
+		+ `<rect x="${num(el.x + e / 2)}" y="${num(el.y + e / 2)}" width="${num(Math.max(0, el.width - e))}" height="${num(Math.max(0, el.height - e))}" fill="none" stroke="${escapeAttr(tapeEdge(el.color))}" stroke-width="${num(e)}"/>`;
 }
 
 const pointsAttr = (pts: ReadonlyArray<readonly [number, number]>): string => pts.map(([x, y]) => `${num(x)},${num(y)}`).join(" ");

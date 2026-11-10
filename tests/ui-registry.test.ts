@@ -46,6 +46,7 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["heavy page", baseContext({ page: { index: 0, count: 3, background: "none", infinite: false, bookmarked: false, splittable: true } })],
 	["two notebooks open", baseContext({ openNotebooks: 2 })],
 	["locked page (0.16, #124)", baseContext({ page: { index: 1, count: 3, background: "none", infinite: false, bookmarked: false, locked: true } })],
+	["notebook with study tapes, one revealed (0.29, #10)", baseContext({ tapes: { drawing: false, total: 2, revealed: 1 } })],
 ];
 const WIDTHS = [360, 800, 1280];
 

@@ -6,6 +6,7 @@ import { t, type MessageKey } from "../i18n";
 import { renderThumbnail } from "../library/thumbnail";
 import { allPages, cleanCoverField, coverPage, defaultHandInPages, handInCheck, withoutPages, type CoverFields, type OpenKind } from "../model/hand-in";
 import type { Page } from "../model/types";
+import { cleanPagesForExport, TAPES_ONLY } from "../model/clean-export";
 import { recordPluginWrite } from "../storage/plugin-written";
 import { modalShell, shellButton, shellNote, shellRow, shellSection, setShellButtonLabel } from "../ui/components/modal-shell";
 import { buildPdfBytes, freePath, type ExportOptions } from "./export";
@@ -90,7 +91,8 @@ export async function runHandIn(host: Pick<HandInHost, "app" | "file" | "pages" 
 		);
 		const base = host.options();
 		// 0.26 (#285): the pages with the redaction boxes applied (the cover is not a notebook page and has none).
-		const { pages: sheets, options } = withRedaction([cover, ...chosen], base);
+		// 0.29 (#10): what is handed in is the work: study tapes are left out (same ids, the notebook is untouched).
+		const { pages: sheets, options } = withRedaction([cover, ...cleanPagesForExport(chosen, TAPES_ONLY)], base);
 		const header = options.header;
 		const { bytes, skipped } = await buildPdfBytes(host.file.basename, sheets, host.media, {
 			...options,
@@ -223,7 +225,8 @@ export class HandInModal extends Modal {
 			for (; next < stop; next++) {
 				const c = cells[next]!;
 				try {
-					const url = renderThumbnail(c.page, THUMB_WIDTH * 2, { mime: "image/jpeg", quality: 0.7 });
+					// 0.29 (#10): drawn as it is handed in (without study tapes).
+					const url = renderThumbnail(cleanPagesForExport([c.page], TAPES_ONLY)[0] ?? c.page, THUMB_WIDTH * 2, { mime: "image/jpeg", quality: 0.7 });
 					if (url) c.img.src = url;
 				} catch {
 					// A page that cannot be drawn is still choosable by its number.

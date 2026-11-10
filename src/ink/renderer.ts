@@ -1,4 +1,6 @@
-import type { AreaElement, ExcerptElement, Page, PageElement, Point, ShapeDash, Stroke, TextElement, Tool } from "../model/types";
+import type { AreaElement, ExcerptElement, Page, PageElement, Point, ShapeDash, Stroke, TapeElement, TextElement, Tool } from "../model/types";
+import { drawTape } from "./tape-render";
+import type { TapeReveal } from "../model/tape";
 import { isNewPen, MM, RENDER_FREEHAND, RENDER_INK } from "../model/types";
 import { opacityOf } from "../model/opacity";
 import { strokeTaper, writingTaper } from "../model/taper";
@@ -142,6 +144,15 @@ export function drawElement(
 	}
 	if (el.type === "area") {
 		drawArea(ctx, el);
+		return;
+	}
+	if (el.type === "tape") {
+		ctx.save();
+		try {
+			drawTape(ctx, el);
+		} finally {
+			ctx.restore();
+		}
 		return;
 	}
 	ctx.save();
@@ -317,6 +328,10 @@ export class Renderer {
 	private live: LiveStroke | null = null;
 	/** v23 (#99): the rectangle of the area highlighter being dragged, on the live layer (never saved). */
 	private areaPreview: { pageIndex: number; area: AreaElement } | null = null;
+	/** v27 (#10): the study tape being dragged, on the live layer (never saved). */
+	private tapePreview: { pageIndex: number; tape: TapeElement } | null = null;
+	/** v27 (#10): which study tapes are revealed in this view (view-only). Null: every tape hides what is under it. */
+	private tapeReveal: TapeReveal | null = null;
 	private lasso: LassoOverlay | null = null;
 	private selection: SelectionOverlay | null = null;
 	private peek: PeekOverlay | null = null;
@@ -534,6 +549,19 @@ export class Renderer {
 		this.invalidate();
 	}
 
+	/** v27 (#10): which study tapes are revealed in this view (view-only; null: none, every tape hides what is under it). */
+	setTapeReveal(reveal: TapeReveal | null): void {
+		this.tapeReveal = reveal;
+		this.invalidate();
+	}
+
+	/** v27 (#10): shows the tape being dragged (null ends it). Only the live layer is redrawn. */
+	setTapePreview(preview: { pageIndex: number; tape: TapeElement } | null): void {
+		this.tapePreview = preview;
+		this.liveDirty = true;
+		this.schedule();
+	}
+
 	/** v8: how structured boxes are labelled (the view passes translated kind names). */
 	setBoxLabel(label: BoxLabel | undefined): void {
 		this.boxLabel = label;
@@ -597,7 +625,8 @@ export class Renderer {
 			this.wet = null;
 			this.wetDone = null;
 		}
-		if (this.staticDirty || !box || this.staticCanvas.style.transform) {
+		// v27 (#10): on a page with a hidden study tape the new ink goes under the tape, so the page is drawn again in order.
+		if (this.staticDirty || !box || this.staticCanvas.style.transform || this.hasHidingTape(pageIndex)) {
 			this.invalidate();
 			if (wet && fromWet) this.releaseWet(wet, false, strokeTaper(stroke) !== undefined);
 			return;
@@ -1085,6 +1114,8 @@ export class Renderer {
 				}
 				// v8 marker badges go above the ink, so they stay visible and tappable.
 				if (!bare && page.elements?.length) this.drawMarkers(ctx, page);
+				// v27 (#10): study tapes above everything else on the page.
+				if (!bare && page.elements?.length) this.drawTapes(ctx, page);
 			} finally {
 				ctx.restore();
 			}
@@ -1183,6 +1214,26 @@ export class Renderer {
 		for (const el of elements) {
 			if (el.type !== "text" || skip(el)) continue;
 			this.guarded(ctx, "text element", () => drawTextElement(ctx, this.night ? { ...el, color: this.nightInkColor(el.color) } : el));
+		}
+	}
+
+	/** v27 (#10): whether page `pageIndex` has a study tape that hides what is under it now. */
+	private hasHidingTape(pageIndex: number): boolean {
+		const elements = this.pages[pageIndex]?.elements;
+		if (!elements) return false;
+		for (const el of elements) if (el.type === "tape" && !this.tapeReveal?.isRevealed(el.id)) return true;
+		return false;
+	}
+
+	/**
+	 * v27 (#10) study tapes: last of all, above the ink, the badges and every other element, so a hidden tape hides what is under it. A revealed
+	 * tape (view-only) is only a tint and a dashed outline.
+	 */
+	private drawTapes(ctx: CanvasRenderingContext2D, page: Page): void {
+		for (const el of page.elements ?? []) {
+			if (el.type !== "tape" || this.hiddenElements?.has(el) || this.selectedElements?.has(el)) continue;
+			const revealed = this.tapeReveal?.isRevealed(el.id) ?? false;
+			this.guarded(ctx, "tape element", () => drawTape(ctx, el, { revealed, night: this.night, scale: this.viewport.scale }));
 		}
 	}
 
@@ -1392,6 +1443,13 @@ export class Renderer {
 			ctx.strokeRect(area.area.x, area.area.y, area.area.width, area.area.height);
 			ctx.restore();
 		});
+		// v27 (#10): the study tape being dragged, with the look it will have.
+		const tape = this.tapePreview;
+		if (tape && boxes[tape.pageIndex]) this.guarded(ctx, "tape preview", () => {
+			this.beginPage(ctx, boxes[tape.pageIndex]!);
+			drawTape(ctx, tape.tape, { night: this.night, scale: this.viewport.scale });
+			ctx.restore();
+		});
 	}
 
 	/** How an area highlighter is painted: the highlighter's look in the day, its night counterpart at night, fainter when dimmed by the meaning filter. */
@@ -1456,7 +1514,9 @@ export class Renderer {
 			this.beginPage(ctx, box, clip);
 			for (const el of elements) {
 				const moved = transformElement(el, matrix, measureText);
-				drawElement(ctx, moved, this.elementImage(moved), this.boxLabel, this.equationNumbers());
+				// v27 (#10): a selected study tape keeps the look it has in the view (hidden or revealed).
+				if (moved.type === "tape") this.guarded(ctx, "tape element", () => drawTape(ctx, moved, { revealed: this.tapeReveal?.isRevealed(moved.id) ?? false, night: this.night, scale: this.viewport.scale }));
+				else drawElement(ctx, moved, this.elementImage(moved), this.boxLabel, this.equationNumbers());
 			}
 			ctx.restore();
 		}

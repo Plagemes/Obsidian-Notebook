@@ -39,7 +39,8 @@ export function infoRows(info: PageInfo): Array<[string, string]> {
 	}
 	const e = info.elements;
 	const maths = (e.equation + e.graph > 0 ? `; ${t("info.objects.math", { equations: String(e.equation), graphs: String(e.graph) })}` : "")
-		+ (e.excerpt > 0 ? `; ${t("info.objects.excerpts", { n: String(e.excerpt) })}` : "");
+		+ (e.excerpt > 0 ? `; ${t("info.objects.excerpts", { n: String(e.excerpt) })}` : "")
+		+ (e.tape > 0 ? `; ${t("tape.info", { n: String(e.tape) })}` : ""); // 0.29 studytape (#10)
 	rows.push([t("info.objects"), e.total === 0 ? t("info.objects.none") : t("info.objects.value", { text: String(e.text), images: String(e.image), boxes: String(e.box), markers: String(e.marker) }) + maths]);
 	const a = info.assets;
 	rows.push([t("info.files"), a.count === 0 ? t("info.files.none")

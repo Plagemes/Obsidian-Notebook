@@ -103,6 +103,10 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// 0.28 (#184): the paint bucket fills shapes: with the shape tool in hand it is the next thing wanted (enough for "For this page"); with a selection
 	// it steps back (the person is editing, not colouring); otherwise it only leans forward a little on a page that can be edited.
 	if (a.id === "paint-bucket") boost += hasSelection ? 0 : c.tool === "shape" ? HERE_MIN_BOOST + 2 : c.page && !c.page.locked ? 3 : 0;
+	// 0.29 (#10): the study tape comes first while its mode is on (to turn it off); revealing or hiding all the tapes fits a notebook that has
+	// tapes (enough for "For this page"); laying one leans forward a little on a PDF page (slides to learn from) when the mode is off.
+	if (a.id === "study-tape") boost += c.tapes?.drawing ? HERE_MIN_BOOST + 6 : c.page?.background === "pdf" ? 4 : 0;
+	if ((a.id === "tapes-reveal-all" || a.id === "tapes-hide-all") && (c.tapes?.total ?? 0) > 0) boost += HERE_MIN_BOOST + 2;
 	return boost;
 }
 
