@@ -311,6 +311,11 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	commentMarkers: boolean;
 	/** Add the comments to the PDF export as margin notes (a strip beside each page that has comments). */
 	commentsInPdf: boolean;
+	// 0.29 strikedelete (#96): words struck through with a line are logically deleted
+	/** Hide the words that are struck through (and their lines) in the view. The ink is never deleted; off by default. */
+	hideStruck: boolean;
+	/** Leave struck-out words out of exports and shares by default (the export dialog's own switch starts from it). Off by default. */
+	exportHideStruck: boolean;
 	headerMode: HeaderMode;
 	headerPageNumber: boolean;
 	headerPageTotal: boolean;
@@ -498,6 +503,8 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	indexPrefix: "#idx",
 	commentMarkers: true,
 	commentsInPdf: false,
+	hideStruck: false,
+	exportHideStruck: false,
 	headerMode: "off",
 	headerPageNumber: true,
 	headerPageTotal: true,
@@ -702,6 +709,8 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.indexPrefix === "string") s.indexPrefix = normalizeIndexPrefix(d.indexPrefix);
 	if (typeof d.commentMarkers === "boolean") s.commentMarkers = d.commentMarkers;
 	if (typeof d.commentsInPdf === "boolean") s.commentsInPdf = d.commentsInPdf;
+	if (typeof d.hideStruck === "boolean") s.hideStruck = d.hideStruck;
+	if (typeof d.exportHideStruck === "boolean") s.exportHideStruck = d.exportHideStruck;
 	if (isHeaderMode(d.headerMode)) s.headerMode = d.headerMode;
 	if (isHeaderAlign(d.headerAlign)) s.headerAlign = d.headerAlign;
 	if (isClipBackground(d.clipImageBackground)) s.clipImageBackground = d.clipImageBackground;

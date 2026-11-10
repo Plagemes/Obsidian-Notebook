@@ -408,6 +408,9 @@ const READING: SettingSpec[] = [
 	// 0.18 (#86): margin comments.
 	{ id: "commentMarkers", section: "reading", order: 70, name: "settings.commentMarkers", desc: "settings.commentMarkers.desc", control: { type: "toggle" }, keywords: "comments markers margin review commenti margine revisione" },
 	{ id: "commentsInPdf", section: "reading", order: 71, name: "settings.commentsInPdf", desc: "settings.commentsInPdf.desc", control: { type: "toggle" }, keywords: "comments pdf markdown export margin notes commenti esporta note a margine" },
+	// 0.29 strikedelete (#96): a line through a handwritten word marks it as deleted; it can be hidden in the view and left out of exports.
+	{ id: "hideStruck", section: "reading", order: 80, name: "settings.hideStruck", desc: "settings.hideStruck.desc", control: { type: "toggle" }, keywords: "strike strikethrough struck crossed out deleted hide words line through barrato cancellato nascondi parole riga" },
+	{ id: "exportHideStruck", section: "reading", order: 81, name: "settings.exportHideStruck", desc: "settings.exportHideStruck.desc", control: { type: "toggle" }, keywords: "strike strikethrough struck crossed out deleted export share pdf png barrato cancellato esporta condividi" },
 	// 0.20 refwindow (#107): the floating reference window.
 	{ id: "refWindowSnap", section: "reading", order: 75, name: "settings.refWindowSnap", desc: "settings.refWindowSnap.desc", control: { type: "toggle" }, keywords: "reference window floating snap edges finestra riferimento aggancio bordi" },
 

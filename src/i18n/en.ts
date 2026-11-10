@@ -5439,6 +5439,18 @@ export const en = {
 	"figures.act.caption": "Caption…",
 	"figures.act.captionEdit": "Edit caption…",
 	"figures.act.reference": "Insert reference",
+	// 0.29 strikedelete (#96): a line through a handwritten word marks it as deleted
+	"strike.action": "Hide struck words",
+	"command.hideStruck": "Hide or show the words struck through with a line",
+	"strike.hidden": "Struck words are hidden (the ink is still in the notebook)",
+	"strike.shown": "Struck words are shown, struck through",
+	"help.hideStruck": "A word with a line drawn through its middle counts as deleted. Turn this on to hide those words and their lines in the view; turn it off and they are back, struck through. The ink is never deleted. A line under or over a word does not count.",
+	"settings.hideStruck": "Hide struck-out words",
+	"settings.hideStruck.desc": "A word with a line through its middle is hidden in the view; nothing is erased.",
+	"settings.exportHideStruck": "Leave struck-out words out of exports",
+	"settings.exportHideStruck.desc": "Exports and shares leave out struck-through words. The notebook is not changed.",
+	"export.struck": "Leave out struck-out words",
+	"export.struck.desc": "Words with a line through their middle, and those lines, are not drawn in the PDF, SVG, HTML, PNG images or print. Your notebook is not changed.",
 } as const;
 
 export type MessageKey = keyof typeof en;

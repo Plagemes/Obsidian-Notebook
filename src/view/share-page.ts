@@ -4,7 +4,7 @@
 // naming rules as the exports and a notice offers to open it or copy the image. Closing the share sheet writes nothing. The document is only read.
 import { normalizePath, Modal, Setting, type App, type TFile } from "obsidian";
 import { t } from "../i18n";
-import { cleanPagesForExport, resolveCleanOptions } from "../model/clean-export";
+import { cleanPagesForExport, resolveCleanOptions, type CleanExportOptions } from "../model/clean-export";
 import { uniqueFileName } from "../model/export-markdown";
 import { DEFAULT_PNG_SCALE, planPageImages, scaleDpi } from "../model/export-pages";
 import { parsePageRange } from "../model/page-range";
@@ -37,6 +37,8 @@ export interface ShareHost {
 	pages(): readonly Page[];
 	media: NotebookMedia | null;
 	options(): ExportOptions;
+	/** 0.29 (#96): the setting "leave out struck-out words in exports and shares": the shared pictures and PDF do not show them. Absent: off. */
+	struck?: boolean;
 }
 
 /** A file ready to share, in memory. */
@@ -162,7 +164,9 @@ export class SharePageModal extends Modal {
 /** Draws the files: PNG images (one per page, or the crop of a selection) or one PDF, through the export pipeline. */
 async function prepareFiles(host: ShareHost, choice: ShareChoice, plan: Extract<SharePlan, { ok: true }>): Promise<{ files: Prepared[]; skipped: number }> {
 	// 0.19 (#239): a clean copy draws filtered copies of the pages; the document is untouched.
-	const clean = choice.clean ? {} : null;
+	// 0.29 (#96): the struck-out words setting works with or without the clean copy (without it, the study layers stay in).
+	const struck = host.struck === true;
+	const clean: CleanExportOptions | null = choice.clean ? { struck } : struck ? { markers: false, comments: false, collapsedStickies: false, struck } : null;
 	const all = host.pages();
 	const cleaned = clean ? cleanPagesForExport(all, clean) : all;
 	const base: ExportOptions = { ...host.options(), layers: "both" };

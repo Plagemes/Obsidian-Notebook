@@ -5440,4 +5440,16 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"figures.act.caption": "Didascalia…",
 	"figures.act.captionEdit": "Modifica didascalia…",
 	"figures.act.reference": "Inserisci riferimento",
+	// 0.29 strikedelete (#96): una riga su una parola scritta a mano la segna come cancellata
+	"strike.action": "Nascondi le parole barrate",
+	"command.hideStruck": "Nascondi o mostra le parole barrate con una riga",
+	"strike.hidden": "Le parole barrate sono nascoste (l'inchiostro resta nel quaderno)",
+	"strike.shown": "Le parole barrate sono visibili, barrate",
+	"help.hideStruck": "Una parola con una riga tracciata a metà altezza vale come cancellata. Attivalo per nascondere quelle parole e le loro righe nella vista; disattivalo e tornano visibili, barrate. L'inchiostro non viene mai cancellato. Una riga sotto o sopra la parola non conta.",
+	"settings.hideStruck": "Nascondi le parole barrate",
+	"settings.hideStruck.desc": "Una parola con una riga a metà altezza è nascosta nella vista; nulla si cancella.",
+	"settings.exportHideStruck": "Escludi le parole barrate dalle esportazioni",
+	"settings.exportHideStruck.desc": "Esportazioni e condivisioni escludono le parole barrate. Il quaderno non cambia.",
+	"export.struck": "Escludi le parole barrate",
+	"export.struck.desc": "Le parole con una riga a metà altezza, e quelle righe, non vengono disegnate nel PDF, SVG, HTML, nelle immagini PNG o nella stampa. Il quaderno non cambia.",
 };

@@ -83,6 +83,7 @@ export interface UiContext {
 		/** wave 0.10 (51): the user switched this view to read-only mode. */ readOnly?: boolean;
 		/** 0.17 (#71): snap is available (the setting is not "off") and whether it is on now (not paused in this view). Optional (absent: available, on). */ snapAvailable?: boolean; snap?: boolean;
 		/** 0.28 (#256): the "Reorder lines" mode (handles at the left of the handwritten lines) is on. Optional (off when absent). */ lineHandles?: boolean;
+		/** 0.29 (#96): the struck-through words are hidden in the view. Optional (off when absent). */ struckHidden?: boolean;
 	};
 	/** wave 0.10 (81): the device can print (desktop with a print dialog); false or absent on a phone or tablet. */
 	canPrint?: boolean;
@@ -534,6 +535,8 @@ export const ACTIONS: readonly ActionDef[] = [
 	{ id: "meaning-filter", label: "meaning.filter.menu", icon: "filter", group: "view", surfaces: ["sheet", "notebook"], priority: 34, scope: "view", command: "command.meaningFilter", readOnly: true, keywords: "colour color meaning legend filter definition example significato colori filtra legenda" },
 	{ id: "meaning-legend", label: "meaning.menu", icon: "tags", group: "view", surfaces: ["sheet", "notebook"], priority: 33, scope: "view", command: "command.meaningLegend", readOnly: true, keywords: "colour color meaning legend definition example significato colori legenda" },
 	{ id: "meaning-digest", label: "meaning.digest.menu", icon: "tags", group: "share", surfaces: ["sheet", "notebook"], priority: 24.5, scope: "view", command: "command.meaningDigest", readOnly: true, keywords: "colour color meaning digest collect note definition example raccolta colori significato" },
+	// 0.29 (#96): a line through a handwritten word marks it as deleted; this view switch hides the struck words (the ink stays in the notebook).
+	{ id: "toggle-hide-struck", label: "strike.action", icon: "strikethrough", group: "view", surfaces: ["sheet"], priority: 32, scope: "view", command: "command.hideStruck", readOnly: true, checked: (c) => !!c.toggles.struckHidden, keywords: "strike strikethrough struck crossed out deleted hide words line through barrato cancellato nascondi parole riga" },
 	// 0.18 mentions (O7): the notes that link to the page in view (and to the notebook as a whole).
 	{ id: "mentions", label: "mentions.menu", icon: "links-coming-in", group: "share", surfaces: ["page", "sheet", "notebook"], priority: 24, scope: "view", command: "command.mentions", readOnly: true, keywords: "mentions backlinks linked notes links menzioni collegamenti note" },
 	// 0.19 (#228): every picture and figure cut-out of the section, the notebook or some pages, in one grid.

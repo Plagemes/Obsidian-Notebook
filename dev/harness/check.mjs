@@ -239,6 +239,8 @@ for (const doc of ["ctxpalette", "ctxpalettew"]) for (const device of ["tablet",
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "geosuggest", theme, device, lowLatency: false });
 // 0.29 studytape (#10): study tape, hidden and revealed (dev/harness/studytape-check.ts), tablet and phone, light and dark.
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "studytape", theme, device, lowLatency: false });
+// 0.29 strikedelete (#96): struck words hidden in the view, the export switch (dev/harness/strikedelete-check.ts).
+for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "strikedelete", theme, device, lowLatency: false });
 // 0.25 baseline (#93): Align to baseline (dev/harness/baseline-check.ts).
 for (const device of ["tablet", "phone"]) for (const theme of ["light", "dark"]) SCENARIOS.push({ doc: "baseline", theme, device, lowLatency: false });
 // 0.25 papersuggest (#409): suggested paper in the "+" strip (dev/harness/papersuggest-check.ts).
@@ -486,6 +488,7 @@ async function main() {
 				else if (s.doc === "baseline") report = await cdp.evaluate("window.harness.checkBaseline()", 90000); // 0.25 baseline
 				else if (s.doc === "geosuggest") report = await cdp.evaluate("window.harness.checkGeosuggest()", 90000); // 0.28 geosuggest
 				else if (s.doc === "studytape") report = await cdp.evaluate("window.harness.checkStudytape()", 90000); // 0.29 studytape
+				else if (s.doc === "strikedelete") report = await cdp.evaluate("window.harness.checkStrikedelete()", 90000); // 0.29 strikedelete
 				else if (s.doc === "markedview") report = await cdp.evaluate("window.harness.checkMarkedview()", 90000); // 0.25 markedview
 				else if (s.doc === "macros") report = await cdp.evaluate("window.harness.checkMacros()", 120000); // 0.27 macros
 				else if (s.doc === "linehandle") report = await cdp.evaluate("window.harness.checkLinehandle()", 90000); // 0.28 linehandle
@@ -748,6 +751,19 @@ async function main() {
 						writeFileSync(join(designDir, `studytape-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`studytape ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.29 strikedelete: struck words shown, hidden, and the export dialog with its switch.
+			if (s.doc === "strikedelete") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["shown", "hidden", "dialog"]) {
+					try {
+						await cdp.evaluate(`window.harness.strikedeleteShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `strikedelete-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`strikedelete ${state} screenshot: ${e.message}`);
 					}
 				}
 			}
