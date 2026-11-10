@@ -237,7 +237,8 @@ export class PdfTextTools {
 			this.clearSelection();
 			return;
 		}
-		const cached = await this.cache.get(d.asset, d.pdfPage);
+		// The text the page SHOWS (a crop leaves runs out: review Q5).
+		const cached = await this.cache.getView(d.asset, d.pdfPage, viewOf(this.host.doc()?.pages[d.pageIndex]?.background));
 		if (!this.on || this.destroyed) return;
 		if (!cached) {
 			this.clearSelection();
@@ -259,8 +260,8 @@ export class PdfTextTools {
 
 	/** Turns the drag so far into the selection. */
 	private applyDrag(d: Drag): void {
-		const cached = this.cache.peek(d.asset, d.pdfPage);
 		const page = this.host.doc()?.pages[d.pageIndex];
+		const cached = this.cache.peekView(d.asset, d.pdfPage, viewOf(page?.background));
 		if (!cached || !page || page.id !== d.pageId) return;
 		const rect = backgroundRect(page);
 		const view = viewOf(page.background);
@@ -311,7 +312,8 @@ export class PdfTextTools {
 	/** The selected text, or null. */
 	copyText(): string | null {
 		const s = this.sel;
-		const cached = s ? this.cache.peek(s.asset, s.pdfPage) : null;
+		const shownPage = s ? this.host.doc()?.pages.find((p) => p.id === s.pageId) : undefined;
+		const cached = s ? this.cache.peekView(s.asset, s.pdfPage, viewOf(shownPage?.background)) : null;
 		if (!s || !cached) return null;
 		const text = selectionText(cached.content, cached.text, s.range);
 		return text.length > 0 ? text : null;
@@ -433,13 +435,15 @@ export class PdfTextTools {
 					ctx.setLineDash([4, 3]);
 					for (const l of found.links) {
 						const r = pdfRectToPage(l, rect, found, viewOf(bg));
+						// A link the crop leaves out is not on the page (review Q5).
+						if (r.x + r.width <= rect.x || r.y + r.height <= rect.y || r.x >= rect.x + rect.width || r.y >= rect.y + rect.height) continue;
 						ctx.strokeRect((box.x + r.x) * v.scale + v.offsetX, (box.y + r.y) * v.scale + v.offsetY, r.width * v.scale, r.height * v.scale);
 					}
 					ctx.setLineDash([]);
 				}
 			}
 			if (s && s.pageIndex === i && s.pageId === page.id) {
-				const cached = this.cache.peek(s.asset, s.pdfPage);
+				const cached = this.cache.peekView(s.asset, s.pdfPage, viewOf(bg));
 				if (!cached) continue;
 				ctx.fillStyle = SELECTION_FILL;
 				const rects = this.rectsOf(s, cached, rect, viewOf(bg));

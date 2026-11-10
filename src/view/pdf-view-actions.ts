@@ -7,7 +7,7 @@ import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
 import { Batch, type Command } from "../model/history";
 import { rotationOf, viewOf, viewSize } from "../model/pdf-view";
-import { buildViewCommands, pagesOfSamePdf, type ViewBuild, type ViewEdit } from "../model/pdf-view-ops";
+import { buildViewCommands, pagesOfSamePdf, skippedReasons, type ViewBuild, type ViewBuildOptions, type ViewEdit } from "../model/pdf-view-ops";
 import { MM, type Page } from "../model/types";
 import { iconButton } from "../ui/components/dom";
 import { modalShell, shellButton, shellCheck, shellNote, type ModalShell } from "../ui/components/modal-shell";
@@ -36,11 +36,24 @@ async function sourceSizes(host: PdfActionHost, page: Page): Promise<Size[] | nu
 /** Runs the commands of a build as one undo step and says what could not be done. */
 function runBuild(host: PdfActionHost, page: Page, build: ViewBuild): void {
 	if (build.commands.length > 0) {
-		const cmds: Command[] = build.commands;
+		const cmds: Command[] = build.ordered;
 		host.run(cmds.length === 1 ? cmds[0]! : new Batch("Rotate or crop PDF page", cmds), host.doc.pages.indexOf(page));
 		if (build.grown > 0) showNotice(t("pdfView.grown", { n: String(build.grown) }), 6000);
 	}
-	if (build.blocked > 0) showNotice(t("pdfView.blocked", { n: String(build.blocked) }), 9000);
+	const reasons = skippedReasons(build);
+	if (reasons.length === 0) return;
+	// A page that has redaction boxes is the only reason nothing was done: say what to do about it.
+	if (build.commands.length === 0 && reasons.length === 1 && reasons[0]![0] === "redacted") {
+		showNotice(t("pdfView.redacted"), 9000);
+		return;
+	}
+	const n = reasons.reduce((sum, [, count]) => sum + count, 0);
+	showNotice(t("pdfView.skipped", { n: String(n), why: reasons.map(([why]) => t(`pdfView.why.${why}` as const)).join("; ") }), 10000);
+}
+
+/** What `buildViewCommands` needs to know about the notebook and its redaction boxes. */
+function buildOptions(host: PdfActionHost): ViewBuildOptions {
+	return { doc: host.doc, redacted: (pageId) => host.hasRedaction?.(pageId) === true };
 }
 
 /** The targets of an edit: `pages` with the size of the PDF page each one shows. */
@@ -62,13 +75,18 @@ export async function rotatePdfPage(host: PdfActionHost, page: Page, turns: 1 | 
 	}
 	const sizes = await sourceSizes(host, page);
 	if (!sizes || !host.editable() || !host.doc.pages.includes(page)) return;
-	runBuild(host, page, buildViewCommands(targetsOf(sizes, [page]), { turns }));
+	runBuild(host, page, buildViewCommands(targetsOf(sizes, [page]), { turns }, buildOptions(host)));
 }
 
 /** Page sheet action: the dialog to turn and crop the PDF page, on this page or on every page of the same PDF. */
 export async function openPdfCropModal(host: PdfActionHost, page: Page): Promise<void> {
 	if (!host.editable() || page.background?.kind !== "pdf") {
 		showNotice(t("pdf.noPdfPage"));
+		return;
+	}
+	// Redaction boxes are in page coordinates: a page that has some is not turned or cropped (the dialog would only apply it to the other pages).
+	if (host.hasRedaction?.(page.id)) {
+		showNotice(t("pdfView.redacted"), 9000);
 		return;
 	}
 	const sizes = await sourceSizes(host, page);
@@ -256,10 +274,15 @@ class PdfCropModal extends Modal {
 		const edit: ViewEdit = { turns };
 		// The crop is stored on the PDF page itself (unrotated), so it is the same whatever the turn. A turn alone keeps the crop each page has.
 		const cropNow = frameToCrop(this.frame, this.turned, this.source);
-		const cropBefore = frameToCrop(this.initialFrame, this.initialTurn, this.source);
+		const cropBefore = frameToCrop(this.initialFrame, this.initialTurn, this.source) ?? null;
+		// A frame that cannot be stored as a crop is refused, never read as "no crop" (review Q12).
+		if (cropNow === undefined) {
+			showNotice(t("pdfView.invalidFrame"), 6000);
+			return;
+		}
 		if (JSON.stringify(cropNow) !== JSON.stringify(cropBefore)) edit.crop = cropNow;
 		const pages = this.all ? this.siblings : [this.page];
-		const build = buildViewCommands(targetsOf(this.sizes, pages.filter((p) => this.host.doc.pages.includes(p))), edit);
+		const build = buildViewCommands(targetsOf(this.sizes, pages.filter((p) => this.host.doc.pages.includes(p))), edit, buildOptions(this.host));
 		this.close();
 		runBuild(this.host, this.page, build);
 	}

@@ -6,6 +6,7 @@
  * fetches a few pages at a time, matches them, and gives the event loop back whenever it has used its time budget, so
  * typing, scrolling and drawing stay responsive on a PDF with hundreds of pages. A newer search cancels the older one.
  */
+import { effectiveCrop, viewKey, type PdfView } from "../model/pdf-view";
 import type { PageTextContent } from "./text-items";
 import { assemblePageText, findInPage, snippetOf, type PageText, type Snippet, type TextHit } from "./text-search";
 
@@ -18,6 +19,19 @@ export interface PdfTextSource {
 export interface CachedPage {
 	content: PageTextContent;
 	text: PageText;
+}
+
+/**
+ * 0.28 review (Q5): the text of a page as the page SHOWS it: the runs a crop leaves out are not on the page, so they are not searched, selected,
+ * copied or followed. The text is assembled again from the runs that are left (its offsets are those of the returned page only). The page
+ * itself when the view has no crop or the crop leaves every run in.
+ */
+export function visibleOf(page: CachedPage, view: PdfView | undefined): CachedPage {
+	if (!view?.crop) return page;
+	const c = effectiveCrop(view, page.content);
+	const items = page.content.items.filter((b) => b.x < c.x + c.width && b.x + b.width > c.x && b.y < c.y + c.height && b.y + b.height > c.y);
+	if (items.length === page.content.items.length) return page;
+	return { content: { ...page.content, items }, text: assemblePageText(items) };
 }
 
 /** At most this many pages are kept (a few MB); the oldest go first. */
@@ -46,6 +60,34 @@ export class PageTextCache {
 		return this.pages.get(PageTextCache.key(asset, page)) ?? null;
 	}
 
+	/** 0.28 review (Q5): per (page, view) the text a cropped page shows (see `visibleOf`). */
+	private readonly shown = new Map<string, CachedPage>();
+
+	private shownOf(asset: string, page: number, view: PdfView | undefined, base: CachedPage): CachedPage {
+		if (!view?.crop) return base;
+		const key = `${PageTextCache.key(asset, page)}|${viewKey(view)}`;
+		let have = this.shown.get(key);
+		if (!have) {
+			have = visibleOf(base, view);
+			this.shown.set(key, have);
+			// A page's views are few: the memo is dropped with its page, or when it grows past the cache.
+			if (this.shown.size > this.max) this.shown.clear();
+		}
+		return have;
+	}
+
+	/** The page as `view` shows it, if the page is cached already. */
+	peekView(asset: string, page: number, view: PdfView | undefined): CachedPage | null {
+		const base = this.peek(asset, page);
+		return base ? this.shownOf(asset, page, view, base) : null;
+	}
+
+	/** The page as `view` shows it; null when it could not be read. */
+	async getView(asset: string, page: number, view: PdfView | undefined): Promise<CachedPage | null> {
+		const base = await this.get(asset, page);
+		return base ? this.shownOf(asset, page, view, base) : null;
+	}
+
 	/** The page's text; null when it could not be read. */
 	get(asset: string, page: number): Promise<CachedPage | null> {
 		const key = PageTextCache.key(asset, page);
@@ -70,10 +112,12 @@ export class PageTextCache {
 	clear(asset?: string): void {
 		if (asset === undefined) {
 			this.pages.clear();
+			this.shown.clear();
 			return;
 		}
 		const prefix = `${asset}|`;
 		for (const key of [...this.pages.keys()]) if (key.startsWith(prefix)) this.pages.delete(key);
+		for (const key of [...this.shown.keys()]) if (key.startsWith(prefix)) this.shown.delete(key);
 	}
 
 	private store(key: string, entry: CachedPage): void {
@@ -92,6 +136,8 @@ export interface SearchTarget {
 	asset: string;
 	/** 1-based page of the PDF. */
 	pdfPage: number;
+	/** 0.28 (#76): the turn and crop the page shows; the runs a crop leaves out are not searched. */
+	view?: PdfView;
 }
 
 /** One match: where it is and the text around it. */
@@ -155,7 +201,7 @@ export async function runSearch(options: SearchRunOptions, handlers: SearchRunHa
 	let sliceStart = now();
 	for (let i = 0; i < targets.length; i += batch) {
 		const group = targets.slice(i, i + batch).filter((t) => !failed.has(t.asset));
-		const pages = await Promise.all(group.map((t) => cache.get(t.asset, t.pdfPage)));
+		const pages = await Promise.all(group.map((t) => cache.getView(t.asset, t.pdfPage, t.view)));
 		if (signal.cancelled) return { ...result, cancelled: true };
 		for (let k = 0; k < group.length; k++) {
 			const target = group[k]!;
@@ -165,7 +211,7 @@ export async function runSearch(options: SearchRunOptions, handlers: SearchRunHa
 				failed.add(target.asset);
 				continue;
 			}
-			const key = `${target.asset}|${target.pdfPage}`;
+			const key = `${target.asset}|${target.pdfPage}|${viewKey(target.view)}`;
 			let hits = matched.get(key);
 			if (!hits) {
 				hits = findInPage(page.text, query, limit - total);
