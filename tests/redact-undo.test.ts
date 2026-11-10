@@ -10,7 +10,7 @@ import { insertTableCommand, planTableEdit } from "../src/ink/table-edit";
 import { createDocument, createPage, createStroke, quantizePoint } from "../src/model/document";
 import { UpdateItems, type PageItem } from "../src/model/groups";
 import { jumpHistory } from "../src/model/history-jump";
-import { AddElement, AddPage, AddStroke, Batch, EraseStrokes, History, type Command, type StepInfo } from "../src/model/history";
+import { AddElement, AddStroke, Batch, EraseStrokes, History, type Command, type StepInfo } from "../src/model/history";
 import { pageRules } from "../src/model/page-undo";
 import type { RedactBox } from "../src/model/redact";
 import { checkContent, freezeStroke } from "../src/model/serialize";
