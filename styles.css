@@ -21198,3 +21198,13 @@ body.notebook-style-obsidian {
 		display: none;
 	}
 }
+
+/* ===== 0.28 pageundo ===== */
+/* History panel with per-page undo on: the steps of the page in view carry an accent edge; steps that touch the whole notebook are drawn quieter. */
+.nb-ui.nb-hist-modal .nb-hist-row.is-here {
+	border-left: 3px solid var(--nb-accent);
+}
+
+.nb-ui.nb-hist-modal .nb-hist-row.is-global .nb-hist-row-title {
+	color: var(--nb-text-muted);
+}

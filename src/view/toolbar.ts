@@ -379,6 +379,20 @@ export class Toolbar {
 		releaseSwallowed();
 	}
 
+	/**
+	 * 0.28 (#98): with per-page undo on, the two buttons say they act on the page in view: the name (tooltip and the title of the long-press
+	 * bubble) and the one-line help change. Off: the plain Undo / Redo again.
+	 */
+	setPageUndo(on: boolean): void {
+		for (const [button, key, help] of [
+			[this.undoButton, on ? "tool.undo.page" : "tool.undo", on ? "help.undoPage" : "help.undo"],
+			[this.redoButton, on ? "tool.redo.page" : "tool.redo", on ? "help.redoPage" : "help.redo"],
+		] as const) {
+			button.setAttribute("aria-label", t(key));
+			button.dataset.help = help;
+		}
+	}
+
 	setHistory(canUndo: boolean, canRedo: boolean): void {
 		this.undoButton.disabled = !this.editable || !canUndo;
 		this.redoButton.disabled = !this.editable || !canRedo;

@@ -4424,3 +4424,41 @@ Settings, Writing: *Tasks on planner pages* (on by default). Implemented, not ve
 | Chip, list, open at line, incremental updates, setting, stacking | yes | harness `doc=plannertasks` and `doc=pillstack` | | | |
 | Tick a task from the chip | no | | | | read only by design (no safe block-id writer for ordinary notes) |
 | Overlay in exports | no | | | | left out in this wave |
+
+### 0.28 — pageundo: per-page undo (roadmap #98; steps 3180-3199)
+
+Manual steps (real Obsidian; nothing here is verified on Android hardware). Use a notebook of at least three pages. No document format change.
+
+3180. **Off by default.** Settings > Pages > *Undo on this page only* is off. Write on pages 1, 2 and 3, then tap Undo: the newest step of the notebook goes back, whatever its page (as before). The undo button reads *Undo*.
+3181. **Turn it on.** Switch the setting on: the undo and redo buttons now read *Undo on this page* / *Redo on this page* (hover tooltip with a mouse; hold a finger on the icon for the explanation bubble, which says the last change on this page is taken back and the other pages keep theirs).
+3182. **Interleaved pages.** Write a stroke on page 1, one on page 2, one on page 3, another on page 1, another on page 2. Go to page 1 and tap Undo: only page 1's newest stroke goes. Go to page 2 and Undo: page 2's newest goes. Page 3 and the older strokes are untouched.
+3183. **Button state follows the page.** Go to a page you never wrote on: Undo is disabled. Go to one you did: it is enabled. Redo likewise after an undo on that page.
+3184. **Redo on a page.** On page 1 undo twice, then Redo once: the older of the two strokes comes back first (the order is the page's own). Redo again: the newer one.
+3185. **Other pages do not clear it.** Undo a stroke on page 1, write on page 3, go back to page 1: Redo is still available and brings the stroke back. Undo it again, write on page 1 itself: Redo on page 1 is now disabled (a new edit on a page drops that page's redo steps).
+3186. **A step on two pages.** Select ink on page 1 and move it to page 2 (*Move selection to page*). On page 1 tap Undo: nothing is undone and one notice says that the last change also touched other pages and points to the history panel. The same on page 2. Older steps of those pages are NOT undone behind its back.
+3187. **Past the global step.** Open *Action history* and tap the step just before the move: everything after it is undone in order (the panel stays global). Per-page Undo works again afterwards.
+3188. **Page structure.** Add a page and write on it: Undo twice on the new page takes back the stroke, then says the page change is global (the page is not removed by a per-page Undo). Deleting or reordering pages behaves the same; Undo on a page that the deleted page was not is unaffected.
+3189. **Pictures.** Insert the same picture on pages 1 and 2. On page 1 Undo: a notice says the step added a file another page still uses and nothing is undone; on page 2 Undo works, and then page 1 can be undone.
+3190. **Macros.** Run a macro whose steps write on one page: one Undo on that page takes the whole run back. A macro that writes on two pages is one global step (notice).
+3191. **Locked pages.** Lock page 2 after writing on it (or let a synced lock arrive): Undo on page 2 does nothing and says the page is locked; page 1 still undoes. Unlock page 2: its Undo works again.
+3192. **Read-only.** In read-only mode neither button does anything and the history is intact afterwards.
+3193. **Two pages side by side.** In a spread, write on the left then the right page and tap Undo: it acts on the page you touched last; touch the other page and Undo acts on that one.
+3194. **History panel.** With the setting on the panel opens with a note about per-page undo; steps of the page in view show an accent edge and *this page*; steps that touch several pages or the notebook show *whole notebook* in a muted title. The order and the *Now* tile are the global ones; with the setting off nothing is marked.
+3195. **Panel after a page undo.** Undo on page 1 although page 2 was written later: in the panel the undone step of page 1 sits in the *Undone steps* group at the top while page 2's step is still the current point. Tapping the undone step brings it back.
+3196. **Switch it off again.** Switch the setting off: the buttons read *Undo* / *Redo* again, Undo takes back the newest step of the notebook, and a new edit clears the whole redo list as it always did.
+3197. **Text boxes and settings.** Edit a text box on page 1, write on page 2, Undo on page 1: the text edit goes back, page 2 is untouched. Edit a page property (paper, margins) on page 3: it is a step of page 3 and is undone there.
+3198. **Looks.** Light and dark, English and Italian (the setting, the buttons' names, the notices, the panel note and marks); the setting sits in Pages and its description is one line.
+3199. **S Pen button after a page undo (known limit).** Undo on page 1, then write on page 2 and replay a contact with the side button held late: the replay as an eraser may not happen while a step undone on another page waits for redo (the stroke stays as ink and one Undo on page 2 takes it back).
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Which pages a step touches (batches, groups, lock-exempt wrapper), local versus global, every command class classified (pure) | yes | `tests/page-undo.test.ts` | | | |
+| Undo / Redo on one page: newest step of the page, own inverse, interleaved pages, out-of-order redo, order inside a page | yes | `tests/page-undo.test.ts`, harness `doc=pageundo` | | | |
+| Dependency refusal: a step that touched several pages, page structure, notebook-wide and unknown steps are never undone out of order | yes | `tests/page-undo.test.ts` | | | |
+| A picture or slide entry another page uses keeps the step global | yes | `tests/page-undo.test.ts` | | | |
+| Redo list kept for other pages, dropped by an edit on the same page or a global one; unchanged with the setting off | yes | `tests/page-undo.test.ts` | | | |
+| Groups, locked pages, remap after an upkeep swap, the document guard, read-only | yes | `tests/page-undo.test.ts` | | | |
+| History panel marks (this page, whole notebook), global list and jumps unchanged | yes | `tests/page-undo-panel.test.ts`, harness `doc=pageundo` | | | |
+| Setting *Undo on this page only* (default off), button names and help in en and it | yes | `tests/page-undo-panel.test.ts`, `tests/settings-schema.test.ts`, harness `doc=pageundo` | | | |
+| Undo on the page last touched in a two-page spread | yes | uses `currentPageIndex` (not run in the harness) | | | |
+| S Pen side-button replay while a page-undone step waits for redo | no | | | | `retractStroke` still needs an empty redo list |

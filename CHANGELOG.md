@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### pageundo
+- **Per-page undo (#98).** A new switch, *Undo on this page only* (Settings > Pages, off by default), makes Undo and Redo act on the page in view (in a two-page spread, the page you touched last): the latest change made on that page is taken back even if you wrote on other pages since, and the other pages are never touched. The toolbar buttons then read *Undo on this page* / *Redo on this page* (tooltip and long-press help). With the switch off nothing changes.
+- **One history, not several.** The notebook still keeps ONE history; each step knows which pages it touched. Undo on a page takes the newest step that touches that page out of the middle of the history and runs the step's own inverse (never a snapshot), so later edits of other pages are never dropped. It is safe because no later step touches that page. A step that touched several pages (moving ink between pages, copies to a page), the page list (add, delete, move, reorder, insert) or the whole notebook (properties, saved views, files), or one that added a picture another page still uses, is *global*: it is never undone out of order, and a notice says so and points to the history panel.
+- **Redo.** An undone step stays redoable while you write on other pages; a new edit on the same page (or any global change) drops it, as a new edit always does. Redo on a page brings back the step that page undid last. The guards are the ones of an ordinary Undo: locked pages, the document check (a step that would make the notebook unsavable is refused and dropped), groups (a macro run is one step) and the read-only mode.
+- **History panel.** With the switch on, the panel marks the steps of the page in view ("this page") and the steps that touch the whole notebook ("whole notebook") and says so; the list, the order and the jumps stay global.
+- **Code.** `src/model/page-undo.ts` (which pages a step touches, `pageRules`), `src/model/page-scope.ts` (types and pure rules the History needs), `History.undoOnPage` / `redoOnPage` / `peekOnPage` / `setPageRules` / `setPagewise` in `src/model/history.ts`; no format change. Tests: `tests/page-undo.test.ts`, `tests/page-undo-panel.test.ts`; harness scenario `doc=pageundo`.
+
 ## 0.27.0 — 2026-11-09
 
 Eight features: stroke taper for the pens, two pages side by side, headings when zoomed out, macros, a layout that follows the input device, workspace presets, suggested search terms for PDFs and tasks due on planner pages. The notebook format moves to version 25 (taper): the migration from version 24 is automatic, and Notebook 0.26 and older open a v25 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).

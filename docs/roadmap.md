@@ -248,7 +248,7 @@ Non-trivial features, many of them original to this project. Priority **P1** nex
 95. **P1** 🧪 Automatic next page: writing at the bottom of the last page appends a new page (different from infinite pages).
 96. **P2** Strike-through as logical deletion: a line over a word marks it as deleted; it stays readable struck through and can be hidden.
 97. **P1** 🧪 Selective eraser: erase only one kind of ink (only highlighter, only one colour) and leave the rest.
-98. **P2** Per-page undo: each page has its own history; undo on one page never touches another.
+98. **P2** 🧪 Per-page undo: each page has its own history; undo on one page never touches another. (0.28: Settings > Pages > *Undo on this page only*, off by default; one global History where every step knows the pages it touched, so Undo / Redo act on the newest step of the page in view with the step's own inverse; steps that touch several pages, the page list or the whole notebook are never undone out of order; the history panel marks them and stays global. `model/page-undo.ts`, `History.undoOnPage`.)
 99. **P2** 🧪 Area highlighter: translucent rectangles, ideal on scanned PDFs.
 100. **P1** 🧪 Invisible ink for self-testing: write answers with a hidden pen and reveal them with "show solutions".
 101. **P2** 🧪 Colours with meaning: define what each colour means (red = definition, blue = example), filter the view by it and generate a digest per colour.

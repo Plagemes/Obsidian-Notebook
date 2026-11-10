@@ -5187,6 +5187,22 @@ export const en = {
 	"help.searchSuggest.outline": "From the outline of the PDF.",
 	"help.searchSuggest.heading": "From a title or label in this notebook.",
 	"help.searchSuggest.text": "A word you often use in this notebook.",
+	// 0.28 pageundo (#98): per-page undo
+	"settings.pageUndo": "Undo on this page only",
+	"settings.pageUndo.desc": "Undo and Redo take back the last change made on the page in view, not on other pages.",
+	"tool.undo.page": "Undo on this page",
+	"tool.redo.page": "Redo on this page",
+	"help.undoPage": "Take back the last change made on this page. Other pages keep theirs.",
+	"help.redoPage": "Bring back the change you just undid on this page.",
+	"pageundo.nothing": "Nothing to undo on this page.",
+	"pageundo.nothing.elsewhere": "Nothing to undo on this page. Other pages have changes you can undo from there.",
+	"pageundo.global": "The last change on this page also touched other pages or the whole notebook, so it is not undone from here. Open the history panel to go back past it.",
+	"pageundo.shared": "The last change on this page added a file that another page also uses, so it is not undone from here. Open the history panel to go back past it.",
+	"pageundo.redo.nothing": "Nothing to redo on this page.",
+	"pageundo.redo.global": "The next change to redo on this page also touches other pages or the whole notebook. Use the history panel to bring it back.",
+	"histpanel.scope.global": "whole notebook",
+	"histpanel.scope.here": "this page",
+	"histpanel.pageundo.note": "Per-page undo is on: Undo and Redo only act on the page in view. A step marked “whole notebook” touches several pages or the page list, so it cannot be undone from one page. Tapping a step goes back or forward through all pages, in order.",
 } as const;
 
 export type MessageKey = keyof typeof en;

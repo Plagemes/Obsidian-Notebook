@@ -284,6 +284,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	autoLineBreak: boolean;
 	/** 0.23 (#314): when the pen lifts, a tiny hook at the start or the end of the line is cut off the saved stroke (ink/hook-clean.ts). Off by default. */
 	trimHooks: boolean;
+	/** 0.28 (#98): Undo and Redo act on the page in view only (the newest step that touched just that page); the history panel stays global. Off by default. */
+	pageUndo: boolean;
 	// 0.15 (#75): automatic page header / footer
 	// 0.16 (#90): highlights digest
 	/** How the digest note of the highlights is grouped: by page or by colour. */
@@ -470,6 +472,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	notebookTabs: false,
 	autoLineBreak: false,
 	trimHooks: false,
+	pageUndo: false,
 	digestGroup: "page",
 	colourMeanings: [],
 	meaningTolerance: "normal",
@@ -666,6 +669,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.notebookTabs === "boolean") s.notebookTabs = d.notebookTabs;
 	if (typeof d.autoLineBreak === "boolean") s.autoLineBreak = d.autoLineBreak;
 	if (typeof d.trimHooks === "boolean") s.trimHooks = d.trimHooks;
+	if (typeof d.pageUndo === "boolean") s.pageUndo = d.pageUndo;
 	if (d.digestGroup === "page" || d.digestGroup === "colour") s.digestGroup = d.digestGroup;
 	s.colourMeanings = parseLegend(d.colourMeanings);
 	if (isToleranceName(d.meaningTolerance)) s.meaningTolerance = d.meaningTolerance;

@@ -5,6 +5,7 @@ import { lockedChanges, snapshotLocked } from "./page-lock";
 import { elementTextChanged, SetPageTimes, stampPages } from "./page-times";
 import { shiftComments } from "./comments";
 import { shiftPivots } from "./states";
+import { redoSurvives, touchesPage, type PageRules, type PageStepResult } from "./page-scope";
 import type { Asset, NotebookDocument, NotebookMeta, Page, PageBackground, PageComment, PageElement, PageMargins, PageStates, Paper, Stroke } from "./types";
 
 /** A command knows how to apply and revert itself on a document: no snapshots. */
@@ -653,6 +654,11 @@ export class AddAsset implements Command {
 	private added = false;
 	constructor(readonly asset: Asset) {}
 
+	/** 0.28 (#98): this command added the record (it was not there), so undoing it takes the record away. */
+	get adds(): boolean {
+		return this.added;
+	}
+
 	apply(doc: NotebookDocument): void {
 		const assets = (doc.assets ??= {});
 		this.added = !Object.prototype.hasOwnProperty.call(assets, this.asset.id);
@@ -1014,8 +1020,39 @@ export class History {
 		this.undoStack.push(cmd);
 		// 0.27 review (M3): inside a group the stack is trimmed once, when the group ends, so one group costs one entry like one step.
 		if (!this.grouping) this.trimUndo();
-		this.redoStack = [];
+		this.redoStack = this.keptRedo(cmd);
 		this.grouping?.push(cmd);
+	}
+
+	/**
+	 * 0.28 (#98): the redo steps that stay after the new edit `cmd`. Ordinarily none. With per-page undo on, a step undone on its own page
+	 * stays redoable while the person writes on another page: only the undone steps that touch the pages `cmd` touches (and every global
+	 * one) are dropped. See `redoSurvives`.
+	 */
+	private keptRedo(cmd: Command): Command[] {
+		const rules = this.rules;
+		if (!this.pagewise || !rules || this.redoStack.length === 0) return [];
+		const fresh = rules.scope(cmd);
+		return this.redoStack.filter((r) => redoSurvives(rules.scope(r), fresh));
+	}
+
+	/** 0.28 (#98): how the pages a step touches are told (page-undo.ts `pageRules`); null: per-page undo is not available. */
+	private rules: PageRules | null = null;
+	/** 0.28 (#98): per-page undo is on, so a new edit keeps the undone steps of the other pages. Off: the redo list is cleared as always. */
+	private pagewise = false;
+
+	/** 0.28 (#98): gives the history the rules that tell which pages a step touches. Needed by `undoOnPage`, `redoOnPage` and `pagewise`. */
+	setPageRules(rules: PageRules | null): void {
+		this.rules = rules;
+	}
+
+	/** 0.28 (#98): the "Per-page undo" setting. It only changes what a new edit does to the redo list; Undo and Redo themselves are chosen by the caller. */
+	setPagewise(on: boolean): void {
+		this.pagewise = on;
+	}
+
+	get isPagewise(): boolean {
+		return this.pagewise && this.rules !== null;
 	}
 
 	/** Drops the oldest steps beyond the limit. */
@@ -1064,10 +1101,20 @@ export class History {
 	}
 
 	undo(): Command | null {
+		return this.undoAt(this.undoStack.length - 1);
+	}
+
+	/**
+	 * Undoes the step at position `at` of the undo stack with its own `revert` (the newest one for an ordinary Undo). A step taken out of the
+	 * middle is only ever asked for by `undoOnPage`, which has checked that no later step touches its page. Every guard is the one of Undo:
+	 * a refused step is dropped (or, for a locked page, left where it was).
+	 */
+	private undoAt(at: number): Command | null {
 		if (this.locked?.()) return null;
 		const known = this.takeKnown();
-		const cmd = this.undoStack.pop();
+		const cmd = this.undoStack[at];
 		if (!cmd) return null;
+		this.undoStack.splice(at, 1);
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		const snapshot = this.guard ? snapshotDocument(doc) : null;
@@ -1080,7 +1127,7 @@ export class History {
 			const hit = lockedChanges(doc, locks, true);
 			if (hit.length > 0) {
 				cmd.apply(doc);
-				this.undoStack.push(cmd);
+				this.undoStack.splice(at, 0, cmd);
 				this.pagesLocked?.(hit);
 				return null;
 			}
@@ -1091,10 +1138,16 @@ export class History {
 	}
 
 	redo(): Command | null {
+		return this.redoAt(this.redoStack.length - 1);
+	}
+
+	/** Redoes the step at position `at` of the redo stack (the next one for an ordinary Redo): the same as `undoAt`, the other way. */
+	private redoAt(at: number): Command | null {
 		if (this.locked?.()) return null;
 		const known = this.takeKnown();
-		const cmd = this.redoStack.pop();
+		const cmd = this.redoStack[at];
 		if (!cmd) return null;
+		this.redoStack.splice(at, 1);
 		const doc = this.doc();
 		const locks = cmd.lockExempt ? null : snapshotLocked(doc);
 		const snapshot = this.guard ? snapshotDocument(doc) : null;
@@ -1104,7 +1157,7 @@ export class History {
 			const hit = lockedChanges(doc, locks);
 			if (hit.length > 0) {
 				cmd.revert(doc);
-				this.redoStack.push(cmd);
+				this.redoStack.splice(at, 0, cmd);
 				this.pagesLocked?.(hit);
 				return null;
 			}
@@ -1112,6 +1165,58 @@ export class History {
 		if (this.refusedStep(doc, snapshot, "redo", wasBad)) return null;
 		this.undoStack.push(cmd);
 		return cmd;
+	}
+
+	/** The position of the newest step of `stack` that touches `pageId` (-1: none). Both stacks are searched from their end: the next undo / redo first. */
+	private lastTouching(stack: readonly Command[], pageId: string): number {
+		const rules = this.rules;
+		if (!rules) return -1;
+		for (let i = stack.length - 1; i >= 0; i--) if (touchesPage(rules.scope(stack[i]!), pageId)) return i;
+		return -1;
+	}
+
+	/**
+	 * 0.28 (#98): Undo on one page. Takes the newest step that touches `pageId` out of the undo stack and undoes it with its own `revert`;
+	 * the steps on other pages stay as they are. Safe because no later step touches that page (see page-undo.ts). When that newest step is
+	 * global (it names several pages, or the page list, or the notebook) nothing is undone: `{ kind: "global" }`. Every guard of `undo()`
+	 * applies (read-only mode, page locks, the content check).
+	 */
+	undoOnPage(pageId: string): PageStepResult {
+		const rules = this.rules;
+		const at = this.lastTouching(this.undoStack, pageId);
+		if (!rules || at < 0) return { kind: "nothing" };
+		const cmd = this.undoStack[at]!;
+		const scope = rules.scope(cmd);
+		if (!scope.local) return { kind: "global", cmd };
+		// Taking away a file that another page (or the cover) still uses would leave a picture without its file: not out of order.
+		if (rules.sharedElsewhere(this.doc(), scope, pageId)) return { kind: "global", cmd, why: "shared" };
+		const done = this.undoAt(at);
+		return done ? { kind: "done", cmd: done } : { kind: "refused" };
+	}
+
+	/**
+	 * 0.28 (#98): Redo on one page: the step undone last on that page (the one nearest the end of the redo list) is applied again with its own
+	 * `apply`. A new edit on a page dropped that page's redo steps, so what is here is exactly what the page's own undo left.
+	 */
+	redoOnPage(pageId: string): PageStepResult {
+		const rules = this.rules;
+		const at = this.lastTouching(this.redoStack, pageId);
+		if (!rules || at < 0) return { kind: "nothing" };
+		const cmd = this.redoStack[at]!;
+		if (!rules.scope(cmd).local) return { kind: "global", cmd };
+		const done = this.redoAt(at);
+		return done ? { kind: "done", cmd: done } : { kind: "refused" };
+	}
+
+	/** 0.28 (#98): what `undoOnPage` / `redoOnPage` would find for a page, without doing it (for the buttons). */
+	peekOnPage(pageId: string): { undo: "none" | "page" | "global"; redo: "none" | "page" | "global" } {
+		const rules = this.rules;
+		const kind = (stack: readonly Command[]): "none" | "page" | "global" => {
+			const at = this.lastTouching(stack, pageId);
+			if (!rules || at < 0) return "none";
+			return rules.scope(stack[at]!).local ? "page" : "global";
+		};
+		return { undo: kind(this.undoStack), redo: kind(this.redoStack) };
 	}
 
 	canUndo(): boolean {

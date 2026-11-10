@@ -222,6 +222,7 @@ function pagesOfLeaf(cmd: Command): string[] {
 	if (any.page && typeof any.page.id === "string") return [any.page.id];
 	if (Array.isArray(any.pages)) return (any.pages as readonly { id?: unknown }[]).flatMap((p) => (typeof p.id === "string" ? [p.id] : []));
 	if (cmd instanceof ReplacePage) return [cmd.after.id];
+	if (cmd instanceof SetPageContent) return [cmd.change.pageId]; // 0.28 (#98): the page a "Move content" step changed
 	return [];
 }
 
