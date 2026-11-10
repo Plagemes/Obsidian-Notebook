@@ -4455,7 +4455,7 @@ Manual steps (real Obsidian; nothing here is verified on Android hardware). Use 
 | Which pages a step touches (batches, groups, lock-exempt wrapper), local versus global, every command class classified (pure) | yes | `tests/page-undo.test.ts` | | | |
 | Undo / Redo on one page: newest step of the page, own inverse, interleaved pages, out-of-order redo, order inside a page | yes | `tests/page-undo.test.ts`, harness `doc=pageundo` | | | |
 | Dependency refusal: a step that touched several pages, page structure, notebook-wide and unknown steps are never undone out of order | yes | `tests/page-undo.test.ts` | | | |
-| A step that added a file or slide entry is only undone in order; no redo past an undone global or registering step; removing a file blocks every page; the content check validates file, cover, background and slide references on every call (review P1, P2) | yes | `tests/page-undo-review.test.ts` | | | |
+| A step that added a file or slide entry is only undone in order; no redo past an undone global or registering step; removing a file blocks every page; the content check validates file, cover and background references on every call (review P1, P2) | yes | `tests/page-undo-review.test.ts` | | | |
 | A step the guard refuses out of order stays in the history; a refused redo clears no other page's redo steps; macro groups filtered as one step; the redo list is bounded by the limit (review P3-P6) | yes | `tests/page-undo-review.test.ts` | | | |
 | Redo list kept for other pages, dropped by an edit on the same page or a global one; unchanged with the setting off | yes | `tests/page-undo.test.ts` | | | |
 | Groups, locked pages, remap after an upkeep swap, the document guard, read-only | yes | `tests/page-undo.test.ts` | | | |

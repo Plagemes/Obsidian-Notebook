@@ -133,7 +133,7 @@ describe("P1: the file table and the cover are never left behind by an out-of-or
 });
 
 describe("the content check no longer trusts the element cache for shared tables", () => {
-	it("refuses a picture, a background or a cover whose file record is gone, and ink linked to a missing slide", () => {
+	it("refuses a picture, a background or a cover whose file record is gone", () => {
 		const doc = createDocument();
 		const el = Object.freeze(image("i1", X.id));
 		doc.assets = { [X.id]: X };
@@ -149,9 +149,6 @@ describe("the content check no longer trusts the element cache for shared tables
 		doc.pages[0]!.background = { kind: "image", asset: Y.id };
 		expect(checkContent(doc)).toMatch(/background/);
 		delete doc.pages[0]!.background;
-		doc.pages[0]!.strokes.push({ ...line(0, 0, 5, 5), slide: "gone" });
-		expect(checkContent(doc)).toMatch(/slide/);
-		doc.slides = [{ id: "gone", source: "s", page: 1 }];
 		expect(checkContent(doc)).toBeNull();
 	});
 });

@@ -2059,11 +2059,11 @@ export function checkContent(doc: NotebookDocument): string | null {
 			if (Object.isFrozen(v)) checkedViews.add(v);
 		}
 		// 0.28 review (#98): the references into the notebook's shared tables are checked on EVERY call, not cached with the element: an out-of-order
-		// step must never leave a picture, a background, the cover or ink linked to a slide pointing at an entry that is no longer there.
+		// step must never leave a picture, a background or the cover pointing at a file record that is no longer there. (Ink whose slide is not in
+		// the table is accepted on purpose, see tests/model-v12: the writer drops the link; per-page undo never removes a slide entry out of order.)
 		const asset = (id: string, kind: AssetKind): boolean => Object.prototype.hasOwnProperty.call(assets, id) && assets[id]!.kind === kind;
 		const cover = doc.meta?.coverArt;
 		if (cover?.kind === "image" && !asset(cover.asset, "image")) return "meta.coverArt.asset: not an image asset of this notebook";
-		const slideIds = new Set((doc.slides ?? []).map((r) => r.id));
 		// 0.19: ids are unique across strokes and elements, as `serializeChecked` requires (two copies of one element would fail every save).
 		const ids = new Set<string>();
 		for (const page of doc.pages) {
@@ -2077,7 +2077,6 @@ export function checkContent(doc: NotebookDocument): string | null {
 			for (const s of page.strokes) {
 				if (ids.has(s.id)) return `stroke ${s.id}: duplicate id`;
 				ids.add(s.id);
-				if (s.slide !== undefined && !slideIds.has(s.slide)) return `stroke ${s.id}: refers to a slide that is not in the notebook`;
 			}
 			for (const el of page.elements ?? []) {
 				if (ids.has(el.id)) return `element ${el.id}: duplicate id`;
