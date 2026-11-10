@@ -17,6 +17,7 @@ import { GotoPageModal } from "./goto-page";
 import type { NotebookView } from "./notebook-view";
 import { editBookmark, editPageTags } from "./outline";
 import { exportPdfAnnotations, openMarginsModal, updatePdfFromNewVersion } from "./pdf-actions";
+import { openPdfCropModal, rotatePdfPage } from "./pdf-view-actions";
 import { openSlideStripOf, pdfSideState, runPdfSideAction, type PdfSideAction } from "./pdf-sync";
 import { saveNotebookAsTemplate } from "./notebook-templates";
 import { ReferencePickerModal } from "./ref-window-picker";
@@ -349,6 +350,22 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 		const host = v.pdfActionHost();
 		if (!host || !p.background || !host.editable()) showNotice(t("pdf.noPdfPage"));
 		else openMarginsModal(host, p);
+	}),
+	// 0.28 (#76): rotate and crop the PDF page.
+	"pdf-rotate-right": onPage((v, p) => {
+		const host = v.pdfActionHost();
+		if (!host || p.background?.kind !== "pdf") showNotice(t("pdf.noPdfPage"));
+		else void rotatePdfPage(host, p, 1);
+	}),
+	"pdf-rotate-left": onPage((v, p) => {
+		const host = v.pdfActionHost();
+		if (!host || p.background?.kind !== "pdf") showNotice(t("pdf.noPdfPage"));
+		else void rotatePdfPage(host, p, -1);
+	}),
+	"pdf-crop": onPage((v, p) => {
+		const host = v.pdfActionHost();
+		if (!host || p.background?.kind !== "pdf") showNotice(t("pdf.noPdfPage"));
+		else void openPdfCropModal(host, p);
 	}),
 	"pdf-update": onPage((v, _p, i) => {
 		const host = v.pdfActionHost();

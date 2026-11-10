@@ -21198,3 +21198,126 @@ body.notebook-style-obsidian {
 		display: none;
 	}
 }
+
+/* ===== 0.28 pdfrotate ===== */
+/* The dialog that turns and crops a PDF page: the whole page, turned as it will be, with a frame on the part to keep. */
+.nb-ui.nb-pdfview .nb-pdfview-stage {
+	padding: calc(var(--nb-target) / 2);
+	margin-bottom: var(--nb-space-2);
+	display: flex;
+	justify-content: center;
+	background: var(--nb-surface-2);
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-m);
+	touch-action: none;
+	user-select: none;
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-page {
+	--nb-pv-w: 595;
+	--nb-pv-h: 842;
+	position: relative;
+	width: min(100%, calc(48vh * var(--nb-pv-w) / var(--nb-pv-h)));
+	aspect-ratio: calc(var(--nb-pv-w) / var(--nb-pv-h));
+	box-shadow: var(--nb-shadow-1);
+}
+
+/* The shade over what the frame leaves out: clipped to the page; it never takes a touch. */
+.nb-ui.nb-pdfview .nb-pdfview-shade {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-shadefill {
+	--nb-pv-x: 0%;
+	--nb-pv-y: 0%;
+	--nb-pv-fw: 100%;
+	--nb-pv-fh: 100%;
+	position: absolute;
+	left: var(--nb-pv-x);
+	top: var(--nb-pv-y);
+	width: var(--nb-pv-fw);
+	height: var(--nb-pv-fh);
+	box-shadow: 0 0 0 100vmax var(--nb-card-shade);
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	display: block;
+	background: #fff;
+}
+
+/* The frame: its outline and the handles on it. */
+.nb-ui.nb-pdfview .nb-pdfview-frame {
+	--nb-pv-x: 0%;
+	--nb-pv-y: 0%;
+	--nb-pv-fw: 100%;
+	--nb-pv-fh: 100%;
+	position: absolute;
+	left: var(--nb-pv-x);
+	top: var(--nb-pv-y);
+	width: var(--nb-pv-fw);
+	height: var(--nb-pv-fh);
+	box-sizing: border-box;
+	border: 2px solid var(--nb-accent);
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-move {
+	position: absolute;
+	inset: 0;
+	cursor: move;
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-handle {
+	position: absolute;
+	width: var(--nb-target);
+	height: var(--nb-target);
+	margin: calc(var(--nb-target) / -2) 0 0 calc(var(--nb-target) / -2);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	outline: none;
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-handle::after {
+	content: "";
+	width: 14px;
+	height: 14px;
+	border-radius: var(--nb-radius-s);
+	background: var(--nb-bg-elevated);
+	border: 2px solid var(--nb-accent);
+	box-shadow: var(--nb-shadow-1);
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-handle:focus-visible::after {
+	background: var(--nb-accent);
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-n { left: 50%; top: 0; cursor: ns-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-s { left: 50%; top: 100%; cursor: ns-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-w { left: 0; top: 50%; cursor: ew-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-e { left: 100%; top: 50%; cursor: ew-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-nw { left: 0; top: 0; cursor: nwse-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.nb-ui.nb-pdfview .nb-pdfview-handle.is-sw { left: 0; top: 100%; cursor: nesw-resize; }
+
+.nb-ui.nb-pdfview .nb-pdfview-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--nb-space-2);
+	margin-bottom: var(--nb-space-2);
+}
+
+.nb-ui.nb-pdfview .nb-pdfview-readout {
+	margin-left: auto;
+	color: var(--nb-text-muted);
+	font-size: var(--nb-fs-meta);
+}

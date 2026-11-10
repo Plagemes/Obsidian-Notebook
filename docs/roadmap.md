@@ -193,7 +193,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 73. **P1** 🧪 More papers: Cornell, music staff, isometric, hexagonal, calligraphy, planner.
 74. 🧪 **P1** Save a page as a template, with a template gallery.
 75. **P2** 🧪 Automatic header with date and page number.
-76. **P2** Rotate and crop imported PDF pages.
+76. **P2** 🧪 Rotate and crop imported PDF pages (format v26: `rotate` and `crop` on a PDF page background; page sheet actions and a crop dialog; ink, highlights and boxes stay on the same part of the PDF).
 77. **P2** 🧪 Merge notebooks, split a notebook, extract pages into a new notebook.
 78. **P2** 🧪 Move a selection to another page.
 79. **P2** 🧪 Drag files (images, PDFs) straight onto a page.

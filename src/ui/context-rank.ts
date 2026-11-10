@@ -76,6 +76,9 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	if (c.comments?.panel && a.id.startsWith("comment")) boost += 15;
 	// 0.25 (#93): lining the words up fits ink on ruled paper above all (the words go onto the ruled line).
 	if (a.id === "selection-baseline" && hasSelection && c.page?.kind === "ruled") boost += 10;
+	// 0.28 (#76): turning and cropping the page fit a PDF page (a scan on its side, a slide with wide margins): they lean forward on one, but not
+	// enough for "For this page" (the page is turned once, not all the time).
+	if ((a.id === "pdf-rotate-right" || a.id === "pdf-rotate-left" || a.id === "pdf-crop") && c.page?.background === "pdf") boost += 6;
 	// 0.26 (#358): the opacity fits a selection of ink, pictures or areas best, then the highlighter or a shape in hand (both enough for "For this page");
 	// with the plain pen in hand (always, nearly) it only leans forward in the list, so it does not crowd "For this page".
 	if (a.id === "opacity" && canOpacity(c)) boost += hasSelection ? HERE_MIN_BOOST + 8 : c.tool === "highlighter" || c.tool === "shape" ? HERE_MIN_BOOST : 10;
