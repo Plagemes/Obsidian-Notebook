@@ -5364,6 +5364,15 @@ export const en = {
 	"boxindex.foreign": "{path} already exists and is not an index of boxes; it was left untouched. Rename or move it, then try again.",
 	"boxindex.other": "{path} is the index of another notebook; it was left untouched. Try again to use a separate note.",
 	"boxindex.noteTitle": "Definitions and theorems",
+	// 0.28 geosuggest (#403): actions suggested by the geometry of the selection
+	"geosuggest.highlight": "Highlight",
+	"command.selectionHighlight": "Highlight the selection (area highlighter behind it)",
+	"geosuggest.chips": "Suggested actions",
+	"help.geoHighlight": "Put a translucent highlighter rectangle behind the selected writing, in the colour of your highlighter.",
+	"help.geoNote": "Put the selection into a Markdown note as a picture with a link back to this page.",
+	"help.geoLink": "Link the selection to a note, so a tap on it with the pen opens that note.",
+	"settings.suggestSelection": "Suggest actions from the selection",
+	"settings.suggestSelection.desc": "Chips for a row of words, an arrow between two groups or a loop. Rules only, no AI.",
 } as const;
 
 export type MessageKey = keyof typeof en;

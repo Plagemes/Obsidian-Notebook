@@ -726,7 +726,7 @@ A deterministic, rule-based interface that adapts to context, content, habits an
 
 ### Selection
 402. **P1** 🧪 Selection bar by content type: ink, image, text or mixed selection each show their own actions (extends the selection contextual bar).
-403. **P2** Actions suggested by the selection's geometry: a row of words → card, highlight; two regions joined by an arrow → link.
+403. **P2** 🧪 Actions suggested by the selection's geometry: a row of words → highlight, note; two regions joined by an arrow → link; a loop → group (0.28; rules only, up to two chips above the selection bar; "card" is Insert into note, there is no flashcard feature).
 404. **P3** Preview before applying: press and hold an action to see its result.
 405. **P3** Radial menu for the selection.
 406. **P2** Resize and rotate handles shown only when they are meaningful.

@@ -266,6 +266,8 @@ export interface NotebookSettings extends CompanionSettings, GestureSettings, Pe
 	adaptLearn: boolean;
 	/** The selection bar follows what is selected: ink, picture, text, mixed (402). */
 	adaptSelection: boolean;
+	/** 0.28 (#403): chips at the front of the selection bar for what the selection's shape suggests (a row of words, an arrow between two clusters, a loop). */
+	suggestSelection: boolean;
 	// 0.25 (#399): the toolbar and floating pills fade while the pen writes and return on the first touch.
 	toolFade: ToolFadeMode;
 	/** Seconds of writing before the bars fade, and of rest before they return. */
@@ -472,6 +474,7 @@ export const DEFAULT_SETTINGS: NotebookSettings = {
 	adaptPageType: true,
 	adaptLearn: true,
 	adaptSelection: true,
+	suggestSelection: true,
 	toolFade: DEFAULT_TOOL_FADE_MODE,
 	toolFadeSeconds: DEFAULT_TOOL_FADE_SECONDS,
 	toolFadeFirstTouch: true,
@@ -662,6 +665,7 @@ export function readSettings(data: unknown): NotebookSettings {
 	if (typeof d.adaptPageType === "boolean") s.adaptPageType = d.adaptPageType;
 	if (typeof d.adaptLearn === "boolean") s.adaptLearn = d.adaptLearn;
 	if (typeof d.adaptSelection === "boolean") s.adaptSelection = d.adaptSelection;
+	if (typeof d.suggestSelection === "boolean") s.suggestSelection = d.suggestSelection;
 	if (isToolFadeMode(d.toolFade)) s.toolFade = d.toolFade;
 	s.toolFadeSeconds = cleanFadeSeconds(d.toolFadeSeconds);
 	if (typeof d.toolFadeFirstTouch === "boolean") s.toolFadeFirstTouch = d.toolFadeFirstTouch;

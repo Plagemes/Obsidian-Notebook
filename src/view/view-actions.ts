@@ -152,6 +152,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
 	"comment-next": (v) => void v.commentTools?.step(1),
 	// 0.17 (#57): a task from the selection
 	"selection-make-task": (v) => v.makeTaskFromSelection(),
+	"selection-highlight": (v) => v.highlightSelection(),
 	// 0.19 (#213): look up later
 	"selection-look-up": (v) => v.lookUpFromSelection(),
 	"look-up-list": (v) => v.openLookUpList(),

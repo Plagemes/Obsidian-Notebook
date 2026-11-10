@@ -21823,3 +21823,54 @@ body.notebook-style-obsidian {
 		min-width: 60px;
 	}
 }
+
+/* ===== 0.28 geosuggest ===== */
+/* Suggested actions (#403): up to two chips in a row above the selection bar. A row of their own, so no slot below moves. */
+.notebook-context-bar > .notebook-context-suggest {
+	order: 5;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	max-width: 100%;
+}
+
+.notebook-context-bar > .notebook-context-suggest.notebook-hidden {
+	display: none;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-suggest .notebook-suggest-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 32px;
+	padding: 0 var(--nb-space-3, 12px) 0 var(--nb-space-2, 8px);
+	border: 1px solid var(--nb-accent);
+	border-radius: var(--nb-radius-pill);
+	background: var(--nb-accent-bg);
+	color: var(--nb-accent);
+	box-shadow: var(--nb-shadow-float, none);
+	font-size: var(--nb-text-s);
+	font-weight: var(--font-semibold, 600);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-suggest .notebook-suggest-chip:hover {
+	background: var(--nb-accent-strong);
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-context-suggest .notebook-suggest-chip:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-suggest-chip-icon {
+	display: inline-flex;
+}
+
+.workspace-leaf-content .view-content.notebook-view .notebook-suggest-chip-icon svg {
+	width: 16px;
+	height: 16px;
+}

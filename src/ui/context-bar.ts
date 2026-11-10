@@ -39,6 +39,8 @@ export function contextLabelKey(kind: ContextKind, variant?: string): MessageKey
 
 export class ContextBar {
 	readonly el: HTMLElement;
+	/** 0.28 (#403): the suggested actions (chips) above the main row; hidden when there are none. */
+	private readonly suggestEl: HTMLElement;
 	private readonly mainEl: HTMLElement;
 	/** Extra rows of the selection context (restyle colours and widths), filled by SelectionActions. */
 	readonly extraEl: HTMLElement;
@@ -49,6 +51,7 @@ export class ContextBar {
 
 	constructor(parent: HTMLElement, private readonly host: ContextBarHost) {
 		this.el = parent.createDiv({ cls: "notebook-context-bar notebook-hidden", attr: { role: "toolbar" } });
+		this.suggestEl = this.el.createDiv({ cls: "notebook-context-suggest notebook-hidden", attr: { role: "group", "aria-label": t("geosuggest.chips") } });
 		this.mainEl = this.el.createDiv({ cls: "notebook-context-main" });
 		this.extraEl = this.el.createDiv({ cls: "notebook-context-extra" });
 		this.secondEl = this.extraEl.createDiv({ cls: "notebook-context-second notebook-hidden", attr: { role: "toolbar" } });
@@ -75,6 +78,8 @@ export class ContextBar {
 		this.plan = plan;
 		this.el.toggleClass("notebook-hidden", !plan);
 		this.mainEl.empty();
+		this.suggestEl.empty();
+		this.suggestEl.addClass("notebook-hidden");
 		this.secondEl.empty();
 		this.secondEl.addClass("notebook-hidden");
 		if (!plan) return;
@@ -92,6 +97,11 @@ export class ContextBar {
 			open.addClass("notebook-context-chip");
 			return;
 		}
+		// 0.28 (#403): up to two suggested actions above the main row: a bar of its own, so no slot of the rows below moves.
+		if (plan.suggest && plan.suggest.length > 0) {
+			this.suggestEl.removeClass("notebook-hidden");
+			for (const id of plan.suggest) this.chip(this.suggestEl, id, c);
+		}
 		const label = this.mainEl.createDiv({ cls: "notebook-context-label" });
 		setIcon(label.createSpan({ cls: "notebook-context-label-icon" }), ICONS[kind]);
 		label.createSpan({ cls: "notebook-context-label-text", text: name });
@@ -103,6 +113,22 @@ export class ContextBar {
 		}
 		const hide = this.button(this.mainEl, "chevron-down", t("ui.context.collapse"), () => this.host.setCollapsed(kind, true));
 		hide.addClass("notebook-context-collapse");
+	}
+
+	/** A suggestion chip: the action's icon and name; it runs the action exactly as its button in the bar or the sheet would. */
+	private chip(parent: HTMLElement, id: string, c: UiContext): void {
+		const a = actionById(id);
+		if (!a) return;
+		const name = actionLabel(a);
+		const b = parent.createEl("button", { cls: "notebook-suggest-chip", attr: { type: "button", "aria-label": name } });
+		setIcon(b.createSpan({ cls: "notebook-suggest-chip-icon" }), a.icon);
+		b.createSpan({ cls: "notebook-suggest-chip-text", text: name });
+		b.dataset.action = id;
+		b.disabled = !isEnabled(a, c);
+		b.addEventListener("click", (e) => {
+			e.preventDefault();
+			this.host.run(id);
+		});
 	}
 
 	private actionButton(parent: HTMLElement, id: string, c: UiContext): void {

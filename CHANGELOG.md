@@ -42,6 +42,10 @@
 - **Index of definitions and theorems.** A dialog lists every numbered box with its colour, number, title and page, and jumps to it; *Write index note* writes `<Notebook> — Definitions.md` next to the notebook between owner markers (same safety rules as the formula sheet: only the region is rewritten, a note of yours is never touched, boxes under a redaction box are left out).
 - **Code.** `src/model/box-numbering.ts` (pure), `src/view/box-numbers.ts` (cached labels), `src/view/box-index.ts`.
 
+### geosuggest
+- **Actions suggested by the selection's shape (#403).** A selection bar can show up to two chips above its rows, from plain geometric rules (no AI, nothing leaves the device): one horizontal row of handwriting offers *Highlight* (a new action: an area highlighter behind the words, one undo step) and *Insert into note*; two groups of ink joined by an arrow-like stroke offer *Link to a note…* and *Group*; a loop drawn around ink offers *Group*. A paragraph of several lines, a single stroke, and any selection with pictures, text or objects offer nothing. Each chip runs the ordinary action through its normal path (History included); the chips sit in a row of their own, so no slot of the bar moves, also on a phone. Setting *Suggest actions from the selection* (Appearance, on by default). *Highlight* is also in the All actions sheet and the command palette; long-press on a chip shows its help. No format change.
+- **Code.** `suggestFromGeometry` in `src/ui/selection-kind.ts`, `src/ui/selection-suggest.ts`, `suggest` in the selection part of `UiContext` and in `ContextBarPlan`, `ContextBar.chip`, `NotebookView.highlightSelection`.
+
 ## 0.27.0 — 2026-11-09
 
 Eight features: stroke taper for the pens, two pages side by side, headings when zoomed out, macros, a layout that follows the input device, workspace presets, suggested search terms for PDFs and tasks due on planner pages. The notebook format moves to version 25 (taper): the migration from version 24 is automatic, and Notebook 0.26 and older open a v25 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).

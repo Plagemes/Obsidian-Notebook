@@ -4638,3 +4638,28 @@ Settings, Pages: *Number definitions and theorems* (on), *Chapter prefix* (on), 
 | Settings (on/off, chapter prefix, shared counter) en + it | yes | `tests/settings-schema.test.ts` | | | |
 | Thumbnail of each box in the index | no | | | | the box title (when typed) is shown instead |
 | Numbers in the companion note's callouts and in the markers panel | no | | | | left out in this wave |
+
+### 0.28 — geosuggest: actions suggested by the selection's shape (roadmap #403; steps 3300-3319)
+
+Rules only, no AI. Chips appear in a row above the selection bar; they run existing actions.
+
+3300. **Row of words.** Write a line of a few words and lasso it: two chips appear above the bar, *Highlight* and *Insert into note*. The rows of the bar below do not move (compare with the setting off).
+3301. **Highlight.** Tap *Highlight*: a translucent rectangle in the highlighter colour sits behind the words, under the ink; the selection stays. One undo removes it; redo brings it back. On a locked page nothing is added.
+3302. **Insert into note.** Tap that chip: the same flow as *Insert into note* in the bar (note picker, picture and link).
+3303. **Paragraph.** Write three lines and lasso them: no chips. A single long stroke, an underline alone: no chips.
+3304. **Arrow between two groups.** Write two words far apart, draw an arrow from one to the other (the arrow tool or by hand), lasso everything: chips *Link to a note…* and *Group*. Each does what its bar button does.
+3305. **Loop.** Write two lines and draw a closed loop around them; select all: chip *Group*. Tap it: the items become one group, one undo step.
+3306. **Mixed.** Select a row of words together with a picture or a text box: no chips.
+3307. **Setting.** Settings, Appearance, *Suggest actions from the selection*: off, the chips go at once; on, they return on the next selection.
+3308. **Phone.** On a phone-width view the chips sit above the bar in their own row, the five slots of each row of the bar are where they were, and the pieces above (pills) move up rather than overlap.
+3309. **Long-press help.** Hold a finger on a chip: the bubble shows its name and one line, in English and Italian.
+3310. **All actions.** *Highlight* is in the All actions sheet and the command palette; with a row of words selected it comes first under *For this page*.
+3311. **Italian, light, dark.** Texts read in Italian; chips read in light and dark and with *Follow Obsidian theme*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Geometry rules: row of words, arrow between two clusters, loop around ink (pure) | yes | `tests/selection-geo-suggest.test.ts` | | | |
+| Chips above the selection bar (no slot moves), setting, help, ranking | yes | `tests/selection-geo-suggest.test.ts`, harness `doc=geosuggest` | | | |
+| *Highlight* action (area behind the selection, one undo step) | yes | harness `doc=geosuggest` | | | |
+| Flashcards / a "Make card" action | no | | | | none exists in the plugin: the row offers *Insert into note* instead |
+| Region-to-region link | no | | | | the plugin has links from a selection to a note only: the arrow offers *Link to a note…* |

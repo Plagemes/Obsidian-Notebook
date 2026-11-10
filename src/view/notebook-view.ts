@@ -260,6 +260,7 @@ import { isTextField, penKeyMatches, penKeyMayAct } from "../ink/pen-hover";
 import { kindTool, strokeNib } from "../ink/pen-kinds";
 import { hint } from "../ui/hints";
 import { actionById, isEnabled, type UiContext } from "../ui/actions";
+import { suggestForSelection } from "../ui/selection-suggest";
 import { actionLabel } from "../ui/action-sheet";
 import { cloneMacro, isMacroActionId, macroById, setMacros } from "../ui/macros";
 import { runMacroOn } from "./macro-run";
@@ -3010,6 +3011,21 @@ export class NotebookView extends FileView {
 		}).open();
 	}
 
+	/** 0.28 (#403): an area highlighter behind the selection (padded a little), as one undo step through the history; the selection stays. */
+	highlightSelection(): void {
+		const sel = this.selection;
+		const doc = this.session?.doc;
+		if (!sel || !doc || !this.editable() || sel.others?.length || this.statesTools?.ownsSelection(sel)) return;
+		const page = doc.pages[sel.pageIndex];
+		const bounds = page ? itemsBounds(withoutPinnedInk(sel.strokes, sel.elements), sel.elements, measureText) : null;
+		if (!page || !bounds) return;
+		const pad = 4;
+		const area = createArea([bounds.minX - pad, bounds.minY - pad], [bounds.maxX + pad, bounds.maxY + pad], page, this.tools.highlighterColor, this.tools.highlighterOpacity);
+		if (!area || !this.history.execute(new AddElement(page.id, area, page.elements?.length ?? 0))) return;
+		this.afterHistoryChange();
+		this.renderer?.invalidate();
+	}
+
 	/** 0.19 (#213): "Look up later" from the selection: an optional typed word, then a picture of the region and a link to the page are appended to the list note. */
 	lookUpFromSelection(): void {
 		const sel = this.selection;
@@ -4731,6 +4747,19 @@ export class NotebookView extends FileView {
 		};
 	}
 
+	private readonly suggestCache = new WeakMap<Selection, string[]>();
+
+	/** 0.28 (#403): action ids suggested by the geometry of the selection (cached per selection: the rules run once, not on every refresh). */
+	private suggestionsFor(sel: Selection): string[] {
+		if (!this.host.settings.suggestSelection || sel.others?.length || !this.editable()) return [];
+		let ids = this.suggestCache.get(sel);
+		if (!ids) {
+			ids = suggestForSelection(withoutPinnedInk(sel.strokes, sel.elements), sel.elements);
+			this.suggestCache.set(sel, ids);
+		}
+		return ids;
+	}
+
 	/** What the UI knows about the selection (wave 0.10: the items of every page of a selection across pages count). */
 	private selectionCounts(sel: Selection): NonNullable<UiContext["selection"]> {
 		const parts = this.selectionParts(sel);
@@ -4760,6 +4789,8 @@ export class NotebookView extends FileView {
 			grouped: parts.reduce((n, p) => n + p.strokes.filter((s) => s.group !== undefined).length + p.elements.filter((e) => e.group !== undefined).length, 0),
 			// 0.28 (#41): the selection is exactly one hand-drawn table (the table actions show then).
 			table: parts.length === 1 && !!parts[0] && tableOfSelection(parts[0].strokes, parts[0].elements.length) !== null,
+			// 0.28 (#403): the chips the shape of the selection suggests (one page, ink only; empty when the setting is off).
+			suggest: this.suggestionsFor(sel),
 		};
 	}
 

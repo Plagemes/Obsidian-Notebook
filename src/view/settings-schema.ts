@@ -629,6 +629,7 @@ const APPEARANCE: SettingSpec[] = [
 	{ id: "adaptPageType", section: "appearance", order: 31, name: "settings.adaptPageType", desc: "settings.adaptPageType.desc", control: { type: "toggle" }, keywords: "adaptive toolbar page slide ruled grid adattiva barra pagina" },
 	{ id: "adaptLearn", section: "appearance", order: 32, name: "settings.adaptLearn", desc: "settings.adaptLearn.desc", control: { type: "toggle" }, keywords: "adaptive toolbar learn notebook course usage frequent adattiva impara quaderno corso" },
 	{ id: "adaptSelection", section: "appearance", order: 33, name: "settings.adaptSelection", desc: "settings.adaptSelection.desc", control: { type: "toggle" }, keywords: "adaptive selection bar ink image text lasso adattiva selezione" },
+	{ id: "suggestSelection", section: "appearance", order: 33.5, name: "settings.suggestSelection", desc: "settings.suggestSelection.desc", control: { type: "toggle" }, keywords: "suggest actions selection highlight link group chips suggerisci azioni selezione" },
 	{ id: "toolbarReset", section: "appearance", order: 34, name: "settings.toolbarReset", desc: "settings.toolbarReset.desc", control: { type: "action", run: "toolbar-reset", button: "settings.toolbarReset.button" }, keywords: "adaptive toolbar pinned pin reset forget learned fissate azzera dimentica" },
 	// 0.27 macros (#170): a name, an icon and a list of actions on one toolbar button (also in All actions and as an Obsidian command)
 	{

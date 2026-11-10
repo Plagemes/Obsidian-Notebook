@@ -570,3 +570,6 @@ One narrow dialog on the modal shell (`.nb-ws-modal`, `src/view/workspace-picker
 
 ## Planner tasks chip (0.27, roadmap #266)
 A quiet glass pill at the top right (`.notebook-plantasks`, 32px) on daily and weekly planner pages, collapsed by default; tapping opens a glass list (`.notebook-plantasks-panel`) of 44px rows: a small ring (to do) or accent disc with a tick (done) as a status only, the task, and the note name (plus weekday on a weekly page). It takes the top-right slot under the "Referenced on" chip via `--nb-pt-top` (`:has` rules from the symbols strip, "Back to slide" pill and the chip); on a phone it steps aside while the welcome-back card or the "Referenced on" list is shown. Read only. Checked in the `plannertasks` and `pillstack` harness scenarios.
+
+### 0.28 — suggestion chips on the selection bar (#403)
+Up to two accent chips (`.notebook-suggest-chip`: icon and name, pill, `--nb-accent` on `--nb-accent-bg`) in their own row above the selection bar (`.notebook-context-suggest`, `order: 5` of the column-reverse bar). The rows below keep their slots; the bar's lift (`--nb-ctx-lift`) follows its height, so pills above move up. Chips are real buttons (`data-action`), disabled when the action is, with long-press help.
