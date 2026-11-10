@@ -18,6 +18,7 @@ import {
 	type CardRecord, type NewCard,
 } from "./card-content";
 import { PromptModal } from "../library/library-modals";
+import { allTemplates, applyTemplate, findTemplate, templateTags, type CardTemplate } from "./card-templates";
 import { cardFileName, idSet, isUntitledCardName, localDate, nameSuffixFor, nextCardId } from "./ids";
 import { CardListModal, CardModal, ConfirmCardsModal, type CardAnswer, type CardListItem } from "./modals";
 import { LocalPages } from "./local-pages";
@@ -347,8 +348,9 @@ export class ZettelService implements OverlaySource {
 		const now = new Date();
 		const scheme = this.settings.zettelIdScheme;
 		const id = nextCardId(scheme, now, idSet([...this.cards.values()].map((c) => c.id)), answer.parent || null);
+		const template = findTemplate(this.cardTemplates(), answer.template);
 		const card: NewCard = {
-			id, title: answer.title, type: answer.type, source: answer.source, tags: answer.tags, date: localDate(now),
+			id, title: answer.title, type: answer.type, source: answer.source, tags: templateTags(answer.tags, template), date: localDate(now),
 			notebookPath: file.path, notebookId: doc.id, pageId: page.id, page: pageIndex + 1, region, transcription,
 		};
 		const folder = normalizePath(this.settings.zettelFolder || "/");
@@ -357,7 +359,7 @@ export class ZettelService implements OverlaySource {
 		const base = cardFileName(id, answer.title, nameSuffixFor(scheme, answer.title));
 		let path = normalizePath(`${prefix}${base}.md`);
 		for (let i = 2; this.app.vault.getAbstractFileByPath(path); i++) path = normalizePath(`${prefix}${base} ${i}.md`);
-		const note = await this.app.vault.create(path, newCardText(card, (data) => stringifyYaml(data)));
+		const note = await this.app.vault.create(path, applyTemplate(newCardText(card, (data) => stringifyYaml(data)), template, TEXT_DEPS, now));
 		// The metadata cache indexes the note a moment later: the id must count as taken right away.
 		const record = readCard(path, cardProperties(card));
 		if (record) this.cards.set(path, record);
@@ -482,7 +484,7 @@ export class ZettelService implements OverlaySource {
 		} catch {
 			preview = null;
 		}
-		new CardModal(this.app, { luhmann: this.settings.zettelIdScheme === "luhmann", preview }, (answer) => {
+		new CardModal(this.app, { luhmann: this.settings.zettelIdScheme === "luhmann", preview, templates: this.cardTemplates() }, (answer) => {
 			if (!answer) return;
 			void this.enqueue(async () => {
 				const note = await this.writeCard(file, doc, pageIndex, region, answer);
@@ -625,6 +627,11 @@ export class ZettelService implements OverlaySource {
 		const index = doc.pages.findIndex((p) => p.id === pageId);
 		if (index < 0) return Promise.resolve(null);
 		return this.enqueue(() => this.writeCard(file, doc, index, region, answer, transcription));
+	}
+
+	/** Z9: the card templates on offer (built-in, then the person's own), in the plugin language. */
+	cardTemplates(): CardTemplate[] {
+		return allTemplates((k) => t(k), this.settings.zettelCardTemplates);
 	}
 
 	/** Opens a card's note in a tab. */

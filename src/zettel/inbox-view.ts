@@ -409,7 +409,7 @@ export class InboxView extends ItemView {
 
 	private async makeCard(item: InboxItem, type: CardType, preview: string): Promise<void> {
 		const defaults = await this.service.cardDefaults(item, type);
-		new CardModal(this.app, { luhmann: this.luhmann(), preview: preview.startsWith("data:") ? preview : null, defaults }, (answer: CardAnswer | null) => {
+		new CardModal(this.app, { luhmann: this.luhmann(), preview: preview.startsWith("data:") ? preview : null, defaults, templates: this.service.cardTemplates() }, (answer: CardAnswer | null) => {
 			if (answer) void this.run(item, () => this.service.createCard(item, answer));
 		}).open();
 	}

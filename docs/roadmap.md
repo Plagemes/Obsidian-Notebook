@@ -550,7 +550,7 @@ A complete Zettelkasten workflow where handwriting is first-class. Everything go
 - **Z6 P2** Drawn maps of content: a page where cards are placed as live transclusions and relations are drawn; it also generates a Markdown MOC.
 - **Z7 P2** Sequences and branches (Luhmann style 1, 1a, 1a1), optional, with previous/next/children navigation.
 - **Z8 P2** Slip-box view in the library: browse cards like index cards, filter by tag, "draw a random card" to rediscover ideas.
-- **Z9 P2** Card templates: concept, question, quote, definition.
+- **Z9 P2** 🧪 Card templates: concept, question, quote, definition (and your own, in the card dialog and Settings → Zettelkasten).
 - **Z10 P2** System hygiene: orphan cards (no links), duplicates, cards without a typed title.
 - **Z11 P1** 🧪 Title and transcription: each card has a typed title (search and graph) and a transcription field, filled by hand or later by handwriting recognition (M5).
 - **Z12 P1** 🧪 Container-proof: built on the companion note (O1) and the format layer.

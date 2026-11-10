@@ -4664,3 +4664,30 @@ Rules only, no AI. Chips appear in a row above the selection bar; they run exist
 | *Highlight* action (area behind the selection, one undo step) | yes | harness `doc=geosuggest` | | | |
 | Flashcards / a "Make card" action | no | | | | none exists in the plugin: the row offers *Insert into note* instead |
 | Region-to-region link | no | | | | the plugin has links from a selection to a note only: the arrow offers *Link to a note…* |
+
+### 0.29 — cardtemplates: card templates, roadmap Z9 (steps 3440-3459)
+
+Update to 0.29 and fully close and reopen Obsidian. Use a vault with a notebook that has some handwriting. Reference screenshots after `HARNESS_DOC=cardtemplates npm run harness:check`: `dev/harness/dist/shots/design/cardtemplates-*.png` (picker, picker-custom, manager, manager-empty; tablet and phone, light and dark). Not verified on a device.
+
+3440. **Picker.** On a notebook page choose *Make card from this page*. The dialog has a *Template* row: Blank, Concept, Question, Quote, Definition. Blank is selected; the fields below are as before.
+3441. **Concept.** Choose *Concept*: the type tile moves to *Permanent*. Type a title, *Create card*. Expected: the note has the properties as usual plus `card-template: concept`, the live ink, *Transcription*, then four headings (*The idea in one sentence*, *Why it matters*, *Examples*, *Connections*) with room under each. Type under a heading: nothing else in the note changes.
+3442. **Question, quote, definition.** Make one card of each. Expected types *Fleeting*, *Literature*, *Permanent* and the tags `question`, `quote`, `definition` added to any tags you typed (no duplicates if you typed the same one).
+3443. **The type is still yours.** Choose *Quote*, then tap *Fleeting*: the card is created as *Fleeting*, with the quote headings.
+3444. **Blank is unchanged.** Make a card with *Blank*: the note is exactly as in 0.28 (no `card-template`, no extra headings).
+3445. **Inbox.** In the Inbox, *Make card* on an item: the same Template row appears; a template there adds its headings after the transcribed text.
+3446. **Language.** With the plugin in Italian the template names, hints and headings are Italian (*Citazione*, *Fonte e pagina*…). Switch to English: new cards use English headings; cards already made keep theirs.
+3447. **Manager.** *Settings → Study → Zettelkasten → Card templates → Open*. The four built-in templates are listed. Tap the copy button on *Quote*: a template of your own appears with four areas.
+3448. **Edit.** Rename it, change the suggested type, add a tag, put `Seen on {{date}}` as an area. Leave each field. Close the manager and reopen it: the changes are there. Make a card with it: the heading reads *Seen on* and today's date; the type tile is preselected.
+3449. **Delete.** The *Delete* button turns into *Tap again to delete*; tapping elsewhere and back to another row's button does not delete the first. A second tap on the same button deletes the template; cards already made from it are untouched.
+3450. **Empty name.** *Add template*, leave the name empty, close the manager: nothing is saved for it and it does not appear in the card dialog.
+3451. **Sync / restart.** Restart Obsidian: your templates are still offered. Delete a template that a card was made from: the card still opens normally.
+3452. **Pen, finger, mouse.** The tiles, the type tiles, the manager buttons and fields work with the S Pen, a finger and the mouse, and are easy to hit (44 px).
+3453. **Phone width, light, dark.** The tiles wrap to two per row, nothing scrolls sideways, texts read in light, dark and *Follow Obsidian theme*.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Built-in card templates (concept, question, quote, definition), en + it | yes | `tests/card-templates.test.ts` | | | |
+| Template applied to a new card note (headings, `card-template`, tags, transcription kept) | yes | `tests/card-templates.test.ts` | | | |
+| Custom templates in settings (lenient read, unknown fields kept) | yes | `tests/card-templates.test.ts` | | | |
+| Picker in the New card dialog and the Inbox; manager in Settings | yes | harness `doc=cardtemplates` | | | |
+| Handwriting areas inside the card (ink boxes) | no | | | | templates add labelled Markdown areas under the ink; the ink region itself is chosen as before |

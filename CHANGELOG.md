@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### cardtemplates
+- **Card templates (Z9).** The *New card* dialog has a *Template* row: Blank, Concept, Question, Quote and Definition, then your own. A template starts the card's note with labelled areas under the ink (one Markdown heading each, in the plugin language), suggests the card type and adds its tags (question, quote, definition) to yours. The choice also works from the Inbox. The note gets a `card-template` property; nothing in the notebook or its format changes, and a blank card is exactly as before.
+- **Your own templates.** *Settings → Study → Zettelkasten → Card templates* opens a manager built on the shared dialog: copy a built-in template to change it, or add one; a name, a suggested type, tags and one area per line (`{{date}}` is filled in when the card is made). Changes save as you leave a field; deleting asks for a second tap. Stored in the plugin settings, read leniently (bad entries dropped, unknown fields kept).
+
 ## 0.28.0 — 2026-11-10
 
 Eight features: rotate and crop PDF pages (#76), per-page undo (#98, a setting, off by default), hand-drawn tables (#41), a paint bucket (#184), a line handle to reorder lines (#256), a live lecture mode (#132), numbered boxes with an index (#205) and actions suggested by the selection's geometry (#403). The notebook format moves to version 26 (PDF page rotation and crop): the migration from version 25 is automatic, and Notebook 0.27 and older open a v26 notebook read-only and never overwrite it. Three review rounds are folded in (see Review fixes).

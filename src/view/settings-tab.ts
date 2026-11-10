@@ -10,6 +10,7 @@ import { PenTestModal, penSignalInfo } from "./pen-test-modal";
 import { renderPenKeySetting } from "./pen-button-settings";
 import { companionService } from "../integration/companion";
 import { zettelService } from "../zettel";
+import { CardTemplatesModal } from "../zettel/card-template-ui";
 import { gestureKeyId } from "./pen-gesture-settings";
 import { CustomGesturesModal, GestureCheatSheet, setGestureEnabled, type PenGestureUiHost } from "./pen-gesture-ui";
 import { deviceNameRow, type SyncSafetyService } from "./sync-safety";
@@ -235,6 +236,7 @@ export class NotebookSettingTab extends PluginSettingTab {
 			case "gesture-custom": new CustomGesturesModal(this.penGestureHost()).open(); break;
 			case "notebook-templates-manage": openNotebookTemplateManager(this.app, () => this.host.settings); break;
 			case "pen-sets": this.openPenSets(); break;
+			case "card-templates": new CardTemplatesModal({ app: this.app, get: () => this.host.settings.zettelCardTemplates, set: (list) => this.setControlValue("zettelCardTemplates", list) }).open(); break;
 			case "macros-manage": this.openMacros(); break;
 			case "board-columns": new BoardColumnsModal({ app: this.app, get: () => this.host.settings.boardColumns, set: (cols) => this.setControlValue("boardColumns", cols) }).open(); break;
 			case "meanings-edit": new MeaningsEditorModal({ app: this.app, tolerance: () => TOLERANCES[this.host.settings.meaningTolerance], globalLegend: () => this.host.settings.colourMeanings, setGlobal: (legend) => this.setControlValue("colourMeanings", legend) }).open(); break;
