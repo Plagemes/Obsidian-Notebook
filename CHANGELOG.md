@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.30.0 — 2026-11-10
+## 0.30.0 — 2026-11-11
 
 Eight roadmap features: coloured sections in a notebook (#52), a computable table (#147), a trend line on line charts that completes #295, numbered markers on a figure (#247), tidy hand-drawn flowcharts (#245), a timeline element (#148), link suggestions while creating a Zettelkasten card (Z5) and card sequences with branches (Z7). The notebook format moves to version 28 (sections): the migration from version 27 is automatic, and Notebook 0.29 and older open a v28 notebook read-only and never overwrite it. Every save on 0.30 writes version 28, so update every synced device together. The review fixes of each feature are listed under it.
 
