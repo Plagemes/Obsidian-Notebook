@@ -4,7 +4,7 @@ import type { TableGrid } from "../src/ink/table";
 import { createDocument } from "../src/model/document";
 import { History } from "../src/model/history";
 import { serializeChecked } from "../src/model/serialize";
-import type { EquationElement, Page, TextElement } from "../src/model/types";
+import type { EquationElement, Page, TapeElement, TextElement } from "../src/model/types";
 import { RESULT_MARK } from "../src/math/table-formula";
 
 const NOW = new Date("2026-11-10T10:00:00.000Z");
@@ -151,3 +151,71 @@ describe("Compute table (#147)", () => {
 	});
 });
 
+
+describe("Compute keeps the words it did not write (review 0.30 I7)", () => {
+	/** Computes the table and returns the text of the one box it rewrites. */
+	function computeOne(text: string, other: Record<string, string> = { "0,0": "10", "0,1": "12" }): { before: string; after: string; again: string } {
+		const { p, history } = setup();
+		const target = box(2, 0, text);
+		fill(p, other);
+		p.elements!.push(target);
+		const plan = planTableCompute(p, grid);
+		if (!plan.ok) throw new Error(plan.reason);
+		history.execute(plan.cmd);
+		const after = (p.elements!.find((e) => e.id === target.id) as TextElement).text;
+		const again = planTableCompute(p, grid);
+		return { before: text, after, again: again.ok ? "changes" : again.reason };
+	}
+
+	it("replaces only the value after the arrow and keeps the person's annotation", () => {
+		const r = computeOne(`=A1*2 ${RESULT_MARK} 99 (checked by hand)`);
+		expect(r.after).toBe(`=A1*2 ${RESULT_MARK} 20 (checked by hand)`);
+		expect(r.again).toBe("same");
+		const e = computeOne(`=SUM(A1:B1) ${RESULT_MARK} #REF see p.3`);
+		expect(e.after).toBe(`=SUM(A1:B1) ${RESULT_MARK} 22 see p.3`);
+		expect(e.again).toBe("same");
+	});
+
+	it("keeps the box's line breaks and a note on a line below the formula", () => {
+		const r = computeOne("=A1+B1\n(net of VAT)");
+		expect(r.after).toBe(`=A1+B1 ${RESULT_MARK} 22\n(net of VAT)`);
+		expect(r.again).toBe("same");
+		const s = computeOne(`=A1+B1 ${RESULT_MARK} 5\n(net of VAT)\nsecond note`);
+		expect(s.after).toBe(`=A1+B1 ${RESULT_MARK} 22\n(net of VAT)\nsecond note`);
+		const wrapped = computeOne("=A1\n+B1");
+		expect(wrapped.after).toBe(`=A1\n+B1 ${RESULT_MARK} 22`);
+		expect(wrapped.again).toBe("same");
+	});
+
+	it("keeps text after an arrow that is not a result, behind the new result, and is idempotent", () => {
+		const r = computeOne(`=A1*2 ${RESULT_MARK} my note`);
+		expect(r.after).toBe(`=A1*2 ${RESULT_MARK} 20 ${RESULT_MARK} my note`);
+		expect(r.again).toBe("same");
+		const n = computeOne(`=A1*2 ${RESULT_MARK}\nsee p.3`);
+		expect(n.after).toContain("see p.3");
+		expect(n.again).toBe("same");
+		const arrowInNote = computeOne(`=A1\n(see ${RESULT_MARK} p.3)`);
+		expect(arrowInNote.after).toBe(`=A1 ${RESULT_MARK} 10\n(see ${RESULT_MARK} p.3)`);
+		expect(arrowInNote.again).toBe("same");
+	});
+
+	it("never drops a word of any box it rewrites", () => {
+		for (const text of [`=A1 ${RESULT_MARK} 1 alpha beta`, "=A1\nalpha\nbeta", `=A1 ${RESULT_MARK} x alpha`, "=A1 alpha"]) {
+			const r = computeOne(text);
+			for (const word of ["alpha", "beta"]) if (text.includes(word)) expect(r.after).toContain(word);
+		}
+	});
+});
+
+describe("Compute and study tapes (review 0.30 I16)", () => {
+	it("refuses when a formula box that would be written lies under a tape, and does not mind a tape elsewhere", () => {
+		const { p } = setup();
+		fill(p, { "0,0": "4", "1,0": "=A1*2" });
+		const under = { id: "tp", type: "tape", x: grid.xs[0]!, y: grid.ys[1]!, width: 50, height: 20, color: "#ffd60a" } as unknown as TapeElement;
+		p.elements!.push(under);
+		expect(planTableCompute(p, grid)).toMatchObject({ ok: false, reason: "tape" });
+		const far = { ...under, x: 400, y: 600 };
+		p.elements![p.elements!.length - 1] = far;
+		expect(planTableCompute(p, grid)).toMatchObject({ ok: true });
+	});
+});

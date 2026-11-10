@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	colName, evaluate, evaluateSheet, formulaOfText, parseFormula, refName, RESULT_MARK, showValue, valueOfText, withResult,
+	colName, evaluate, evaluateSheet, formulaOfText, parseFormula, refName, RESULT_MARK, rewriteWithResult, showValue, valueOfText, withResult,
 	type CellValue, type SheetCell,
 } from "../src/math/table-formula";
 
@@ -200,5 +200,19 @@ describe("formula boxes (#147)", () => {
 		expect(text).toBe(`=A1*2 ${RESULT_MARK} 42`);
 		expect(formulaOfText(text)?.typed).toBe("=A1*2");
 		expect(formulaOfText(withResult("=A1*2", "#DIV/0"))?.src).toBe("A1*2");
+	});
+});
+
+describe("formula boxes with notes (review 0.30 I7)", () => {
+	it("reads the formula before the arrow and ignores the person's words after the result", () => {
+		expect(formulaOfText(`=B2*C2 ${RESULT_MARK} 120 (checked by hand)`)).toEqual({ src: "B2*C2", typed: "=B2*C2" });
+		expect(formulaOfText("=A1+B1\n(net of VAT)")).toEqual({ src: "A1+B1", typed: "=A1+B1" });
+	});
+	it("rewrites only the result it owns", () => {
+		expect(rewriteWithResult("=A1*2", "42")).toBe(`=A1*2 ${RESULT_MARK} 42`);
+		expect(rewriteWithResult(`=A1*2 ${RESULT_MARK} 120 (checked)`, "42")).toBe(`=A1*2 ${RESULT_MARK} 42 (checked)`);
+		expect(rewriteWithResult(`=A1*2 ${RESULT_MARK} 1.5e-7`, "42")).toBe(`=A1*2 ${RESULT_MARK} 42`);
+		expect(rewriteWithResult(`=A1*2 ${RESULT_MARK} #DIV/0`, "42")).toBe(`=A1*2 ${RESULT_MARK} 42`);
+		expect(rewriteWithResult("1+1", "2")).toBeNull();
 	});
 });

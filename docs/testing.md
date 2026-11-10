@@ -4990,7 +4990,7 @@ A section starts at a page and runs to the page before the next section; pages b
 3541. **Row cost.** Add a fourth column header Cost and in D2 a text box `=B2*C2`, in D3 `=B3*C3`. Choose *Compute table*: D2 reads `=B2*C2 → 4.5`, D3 reads `=B3*C3 → 8`; a notice says 2 formulas computed.
 3542. **Totals.** In B4 type `=SUM(B2:B3)` and in D4 `=SUM(D2:D3)`: after computing they show 5 and 12.5 (the header text in D1 is skipped). `=AVG(D2:D3)` gives 6.25; `=MIN`, `=MAX`, `=COUNT` over a range give the right values; `=D4*10%` gives 1.25.
 3543. **Update.** Change the quantity 3 to 4 (edit the text box) and choose *Compute table* again: D2 and the totals change. Choosing it again without a change says every formula already shows its result and changes nothing.
-3544. **Edit a formula.** Edit a computed box (`=B2*C2 → 4.5`) to `=B2*C2*2` (keep or delete the old result): computing replaces the result and the formula stays.
+3544. **Edit a formula.** Edit a computed box (`=B2*C2 → 4.5`) to `=B2*C2*2` (keep or delete the old result): computing replaces the result and the formula stays. Add your own words after the result (`=B2*C2 → 4.5 (checked by hand)`) or a second line under the formula (`(net of VAT)`): computing changes only the number after the arrow and keeps your words and the line break; computing again changes nothing.
 3545. **Errors.** `=1/0` shows `#DIV/0`; `=Z9` shows `#REF`; `=A1+1` typed in A1 shows `#CYCLE`; two cells that use each other both show `#CYCLE`; `=B1+1` where B1 is a word shows `#VALUE`; `=FOO(1)` shows `#NAME`; `=1+` shows `#ERR`. A formula that uses an error cell shows the same error. The notice counts the errors.
 3546. **Undo and redo.** One undo puts every box back to the formula as it was before; one redo brings the results back. History lists *Table computed*.
 3547. **Refused.** On a locked page the action is disabled. With a formula text box locked (lock it from the selection bar) the notice says it is locked and nothing changes. With a redaction box (Export > Redact) over any text box of the table the notice says nothing was changed; moving the redaction box away makes it work.
@@ -5053,7 +5053,7 @@ A marker is a ring with its number (a shape stroke and a text box, one group); t
 3583. **Boxes are not redrawn.** Zoom in on a box: its strokes are the ones you drew (same wobble, same line weight and pressure look), only moved. The arrows are now clean, in the colour and width you used.
 3584. **One undo.** Undo once: everything is back exactly as drawn, including the arrows and their heads. Redo does the tidy again. The history panel shows one step, *Flowchart tidied* (Italian *Diagramma riordinato*).
 3585. **Twice is nothing.** Tidy the tidied chart again: the notice says it is already tidy and nothing moves.
-3586. **Two-stroke arrows.** Draw an arrow as a line plus a small V at its end (two strokes). Tidy: it becomes one arrow stroke with a clean head; undo brings back the line and the V.
+3586. **Two-stroke arrows.** Draw an arrow as a line plus a small V at its end (two strokes). Tidy: it becomes one arrow stroke with a clean head; undo brings back the line and the V. A label that starts with a "V", "L", "<" or ">" written right at the end of a plain line, inside the box, is not taken for a head: after tidying the letter is still there (it moves with its box) and the line is a plain line.
 3587. **Plain lines and loose ends.** A plain line between two boxes stays a plain line (no head). An arrow that ends in the air is left exactly as drawn.
 3588. **Two arrows between the same boxes** (one each way) end up side by side, not on top of each other.
 3589. **Refusals say why.** With one box selected, or none: "Select a flowchart with at least two boxes". A box drawn inside another of a similar size: it says to select one level at a time and moves nothing. Boxes scattered with no rows or columns still tidy (or say they cannot) but never overlap.
@@ -5071,6 +5071,7 @@ A marker is a ring with its number (a shape stroke and a text box, one group); t
 |---|---|---|---|---|---|
 | Boxes read from strokes (rectangle, diamond, ellipse), small shapes and highlighter ignored, nested boxes refused | yes | `tests/flowchart.test.ts` | | | |
 | Arrows read (one stroke, line + V head), plain lines, ends attached within reach, loose arrows left alone | yes | `tests/flowchart.test.ts` | | | |
+| A handwritten V, L, < or > near a line end is not taken as an arrowhead and never deleted (tip inside a box, part of a word, lopsided, oversized, two candidates) | yes | `tests/flowchart.test.ts` | | | |
 | Labels (writing, text boxes, equations, small rings) follow their box | yes | `tests/flowchart.test.ts` | | | |
 | Layout: columns and rows, equal gaps, first box on the grid, idempotent, never overlapping | yes | `tests/flowchart.test.ts` | | | |
 | Connectors: outline to outline for rectangle, diamond, ellipse; straight and square when boxes line up; parallel ones set apart | yes | `tests/flowchart.test.ts` | | | |

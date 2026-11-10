@@ -1,8 +1,9 @@
-import { evaluateSheet, formulaOfText, showValue, withResult, type CellValue, type SheetCell } from "../math/table-formula";
+import { evaluateSheet, formulaOfText, rewriteWithResult, showValue, type CellValue, type SheetCell } from "../math/table-formula";
 import { Batch, ReplaceElement, type Command } from "../model/history";
 import { isLockedElement } from "../model/groups";
-import type { Page, PageElement, TextElement } from "../model/types";
+import type { Page, PageElement, TapeElement, TextElement } from "../model/types";
 import { boxesTouching, type RedactGuard } from "./redact";
+import { elementTouchesTapes } from "./tape-guard";
 import { colsOf, rowsOf, type TableGrid } from "./table";
 import { cellAnchor, cellText } from "./table-data";
 
@@ -12,8 +13,11 @@ import { cellAnchor, cellText } from "./table-data";
  *
  * Convention. A cell is a formula cell when a text box whose middle (as for the other table readers, `cellAnchor`) lies in it starts with
  * "=". Computing rewrites that very box to `=<formula> -> <result>` (the arrow is U+2192): the formula stays in the box, so it can be edited
- * and computed again (everything from the arrow on is ignored when reading), and the result is a number or an error code (#REF, #CYCLE,
- * #DIV/0, #VALUE, #NAME, #NUM, #ERR). No second box is made, so nothing can fall out of step with the formula. Cells are named like a
+ * and computed again, and the result is a number or an error code (#REF, #CYCLE, #DIV/0, #VALUE, #NAME, #NUM, #ERR). Compute only ever
+ * replaces the result it owns, the value right after the arrow: words the person adds after it ("=B2*C2 -> 120 (checked by hand)") and notes
+ * on lines below the formula stay, and so do the box's line breaks. If the text after the arrow is not a result, the result is put in
+ * before it and their words follow a second arrow (nothing is deleted, and computing again changes nothing). No second box is made, so
+ * nothing can fall out of step with the formula. Cells are named like a
  * spreadsheet's: A1 is the top-left cell of the table, header row included. Handwriting is not read: numbers come from text boxes (and from
  * typeset equations that are just a number) only; a number with a trailing "%" is a percentage.
  *
@@ -80,6 +84,8 @@ export type ComputeRefusal =
 	| "locked"
 	/** A formula box belongs to a part of a drawing with states. */
 	| "states"
+	/** A formula box to be written lies under a study tape. */
+	| "tape"
 	/** The table, or a box to be written, touches a redaction box (or the boxes cannot be read). */
 	| "redacted";
 
@@ -96,8 +102,7 @@ export type ComputePlan = { ok: true; cmd: Command; summary: ComputeSummary; val
 
 /** The text a formula box shows once computed. */
 export function computedText(box: TextElement, value: CellValue): string | null {
-	const f = formulaOfText(box.text);
-	return f ? withResult(f.typed, showValue(value)) : null;
+	return rewriteWithResult(box.text, showValue(value));
 }
 
 /**
@@ -127,6 +132,9 @@ export function planTableCompute(page: Page, grid: TableGrid, guard?: RedactGuar
 	if (edits.length === 0) return { ok: false, reason: "same", summary };
 	if (edits.some((e) => isLockedElement(e.before))) return { ok: false, reason: "locked", summary };
 	if (edits.some((e) => inPart.has(e.before.id))) return { ok: false, reason: "states", summary };
+	// A study tape hides what is under it: a result that changes under one would change a quiz answer unseen.
+	const tapes = elements.filter((e): e is TapeElement => e.type === "tape");
+	if (tapes.length > 0 && edits.some((e) => elementTouchesTapes(e.before, tapes) || elementTouchesTapes(e.after, tapes))) return { ok: false, reason: "tape", summary };
 	if (guard) {
 		if (guard.unreadable) return { ok: false, reason: "redacted", summary };
 		if (guard.boxes.length > 0 && boxesTouching({ strokes: [], elements: [...sheet.read, ...edits.map((e) => e.after)] }, guard.boxes).length > 0) {

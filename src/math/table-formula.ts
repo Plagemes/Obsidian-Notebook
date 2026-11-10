@@ -276,20 +276,89 @@ export function parseFormula(src: string): ParsedFormula {
 
 /**
  * The formula a text box holds, or null when it is not a formula. A formula starts with "=" (spaces before it are fine); once the table has
- * been computed the box reads `=SUM(B1:B4) -> 42` (the arrow is RESULT_MARK): everything from the arrow on is the old result and is
- * ignored, so the formula is always recoverable and computing again is safe. `typed` is the formula as written, with its "=".
+ * been computed the box reads `=SUM(B1:B4) -> 42` (the arrow is RESULT_MARK): the formula is what comes before the arrow, so it is always
+ * recoverable and computing again is safe; whatever the person wrote after the result is theirs and is not read. A box without an arrow
+ * that holds notes on lines below the formula ("=A1+B1" / "(net of VAT)") reads the leading lines that parse as the formula.
+ * `typed` is the formula as written, with its "=".
  */
 export function formulaOfText(text: string): { src: string; typed: string } | null {
-	const flat = text.replace(/\s+/g, " ").trim();
-	if (!flat.startsWith("=")) return null;
-	const cut = flat.indexOf(RESULT_MARK);
-	const typed = (cut < 0 ? flat : flat.slice(0, cut)).trim();
+	const s = splitFormulaBox(text);
+	return s ? { src: s.src, typed: s.typed } : null;
+}
+
+const flatFormula = (s: string): string => s.replace(/\s+/g, " ").trim();
+const parses = (formulaText: string): boolean => parseFormula(flatFormula(formulaText).slice(1)).ok;
+
+/** A result Compute wrote right after the arrow: a number as `showValue` prints it, an error code, or "-" (not finite). */
+const RESULT_TOKEN = /^[ \t]*(?:#[A-Z]+(?:\/0)?|-?\d+(?:\.\d+)?(?:e[+-]?\d+)?|-)(?=\s|$)/;
+/** Most leading lines tried as the formula of a box that holds notes below it. */
+const NOTE_PREFIX_TRIES = 12;
+
+interface FormulaBox {
+	src: string;
+	typed: string;
+	/** The raw text of the formula (line breaks kept), trailing blanks removed. */
+	head: string;
+	/** What the person wrote after the formula and its result, kept as it is (leading blank or line break included); "" when nothing. */
+	rest: string;
+	/** True when the formula is followed by an arrow (the first one of the box). */
+	arrow: boolean;
+	/** With an arrow: the text after it starts with a result Compute could have written, which is the part to replace. */
+	owned: boolean;
+}
+
+/**
+ * Splits a formula box into the part Compute owns (the formula and the result right after the arrow) and the words the person added.
+ * The formula is what comes before the first arrow. If that does not parse and spans lines, or there is no arrow and the whole text does
+ * not parse, the longest run of leading lines that does parse is the formula and the lines below are notes.
+ */
+function splitFormulaBox(text: string): FormulaBox | null {
+	if (!text.trimStart().startsWith("=")) return null;
+	const cut = text.indexOf(RESULT_MARK);
+	const before = cut >= 0 ? text.slice(0, cut) : text;
+	let head = before;
+	let rest = "";
+	let arrow = cut >= 0;
+	let owned = false;
+	if (before.includes("\n") && !parses(before)) {
+		const lines = before.split("\n");
+		for (let k = Math.min(lines.length - 1, NOTE_PREFIX_TRIES); k >= 1; k--) {
+			if (!parses(lines.slice(0, k).join("\n"))) continue;
+			head = lines.slice(0, k).join("\n");
+			rest = text.slice(head.length);
+			arrow = false;
+			break;
+		}
+	}
+	if (arrow) {
+		const tail = text.slice(cut + RESULT_MARK.length);
+		const m = RESULT_TOKEN.exec(tail);
+		owned = m !== null;
+		rest = m ? tail.slice(m[0].length) : tail;
+	}
+	const typed = flatFormula(head);
 	const src = typed.slice(1).trim();
-	return src === "" ? null : { src, typed };
+	if (src === "") return null;
+	return { src, typed, head: head.replace(/\s+$/, ""), rest: rest.trim() === "" ? "" : rest, arrow, owned };
 }
 
 /** The text a formula box holds after computing: the formula as typed, the arrow and the shown result. */
 export const withResult = (typed: string, shown: string): string => `${typed} ${RESULT_MARK} ${shown}`;
+
+/**
+ * The text of the formula box `text` once its result is `shown`, or null when it is not a formula box. Only the result Compute owns is
+ * replaced (the value right after the arrow); every other word, and the box's line breaks, stay. If what follows the arrow is not a result
+ * (the person's own "-> see p.3"), the result is put in before it and their words are kept after a second arrow, so a later Compute
+ * finds the result and changes nothing else (idempotent) and no text is lost.
+ */
+export function rewriteWithResult(text: string, shown: string): string | null {
+	const s = splitFormulaBox(text);
+	if (!s) return null;
+	if (s.arrow && !s.owned) {
+		return s.rest === "" ? withResult(s.head, shown) : `${withResult(s.head, shown)} ${RESULT_MARK}${/^\s/.test(s.rest) ? "" : " "}${s.rest}`;
+	}
+	return withResult(s.head, shown) + s.rest;
+}
 
 /** A result as a text box shows it: at most 10 significant digits, no trailing zeros; an error as its code. */
 export function showValue(v: CellValue): string {

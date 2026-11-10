@@ -5876,6 +5876,7 @@ export const en = {
 	"tablecalc.same": "Every formula already shows its result.",
 	"tablecalc.locked": "A formula box is locked. Unlock it first.",
 	"tablecalc.states": "A formula box belongs to a drawing with states. Nothing was changed.",
+	"tablecalc.tape": "Nothing was changed: a formula box lies under a study tape, and its result would change out of sight. Remove the tape first.",
 	"tablecalc.redacted": "Nothing was changed: the table or a formula box touches a redaction box, and a result could give away what is under it.",
 	// 0.30 figmarkers (#247)
 	"fm.add": "Add numbered marker",
