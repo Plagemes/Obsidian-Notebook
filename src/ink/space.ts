@@ -1,10 +1,11 @@
 import type { NewPageContent, PageContentChange, PageContentPlan } from "../model/page-content";
 import { freezeStroke } from "../model/serialize";
-import type { PageElement, Stroke } from "../model/types";
+import type { PageElement, Stroke, TapeElement } from "../model/types";
 import { linkedInkIds } from "./attach";
 import { elementBounds, transformElement, type MeasureText } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
 import { growForInfinite } from "./infinite";
+import { strokeTouchesTapes } from "./tape-guard";
 import { transformStroke } from "./lasso";
 import { estimateMeasure } from "./text-layout";
 import { translate } from "./transform";
@@ -139,8 +140,17 @@ export function analyseSpace(
 			const nb = elementBounds(el, measure);
 			for (const id of linked) if (!noteOf.has(id)) noteOf.set(id, nb);
 		}
+		// 0.29 (#10, review R5): ink a study tape reaches over moves (or stays) with the tape: it takes the tape's extent, so a tape that straddles
+		// the line never leaves its covered strokes on the other side (a spoiler, and an empty tape over paper).
+		const tapes = (pages[i]!.elements ?? []).filter((el): el is TapeElement => el.type === "tape");
+		const tapeOf = (stroke: Stroke): BBox | undefined => {
+			if (tapes.length === 0) return undefined;
+			const own = boundsOf(stroke);
+			const t = tapes.find((tape) => strokeTouchesTapes(stroke, [tape], own));
+			return t ? { minX: t.x, minY: t.y, maxX: t.x + t.width, maxY: t.y + t.height } : undefined;
+		};
 		pages[i]!.strokes.forEach((stroke, index) => {
-			const b = noteOf.get(stroke.id) ?? boundsOf(stroke);
+			const b = noteOf.get(stroke.id) ?? tapeOf(stroke) ?? boundsOf(stroke);
 			take({ stroke, page: i, index, minY: base + b.minY, maxY: base + b.maxY });
 		});
 		pages[i]!.elements?.forEach((element, index) => {

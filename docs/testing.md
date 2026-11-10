@@ -4698,6 +4698,7 @@ Whether a tape is revealed is never saved: every tape is covered again when the 
 | Reveal all / Hide all actions, ranking, help | yes | `tests/model-v27.test.ts`, harness `doc=studytape` | | | |
 | No ink under a hidden tape; the erasers never touch what a hidden tape covers (all tapes together); the lasso, groups and ink-follows take covered ink | yes | `tests/model-v27.test.ts` (tool), `tests/studytape-review.test.ts`, harness `doc=studytape` (pen, eraser, lasso) | | | |
 | Select, move, resize, quarter turn, delete, group, lock | yes | `tests/model-v27.test.ts` (geometry) | | | |
+| Review round 2: the pen delete gesture spares covered ink; table Add row/column and chart Update take covered ink; Delete/Cut of a selection holding covered content asks first; a text-tool tap on a hidden tape opens no covered box; Insert space keeps a tape and its ink together | yes | `tests/studytape-review2.test.ts`, harness `doc=studytape`, `doc=tables`, `doc=charts` | | | |
 | Exports draw tapes covering (PDF, PNG, SVG, HTML, thumbnails, Copy as image) | yes | `tests/model-v27.test.ts` | | | |
 | Clean copy and hand-in leave tapes out; redaction cuts tapes (fail-closed) | yes | `tests/model-v27.test.ts` | | | |
 | A tape's own colour picker in the selection bar | no | | | | the colour is chosen in the settings for new tapes |

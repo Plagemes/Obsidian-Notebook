@@ -231,8 +231,9 @@ import { MathTools, type MathHost } from "./math-tools";
 import { StickyTools, type StickyHost } from "./sticky-tools";
 import { ChecklistTools, type ChecklistHost } from "./checklist-tools";
 import { TapeTools } from "./tape-tools";
-import { hidingTapes, tapeColorOf } from "../model/tape";
-import { elementTouchesTapes, strokeTouchesTapes } from "../ink/tape-guard";
+import { hidingTapes, tapeColorOf, underTape as pointUnderTapes } from "../model/tape";
+import { elementTouchesTapes, selectionHoldsCovered, strokeTouchesTapes } from "../ink/tape-guard";
+import { confirmDestructive } from "../ui/destructive";
 import { AxesTools, type AxesHost } from "./axes-tools";
 import { TableTools, type TableHost } from "./table-tools";
 import { tableOfSelection } from "../ink/table";
@@ -3735,7 +3736,10 @@ export class NotebookView extends FileView {
 		return {
 			app: this.app, doc: () => c.doc(), editable: () => c.editable(), execute: (cmd) => c.execute(cmd), insertTarget: () => c.insertTarget(),
 			selection: () => (this.selection ? this.selectionParts(this.selection) : null),
-			select: (p, s, e) => c.select(p, s, e), penColor: () => c.penColor(), inkOf: (page) => c.inkOf(page), refresh: () => c.refresh(),
+			select: (p, s, e) => c.select(p, s, e), penColor: () => c.penColor(), refresh: () => c.refresh(),
+			// 0.29 (#10, review R2): the table push and the chart check take ALL the ink, covered strokes and hidden struck words included, so a
+			// row insert moves taped answers with their row and what is saved never depends on what is revealed (not the checkbox host's inkOf).
+			inkOf: (page) => this.inkInView(page, true),
 			redactGuard: (pageId) => this.redactGuard(pageId),
 		};
 	}
@@ -4217,6 +4221,30 @@ export class NotebookView extends FileView {
 		const sel = this.selection;
 		const page = sel && this.session?.doc?.pages[sel.pageIndex];
 		if (!sel || !page || !this.editable() || this.statesTools?.ownsSelection(sel)) return;
+		// 0.29 (#10, review R3): the selection frame draws the hidden tapes over what it holds, so covered answers would go unseen: ask first.
+		if (this.selectionCovered(sel)) {
+			confirmDestructive(this.app, { title: t("tape.delete.title"), body: t("tape.delete.body"), confirm: t("tape.delete.confirm") }, () => {
+				// Only the very selection the question was about (nothing is deleted when it changed meanwhile).
+				if (this.selection === sel && this.editable()) this.deleteSelectionNow(sel);
+			});
+			return;
+		}
+		this.deleteSelectionNow(sel);
+	}
+
+	/** 0.29 (#10, review R3): whether a selection holds ink or objects a hidden study tape covers, even in part (Delete and Cut ask first). */
+	selectionCovered(sel: Selection | null = this.selection): boolean {
+		const doc = this.session?.doc;
+		if (!sel || !doc) return false;
+		return this.selectionParts(sel).some((part) => {
+			const page = doc.pages[part.pageIndex];
+			return !!page && selectionHoldsCovered(part.strokes, part.elements, this.hidingTapesOf(page), this.renderer?.boundsOf, measureText);
+		});
+	}
+
+	private deleteSelectionNow(sel: Selection): void {
+		const page = this.session?.doc?.pages[sel.pageIndex];
+		if (!page) return;
 		if (sel.others?.length) {
 			this.deleteAcrossPages(sel);
 			return;
@@ -4225,8 +4253,9 @@ export class NotebookView extends FileView {
 		const { commands, removed: removedEls } = deleteSelectionCommands(page, sel.strokes, sel.elements);
 		// Ink written on a deleted object stays unless the user takes the offer shown afterwards (setting "Ink follows objects").
 		// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
+		// 0.29 (#10, review R3): nor is ink a hidden study tape reaches over (offers count only what the reader can see).
 		const owned = this.host.settings.inkFollowsObjects && removedEls.length > 0
-			? inkOnRemoved(this.inkInView(page), page.elements ?? [], removedEls, new Set(sel.strokes), measureText)
+			? inkOnRemoved(this.inkOutsideTapes(page), page.elements ?? [], removedEls, new Set(sel.strokes), measureText)
 			: [];
 		this.clearSelection();
 		if (commands.length === 0) return;
@@ -4316,7 +4345,8 @@ export class NotebookView extends FileView {
 			const removedEls = planned.removed;
 			if (this.host.settings.inkFollowsObjects && removedEls.length > 0) {
 				// v8: hidden ink is never offered (nor counted) while the solutions of the page are not shown.
-				const visible = new Set(this.inkInView(page));
+				// 0.29 (#10, review R3): nor ink a hidden study tape reaches over.
+				const visible = new Set(this.inkOutsideTapes(page));
 				const own = new Set(part.strokes);
 				const owned = inkFollowers(page, part, true, measureText).map((f) => f.stroke).filter((s) => visible.has(s) && !own.has(s));
 				if (owned.length > 0) offers.push({ page, removed: removedEls, owned });
@@ -6167,7 +6197,9 @@ export class NotebookView extends FileView {
 			return;
 		}
 		this.clearSelection();
-		const texts = (page.elements ?? []).filter((e): e is TextElement => e.type === "text");
+		// 0.29 (#10, review R4): a tap on a hidden study tape writes on the tape: the text box it covers is not opened (nor its lock chip shown).
+		const onTape = pointUnderTapes(this.hidingTapesOf(page), local[0], local[1]);
+		const texts = onTape ? [] : (page.elements ?? []).filter((e): e is TextElement => e.type === "text");
 		const hit = hitElement(texts, local[0], local[1], 4 / this.viewport.scale, measureText) as TextElement | null;
 		if (!hit) {
 			// 0.20 (#39): a locked text box is not edited, and no new box is started on top of it: the chip offers Unlock.
@@ -7291,6 +7323,13 @@ export class NotebookView extends FileView {
 			boundsOf: () => this.renderer?.boundsOf,
 			revealed: (page) => this.markers?.isRevealed(page) ?? false,
 			struckHidden: (page) => (this.strikeHide?.on ? this.strikeHide.hiddenFor(page.id) : null),
+			// 0.29 (#10, review R1): the delete gesture spares ink a hidden study tape reaches over, as the scribble eraser does.
+			spareStroke: (page) => {
+				const tapes = this.hidingTapesOf(page);
+				const boundsOf = this.renderer?.boundsOf;
+				return tapes.length > 0 ? (s: Stroke) => strokeTouchesTapes(s, tapes, boundsOf?.(s)) : undefined;
+			},
+			tapeKept: () => this.tapeKeptNotice(),
 			selection: () => this.selection,
 			selectionHit: (pageIndex, local) => this.selection?.pageIndex === pageIndex && this.selectionHit(local) !== null,
 			selectPolygon: (pageIndex, polygon) => {
@@ -7876,6 +7915,7 @@ export class NotebookView extends FileView {
 				return true;
 			},
 			deleteSelection: () => this.deleteSelection(),
+			selectionCovered: () => this.selectionCovered(),
 			boxes: () => this.layout?.boxes ?? [],
 			sharedClips: () => this.host.sharedClips?.() ?? (this.sharedClipStore ??= new SharedClipStore(vaultDeviceFileAdapter(this.app), () => this.host.settings.folder, sidecarDeviceId(this.app))),
 			pasteTarget: () => this.pasteTarget(),

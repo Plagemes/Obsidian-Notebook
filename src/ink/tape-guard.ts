@@ -71,3 +71,16 @@ export function elementTouchesTapes(el: PageElement, tapes: readonly TapeElement
 	if (el.type === "tape" || tapes.length === 0) return false;
 	return boxTouchesTapes(elementBounds(el, measure), tapes);
 }
+
+/**
+ * Review R3: whether a selection holds ink or elements that one of the hidden `tapes` covers, even in part. The selection frame draws the
+ * hidden tapes over what it holds, so Delete and Cut ask first: otherwise the covered answers would go without anyone seeing them. The
+ * tapes themselves do not count (a tape alone is visible), but a selected tape still hides what it covers until it is gone.
+ */
+export function selectionHoldsCovered(
+	strokes: readonly Stroke[], elements: readonly PageElement[], tapes: readonly TapeElement[],
+	boundsOf?: (s: Stroke) => BBox, measure: MeasureText = estimateMeasure,
+): boolean {
+	if (tapes.length === 0) return false;
+	return strokes.some((s) => strokeTouchesTapes(s, tapes, boundsOf?.(s))) || elements.some((el) => elementTouchesTapes(el, tapes, measure));
+}

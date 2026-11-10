@@ -5765,5 +5765,8 @@ export const it: Partial<Record<MessageKey, string>> = {
 	"settings.cardTemplates.desc": "Concetto, domanda, citazione e definizione, più modelli tuoi, per le nuove schede.",
 	"redactundo.unreadable": "{step} non eseguito: i riquadri di oscuramento salvati su questo dispositivo non si possono leggere, quindi nessun passo che sposta la scrittura può essere verificato. Apri Esporta… › Oscura… e premi Azzera l'archivio dell'oscuramento (oppure disegna di nuovo i riquadri di questo quaderno e premi Fatto); il passo resta nella cronologia.",
 	"tape.erase.kept": "L'inchiostro sotto un nastro di studio coperto resta. Tocca il nastro per rivelarlo, poi cancella.",
+	"tape.delete.title": "Eliminare il contenuto nascosto?",
+	"tape.delete.body": "Questa selezione include contenuti nascosti sotto i nastri di studio. Eliminarla comunque?",
+	"tape.delete.confirm": "Elimina",
 	"tape.export.note": "I nastri di studio coprono il contenuto solo alla vista: il testo sotto si può ancora trovare nei file esportati. Usa Oscura per togliere contenuti dalle esportazioni.",
 };
