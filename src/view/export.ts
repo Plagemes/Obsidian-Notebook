@@ -5,6 +5,7 @@ import { pagesToPdf, pagesToPdfYielding, type PdfCommentLabels, type PdfOptions,
 import { planSplit, type SplitSettings } from "../ink/export-tiles";
 import { pageToSvg, type SvgPlacedImage } from "../ink/export-svg";
 import { htmlHead, htmlPage, htmlTail, ImageBudget, pageHtmlLinks, type HtmlViewerLabels } from "../ink/export-html";
+import type { FigureLabelSource } from "../ink/figure-text";
 import type { BoxLabel } from "../ink/marker-render";
 import type { HeaderLayout } from "../ink/page-header";
 import { DEFAULT_PNG_SCALE } from "../model/export-pages";
@@ -149,6 +150,11 @@ export interface ExportOptions {
 	 * without the struck words and their lines. The export dialog and the share sheet decide this themselves and drop it from what they pass on.
 	 */
 	struck?: true;
+	/**
+	 * 0.29 (#248) review fix (F1, F3): the figure numbers of THIS notebook, frozen when the options were made. Every writer resolves the
+	 * captions and references of its pages against it (and redaction measures them in the same scope), never against another open view.
+	 */
+	figures?: FigureLabelSource;
 }
 
 /**
@@ -167,6 +173,7 @@ export async function buildPdfBytes(
 		...(options.header ? { header: options.header } : {}),
 		...(options.comments ? { comments: options.comments } : {}),
 		...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
+		...(options.figures ? { figures: options.figures } : {}),
 		...(options.split ? { split: (p: Page) => planSplit(p, options.split!) } : {}),
 	};
 	return { bytes: pause ? await pagesToPdfYielding(pages, pdfOptions, pause) : pagesToPdf(pages, pdfOptions), skipped };
@@ -212,6 +219,7 @@ async function buildSvg(app: App, notebook: TFile, source: Page, suffix: string,
 		...(options.header ? { header: options.header(page) } : {}),
 		...(options.layers ? { layers: options.layers } : {}),
 		...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
+		...(options.figures ? { figures: options.figures } : {}),
 	}));
 	return { path, skipped };
 }
@@ -275,6 +283,7 @@ export async function exportHtml(app: App, notebook: TFile, allPages: readonly P
 				...(options.header ? { header: options.header(page) } : {}),
 				...(options.layers ? { layers: options.layers } : {}),
 				...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
+				...(options.figures ? { figures: options.figures } : {}),
 			});
 			const label = `${labels.page} ${i + 1}`;
 			parts.push(htmlPage(i, pages.length, svg, label, pageHtmlLinks(page, notebook.basename, (n) => { const at = indices.indexOf(n - 1); return at < 0 ? null : at; })));

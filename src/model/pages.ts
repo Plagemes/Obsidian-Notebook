@@ -1,3 +1,4 @@
+import { remapFigureMarkers } from "../ink/figure-text";
 import { copiedCheckbox } from "./checklist";
 import { createId, createPage } from "./document";
 import { freezeElement, freezeStroke } from "./serialize";
@@ -7,15 +8,32 @@ import { pageTimes, putPageTimes } from "./page-times";
 import { remapStates } from "./states";
 import { PAPER_SPACING, type Asset, type Page, type PageElement, type Stroke } from "./types";
 
-function copyElement(el: PageElement, keepTasks: boolean, regroup: (group: string) => string): PageElement {
+function copyElement(el: PageElement, keepTasks: boolean, regroup: (group: string) => string, id: string, figures: ReadonlyMap<string, string>): PageElement {
 	// v17: a copy of a checkbox keeps its tick but never the link to the task line of the original (unless the page is moved).
-	const copy = el.type === "checkbox" ? copiedCheckbox(el, createId(), keepTasks) : { ...el, id: createId() };
+	const copy = el.type === "checkbox" ? copiedCheckbox(el, id, keepTasks) : { ...el, id };
 	// v18: a copy of a page belongs to groups of its own (new ids); its locks are kept.
 	if (copy.group !== undefined) copy.group = regroup(copy.group);
+	// 0.29 (#248) review fix (F2): a caption or a reference to a picture that is copied too names the COPY of the picture.
+	if (copy.type === "text") {
+		const text = remapFigureMarkers(copy.text, figures);
+		if (text !== copy.text) copy.text = text;
+	}
 	return freezeElement(copy);
 }
 
+/** The pictures (images and figure cut-outs) among `elements` with the ids their copies get. */
+function figureIdsOf(elements: readonly PageElement[] | undefined, ids: ReadonlyMap<string, string>): Map<string, string> {
+	const out = new Map<string, string>();
+	for (const e of elements ?? []) if (e.type === "image" || e.type === "excerpt") out.set(e.id, ids.get(e.id)!);
+	return out;
+}
+
 export interface DuplicateOptions {
+	/**
+	 * Review fix (F2): old element id -> id of its copy, shared by the pages of one operation (`duplicatePages`): the pictures the pages
+	 * copied so far have their entries here, so a caption on a later page finds the copy of a picture on an earlier one.
+	 */
+	figures?: Map<string, string>;
 	/**
 	 * The copy replaces the page (pages moved to another notebook, a page restored from the page trash): its checkboxes are the same
 	 * checkboxes and keep the link to their task lines. A real copy (the default) never ticks the tasks of the original. v19: the same
@@ -80,7 +98,17 @@ export function duplicatePage(page: Page, opts: DuplicateOptions = {}): Page {
 	if (page.margins) copy.margins = { ...page.margins };
 	// v7: the copy keeps the page's tags (its bookmark is not copied: bookmarks belong to the original page id).
 	if (page.tags && page.tags.length > 0) copy.tags = [...page.tags];
-	if (page.elements && page.elements.length > 0) copy.elements = page.elements.map((e) => copyElement(e, opts.keepTasks === true, regroup));
+	if (page.elements && page.elements.length > 0) {
+		const made = page.elements.map(() => createId());
+		const newIds = new Map<string, string>();
+		page.elements.forEach((e, i) => {
+			if (!newIds.has(e.id)) newIds.set(e.id, made[i]!);
+		});
+		const mine = figureIdsOf(page.elements, newIds);
+		if (opts.figures) for (const [from, to] of mine) opts.figures.set(from, to);
+		const known = opts.figures ?? mine;
+		copy.elements = page.elements.map((e, i) => copyElement(e, opts.keepTasks === true, regroup, made[i]!, known));
+	}
 	// v16: the comments are about the page, so a copy of the page keeps them (same ids: they are scoped to the page).
 	const comments = copyComments(page.comments, page);
 	if (comments) copy.comments = comments;
@@ -88,6 +116,26 @@ export function duplicatePage(page: Page, opts: DuplicateOptions = {}): Page {
 	// or comes back from the trash (`keepTasks`: the copy replaces the page) is the same page and keeps them.
 	if (opts.keepTasks === true) putPageTimes(copy, pageTimes(page));
 	return copy;
+}
+
+/**
+ * Copies of several pages made in ONE operation (duplicate pages, a notebook made from a template, pages moved to another notebook).
+ * 0.29 (#248) review fix (F2): a caption or reference on any of the copies that names a picture on any of the copies names the copy of
+ * that picture, wherever the two pages are in the list; one that names a picture not copied keeps naming the original.
+ */
+export function duplicatePages(pages: readonly Page[], opts: DuplicateOptions = {}): Page[] {
+	const figures = new Map<string, string>();
+	const copies = pages.map((p) => duplicatePage(p, { ...opts, figures }));
+	for (const copy of copies) {
+		const elements = copy.elements;
+		if (!elements) continue;
+		elements.forEach((e, i) => {
+			if (e.type !== "text") return;
+			const text = remapFigureMarkers(e.text, figures);
+			if (text !== e.text) elements[i] = freezeElement({ ...e, text });
+		});
+	}
+	return copies;
 }
 
 /**

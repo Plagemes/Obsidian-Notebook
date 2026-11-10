@@ -1,7 +1,7 @@
 import { normalizePath, type App, type Plugin, type TFile } from "obsidian";
 import { pagesToPdf } from "../ink/export-pdf";
 import { withExcerptChains } from "../ink/redact";
-import { withFigureLabels } from "../model/figure-captions";
+import { figureLabelSourceOf } from "../model/figure-captions";
 import { Batch } from "../model/history";
 import { lockedPageIds } from "../model/page-lock";
 import { parse, serializeChecked } from "../model/serialize";
@@ -476,8 +476,12 @@ class NotebookApiImpl implements NotebookApi {
 			throw new NotebookApiError("export-failed", `A page of "${f.path}" was turned or cropped after its redaction boxes were drawn, so no PDF was written. Open the notebook, Export… › Redact… and draw those boxes again.`, { path: f.path });
 		}
 		// Review fix (U1): the set knows the notebook's id, so every excerpt of it (also of a page since deleted) is left out.
+		// 0.29 (#248) review fix (F1, F4): the numbers of THIS notebook's figures, worked out from the document alone and used by the redaction
+		// (which measures the text as it will be drawn) and by the writer, whatever other notebooks are open.
+		const figures = figureLabelSourceOf(doc.pages);
 		// 0.29 (#96): the setting "Leave struck-out words out of exports" covers this PDF too.
 		const { pages } = withRedaction(doc.pages, {
+			figures,
 			...(isArmed(stored) ? { redact: withExcerptChains(doc.pages, stored.boxes, doc.id) ?? stored.boxes } : {}),
 			...(this.settings.exportHideStruck ? { struck: true as const } : {}),
 		});
@@ -487,8 +491,7 @@ class NotebookApiImpl implements NotebookApi {
 			if (skipped > 0 && options?.strict) {
 				throw new NotebookApiError("export-incomplete", `${skipped} PDF page(s) or image(s) could not be loaded, so no PDF was written.`, { skipped });
 			}
-			// 0.29 (#248): the notebook is not open in a view here, so its figure numbers are made known for the export.
-			const bytes = withFigureLabels(pages, () => pagesToPdf(pages, { paper: true, title: f.basename, images: (p) => images.get(p) ?? [] }));
+			const bytes = pagesToPdf(pages, { paper: true, title: f.basename, images: (p) => images.get(p) ?? [], figures });
 			const path = freePath(this.app, f, "", "pdf");
 			recordPluginWrite(this.app, [path]);
 			await this.app.vault.createBinary(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);

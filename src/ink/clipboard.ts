@@ -8,6 +8,7 @@ import { freezeElement, freezeStroke } from "../model/serialize";
 import type { Asset, Page, PageElement, Stroke } from "../model/types";
 import { remapStickyInk } from "../model/sticky";
 import { boundGraphId, BOUND_SEPARATOR } from "./attach";
+import { remapFigureMarkers } from "./figure-text";
 import { elementBounds, transformElement } from "./elements";
 import { strokeBounds, type BBox } from "./hit-test";
 import { transformStroke } from "./lasso";
@@ -88,16 +89,27 @@ export function instantiateClip(
 	// v18: a pasted or duplicated set of items belongs to groups of its own (new ids, the same one for the members that shared one);
 	// a lock is kept.
 	const regroup = groupRenamer();
-	const elements = clip.elements.map((e) => {
+	// 0.29 (#248) review fix (F2): the pictures of the clip and the ids their copies get; a caption or a reference in the clip that names
+	// one of them names the copy. One that names a picture outside the clip keeps naming the original.
+	const made = clip.elements.map(() => createId());
+	const figures = new Map<string, string>();
+	clip.elements.forEach((e, i) => {
+		if ((e.type === "image" || e.type === "excerpt") && !figures.has(e.id)) figures.set(e.id, made[i]!);
+	});
+	const elements = clip.elements.map((e, i) => {
 		const moved = transformElement(e, m, measure);
 		// Images and (v10) excerpt snapshots stored again under another id are renamed.
 		const old = elementAssetId(moved);
 		const base = old !== null ? withElementAsset(moved, assetMap?.get(old) ?? old) : moved;
-		const id = createId();
+		const id = made[i]!;
 		if (e.type === "graph") newIds.set(e.id, id);
 		// v17: a pasted checkbox keeps its tick but never the link to the task line of the original.
 		const copy = base.type === "checkbox" ? copiedCheckbox(base, id) : { ...base, id };
 		if (copy.group !== undefined) copy.group = regroup(copy.group);
+		if (copy.type === "text") {
+			const text = remapFigureMarkers(copy.text, figures);
+			if (text !== copy.text) copy.text = text;
+		}
 		return freezeElement(copy);
 	});
 	const strokeIds = new Map<string, string>();

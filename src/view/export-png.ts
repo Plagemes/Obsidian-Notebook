@@ -37,6 +37,7 @@ export async function exportPngPages(app: App, allPages: readonly Page[], reques
 		...(options.equationNumbers ? { equationNumbers: options.equationNumbers } : {}),
 		...(options.layers ? { layers: options.layers } : {}),
 		...(options.header ? { header: options.header } : {}),
+		...(options.figures ? { figures: options.figures } : {}),
 	});
 	try {
 		const chosen = request.pages.filter((i) => i >= 0 && i < pages.length);

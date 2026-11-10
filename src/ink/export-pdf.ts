@@ -24,6 +24,7 @@ import { helveticaCodeWidth, helveticaWidth, toWinAnsi, wrapHelvetica } from "..
 import { LINK_COLOR, lineRuns, linksInCodePoints, shownText } from "./link-text";
 import { tileLabel, type SplitPlan } from "./export-tiles";
 import { dashRuns, fillAlpha, FILL_TINT_ALPHA, isFilled } from "./shape-style";
+import { withFigureScope, type FigureLabelSource } from "./figure-text";
 
 /**
  * An image placed on a page, in page coordinates (pt, origin top-left, y down). `jpeg` is a
@@ -52,6 +53,8 @@ export interface PdfPlacedImage {
 export interface PdfOptions {
 	paper?: boolean;
 	title?: string;
+	/** 0.29 (#248) review fix (F1, F3): the figure numbers of the notebook, frozen at the start of the export (absent: the ambient fallback). */
+	figures?: FigureLabelSource;
 	/** Images of a page (PDF background and image elements). */
 	images?: (page: Page) => PdfPlacedImage[];
 	/** v8 invisible ink: draw the hidden strokes of a page (default: never; they are the solutions). */
@@ -279,10 +282,12 @@ function* pdfSteps(pages: readonly Page[], options: PdfOptions): Generator<void,
 
 /** The PDF of `pages` (see `pdfSteps` above for the layout). Synchronous. */
 export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Uint8Array {
-	const steps = pdfSteps(pages, options);
-	let step = steps.next();
-	while (!step.done) step = steps.next();
-	return step.value;
+	return withFigureScope(options.figures, () => {
+		const steps = pdfSteps(pages, options);
+		let step = steps.next();
+		while (!step.done) step = steps.next();
+		return step.value;
+	});
 }
 
 /**
@@ -291,10 +296,11 @@ export function pagesToPdf(pages: readonly Page[], options: PdfOptions = {}): Ui
  */
 export async function pagesToPdfYielding(pages: readonly Page[], options: PdfOptions, pause: () => Promise<void>): Promise<Uint8Array> {
 	const steps = pdfSteps(pages, options);
-	let step = steps.next();
+	// Review fix (F1, F3): the numbers are in force only while a chunk runs (never across the await), and they are the frozen ones.
+	let step = withFigureScope(options.figures, () => steps.next());
 	while (!step.done) {
 		await pause();
-		step = steps.next();
+		step = withFigureScope(options.figures, () => steps.next());
 	}
 	return step.value;
 }

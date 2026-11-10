@@ -2,7 +2,18 @@
  * Cross-feature rules of the 0.29 wave: the study tape (#10, format 27) next to the redaction undo guard, the strike-through hide, the clean
  * export, the table readers of charts (#244) and statistics (#295), and the figure captions (#248).
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("obsidian", async () => {
+	const base = (await import("./fake-vault")).obsidianMock();
+	class Notice {
+		setMessage(): void {}
+		hide(): void {}
+	}
+	return { ...base, Notice };
+});
+
+import { withRedaction } from "../src/view/export-redact";
 import { readCells } from "../src/ink/table-data";
 import { readTableCells } from "../src/ink/table-numbers";
 import { captureForStep, stepMovesUnderRedaction, type StepBoxes } from "../src/ink/redact-step";
@@ -71,6 +82,20 @@ describe("0.29 integration: study tape and the strike-through hide", () => {
 		expect(strikesOnly.strokes).toHaveLength(page.strokes.length - struck.size);
 		expect(hasCleanableContent(page, { markers: false, comments: false, collapsedStickies: false, struck: false })).toBe(true);
 		expect(hasCleanableContent(page, { markers: false, comments: false, collapsedStickies: false, tapes: false, struck: false })).toBe(false);
+	});
+});
+
+describe("0.29 integration: the struck-words export keeps the study tapes (every export draws them covering)", () => {
+	it("withRedaction({ struck }) leaves the struck words out and the tapes in", () => {
+		const doc = createDocument(NOW);
+		const page = doc.pages[0]!;
+		page.strokes.push(...struckStrokes());
+		const tape = tapeAt(30, 60, 300, 60);
+		page.elements = [tape];
+		const struck = struckInk(page.strokes);
+		const out = withRedaction([page], { struck: true }).pages[0]!;
+		expect(out.strokes).toHaveLength(page.strokes.length - struck.size);
+		expect(out.elements).toEqual([tape]);
 	});
 });
 

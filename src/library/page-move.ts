@@ -5,7 +5,7 @@
 import { elementAssetId } from "../model/excerpts";
 import { normalizeBookmarkInfo, setBookmark } from "../model/bookmarks";
 import { cloneMeta, createPage } from "../model/document";
-import { copyStroke, duplicatePage } from "../model/pages";
+import { copyStroke, duplicatePages } from "../model/pages";
 import { parse } from "../model/serialize";
 import { DEFAULT_META, type Asset, type BookmarkInfo, type NotebookDocument, type NotebookMeta, type Page } from "../model/types";
 
@@ -84,8 +84,9 @@ export function planPageMove(source: NotebookDocument, pageIds: readonly string[
 	// Keep the page ids unless the target already uses one (a copy of the notebook, a page moved there before).
 	const taken = new Set(target.pages.map((p) => p.id));
 	const renamed: PageMovePlan["renamed"] = [];
-	const pages = chosen.map((p) => {
-		const copy = duplicatePage(p, { keepTasks });
+	const copies = duplicatePages(chosen, { keepTasks }); // 0.29 (#248) review fix (F2): captions follow the pictures moved with them
+	const pages = chosen.map((p, i) => {
+		const copy = copies[i]!;
 		// v12: a slide link names an entry of the source's table, which the target does not have: the ink stays, unlinked.
 		if (copy.strokes.some((s) => s.slide !== undefined)) copy.strokes = copy.strokes.map((s) => (s.slide === undefined ? s : copyStroke(s, s.id, null)));
 		if (taken.has(p.id)) renamed.push({ from: p.id, to: copy.id });

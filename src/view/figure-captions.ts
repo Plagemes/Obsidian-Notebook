@@ -3,7 +3,7 @@
 // caption and a reference are ordinary text boxes (model/figure-captions.ts), the numbers are worked out from the document.
 import { Modal, type App } from "obsidian";
 import { t } from "../i18n";
-import { addFigureLabelSource } from "../ink/figure-text";
+import { addFigureLabelSource, frozenFigureSource, type FigureLabelSource } from "../ink/figure-text";
 import { numberFigures, numberMapOf, type NumberedFigure } from "../model/figure-captions";
 import type { Page } from "../model/types";
 import { modalShell, shellButton, shellField, shellNote, shellRow } from "../ui/components/modal-shell";
@@ -31,9 +31,21 @@ export class FigureNumbers {
 
 	constructor(private readonly host: FigureNumbersHost) {}
 
-	/** Starts answering for the texts shown anywhere (the view is open). */
+	/** The live source of this notebook alone: its renderer draws inside it (exclusive, see `withFigureScope`). Review fix (F1). */
+	readonly liveSource: FigureLabelSource = { abbr: () => t("figcap.abbr"), number: (id) => this.numberOf(id) };
+
+	/**
+	 * The numbers as they are right now, frozen: an export takes this at its start and resolves every page against it, so edits made
+	 * while it yields (or the view closing) change nothing in the file. Review fix (F3).
+	 */
+	snapshot(): FigureLabelSource {
+		this.refresh();
+		return frozenFigureSource(this.map, t("figcap.abbr"));
+	}
+
+	/** Starts answering for the texts drawn outside any scope (the view is open): the fallback of `figure-text.ts`. */
 	register(): void {
-		this.remove ??= addFigureLabelSource({ abbr: () => t("figcap.abbr"), number: (id) => this.numberOf(id) });
+		this.remove ??= addFigureLabelSource(this.liveSource);
 	}
 
 	/** Stops answering (the view closed). */
@@ -171,7 +183,7 @@ export class FigureRefModal extends Modal {
 			row.setAttribute("role", "listitem");
 		}
 		const broken = this.picker.broken();
-		if (broken > 0) shellNote(shell.body, t("figcap.refs.broken", { n: String(broken) }));
+		if (broken > 0) shellNote(shell.body, broken === 1 ? t("figcap.refs.broken.one") : t("figcap.refs.broken.many", { n: String(broken) }));
 		shellButton(shell.foot, "secondary", t("figcap.dialog.cancel"), () => this.close());
 	}
 
