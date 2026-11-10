@@ -242,6 +242,7 @@ import { tableOfSelection } from "../ink/table";
 import { chartOfSelection, tableInSelection } from "../ink/chart";
 import { ChartTools } from "./chart-tools";
 import { FigureMarkerTools } from "./figure-marker-tools"; // 0.30 figmarkers
+import { FlowchartTools } from "./flowchart-tools";
 import { ChemTools, holdsReaction } from "./chem-tools";
 import { CalculatorTools } from "./calculator";
 import { GroupTools, type GroupHost } from "./group-tools";
@@ -588,6 +589,8 @@ export class NotebookView extends FileView {
 	private charts: ChartTools | null = null;
 	/** 0.30 (#247): numbered markers on a figure, with a legend (add one, renumber after a deletion). */
 	private figureMarkers: FigureMarkerTools | null = null;
+	/** 0.30 (#245): "Tidy flowchart" on a selection of hand-drawn boxes and arrows. */
+	private flowchart: FlowchartTools | null = null;
 	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
 	private chem: ChemTools | null = null;
 	/** 0.29 (#182): the advanced calculator (null before the view is open). */
@@ -962,6 +965,7 @@ export class NotebookView extends FileView {
 		this.tables = new TableTools(this.tableHost());
 		this.charts = new ChartTools(this.tableHost());
 		this.figureMarkers = new FigureMarkerTools({ ...this.tableHost(), textSize: () => this.tools.textSize });
+		this.flowchart = new FlowchartTools(this.tableHost());
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
 		this.calculator = new CalculatorTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
@@ -1451,6 +1455,7 @@ export class NotebookView extends FileView {
 		this.tables = null;
 		this.charts = null;
 		this.figureMarkers = null;
+		this.flowchart = null;
 		this.chem = null;
 		this.calculator = null;
 		this.checklist = null;
@@ -3780,6 +3785,11 @@ export class NotebookView extends FileView {
 	/** 0.30 (#247): numbered markers on a figure of this view (null before the view is open). */
 	get figMarkerTools(): FigureMarkerTools | null {
 		return this.figureMarkers;
+	}
+
+	/** 0.30 (#245): the flowchart tidy-up of this view (null before the view is open). */
+	get flowchartTools(): FlowchartTools | null {
+		return this.flowchart;
 	}
 
 	/** 0.22 (#206): instant axes of this view (null before the view is open). */

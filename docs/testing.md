@@ -5032,3 +5032,42 @@ A marker is a ring with its number (a shape stroke and a text box, one group); t
 | Placing a marker by tapping the spot on the figure | no | | | | markers appear on a free spot and are dragged to place |
 | Renumbering by itself after a delete, or in reading order | no | | | | explicit *Renumber markers* in placement order only |
 | Leader lines from a marker to its legend text | no | | | | roadmap #246 |
+
+### 0.30 — flowchart: hand-drawn flowcharts that tidy themselves (roadmap #245; steps 3580-3599)
+
+*All actions › Selection › Tidy flowchart* (and the command palette) on a selection of hand-drawn boxes and arrows. Implemented, not verified on hardware. It recognises rectangles, diamonds and ellipses (closed strokes) and arrows (one stroke, or a line with a small V drawn at one end) that start and end on two different boxes, lines the boxes up in rows and columns, evens out the gaps and draws the arrows again from outline to outline. The writing and text boxes inside a box move with it. The boxes keep their strokes (points, pressure, style); only the arrows are redrawn, as clean shape strokes in the same colour and width. One undo step; no format change.
+
+3580. **Draw and select.** On a grid page draw by hand, with the S Pen, a flowchart of five or six boxes (two rectangles, one diamond for a decision, one ellipse for start or end), a few words inside each box (writing or a text box) and an arrow between each pair, some of them slightly crooked. Lasso the whole thing: *All actions* shows *Tidy flowchart* in the Selection group (not with fewer than two strokes selected).
+3581. **Tidy.** Tap it. The boxes line up in columns and rows (boxes whose centres were roughly under each other now share one centre line), the gaps between neighbouring rows and between neighbouring columns are all equal, the first box sits on a grid line, and each arrow is a straight line that starts at the outline of one box and ends with its head just before the outline of the next (check on the diamond and the ellipse: the arrow touches the curve, not an invisible box around it). A notice says how many boxes and arrows.
+3582. **Labels travel.** Every word inside a box moved with its box and sits in the same place relative to it, so no label is left behind. A text box inside a box moved too. A "yes" or "no" written beside an arrow (within about 22 pt of it, outside every box) followed the middle of that arrow. Other writing, farther from any arrow and outside every box, stayed where it was.
+3583. **Boxes are not redrawn.** Zoom in on a box: its strokes are the ones you drew (same wobble, same line weight and pressure look), only moved. The arrows are now clean, in the colour and width you used.
+3584. **One undo.** Undo once: everything is back exactly as drawn, including the arrows and their heads. Redo does the tidy again. The history panel shows one step, *Flowchart tidied* (Italian *Diagramma riordinato*).
+3585. **Twice is nothing.** Tidy the tidied chart again: the notice says it is already tidy and nothing moves.
+3586. **Two-stroke arrows.** Draw an arrow as a line plus a small V at its end (two strokes). Tidy: it becomes one arrow stroke with a clean head; undo brings back the line and the V.
+3587. **Plain lines and loose ends.** A plain line between two boxes stays a plain line (no head). An arrow that ends in the air is left exactly as drawn.
+3588. **Two arrows between the same boxes** (one each way) end up side by side, not on top of each other.
+3589. **Refusals say why.** With one box selected, or none: "Select a flowchart with at least two boxes". A box drawn inside another of a similar size: it says to select one level at a time and moves nothing. Boxes scattered with no rows or columns still tidy (or say they cannot) but never overlap.
+3590. **Redaction (fail closed).** Add a redaction box (Export… › Redact…) over one box of the chart, then tidy: nothing moves and the notice says why. Also try with a redaction box where a box would LAND after the tidy (the first run shows where boxes go): refused too. Remove the box and it works.
+3591. **Study tape.** With a study tape over part of the chart (tape covered or revealed): refused, nothing moves.
+3592. **Locked page and locked items.** On a locked page it refuses and nothing changes. A locked text box inside a box is not moved. Hidden (invisible) ink in the selection is not touched.
+3593. **Page edge.** On a small page, draw a chart that nearly fills it, tidy: when the even gaps would push something off the page, it is refused with a notice and nothing moves.
+3594. **Groups and pen types.** Boxes drawn with the fountain pen or the marker keep their pen type after the move; a redrawn arrow of such a pen becomes a plain shape stroke of the same colour and width. A group that contains the arrows keeps its other members.
+3595. **Per-page undo.** With *Undo on this page only* on, undo of the tidy acts on its page only, with other pages' steps after it left alone.
+3596. **Phone, light, dark, Italian.** The action reads in light and dark; with the plugin in Italian the name is *Riordina diagramma di flusso* and the help (long-press on the action in the sheet) and the notices are in Italian.
+3597. **Speed.** A chart of about 30 boxes and 40 arrows tidies in well under a second on the tablet.
+3598. **Real device.** On the tablet with the S Pen: draw a real flowchart quickly, as you would in a lecture, and tidy it: note any box that was not recognised (too sloppy, too small, a diamond read as an ellipse), any arrow that was not attached, and any label that was left outside its box. These are the limits of the recogniser, not of the layout.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Boxes read from strokes (rectangle, diamond, ellipse), small shapes and highlighter ignored, nested boxes refused | yes | `tests/flowchart.test.ts` | | | |
+| Arrows read (one stroke, line + V head), plain lines, ends attached within reach, loose arrows left alone | yes | `tests/flowchart.test.ts` | | | |
+| Labels (writing, text boxes, equations, small rings) follow their box | yes | `tests/flowchart.test.ts` | | | |
+| Layout: columns and rows, equal gaps, first box on the grid, idempotent, never overlapping | yes | `tests/flowchart.test.ts` | | | |
+| Connectors: outline to outline for rectangle, diamond, ellipse; straight and square when boxes line up; parallel ones set apart | yes | `tests/flowchart.test.ts` | | | |
+| One undo step of existing commands, strokes keep points / pressure / style, ids and order kept, saves and reads back | yes | `tests/flowchart.test.ts` | | | |
+| Refuses: redaction box before or after (and unreadable boxes), study tape, page edge, too few boxes, nested | yes | `tests/flowchart.test.ts` | | | |
+| Per-page undo scope (one page, not global) | yes | `tests/flowchart.test.ts` | | | |
+| Action in the sheet, help, ranking, command, en + it, history title | yes | `tests/flowchart-actions.test.ts`, `tests/ui-registry.test.ts` | | | |
+| Screens (before / after, tablet and phone, light and dark) | yes | harness `doc=flowchart` | | | |
+| Elbow (right-angle) connectors, swimlanes, boxes in more than one grid cell, triangles | no | | | | arrows are straight; a box nested in a box of similar size is refused |
+| Reading the text of a label | no | | | | the plugin has no handwriting recognition; labels are moved, not read |

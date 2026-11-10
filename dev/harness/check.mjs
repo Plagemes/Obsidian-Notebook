@@ -371,6 +371,8 @@ for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"])
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "syncprov", theme, device, lowLatency: false });
 // 0.29 figcaptions (#248): figure captions, references and the reference picker (dev/harness/figcaptions-check.ts), tablet and phone, dark and light (dist/shots/figcaptions-*.png).
 for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "figcaptions", theme, device, lowLatency: false });
+// 0.30 flowchart (#245): Tidy flowchart before / after (dev/harness/flowchart-check.ts), tablet and phone, dark and light (dist/shots/design/flowchart-*.png).
+for (const theme of ["dark", "light"]) for (const device of ["tablet", "phone"]) SCENARIOS.push({ doc: "flowchart", theme, device, lowLatency: false });
 
 /** RGBA pixel reader for the 8-bit, non-interlaced PNGs Chrome produces. */
 function decodePng(buf) {
@@ -516,6 +518,7 @@ async function main() {
 				else if (s.doc === "charts") report = await cdp.evaluate("window.harness.checkCharts()", 120000); // 0.29 charts
 				else if (s.doc === "chartreg") report = await cdp.evaluate("window.harness.checkChartreg()", 120000); // 0.30 chartreg
 				else if (s.doc === "figmarkers") report = await cdp.evaluate("window.harness.checkFigmarkers()", 120000); // 0.30 figmarkers
+				else if (s.doc === "flowchart") report = await cdp.evaluate("window.harness.checkFlowchart()", 120000); // 0.30 flowchart
 				else if (s.doc === "stats") report = await cdp.evaluate("window.harness.checkStats()", 120000); // 0.29 stats
 				else if (s.doc === "tablecalc") report = await cdp.evaluate("window.harness.checkTablecalc()", 120000); // 0.30 tablecalc
 				else if (s.doc === "tidy") report = await cdp.evaluate("window.harness.checkTidy()", 90000); // 0.26 tidy
@@ -855,6 +858,19 @@ async function main() {
 						writeFileSync(join(designDir, `figmarkers-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
 					} catch (e) {
 						problems.push(`figmarkers ${state} screenshot: ${e.message}`);
+					}
+				}
+			}
+			// 0.30 flowchart: the crooked chart selected, and the tidied chart.
+			if (s.doc === "flowchart") {
+				const designDir = join(shots, "design");
+				mkdirSync(designDir, { recursive: true });
+				for (const state of ["before", "after"]) {
+					try {
+						await cdp.evaluate(`window.harness.flowchartShot('${state}').then(() => true)`, 60000);
+						writeFileSync(join(designDir, `flowchart-${state}-${s.theme}-${s.device}.png`), Buffer.from((await cdp.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+					} catch (e) {
+						problems.push(`flowchart ${state} screenshot: ${e.message}`);
 					}
 				}
 			}
