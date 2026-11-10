@@ -240,6 +240,85 @@ describe("reading a flowchart (0.30, #245)", () => {
 	});
 });
 
+describe("a handwritten glyph is not an arrowhead (review 0.30 I8)", () => {
+	const edgesOf = (strokes: Stroke[]) => {
+		const model = readFlowchart(strokes, []);
+		if (model === "few" || model === "nested") throw new Error(model);
+		return model.edges;
+	};
+	/** Two stacked boxes joined by a line that ends `into` pt inside the lower one. */
+	function stack(into = 2) {
+		const a = rect(103, 52, 120, 48), b = rect(96, 190, 130, 48, 7);
+		return { a, b, shaft: line([163, 102], [163, 190 + into], 8) };
+	}
+
+	it("keeps a symmetric V written inside the box at the line's end (the label's first letter)", () => {
+		const { a, b, shaft } = stack(2);
+		const v = stroke([pt(155, 184), pt(163, 196), pt(171, 184)]);
+		const edges = edgesOf([a, b, shaft, v]);
+		expect(edges).toHaveLength(1);
+		expect(edges[0]!.arrow).toBe(false);
+		expect(edges[0]!.heads).toEqual([]);
+	});
+
+	it("keeps an L, a < and a > that are not clearly a head", () => {
+		const { a, b, shaft } = stack(2);
+		// an L: one wing along the line, one across it
+		const l = stroke([pt(160, 174), pt(160, 190), pt(176, 190)]);
+		expect(edgesOf([a, b, shaft, l])[0]!.heads).toEqual([]);
+		// a ">" and a "<" inside the lower box, their apex deep in it
+		const gt = stroke([pt(152, 190), pt(163, 197), pt(152, 204)]);
+		expect(edgesOf([a, b, shaft, gt])[0]!.heads).toEqual([]);
+		const lt = stroke([pt(174, 190), pt(163, 197), pt(174, 204)]);
+		expect(edgesOf([a, b, shaft, lt])[0]!.heads).toEqual([]);
+		// a "<" in the box at the other end of a sideways line
+		const left = rect(100, 100, 100, 50), right = rect(300, 102, 100, 50, 7);
+		const side = line([196, 125], [304, 127], 8);
+		const lt2 = stroke([pt(204, 117), pt(192, 125), pt(204, 133)]);
+		const gt2 = stroke([pt(296, 119), pt(308, 127), pt(296, 135)]);
+		for (const g of [lt2, gt2]) expect(edgesOf([left, right, side, g])[0]!.heads).toEqual([]);
+	});
+
+	it("keeps a V that is part of a word written next to the line's end, outside the boxes", () => {
+		const { a, b, shaft } = stack(-3);
+		const v = stroke([pt(155, 174), pt(163, 187), pt(171, 174)]);
+		const e = stroke([pt(172, 178), pt(176, 174), pt(180, 178), pt(176, 182)]);
+		expect(edgesOf([a, b, shaft, v, e])[0]!.heads).toEqual([]);
+		expect(edgesOf([a, b, shaft, v])[0]!.heads).toEqual([v]);
+	});
+
+	it("keeps a lopsided or oversized V, and takes none of two that both look like the head", () => {
+		const { a, b, shaft } = stack(-3);
+		// one wing 12 deg and the other 70 deg off the line
+		const lop = stroke([pt(159.26, 169.4), pt(163, 187), pt(178, 181.5)]);
+		expect(edgesOf([a, b, shaft, lop])[0]!.heads).toEqual([]);
+		// wings as long as the line allows: more than 45% of its length
+		const short = line([163, 150], [163, 188], 9);
+		const big = stroke([pt(143, 150), pt(163, 187), pt(183, 150)]);
+		expect(edgesOf([rect(103, 100, 120, 48), b, short, big])[0]!.heads).toEqual([]);
+		const one = stroke([pt(155, 174), pt(163, 187), pt(171, 174)]);
+		const two = stroke([pt(154, 173), pt(163, 186), pt(172, 173)]);
+		expect(edgesOf([a, b, shaft, one, two])[0]!.heads).toEqual([]);
+	});
+
+	it("still takes a clear arrowhead, and a tidy never deletes the glyph it left alone", () => {
+		const { a, b, shaft } = stack(-3);
+		const head = stroke([pt(155, 174), pt(163, 187), pt(171, 174)]);
+		expect(edgesOf([a, b, shaft, head])[0]!.heads).toEqual([head]);
+		const inBox = stack(2);
+		const v = stroke([pt(155, 184), pt(163, 196), pt(171, 184)]);
+		const { doc, page } = pageWith([inBox.a, inBox.shaft, v, inBox.b]);
+		const plan = must(run(page, [inBox.a, inBox.shaft, v, inBox.b]));
+		new History(() => doc).execute(plan.cmd);
+		expect(plan.arrows).toBe(1);
+		const kept = page.strokes.find((s) => s.id === v.id);
+		expect(kept).toBeDefined();
+		expect(page.strokes).toHaveLength(4);
+		// the plain line stays a plain line
+		expect(arrowEnds(page.strokes.find((s) => s.id === inBox.shaft.id)!.points)).toBeNull();
+	});
+});
+
 describe("planFlowchart (0.30, #245)", () => {
 	/** A wobbly vertical flowchart: box, diamond, box, with labels, a text box and two arrows. */
 	function chart() {

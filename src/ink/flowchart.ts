@@ -47,7 +47,18 @@ const MOVE_EPSILON = 1.5;
 const END_TOLERANCE = 1.5;
 /** Most a head stroke may measure, pt, and how near its apex must be to a line's end. */
 const HEAD_MAX = 45;
-const HEAD_REACH = 9;
+const HEAD_REACH = 7;
+/**
+ * A head is only read when it is clearly one (it is deleted when it is): at most this share of the line's length, wings 8..75 deg off the
+ * line and within 30 deg of each other, the apex not deeper than HEAD_DEEP inside a box, and no other writing within HEAD_NEIGHBOUR pt.
+ */
+const HEAD_LINE_SHARE = 0.45;
+const HEAD_MIN_LINE = 24;
+const HEAD_ANGLE_MIN = 8;
+const HEAD_ANGLE_MAX = 75;
+const HEAD_ANGLE_SKEW = 30;
+const HEAD_DEEP = 4;
+const HEAD_NEIGHBOUR = 3;
 /** A box nested in another one is a label (a bullet, a ring around a digit) when it covers less than this share of it. */
 const LABEL_SHARE = 0.25;
 /** Items may stick out of the page by this much (pt) before the tidy-up is refused. */
@@ -221,7 +232,7 @@ function wingOf(points: readonly Point[], tail: V, tip: V): number {
 }
 
 /** A small "V" stroke: its apex and the middle of its wing ends, or null. */
-function headOf(stroke: Stroke): { apex: V; back: V; wing: number } | null {
+function headOf(stroke: Stroke): { apex: V; back: V; wing: number; ends: [V, V] } | null {
 	const raw: V[] = stroke.points.map((p) => [p[0], p[1]]);
 	if (raw.length < 3) return null;
 	const length = pathLength(raw);
@@ -245,7 +256,32 @@ function headOf(stroke: Stroke): { apex: V; back: V; wing: number } | null {
 	const a1 = Math.atan2(p0[1] - apex[1], p0[0] - apex[0]), a2 = Math.atan2(pn[1] - apex[1], pn[0] - apex[0]);
 	const between = Math.abs(Math.atan2(Math.sin(a1 - a2), Math.cos(a1 - a2)));
 	if (between < (15 * Math.PI) / 180 || between > (130 * Math.PI) / 180) return null;
-	return { apex, back: [(p0[0] + pn[0]) / 2, (p0[1] + pn[1]) / 2], wing: Math.min(WING_MAX, Math.max(WING_MIN, (w1 + w2) / 2)) };
+	return { apex, back: [(p0[0] + pn[0]) / 2, (p0[1] + pn[1]) / 2], wing: Math.min(WING_MAX, Math.max(WING_MIN, (w1 + w2) / 2)), ends: [p0, pn] };
+}
+
+/**
+ * Is this small "V" confidently the head of the line that ends at `end` (the line runs from `end` towards `other`)? A handwritten "V", "L",
+ * "<" or ">" has the same shape, and a head that is taken is DELETED, so only a clearly symmetric, clearly small one counts: the wings lie on
+ * either side of the line, at much the same angle to it and of much the same length, and the head is small against the line.
+ */
+function headFitsLine(head: NonNullable<ReturnType<typeof headOf>>, end: readonly number[], other: readonly number[]): boolean {
+	const len = dist(end, other);
+	if (len < HEAD_MIN_LINE || Math.max(dist(head.apex, head.ends[0]), dist(head.apex, head.ends[1])) > HEAD_LINE_SHARE * len) return false;
+	const ux = (other[0]! - end[0]!) / len, uy = (other[1]! - end[1]!) / len;
+	const side: number[] = [];
+	const angle: number[] = [];
+	for (const w of head.ends) {
+		const wx = w[0] - head.apex[0], wy = w[1] - head.apex[1], wl = Math.hypot(wx, wy);
+		if (wl < 1e-6) return false;
+		side.push(ux * wy - uy * wx);
+		angle.push(Math.acos(Math.max(-1, Math.min(1, (ux * wx + uy * wy) / wl))));
+	}
+	const [s1, s2] = side as [number, number];
+	if (s1 * s2 >= 0) return false;
+	const [a1, a2] = angle as [number, number];
+	const lo = (HEAD_ANGLE_MIN * Math.PI) / 180, hi = (HEAD_ANGLE_MAX * Math.PI) / 180;
+	if (a1 < lo || a1 > hi || a2 < lo || a2 > hi) return false;
+	return Math.abs(a1 - a2) <= (HEAD_ANGLE_SKEW * Math.PI) / 180;
 }
 
 // ---------------------------------------------------------------- the picture
@@ -330,26 +366,42 @@ export function readFlowchart(strokes: readonly Stroke[], elements: readonly Pag
 	const heads = new Map<Stroke, Stroke[]>();
 	// A line with a small head drawn at one end is an arrow.
 	const loose = strokes.filter((s) => !boxStrokes.has(s) && !links.some((l) => l.stroke === s) && s.tool !== "highlighter");
+	// A head stroke is deleted when the line is redrawn, so it is read only when it is clearly a head (a handwritten "V", "L", "<" or ">" next
+	// to the end of a line is not one, and is left alone, the line then being a plain line): not inside a box, not part of other writing,
+	// symmetric about the line, small against it, and the only candidate of that line.
+	const deepInside = (x: number, y: number): boolean => nodes.some((n) => insideShape(n.shape, n.box, x, y, -HEAD_DEEP));
+	const candidates: Array<{ s: Stroke; l: (typeof links)[number]; end: "from" | "to"; head: NonNullable<ReturnType<typeof headOf>> }> = [];
 	for (const s of loose) {
 		const head = headOf(s);
-		if (!head) continue;
+		if (!head || deepInside(head.apex[0], head.apex[1])) continue;
+		const sb = strokeBounds(s);
+		const crowded = loose.some((o) => {
+			if (o === s) return false;
+			const ob = strokeBounds(o);
+			return ob.minX <= sb.maxX + HEAD_NEIGHBOUR && ob.maxX >= sb.minX - HEAD_NEIGHBOUR && ob.minY <= sb.maxY + HEAD_NEIGHBOUR && ob.maxY >= sb.minY - HEAD_NEIGHBOUR;
+		});
+		if (crowded) continue;
 		let best: { l: (typeof links)[number]; end: "from" | "to"; d: number } | null = null;
 		for (const l of links) {
-			if (l.link.arrow || heads.has(l.stroke)) continue;
+			if (l.link.arrow) continue;
 			for (const end of ["from", "to"] as const) {
 				const e = l.link[end];
 				const other = l.link[end === "from" ? "to" : "from"];
 				const d = dist(e, head.apex);
 				if (d > HEAD_REACH || (best && d >= best.d)) continue;
-				// The wings point back along the line.
+				// The wings point back along the line, on either side of it.
 				const ux = other[0] - e[0], uy = other[1] - e[1], len = Math.hypot(ux, uy) || 1;
 				const bx = head.back[0] - head.apex[0], by = head.back[1] - head.apex[1], bl = Math.hypot(bx, by) || 1;
-				if ((ux * bx + uy * by) / (len * bl) < 0.6) continue;
+				if ((ux * bx + uy * by) / (len * bl) < 0.6 || !headFitsLine(head, e, other)) continue;
 				best = { l, end, d };
 			}
 		}
-		if (!best) continue;
-		const { l, end } = best;
+		if (best) candidates.push({ s, l: best.l, end: best.end, head });
+	}
+	for (const c of candidates) {
+		// Two strokes that both look like the head of one line: unsure, so neither is taken.
+		if (candidates.some((o) => o !== c && o.l === c.l)) continue;
+		const { l, end, head, s } = c;
 		if (end === "from") l.link = { ...l.link, from: l.link.to, to: l.link.from };
 		l.link = { ...l.link, arrow: true, wing: head.wing };
 		heads.set(l.stroke, [s]);
