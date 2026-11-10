@@ -109,6 +109,9 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"chart-update": "help.chart.update",
 	// 0.29 stats (#295)
 	"table-stats": "help.table.stats",
+	// 0.30 timeline (#148)
+	"insert-timeline": "help.timeline.insert",
+	"timeline-edit": "help.timeline.edit",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

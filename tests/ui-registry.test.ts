@@ -37,6 +37,7 @@ const CONTEXTS: Array<[string, UiContext]> = [
 	["selection that is a hand-drawn table (0.28, #41)", baseContext({ tool: "lasso", selection: { strokes: 9, elements: 0, images: 0, table: true } })],
 	["selection with a table to chart (0.29, #244)", baseContext({ tool: "lasso", selection: { strokes: 9, elements: 4, images: 0, chartable: true } })],
 	["selection that is a chart (0.29, #244)", baseContext({ tool: "lasso", selection: { strokes: 20, elements: 12, images: 0, chart: true } })],
+	["selection that is a timeline (0.30, #148)", baseContext({ tool: "lasso", selection: { strokes: 20, elements: 12, images: 0, timeline: true } })],
 	["selection of three strokes (0.26, tidy up)", baseContext({ tool: "lasso", selection: { strokes: 3, elements: 0, images: 0 } })],
 	["page with locked elements (0.20, #39)", baseContext({ page: { index: 1, count: 3, background: "none", infinite: false, bookmarked: false, lockedElements: 2 } })],
 	["lasso, nothing selected", baseContext({ tool: "lasso" })],

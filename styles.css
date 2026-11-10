@@ -22636,3 +22636,68 @@ body.notebook-style-obsidian {
 	display: flex;
 	justify-content: flex-end;
 }
+
+/* ===== 0.30 timeline ===== */
+.nb-ui.nb-timeline-dialog {
+	--nb-timeline-paper: #fbfaf7;
+}
+
+.nb-ui.nb-timeline-dialog .nb-timeline-events {
+	min-height: 132px;
+	padding: 10px 14px;
+	resize: vertical;
+	line-height: 1.45;
+}
+
+.nb-ui.nb-timeline-dialog .nb-timeline-seg {
+	max-width: 100%;
+}
+
+.nb-ui.nb-timeline-dialog .nb-timeline-seg .nb-segment {
+	min-width: 0;
+	flex: 1 1 0;
+	padding: 0 10px;
+}
+
+.nb-ui.nb-timeline-dialog .nb-timeline-colours {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.nb-ui.nb-timeline-dialog .nb-timeline-swatch {
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 2px solid var(--nb-border);
+	border-radius: 50%;
+	background: var(--nb-timeline-swatch, var(--nb-text));
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.nb-ui.nb-timeline-dialog .nb-timeline-swatch.is-active {
+	border-color: var(--nb-accent);
+	box-shadow: 0 0 0 2px var(--nb-accent-bg);
+}
+
+.nb-ui.nb-timeline-dialog .nb-timeline-preview {
+	display: flex;
+	justify-content: center;
+	padding: 10px;
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-card);
+	background: var(--nb-timeline-paper);
+}
+
+.nb-ui.nb-timeline-dialog .nb-timeline-preview-svg {
+	width: 100%;
+	max-width: 420px;
+	height: auto;
+}
+
+.nb-ui.nb-timeline-dialog .nb-timeline-notes {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
