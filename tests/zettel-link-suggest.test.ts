@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { boundCandidates, clampCount, hasSignal, linkOutcome, rankLinkSuggestions, resolveChosen, type LinkCandidate } from "../src/zettel/link-suggest";
+import { en } from "../src/i18n/en";
+import { it as itMessages } from "../src/i18n/it";
+import { boundCandidates, clampCount, goneChosen, hasSignal, linkOutcome, rankLinkSuggestions, resolveChosen, type LinkCandidate } from "../src/zettel/link-suggest";
 import { readZettelSettings } from "../src/zettel/settings";
 
 const card = (path: string, title: string, tags: string[] = [], mtime = 0): LinkCandidate => ({ path, id: path, title, tags, mtime });
@@ -87,5 +89,23 @@ describe("linking the chosen cards to the note just made (review Z1)", () => {
 		expect(linkOutcome(1, 0)).toBe("one");
 		expect(linkOutcome(2, 0)).toBe("many");
 		expect(linkOutcome(2, 1)).toBe("failed");
+	});
+
+	it("review R6: counts the chosen cards that are gone apart from those already linked", () => {
+		const gone = rec("Cards/9 Gone.md", "9");
+		expect(goneChosen([a, gone, gone, rec("x.md", "3")], byPath, byId, "x.md")).toBe(1);
+		expect(goneChosen([a, b], byPath, byId, "x.md")).toBe(0);
+		// A card renamed meanwhile is found by its id, so it is not gone.
+		expect(goneChosen([rec("Old/1 A.md", "1")], new Map(), byId, "x.md")).toBe(0);
+		expect(linkOutcome(0, 0, 2, 0)).toBe("gone");
+		expect(linkOutcome(0, 0, 1, 1)).toBe("none"); // the one still there was linked already; the gone one is said apart
+		expect(linkOutcome(1, 0, 1, 0)).toBe("one");
+		expect(linkOutcome(0, 1, 1, 0)).toBe("failed");
+		for (const key of ["zettel.suggest.gone", "zettel.suggest.goneOne", "sequence.linkFailed", "sequence.pageKept", "zettel.pageGone"] as const) {
+			expect(en[key]).toBeTruthy();
+			expect(itMessages[key]).toBeTruthy();
+		}
+		expect(en["zettel.suggest.gone"]).toContain("{n}");
+		expect(en["zettel.suggest.goneOne"]).not.toContain("{n}");
 	});
 });

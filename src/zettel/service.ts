@@ -22,7 +22,7 @@ import { PromptModal } from "../library/library-modals";
 import { allTemplates, applyTemplate, findTemplate, templateTags, type CardTemplate } from "./card-templates";
 import { cardFileName, idSet, isUntitledCardName, localDate, nameSuffixFor, nextCardId } from "./ids";
 import { CardListModal, CardModal, ConfirmCardsModal, type CardAnswer, type CardListItem } from "./modals";
-import { linkOutcome, resolveChosen } from "./link-suggest";
+import { goneChosen, linkOutcome, resolveChosen } from "./link-suggest";
 import { LocalPages } from "./local-pages";
 import { CardOverlay, type OverlaySource } from "./overlay";
 import { idsInNames, isSequenceId, neighbours, sequenceCardId, type SequenceKind } from "./sequence";
@@ -515,28 +515,48 @@ export class ZettelService implements OverlaySource {
 				if (held) this.creating.delete(held);
 				return;
 			}
-			let target = { doc, pageIndex };
+			let targetDoc = doc;
+			let pageId = page?.id;
 			let key: string | null = held;
+			let addedId: string | null = null;
 			if (newPageIn) {
 				const added = this.addPageForCard(newPageIn, doc, page);
 				if (!added) {
 					new Notice(t("sequence.cannotAddPage"));
 					return;
 				}
-				target = added;
-				key = `${added.doc.id}/${added.doc.pages[added.pageIndex]!.id}`;
+				targetDoc = added.doc;
+				pageId = addedId = added.pageId;
+				key = `${added.doc.id}/${added.pageId}`;
 				this.creating.add(key);
 			}
 			void this.enqueue(async () => {
 				try {
+					// Review R5: the page is found by its id when the task runs (the pages may have moved while it waited in the queue).
+					const index = pageId === undefined ? -1 : targetDoc.pages.findIndex((p) => p.id === pageId);
+					const pageNow = targetDoc.pages[index];
+					if (!pageNow) {
+						new Notice(t("zettel.pageGone"));
+						return;
+					}
 					// Review Z2: the page may have got its card while the dialog was open (sync, another dialog).
-					const pageNow = target.doc.pages[target.pageIndex];
-					const existing = !region && pageNow ? this.cardsOfFile(file, target.doc.id).find((c) => c.pageId === pageNow.id && !c.region) : undefined;
+					const existing = !region ? this.cardsOfFile(file, targetDoc.id).find((c) => c.pageId === pageNow.id && !c.region) : undefined;
 					if (existing) {
 						new Notice(t("sequence.pageHasCard", { id: existing.id }));
 						return;
 					}
-					const note = await this.writeCard(file, target.doc, target.pageIndex, region, answer, undefined, sequence);
+					let note: TFile;
+					try {
+						note = await this.writeCard(file, targetDoc, index, region, answer, undefined, sequence);
+					} catch (e) {
+						if (addedId === null) throw e;
+						// Review R5: the page added for the card stays (nothing is deleted behind the person's back) and stays "new", so in a
+						// slip-box notebook the next save gives it a card of its own; Undo removes it. Said once, with the reason.
+						new Notice(t("sequence.pageKept", { error: e instanceof Error ? e.message : String(e) }), 8000);
+						return;
+					}
+					// Only now is the added page done: the slip-box leaves it alone from here on.
+					if (addedId !== null) this.localPages.know(targetDoc.id, [addedId]);
 					if (!sequence) {
 						new Notice(t("zettel.created", { name: note.basename }));
 						await this.linkChosen(note, answer.links);
@@ -545,7 +565,7 @@ export class ZettelService implements OverlaySource {
 					const made = this.cards.get(note.path);
 					const linked = await this.linkSequence(sequence, made ?? null);
 					new Notice(t("sequence.created", { id: made?.id ?? note.basename, origin: sequence.origin.id, kind: t(sequence.kind === "branch" ? "sequence.kind.branch" : "sequence.kind.followUp") }));
-					if (!linked) new Notice(t("zettel.suggest.linkFailed"));
+					if (!linked) new Notice(t("sequence.linkFailed", { origin: sequence.origin.id }));
 					await this.linkChosen(note, answer.links);
 				} finally {
 					if (key) this.creating.delete(key);
@@ -555,10 +575,11 @@ export class ZettelService implements OverlaySource {
 	}
 
 	/**
-	 * Adds a page right after `after` in the view (same size and paper) for a new card and marks it as being made, so the
-	 * slip-box leaves it alone. Null when the notebook could not be changed.
+	 * Adds a page right after `after` in the view (same size and paper) for a new card. The caller marks it as being made (the
+	 * `creating` key) so the slip-box leaves it alone, and marks it known only once the card is written (review R5). Null when the
+	 * notebook could not be changed.
 	 */
-	private addPageForCard(view: NotebookView, doc: NotebookDocument, after: NotebookDocument["pages"][number] | undefined): { doc: NotebookDocument; pageIndex: number } | null {
+	private addPageForCard(view: NotebookView, doc: NotebookDocument, after: NotebookDocument["pages"][number] | undefined): { doc: NotebookDocument; pageId: string } | null {
 		const before = view.document;
 		const index = before && after ? before.pages.findIndex((p) => p.id === after.id) : -1;
 		if (!before || before.id !== doc.id || index < 0) return null;
@@ -567,8 +588,7 @@ export class ZettelService implements OverlaySource {
 		const now = view.document;
 		const added = now && now.id === doc.id && now.pages.length === count + 1 ? now.pages[index + 1] : undefined;
 		if (!now || !added) return null;
-		this.localPages.know(now.id, [added.id]);
-		return { doc: now, pageIndex: index + 1 };
+		return { doc: now, pageId: added.id };
 	}
 
 	/**
@@ -584,17 +604,32 @@ export class ZettelService implements OverlaySource {
 		}
 		let linked = 0;
 		let failed = 0;
-		// The chosen card may have been renamed or moved since the dialog opened: its id still finds it.
-		for (const other of resolveChosen(chosen, this.cards, this.cardsById(), made.path)) {
+		// The chosen card may have been renamed or moved since the dialog opened: its id still finds it. Review R6: a card that
+		// cannot be found, or whose file is gone, is counted as gone, not as already linked.
+		const byId = this.cardsById();
+		let gone = goneChosen(chosen, this.cards, byId, made.path);
+		let already = 0;
+		for (const other of resolveChosen(chosen, this.cards, byId, made.path)) {
+			if (!this.app.vault.getFileByPath(other.path)) {
+				gone++;
+				continue;
+			}
 			try {
 				if (await this.linkCards(made, other)) linked++;
+				else already++;
 			} catch (e) {
 				failed++;
 				console.error("[notebook] zettel: link", e);
 			}
 		}
-		const outcome = linkOutcome(linked, failed);
+		const outcome = linkOutcome(linked, failed, gone, already);
+		const goneText = gone === 1 ? t("zettel.suggest.goneOne") : t("zettel.suggest.gone", { n: String(gone) });
+		if (outcome === "gone") {
+			new Notice(goneText);
+			return;
+		}
 		new Notice(outcome === "failed" ? t("zettel.suggest.linkFailed") : outcome === "none" ? t("zettel.suggest.linkedNone") : outcome === "one" ? t("zettel.suggest.linkedOne") : t("zettel.suggest.linked", { n: String(linked) }));
+		if (gone > 0) new Notice(goneText);
 	}
 
 	// ------------------------------------------------------------------- sequences (Z7)

@@ -5043,6 +5043,7 @@ A marker is a ring with its number (a shape stroke and a text box, one group); t
 | Placing a marker by tapping the spot on the figure | no | | | | markers appear on a free spot and are dragged to place |
 | Renumbering by itself after a delete, or in reading order | no | | | | explicit *Renumber markers* in placement order only |
 | Leader lines from a marker to its legend text | no | | | | roadmap #246 |
+| Legend kept in numeric order after a renumber (review R8) | no | | | | known limit: only the digits of each line change, so the legend can read `1. A / 3. B / 2. C`; no *Sort legend* yet |
 
 ### 0.30 — flowchart: hand-drawn flowcharts that tidy themselves (roadmap #245; steps 3580-3599)
 
@@ -5083,6 +5084,7 @@ A marker is a ring with its number (a shape stroke and a text box, one group); t
 | Screens (before / after, tablet and phone, light and dark) | yes | harness `doc=flowchart` | | | |
 | Elbow (right-angle) connectors, swimlanes, boxes in more than one grid cell, triangles | no | | | | arrows are straight; a box nested in a box of similar size is refused |
 | Reading the text of a label | no | | | | the plugin has no handwriting recognition; labels are moved, not read |
+| Every real arrowhead moved with its line (review R4) | no | | | | known limit: a head the strict rules do not take (double-headed arrows, uneven wings, connectors under 24 pt, two heads within 3 pt) stays at the old line end when the boxes move; Undo restores, nothing is deleted |
 
 ### 0.30 — timeline: dated events on an axis (roadmap #148; steps 3600-3619)
 
@@ -5155,6 +5157,7 @@ Update to 0.30 and fully close and reopen Obsidian. Use a vault with a notebook 
 | An id above a card that exists counts as taken (follow-up / branch never adopt a deleted card's descendants) | yes | `tests/zettel-sequence.test.ts` | | | |
 | Follow-up / branch on a page that is already a card adds a new page for the new card (on Create only) | yes | | | | needs the open notebook view; not checked outside Obsidian |
 | A page being given a card is held while its dialog is open and checked again before writing (no second page card) | yes | | | | not checked outside Obsidian |
+| The page added for a follow-up / branch card is found by id when the write runs; a failed write keeps it with a notice (Undo removes it) and leaves it new, so a slip-box gives it a card at the next save; own notice for a failed origin link (review R5, R6) | yes | `tests/zettel-link-suggest.test.ts` (texts only) | | | the service path is not covered by an automated test (it needs Obsidian's vault and an open notebook view) |
 | On-page sequence strip | no | | | | not built; the dialog and commands cover navigation |
 
 ### 0.30 — linksuggest: link suggestions while creating a card, roadmap Z5 (steps 3620-3639)
@@ -5181,6 +5184,6 @@ Update to 0.30 and fully close and reopen Obsidian. Use a vault with at least si
 |---|---|---|---|---|---|
 | Pure ranking of link suggestions (shared tags, title words, contained title, recency tie-break, bounded candidates) | yes | `tests/zettel-link-suggest.test.ts` | | | |
 | Cards to link in the New card dialog (debounced, one tap to choose) | yes | harness `doc=linksuggest` | | | |
-| Chosen cards linked two-way with the zettel writer, inside the task that makes the note (the answer carries them; no watcher) | yes | `tests/zettel-link-suggest.test.ts` (which cards, which notice), harness `doc=linksuggest` (the answer carries them) | | | the real vault write is not checked outside Obsidian |
+| Chosen cards linked two-way with the zettel writer, inside the task that makes the note (the answer carries them; no watcher); chosen cards deleted meanwhile are named as gone, not as already linked (review R6) | yes | `tests/zettel-link-suggest.test.ts` (which cards, which notice), harness `doc=linksuggest` (the answer carries them) | | | the real vault write is not checked outside Obsidian |
 | Settings: suggest on/off and how many (1-8) | yes | `tests/zettel-link-suggest.test.ts` | | | |
 | Text of the card pages (text boxes) as a similarity signal | no | | | | titles, tags and source only |
