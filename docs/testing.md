@@ -4586,3 +4586,30 @@ Manual steps (real Obsidian; nothing here is verified on Android hardware). Use 
 | Action, colour-row button, command, long-press help, context rule, setting (tint or solid), en + it | yes | `tests/long-press-help.test.ts`, `tests/ui-registry.test.ts`, `tests/i18n.test.ts` | | | |
 | Holes: an inner closed shape is not left unfilled | no | | | | a shape fill is one nonzero polygon (no holes); documented limit |
 | Stay armed for several fills | no | | | | one-shot like the eyedroppers |
+
+### 0.28 — livelecture (live lecture bar, #132, steps 3260-3279)
+
+3260. **Appears with the lecture.** Start a lecture (Start on the banner, the command, or an automatic lecture): a small bar appears at the bottom left, above the contextual bar, with a running timer (mm:ss, h:mm:ss after an hour) and two buttons, *New page* and *Important moment*.
+3261. **Timer.** With a class that began 20 minutes ago the timer starts near 20:00 and counts up each second; with no class (manual start) it starts at 00:00. Put the app in the background and return: the time is right.
+3262. **New page.** Tap *New page*: a page with the same paper is added right after the page you are on and the view goes to it; Undo removes it (one step).
+3263. **Important moment.** Tap *Important moment*: a notice "Marked ★ 12:34 on page N"; the page now has a bookmark (page panel, outline, bookmarks list) titled "★ 12:34", in the "important" category.
+3264. **Two marks on a page.** Tap it again on the same page a few seconds later: the title becomes "★ 12:34 · ★ 12:41". A bookmark you titled yourself keeps its text in front of the stamps.
+3265. **Undo.** Undo takes the last mark back as one step.
+3266. **Spread.** In the two-page spread, the mark and the new page use the page you last wrote on (the current page), not the left page of the pair.
+3267. **End of lecture list.** Open the end-of-lecture panel: an *Important moments* section lists every stamp with its page, in page then time order; tapping one closes the panel and goes to that page. The list is still there after closing and reopening the notebook.
+3268. **Fold.** Tap the chevron: only the timer stays; tap it again: the buttons return.
+3269. **Fades with the toolbar.** With *Toolbar fades while writing* on, the bar fades while the pen writes and returns when you lift it. The bar never sits over the writing area you use (bottom left, above the contextual bar) and the pen never starts a stroke on it.
+3270. **Setting.** *Settings > Study > Live lecture bar* off: the bar is gone during a lecture; on: it returns. Default on.
+3271. **Read-only.** In a read-only notebook the buttons do nothing but say the notebook is read-only.
+3272. **Stacking.** With the symbols strip, the *Back to slide* pill and the *Referenced on* chip on, nothing overlaps the bar, on a tablet and on a phone.
+3273. **Long press.** Hold a finger on each of the three buttons: a bubble explains it. A pen does not trigger the bubble.
+3274. **Italian, light, dark, phone.** The strings are in Italian with the plugin in Italian; the bar reads in light and dark and fits a phone; touch targets are at least 44 px.
+3275. **No format change.** Marks are only the title of the page bookmark; the notebook still opens in older 0.27 builds.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Elapsed timer formatting, mark stamps, joining stamps, reading them back by page | yes | `tests/live-lecture.test.ts` | | | |
+| Live bar: timer, New page, Important moment (stamped bookmark), fold, setting, stacking | yes | harness `doc=livelecture` and `doc=pillstack` | | | |
+| Moments list in the end-of-lecture panel, tap to jump | yes | `collectLiveMarks` in `tests/live-lecture.test.ts`; harness `doc=livelecture` | | | |
+| Timer after a restart of a manual lecture | no | | | | a manual lecture without a class restarts at 00:00 when the notebook is reopened; a class lecture keeps the class start |
+| Marks in the lecture log (daily note) | no | | | | left out: the log line is unchanged |

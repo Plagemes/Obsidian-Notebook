@@ -5317,6 +5317,21 @@ export const en = {
 	"histpanel.t.fillArea": "Area filled",
 	"settings.bucketTint": "Paint bucket fills as a tint",
 	"settings.bucketTint.desc": "On: a light tint, so the page stays readable. Off: the solid colour.",
+	// 0.28 livelecture
+	"settings.liveBar": "Live lecture bar",
+	"settings.liveBar.desc": "During a lecture, shows the timer with new page and important moment buttons.",
+	"liveBar.label": "Live lecture",
+	"liveBar.newPage": "New page",
+	"liveBar.mark": "Important moment",
+	"liveBar.fold": "Fold the bar",
+	"liveBar.unfold": "Show the buttons",
+	"liveBar.marked": "Marked {label} on page {n}",
+	"liveBar.readOnly": "This notebook is read-only: nothing was marked.",
+	"help.liveNewPage": "Adds a page right after the one you are on, with the same paper.",
+	"help.liveMark": "Marks this page as an important moment, stamped with the lecture time. It becomes a bookmark you can find in the end-of-lecture panel.",
+	"help.liveFold": "Folds the bar down to the timer, or opens it again.",
+	"markers.panel.moments": "Important moments",
+	"markers.panel.moment": "{label} · page {n}",
 } as const;
 
 export type MessageKey = keyof typeof en;

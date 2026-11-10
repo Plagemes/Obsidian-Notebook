@@ -187,6 +187,8 @@ import { FindReplaceModal } from "./find-replace";
 import { PageInfoModal } from "./page-info";
 import { PageOffer } from "./page-offer";
 import { SlideBack } from "./slide-back";
+import { LiveBar } from "./live-bar";
+import { addMarkToTitle, markLabel } from "../timetable/live-lecture";
 import { InputLayout } from "./input-layout-view";
 import { effectiveToolbarSize } from "../ui/input-layout";
 import { ToolFade } from "./tool-fade";
@@ -605,6 +607,8 @@ export class NotebookView extends FileView {
 	private pageOffer: PageOffer | null = null;
 	/** 0.21 (#225): the pill back to the place last written during a lecture (view/slide-back.ts). */
 	slideBack: SlideBack | null = null;
+	/** 0.28 livelecture (#132): the floating timer bar with the quick buttons during a lecture (view/live-bar.ts). */
+	liveBar: LiveBar | null = null;
 	/** 0.23 (#420): the card offered when a notebook is reopened after a while (view/welcome-back.ts). */
 	welcomeBack: WelcomeBack | null = null;
 	pageRefs: PageRefs | null = null;
@@ -993,7 +997,10 @@ export class NotebookView extends FileView {
 				const i = findLecturePage(this.session?.doc?.pages ?? [], course, date);
 				if (i >= 0) this.scrollToPage(i);
 			},
-			changed: () => this.refreshUi(),
+			changed: () => {
+				this.refreshUi();
+				this.liveBar?.sync();
+			},
 			ended: (end) => this.onLectureEnd(end),
 			started: (cls, pageAdded) => {
 				this.lectureHeader?.lectureStarted(cls, pageAdded);
@@ -1006,6 +1013,13 @@ export class NotebookView extends FileView {
 		this.pageOffer = new PageOffer({
 			parent: () => this.body,
 			insertAfter: (pageId) => this.insertPageAfterId(pageId),
+		});
+		this.liveBar = new LiveBar({
+			parent: () => this.body,
+			enabled: () => this.host.settings.liveBar && (this.lectureMode?.on ?? false) && this.layout !== null,
+			startedAt: () => this.lectureMode?.startedAt ?? null,
+			newPage: () => this.addPage(),
+			mark: (seconds) => this.markLiveMoment(seconds),
 		});
 		this.slideBack = new SlideBack({
 			parent: () => this.body,
@@ -1381,6 +1395,8 @@ export class NotebookView extends FileView {
 		this.toolFade?.destroy();
 		this.toolFade = null;
 		this.inputLayout = null;
+		this.liveBar?.destroy();
+		this.liveBar = null;
 		this.slideBack?.destroy();
 		this.slideBack = null;
 		this.pageRefs?.destroy();
@@ -1857,6 +1873,7 @@ export class NotebookView extends FileView {
 		this.reading?.settingsChanged();
 		this.lectureMode?.settingsChanged();
 		this.slideBack?.settingsChanged();
+		this.liveBar?.sync();
 		this.toolFade?.settingsChanged();
 		this.inputLayout?.settingsChanged();
 		this.pageRefs?.reset();
@@ -3787,6 +3804,27 @@ export class NotebookView extends FileView {
 		if (page && to >= 0 && to < (this.session?.doc?.pages.length ?? 0)) this.pageCommand(new MovePage(page.id, from, to), to, page);
 	}
 
+	/** 0.28 livelecture (#132): "Important moment": a stamped bookmark ("★ 12:34") on the current page, one undo step. */
+	private markLiveMoment(seconds: number): void {
+		const doc = this.session?.doc;
+		const index = this.currentPageIndex();
+		const page = doc?.pages[index];
+		if (!doc || !page) return;
+		if (!this.editable() || this.controller?.drawing) {
+			showNotice(t("liveBar.readOnly"), 3000);
+			return;
+		}
+		const label = markLabel(seconds);
+		const before = doc.meta ?? cloneMeta(DEFAULT_META);
+		const info = { ...(before.bookmarkInfo ?? {}) };
+		const old = info[page.id];
+		info[page.id] = { ...old, title: addMarkToTitle(old?.title, label), category: old?.category ?? "important" };
+		const bookmarks = before.bookmarks.includes(page.id) ? before.bookmarks : [...before.bookmarks, page.id];
+		this.history.execute(new SetMeta(before, mergeMeta(before, { bookmarks, bookmarkInfo: info })));
+		this.afterHistoryChange();
+		showNotice(t("liveBar.marked", { label, n: String(index + 1) }), 2000);
+	}
+
 	private toggleBookmarkOf(pageId: string): void {
 		const doc = this.session?.doc;
 		if (!doc || !this.editable() || this.controller?.drawing || !doc.pages.some((p) => p.id === pageId)) return;
@@ -5176,6 +5214,7 @@ export class NotebookView extends FileView {
 			this.syncHooks?.loaded();
 			this.practiceHooks?.loaded();
 			this.lectureMode?.opened();
+			this.liveBar?.sync();
 			this.lectureHeader?.opened();
 			this.lectureHeader?.pagesChanged();
 		} else {
