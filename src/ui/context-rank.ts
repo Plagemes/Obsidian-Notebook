@@ -102,6 +102,9 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	// figure, and most with the text tool in hand (it puts a text box), but it only leans forward in the list: it never crowds "For this page".
 	if (a.id === "figure-caption" && isOneFigure(c)) boost += HERE_MIN_BOOST;
 	if (a.id === "figure-ref") boost += (c.figures?.captioned ?? 0) > 0 && !hasSelection ? (c.tool === "text" ? 12 : 6) : 0;
+	// 0.29 (#244): "Chart from table" fits a selected table and "Update chart" a selected chart (both enough for "For this page"; the actions only show then).
+	if (a.id === "chart-from-table" && c.selection?.chartable === true) boost += HERE_MIN_BOOST + 5;
+	if (a.id === "chart-update" && c.selection?.chart === true) boost += HERE_MIN_BOOST + 6;
 	if (a.id === "insert-table" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 4;
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
 	// 0.28 (#184): the paint bucket fills shapes: with the shape tool in hand it is the next thing wanted (enough for "For this page"); with a selection

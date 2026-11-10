@@ -102,6 +102,9 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"study-tape": "tape.help.draw",
 	"tapes-reveal-all": "tape.help.revealAll",
 	"tapes-hide-all": "tape.help.hideAll",
+	// 0.29 charts (#244)
+	"chart-from-table": "help.chart.fromTable",
+	"chart-update": "help.chart.update",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */
