@@ -9,6 +9,10 @@ export interface ZettelSettings {
 	zettelShowRegions: boolean;
 	/** Document ids of the slip-box notebooks (Z2): every page of these is a card. */
 	zettelSlipBoxes: string[];
+	/** Z5: related cards offered for linking in the card dialog. */
+	zettelLinkSuggest: boolean;
+	/** Z5: most suggestions listed (1-8). */
+	zettelLinkSuggestCount: number;
 }
 
 export const DEFAULT_ZETTEL_SETTINGS: Readonly<ZettelSettings> = {
@@ -16,6 +20,8 @@ export const DEFAULT_ZETTEL_SETTINGS: Readonly<ZettelSettings> = {
 	zettelIdScheme: "timestamp",
 	zettelShowRegions: true,
 	zettelSlipBoxes: [],
+	zettelLinkSuggest: true,
+	zettelLinkSuggestCount: 4,
 };
 
 function cleanFolder(folder: string): string {
@@ -28,6 +34,8 @@ export function readZettelSettings(d: Record<string, unknown>): ZettelSettings {
 	if (typeof d.zettelFolder === "string" && cleanFolder(d.zettelFolder)) s.zettelFolder = cleanFolder(d.zettelFolder);
 	if (ID_SCHEMES.includes(d.zettelIdScheme as ZettelIdScheme)) s.zettelIdScheme = d.zettelIdScheme as ZettelIdScheme;
 	if (typeof d.zettelShowRegions === "boolean") s.zettelShowRegions = d.zettelShowRegions;
+	if (typeof d.zettelLinkSuggest === "boolean") s.zettelLinkSuggest = d.zettelLinkSuggest;
+	if (typeof d.zettelLinkSuggestCount === "number" && Number.isFinite(d.zettelLinkSuggestCount)) s.zettelLinkSuggestCount = Math.min(8, Math.max(1, Math.round(d.zettelLinkSuggestCount)));
 	if (Array.isArray(d.zettelSlipBoxes)) {
 		s.zettelSlipBoxes = [...new Set(d.zettelSlipBoxes.filter((x): x is string => typeof x === "string" && x.length > 0))];
 	}

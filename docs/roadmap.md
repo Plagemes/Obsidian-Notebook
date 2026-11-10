@@ -546,7 +546,7 @@ A complete Zettelkasten workflow where handwriting is first-class. Everything go
 - **Z2 P1** 🧪 Slip-box notebook type: every page is a Zettel; a new page creates its note automatically.
 - **Z3 P1** 🧪 Drawn links: draw an arrow between two cards (or regions) and a two-way link is created between their notes; visible in Obsidian's graph.
 - **Z4 P1** 🧪 Processing flow: fleeting notes (loose sheet #176, markers, questions) go to an "to process" inbox; PDF excerpts (#105, #155) become literature notes with their source; a guided view lets you discard each one, turn it into a permanent card, or link it to an existing one.
-- **Z5 P2** Link suggestions while creating a card: related cards by tags, title and text-box text (MiniSearch), so no card stays isolated.
+- **Z5 P2** 🧪 Link suggestions while creating a card: related cards by tags and title (the in-house text folding, no MiniSearch; text-box text is not used yet), so no card stays isolated.
 - **Z6 P2** Drawn maps of content: a page where cards are placed as live transclusions and relations are drawn; it also generates a Markdown MOC.
 - **Z7 P2** Sequences and branches (Luhmann style 1, 1a, 1a1), optional, with previous/next/children navigation.
 - **Z8 P2** Slip-box view in the library: browse cards like index cards, filter by tag, "draw a random card" to rediscover ideas.

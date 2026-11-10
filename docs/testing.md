@@ -4925,3 +4925,30 @@ Update to 0.29 and fully close and reopen Obsidian. Use a vault with a notebook 
 | A line only strikes ink written before it | yes | `tests/strikethrough.test.ts` | | | |
 | Groups complete with hidden struck members; very dense pages are skipped in the view | yes | `tests/strikethrough.test.ts` | | | |
 | Pictures of a selection into notes, copies, digests leave out struck words | no | | | | not covered; the setting text says which files are |
+
+### 0.30 — linksuggest: link suggestions while creating a card, roadmap Z5 (steps 3620-3639)
+
+Update to 0.30 and fully close and reopen Obsidian. Use a vault with at least six cards that share a few tags and title words, and a notebook with handwriting. Reference screenshots after `HARNESS_DOC=linksuggest npm run harness:check`: `dev/harness/dist/shots/design/linksuggest-*.png` (empty, typed, chosen; tablet and phone, light and dark). Not verified on a device.
+
+3620. **Field.** On a notebook page choose *Make card from this page*. Under *Tags* the dialog has *Cards to link*. With nothing typed it says there are no related cards yet.
+3621. **By tags.** Type a tag that two of your cards use. About a quarter of a second after you stop typing, those cards are listed, the most recently changed first among equals, each with the reason (*Shared tags: #x*).
+3622. **By title.** Clear the tag and type a title that shares a word with an existing card title (accents and capitals do not matter): that card is listed with *Shared words*. A title containing or contained in another title shows *Similar title*.
+3623. **Ranking.** A card sharing two tags comes before one sharing a single word. Unrelated cards never appear, however few cards match.
+3624. **One tap.** Tap a suggestion: it turns accented with a check and *Will link*; tap it again to take it back. Choose two cards, *Create card*.
+3625. **Links written.** A moment after the note appears, a notice says *Linked to 2 cards*. Open the new note and one of the chosen notes: each has the other in its `links` property (the same two-way link as a drawn arrow). Obsidian's graph shows the edge.
+3626. **Nothing chosen.** Create a card without tapping any suggestion: no links are added and no notice appears.
+3627. **Cancel.** Choose a card and press *Cancel*: nothing is linked and the chosen note is untouched.
+3628. **From the Inbox.** *Make card* on an Inbox item shows the same field and links the same way.
+3629. **Setting off.** *Settings → Study → Zettelkasten → Suggest cards to link* off: the dialog has no *Cards to link* field. On again: it is back.
+3630. **Count.** *Suggestions shown* (visible while the setting is on) set to 1: only the best match is listed; set to 8: up to eight.
+3631. **Cheap.** In a vault with hundreds of cards, typing in the title keeps up with the pen or keyboard (no stutter); the list updates after you pause. No note file is read (only the metadata cache).
+3632. **Pen, finger, mouse.** The rows work with the S Pen, a finger and the mouse and are 44 px high.
+3633. **Phone width, light, dark.** Rows wrap their text on one line with an ellipsis, nothing scrolls sideways, and the field reads in light, dark and *Follow Obsidian theme*; in Italian the texts are Italian.
+
+| Feature | implemented | automated test | verified on hardware | experimental | to do |
+|---|---|---|---|---|---|
+| Pure ranking of link suggestions (shared tags, title words, contained title, recency tie-break, bounded candidates) | yes | `tests/zettel-link-suggest.test.ts` | | | |
+| Cards to link in the New card dialog (debounced, one tap to choose) | yes | harness `doc=linksuggest` | | | |
+| Chosen cards linked two-way with the zettel writer once the note exists | yes | harness `doc=linksuggest` (writer faked) | | | the real vault write and the cache event are not checked outside Obsidian |
+| Settings: suggest on/off and how many (1-8) | yes | `tests/zettel-link-suggest.test.ts` | | | |
+| Text of the card pages (text boxes) as a similarity signal | no | | | | titles, tags and source only |

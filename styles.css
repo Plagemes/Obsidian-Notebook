@@ -22636,3 +22636,57 @@ body.notebook-style-obsidian {
 	display: flex;
 	justify-content: flex-end;
 }
+
+/* ===== 0.30 linksuggest ===== */
+.nb-ui .nb-zk-suggest-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nb-ui .nb-zk-suggest-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 44px;
+	padding: 6px 10px;
+	text-align: left;
+	background: var(--nb-surface-2, var(--nb-surface));
+	border: 1px solid var(--nb-border);
+	border-radius: var(--nb-radius-md, 10px);
+	color: var(--nb-text);
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.nb-ui .nb-zk-suggest-row.is-active {
+	background: var(--nb-accent-bg);
+	border-color: var(--nb-accent);
+}
+
+.nb-ui .nb-zk-suggest-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+}
+
+.nb-ui .nb-zk-suggest-title {
+	font-size: var(--nb-fs-body);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .nb-zk-suggest-reason {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-ui .nb-zk-suggest-empty {
+	font-size: var(--nb-fs-meta);
+	color: var(--nb-text-muted);
+}

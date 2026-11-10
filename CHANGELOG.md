@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+### linksuggest
+- **Link suggestions while creating a card (Z5).** The *New card* dialog (also from the Inbox) has a *Cards to link* field: as you type the title, source and tags, the cards of your slip-box that share tags or title words with it are listed (best first, the most recently changed card breaks ties), each with the reason. Tap one to link it; the link is written both ways, like a drawn arrow, once the note exists. Settings > Study > Zettelkasten: *Suggest cards to link* (on by default) and *Suggestions shown* (1 to 8).
+- **Cheap.** The candidates come from the cards already indexed and the metadata cache (no note is read), are capped at the 600 most recent cards, and ranking runs a quarter of a second after the last key.
+- **No format change.** Code: pure `src/zettel/link-suggest.ts`, `src/zettel/link-suggest-ui.ts`. Tests `tests/zettel-link-suggest.test.ts`; harness `doc=linksuggest`. Not verified on Android hardware.
+
 
 ## 0.29.0 — 2026-11-11
 
