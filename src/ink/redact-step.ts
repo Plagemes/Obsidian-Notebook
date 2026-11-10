@@ -23,7 +23,8 @@
  *   and touches a box there (review U6b).
  * - round-2 review (H1): the background of a page with boxes (the PDF page or the picture) that moves, grows or changes: its rectangle on the
  *   page (`backgroundRect`: a left margin, a page size) or what it shows (its asset, page, turn or crop). The boxes are page coordinates, so
- *   the background would slide out from under them, and a background-only page has no ink that would tell.
+ *   the background would slide out from under them, and a background-only page has no ink that would tell. Round-4 review (Z3): except
+ *   the growth of an infinite page (`grownOnly`) while every box of the page records its geometry: the export refuses the page then.
  * Ink that only appears (an erase undone) or disappears (a stroke undone) is not a move: a box cuts whatever lies under it at export.
  * Fail closed: when the stored boxes cannot be read, any move on a page the step names refuses the step (`refused(step, true)`: the view says
  * so with its own notice, review U2).
@@ -52,17 +53,37 @@ export interface PageShot {
 	/** Round-2 review (H1): where the background is drawn (null: the page has no background) and what it shows (`backgroundKey`). */
 	background: Rect | null;
 	backgroundKey: string;
+	/** Round-4 review (Z3): whether the page was infinite (its background may only have grown or shrunk with it, see `grownOnly`). */
+	infinite: boolean;
 }
 
 /** The background of `page` as a `PageShot` holds it. */
-function backgroundOf(page: Page): { background: Rect | null; backgroundKey: string } {
-	return { background: page.background ? backgroundRect(page) : null, backgroundKey: backgroundKey(page.background) };
+function backgroundOf(page: Page): { background: Rect | null; backgroundKey: string; infinite: boolean } {
+	return { background: page.background ? backgroundRect(page) : null, backgroundKey: backgroundKey(page.background), infinite: page.infinite === true };
 }
 
 /** Round-3 review: compared to 0.01 pt, like the stored values (a height less a bottom margin is not always exact in floating point). */
 const near = (a: number, b: number): boolean => Math.round(a * 100) === Math.round(b * 100);
 const sameRect = (a: Rect | null, b: Rect | null): boolean =>
 	a === b || (a !== null && b !== null && near(a.x, b.x) && near(a.y, b.y) && near(a.width, b.width) && near(a.height, b.height));
+
+/**
+ * Round-4 review (Z3): true when the background of an infinite page only grew or shrank downwards with the page: the same asset, page, turn
+ * and crop (`key`), on a page that is infinite before and after, at the same place and width, only its height changed. That is what writing
+ * near the bottom of an infinite page without margins does (as in 0.28, the background is stretched to the new height), and what the Undo of
+ * that writing, a merge or a restore of a longer copy do. Neither the undo/redo check nor the early notice refuses it: the export does, on
+ * the page as it is, when the boxes were drawn on another geometry (`staleRedactionPages`, fail closed).
+ */
+function grownOnly(a: { rect: Rect | null; key: string; infinite: boolean }, b: { rect: Rect | null; key: string; infinite: boolean }): boolean {
+	return a.infinite && b.infinite && a.key !== "" && a.key === b.key && a.rect !== null && b.rect !== null
+		&& near(a.rect.x, b.rect.x) && near(a.rect.y, b.rect.y) && near(a.rect.width, b.rect.width) && !near(a.rect.height, b.rect.height);
+}
+
+/** What `backgroundShifts` follows of a page while it walks a batch (round-4 review Y7). */
+type PageGeometry = Pick<Page, "width" | "height" | "margins" | "background" | "infinite">;
+
+const geometryOf = (p: PageGeometry): { rect: Rect | null; key: string; infinite: boolean } =>
+	({ rect: p.background ? backgroundRect(p) : null, key: backgroundKey(p.background), infinite: p.infinite === true });
 
 /**
  * Round-2 review (H1): the pages whose background `cmd` would move, stretch or change when it runs on `doc`. A margin change moves the
@@ -72,9 +93,26 @@ const sameRect = (a: Rect | null, b: Rect | null): boolean =>
  * background replaced by another one ("Update PDF") and a page restore whose background is elsewhere or shows something else. A background
  * added to a page that had none, or taken away, is not counted: nothing the boxes covered can show. The export checks the same thing on
  * the page as it is (`staleRedactionPages`), so this is the early notice, not the only guard.
+ * Round-4 review: (Y7) the commands of a batch are judged in order, each on the pages as the commands before it left them (a merge that
+ * adds a right margin and then grows the page keeps the background where it is); (Z3) the growth of an infinite page (`grownOnly`) is not
+ * counted, as in 0.28.
  */
 export function backgroundShifts(doc: NotebookDocument, cmd: Command): string[] {
 	const out: string[] = [];
+	// The pages as the commands walked so far leave them (a copy of what the walk needs; the document is not touched).
+	const sim = new Map<string, PageGeometry>();
+	const page = (id: string): PageGeometry | undefined => {
+		const known = sim.get(id);
+		if (known) return known;
+		const p = doc.pages.find((x) => x.id === id);
+		if (!p) return undefined;
+		const copy: PageGeometry = { width: p.width, height: p.height, ...(p.margins ? { margins: p.margins } : {}), ...(p.background ? { background: p.background } : {}), ...(p.infinite ? { infinite: true } : {}) };
+		sim.set(id, copy);
+		return copy;
+	};
+	const flag = (id: string): void => {
+		if (!out.includes(id)) out.push(id);
+	};
 	const walk = (c: Command): void => {
 		if (c instanceof Batch) {
 			for (const x of c.commands) walk(x);
@@ -86,28 +124,47 @@ export function backgroundShifts(doc: NotebookDocument, cmd: Command): string[] 
 			return;
 		}
 		if (c instanceof SetPageMargins) {
-			if (marginsOf({ margins: c.before }).left !== marginsOf({ margins: c.after }).left) out.push(c.pageId);
+			const b = marginsOf({ margins: c.before });
+			const a = marginsOf({ margins: c.after });
+			if (b.left !== a.left) flag(c.pageId);
+			const p = page(c.pageId);
+			if (!p) return;
+			// As `SetPageMargins.apply`: the background keeps its box, the page grows or shrinks by the change.
+			p.width = Math.round((p.width + a.left + a.right - b.left - b.right) * 100) / 100;
+			p.height = Math.round((p.height + a.bottom - b.bottom) * 100) / 100;
+			if (c.after) p.margins = { ...c.after };
+			else delete p.margins;
 			return;
 		}
-		const page = (id: string): Page | undefined => doc.pages.find((p) => p.id === id);
 		if (c instanceof SetPageSize) {
 			const p = page(c.pageId);
-			if (!p?.background) return;
+			if (!p) return;
 			const margins = marginsAfterResize(p, c.after);
-			if (!sameRect(backgroundRect(p), backgroundRect({ ...c.after, ...(margins ? { margins } : {}) }))) out.push(c.pageId);
+			const next: PageGeometry = { ...p, width: c.after.width, height: c.after.height };
+			if (margins) next.margins = margins;
+			else delete next.margins;
+			if (p.background) {
+				const a = geometryOf(p);
+				const b = geometryOf(next);
+				if (!sameRect(a.rect, b.rect) && !grownOnly(a, b)) flag(c.pageId);
+			}
+			sim.set(c.pageId, next);
 			return;
 		}
 		if (c instanceof SetPageBackground) {
 			const p = page(c.pageId);
-			if (!p?.background) return;
-			const next = { background: c.background, width: c.size.width, height: c.size.height, ...(p.margins ? { margins: p.margins } : {}) };
-			if (backgroundGeometry(p) !== backgroundGeometry(next)) out.push(c.pageId);
+			if (!p) return;
+			const next: PageGeometry = { ...p, background: c.background, width: c.size.width, height: c.size.height };
+			if (p.background && backgroundGeometry(p) !== backgroundGeometry(next) && !grownOnly(geometryOf(p), geometryOf(next))) flag(c.pageId);
+			sim.set(c.pageId, next);
 			return;
 		}
 		if (c instanceof ReplacePage) {
-			const a = backgroundGeometry(c.before);
+			const p = page(c.before.id) ?? c.before;
+			const a = backgroundGeometry(p);
 			const b = backgroundGeometry(c.after);
-			if (a !== "" && b !== "" && a !== b) out.push(c.before.id);
+			if (a !== "" && b !== "" && a !== b && !grownOnly(geometryOf(p), geometryOf(c.after))) flag(c.before.id);
+			sim.set(c.before.id, { width: c.after.width, height: c.after.height, ...(c.after.margins ? { margins: c.after.margins } : {}), ...(c.after.background ? { background: c.after.background } : {}), ...(c.after.infinite ? { infinite: true } : {}) });
 		}
 	};
 	walk(cmd);
@@ -236,7 +293,11 @@ export function stepMovesUnderRedaction(before: readonly PageShot[], doc: Notebo
 				// `geo`): the Undo of a size change that moved it is the way back, never refused.
 				const geo = backgroundGeometry(page);
 				const back = guard.unreadable !== true && geo !== "" && guard.boxes.every((b) => b.geo === geo);
-				if (!back) return true;
+				// Round-4 review (Z3): nor the growth of an infinite page (the Undo or Redo of writing near its bottom), when every box of the page
+				// knows its geometry: the export then refuses the page while its background is not where the boxes were drawn.
+				const grown = guard.unreadable !== true && guard.boxes.every((b) => b.geo !== undefined)
+					&& grownOnly({ rect: shot.background, key: shot.backgroundKey, infinite: shot.infinite }, { rect: now.background, key: now.backgroundKey, infinite: now.infinite });
+				if (!back && !grown) return true;
 			}
 		}
 		const nowStrokes = new Set<Stroke>(page.strokes);

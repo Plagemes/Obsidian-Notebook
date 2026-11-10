@@ -36,6 +36,11 @@ export interface PdfActionHost {
 	editable(): boolean;
 	/** 0.28 (#76): whether a page has redaction boxes (or the boxes cannot be read): such a page is never turned or cropped. Optional (none when absent). */
 	hasRedaction?(pageId: string): boolean;
+	/**
+	 * Round-4 review (Y5): true, after a notice that says why, when `run` would refuse `cmd` because it moves, stretches or replaces the
+	 * background of a page with redaction boxes (or the boxes cannot be read). Optional (`marginsRefused` on `hasRedaction` when absent).
+	 */
+	redactRefused?(cmd: Command): boolean;
 	/** Runs `cmd` as one undo step and refreshes the view; false when the document can no longer be edited. */
 	run(cmd: Command, scrollTo?: number): boolean;
 }
@@ -59,6 +64,17 @@ function marginCommand(target: Page, after: PageMargins | undefined): Command | 
  */
 export function marginsRefused(host: Pick<PdfActionHost, "doc" | "hasRedaction">, cmd: Command): boolean {
 	return backgroundShifts(host.doc, cmd).some((id) => host.hasRedaction?.(id) === true);
+}
+
+/**
+ * Round-4 review (Y5): true, after one notice, when "Update PDF" would switch the slide under the redaction boxes of a page (or the boxes
+ * cannot be read): the whole update is refused before anything is written.
+ */
+export function republishRefused(host: Pick<PdfActionHost, "doc" | "hasRedaction" | "redactRefused">, cmd: Command): boolean {
+	if (host.redactRefused) return host.redactRefused(cmd);
+	if (!marginsRefused(host, cmd)) return false;
+	showNotice(t("redactmove.background"), 9000);
+	return true;
 }
 
 /** Asks for the margins of a page (mm) and applies them, optionally to every page of the same PDF, as one undo step. */
@@ -222,6 +238,10 @@ export async function updatePdfFromNewVersion(host: PdfActionHost, anchorIndex: 
 		}
 		const choice = await askRepublish(host, result, unreadable);
 		if (!choice || !host.editable()) return;
+		// Round-4 review (Y5): the plan is checked against the redaction boxes BEFORE the new PDF is stored, so a refused update leaves no
+		// orphan file in `_assets/`. Only the asset id is read by the check (it is the hash of the bytes, the same once stored).
+		const draft = planRepublish(host.doc, result, { id: assetId, kind: "pdf", path: "", name: picked.name, bytes: picked.bytes.byteLength }, sizes, choice);
+		if (draft.command && republishRefused(host, draft.command)) return;
 		const asset = await storeAsset(host.app, host.folder, picked.bytes, picked.name, "pdf");
 		if (asset.id !== assetId) throw new Error("the file changed while it was being read");
 		host.media.addPending(asset);

@@ -22,7 +22,7 @@ import { filterErasable } from "../ink/erase-filter";
 import { AreaEraseGesture, areasUnderEraser } from "../ink/area-erase";
 import { createArea } from "../model/area";
 import { findHitStrokes, type BBox } from "../ink/hit-test";
-import { growCommand, growForInfinite } from "../ink/infinite";
+import { growForInfinite } from "../ink/infinite";
 import { InputPolicy } from "../ink/input-policy";
 import { rectanglePolygon, strokesInLasso } from "../ink/lasso";
 import { lineBreakTarget } from "../ink/line-break";
@@ -66,7 +66,7 @@ import { backgroundRect } from "../model/margins";
 import { viewKey, viewOf, type PdfView } from "../model/pdf-view";
 import {
 	AddAsset, AddElement, AddPage, AddStroke, Batch, History, InsertPages, MovePage, RemoveElement, ReplaceElement,
-	ReplaceStroke, SetMeta, type Command, type StepCheck,
+	ReplaceStroke, SetMeta, SetPageSize, type Command, type StepCheck,
 } from "../model/history";
 import { backgroundShifts, redactStepCheck } from "../ink/redact-step"; // 0.29 redactundo (R3-1)
 import { pageContentCommand } from "../model/page-content";
@@ -4562,13 +4562,26 @@ export class NotebookView extends FileView {
 	}
 
 	/**
-	 * Round-3 review (Z1): true when `cmd` would move, stretch or replace the background of a page with redaction boxes (or any page it names
-	 * while the boxes cannot be read): `applyCommand` refuses it. The merge dialog asks first, to say so in its own words.
+	 * Round-3 review (Z1): whether `cmd` would move, stretch or replace the background of a page with redaction boxes (or any page it names
+	 * while the boxes cannot be read): `applyCommand` refuses it. Round-4 review (Y6): with the reason, or null: "unreadable" when the stored
+	 * boxes cannot be read (no page can be said to have boxes then), else "boxes". The restore and merge dialogs ask first, so the reader
+	 * gets one notice that says why.
 	 */
-	redactRefuses(cmd: Command): boolean {
+	redactRefusal(cmd: Command): "boxes" | "unreadable" | null {
 		const doc = this.session?.doc;
-		if (!doc) return false;
-		return backgroundShifts(doc, cmd).some((id) => { const g = this.redactGuard(id); return g.unreadable === true || g.boxes.length > 0; });
+		if (!doc) return null;
+		let why: "boxes" | "unreadable" | null = null;
+		for (const id of backgroundShifts(doc, cmd)) {
+			const g = this.redactGuard(id);
+			if (g.unreadable === true) return "unreadable";
+			if (g.boxes.length > 0) why = "boxes";
+		}
+		return why;
+	}
+
+	/** Round-4 review (Y6): the notice for a change refused by `redactRefusal`. */
+	private redactRefusalNotice(why: "boxes" | "unreadable"): void {
+		showNotice(t(why === "unreadable" ? "redactmove.unreadable" : "redactmove.background"), 9000);
 	}
 
 	/** Runs a command built outside the view (merge, page restore) as one undo step. */
@@ -4578,8 +4591,9 @@ export class NotebookView extends FileView {
 		// Round-2 review (H1): a left margin that changes (a merge that widens a page, a page size that drops the margins) moves the background
 		// and the ink out from under the redaction boxes of the page: refused, like a PDF turn or crop (fail closed when the boxes are unreadable).
 		// Round-3 review (Z1, Z2): merges, page sizes, Update PDF and page restores included (see `backgroundShifts`).
-		if (this.redactRefuses(cmd)) {
-			showNotice(t("redactmove.background"), 9000);
+		const why = this.redactRefusal(cmd);
+		if (why) {
+			this.redactRefusalNotice(why);
 			return false;
 		}
 		this.commitText();
@@ -5262,12 +5276,20 @@ export class NotebookView extends FileView {
 				const stored = this.redactState();
 				return stored.unreadable === true || boxesOf(stored.boxes, pageId).length > 0;
 			},
+			// Round-4 review (Y5): asked by "Update PDF" before the new PDF is stored, with the notice that says why.
+			redactRefused: (cmd) => {
+				if (!this.stillHere(session) || session.doc !== doc) return false;
+				const why = this.redactRefusal(cmd);
+				if (why) this.redactRefusalNotice(why);
+				return why !== null;
+			},
 			run: (cmd, scrollTo) => {
 				if (!this.stillHere(session) || session.doc !== doc) return false;
 				// Round-3 review (Z2): "Update PDF" switching the slide under the boxes of a page (and any other PDF action that would move or
 				// stretch a boxed background) is refused up front; the export would refuse the page anyway.
-				if (this.redactRefuses(cmd)) {
-					showNotice(t("redactmove.background"), 9000);
+				const why = this.redactRefusal(cmd);
+				if (why) {
+					this.redactRefusalNotice(why);
 					return false;
 				}
 				this.commitText();
@@ -7043,8 +7065,7 @@ export class NotebookView extends FileView {
 			const maxY = Math.max(...strokes.map((s) => this.renderer!.boundsOf(s).maxY));
 			const height = growForInfinite(page, { maxY });
 			if (height !== null) {
-				// Round-3 review (Z3): a page with a background and no margins grows by a bottom margin (`growCommand`).
-				commands.push(growCommand(page, height));
+				commands.push(new SetPageSize(page.id, { width: page.width, height: page.height }, { width: page.width, height }));
 				grew = true;
 			}
 		}
