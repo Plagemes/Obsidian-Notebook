@@ -96,6 +96,8 @@ export const LABELS: Readonly<Record<string, Title>> = {
 	"Insert chart": ["histpanel.t.chartInsert", "bar-chart-3"],
 	"Update chart": ["histpanel.t.chartUpdate", "refresh-cw"],
 	"Compute table": ["histpanel.t.tableCompute", "calculator"],
+	"Add marker": ["histpanel.t.markerAdd", "map-pin"],
+	"Renumber markers": ["histpanel.t.markerRenumber", "list-ordered"],
 	"Convert equation to ink": ["histpanel.t.eqInk", "pencil"],
 	"Balance reaction": ["histpanel.t.balance", "flask-conical"],
 	"Edit graph": ["histpanel.t.graph", "activity"],

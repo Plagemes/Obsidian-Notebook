@@ -119,6 +119,9 @@ export const ACTION_HELP: Readonly<Record<string, MessageKey>> = {
 	"table-stats": "help.table.stats",
 	// 0.30 tablecalc (#147)
 	"table-compute": "help.tablecalc",
+	// 0.30 figmarkers (#247)
+	"figure-marker-add": "help.fm.add",
+	"figure-markers-renumber": "help.fm.renumber",
 };
 
 /** The id of the tool-button explanation (set as `data-help` on the toolbar's tool buttons). */

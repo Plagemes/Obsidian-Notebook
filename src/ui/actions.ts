@@ -56,6 +56,7 @@ export interface UiContext {
 		/** 0.28 (#41): the selection is exactly one hand-drawn table (optional, false when absent). */ table?: boolean;
 		/** 0.29 (#244): the selection holds one hand-drawn table a chart can be made from, other items allowed (optional, false when absent). */ chartable?: boolean;
 		/** 0.29 (#244): the selection is exactly one chart made from a table (optional, false when absent). */ chart?: boolean;
+		/** 0.30 (#247): what the selection is for numbered markers on a figure ("figure": one picture; "region": ink or other drawn items; "set": markers or a legend, `stale` when a renumber would change something); optional, none when absent. */ markers?: { kind: "figure" | "region" | "set"; stale: boolean } | null;
 	} | null;
 	/** The page in view (index of the page sheet when it was opened from a thumbnail). */
 	page: {
@@ -666,6 +667,9 @@ export const ACTIONS: readonly ActionDef[] = [
 	// 0.29 (#248): figure captions ("Fig. 3 — text") numbered by reading order, and references that always show the current number.
 	{ id: "figure-caption", label: "figcap.caption.menu", icon: "quote", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.1, scope: "view", command: "command.figureCaption", when: isOneFigure, enabled: pageOpen, keywords: "figure caption number picture photo label legenda didascalia numero figura immagine" },
 	{ id: "figure-ref", label: "figcap.refs.menu", icon: "link", group: "insert", surfaces: ["sheet", "palette"], priority: 44, scope: "view", command: "command.figureRef", enabled: pageOpen, keywords: "figure reference cross-reference see fig number link riferimento figura rimando numero collegamento" },
+	// 0.30 figmarkers (#247): numbered markers (1, 2, 3) on a picture or a drawing with a legend under it; renumbering is explicit (it closes the gaps and updates the legend).
+	{ id: "figure-marker-add", label: "fm.add", icon: "map-pin", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.2, scope: "view", command: "fm.command.add", when: (c) => !!c.selection?.markers, enabled: pageOpen, keywords: "figure marker number numbered legend annotate label pin circle diagram anatomy segnaposto numero numerato legenda annota etichetta cerchio figura schema anatomia" },
+	{ id: "figure-markers-renumber", label: "fm.renumber", icon: "list-ordered", group: "selection", surfaces: ["sheet"], contexts: ["selection"], priority: 40.15, scope: "view", command: "fm.command.renumber", when: (c) => c.selection?.markers?.kind === "set", enabled: pageOpen, keywords: "figure marker renumber legend update gaps order segnaposto rinumera legenda aggiorna numeri buchi ordine" },
 	// 0.18 (#86): margin comments: a comment anchored to the selection's region, or to a rectangle drawn on the page; the side panel lists them.
 	{ id: "comment-selection", label: "comments.action", icon: "message-square-plus", group: "selection", surfaces: ["context", "sheet"], contexts: ["selection"], priority: 40, scope: "view", command: "comments.command.selection", when: hasSelection, enabled: pageOpen, keywords: "comment note margin review annotation commento nota margine revisione" },
 	{ id: "comment-region", label: "comments.region", icon: "square-dashed", group: "insert", surfaces: ["sheet", "palette"], priority: 46, scope: "view", command: true, enabled: pageOpen, keywords: "comment region rectangle margin note review commento regione rettangolo margine" },

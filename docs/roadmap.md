@@ -480,7 +480,7 @@ Priority **P1** next, **P2** very useful, **P3** nice to have. Status: ⏳ for a
 244. **P2** 🧪 Charts from table data (bar, line, pie), updated when the numbers change. (0.29: *Chart from table* on a selected hand-drawn table, then *Update chart* on the selected chart redraws it in place in one undo step; the chart is ordinary shape strokes and text boxes, no format change; the numbers are read from text boxes typed in the cells, handwriting is not read; the update is explicit, not automatic.)
 245. **P2** Hand-drawn flowcharts that tidy themselves: boxes and arrows recognised, aligned and connected.
 246. **P2** Leader-line labels, auto-aligned, for annotated figures (anatomy, diagrams).
-247. **P2** Numbered markers on a figure (1, 2, 3) with an automatically generated legend.
+247. **P2** 🧪 Numbered markers on a figure (1, 2, 3) with an automatically generated legend. (0.30: *Add numbered marker* on a selected picture, drawing or marker puts the next numbered circle on it and its line in a legend under it, one undo step; numbering is by placement order and *Renumber markers* closes gaps and updates the legend in one step; markers and legend are ordinary shapes and text boxes of `nbm1.` groups, no format change; copies are plain pictures.)
 248. **P2** 🧪 Figure captions and numbering ("Fig. 3") with references that update themselves.
 249. **P2** 🧪 Automatic course formula sheet: collects every formula element (#110) into one page.
 250. **P3** Pattern fills (hatching, dots).

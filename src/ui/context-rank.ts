@@ -107,6 +107,10 @@ export function contextBoost(a: ActionDef, c: UiContext): number {
 	if (a.id === "chart-update" && c.selection?.chart === true) boost += HERE_MIN_BOOST + 6;
 	// 0.30 (#147): "Compute table" fits a selected table a little more than its other actions (it is what typing a formula leads to).
 	if (a.id === "table-compute" && c.selection?.table === true) boost += 2;
+	// 0.30 (#247): numbered markers fit a selected picture above all (enough for "For this page"); on any other drawn selection the action only leans
+	// forward; renumbering fits the markers of a figure that was changed since (one was deleted, a legend line is missing or left over).
+	if (a.id === "figure-marker-add") boost += isOneFigure(c) ? HERE_MIN_BOOST + 1 : c.selection?.markers?.kind === "set" ? 6 : c.selection?.markers?.kind === "region" ? 3 : 0;
+	if (a.id === "figure-markers-renumber" && c.selection?.markers?.kind === "set") boost += c.selection.markers.stale ? HERE_MIN_BOOST + 7 : 2;
 	if (a.id === "insert-table" && !hasSelection && (c.page?.kind === "grid" || c.page?.kind === "plain")) boost += 4;
 	if (a.group === "macros") boost += macroFit(a, c, hasSelection);
 	// 0.29 (#182): the calculator fits where numbers are being worked on: a selected text box, equation or graph (the expression to work out,

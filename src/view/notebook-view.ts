@@ -241,6 +241,7 @@ import { TableTools, type TableHost } from "./table-tools";
 import { tableOfSelection } from "../ink/table";
 import { chartOfSelection, tableInSelection } from "../ink/chart";
 import { ChartTools } from "./chart-tools";
+import { FigureMarkerTools } from "./figure-marker-tools"; // 0.30 figmarkers
 import { ChemTools, holdsReaction } from "./chem-tools";
 import { CalculatorTools } from "./calculator";
 import { GroupTools, type GroupHost } from "./group-tools";
@@ -585,6 +586,8 @@ export class NotebookView extends FileView {
 	private tables: TableTools | null = null;
 	/** 0.29 (#244): charts from table data (make one from a selected table, update it when the numbers change). */
 	private charts: ChartTools | null = null;
+	/** 0.30 (#247): numbered markers on a figure, with a legend (add one, renumber after a deletion). */
+	private figureMarkers: FigureMarkerTools | null = null;
 	/** 0.23 (#294): balancing of a typed chemical reaction in the selected text. */
 	private chem: ChemTools | null = null;
 	/** 0.29 (#182): the advanced calculator (null before the view is open). */
@@ -958,6 +961,7 @@ export class NotebookView extends FileView {
 		this.axes = new AxesTools(this.axesHost());
 		this.tables = new TableTools(this.tableHost());
 		this.charts = new ChartTools(this.tableHost());
+		this.figureMarkers = new FigureMarkerTools({ ...this.tableHost(), textSize: () => this.tools.textSize });
 		this.chem = new ChemTools({ ...this.mathHost(), app: this.app });
 		this.calculator = new CalculatorTools({ ...this.mathHost(), app: this.app });
 		this.groups = new GroupTools(this.groupHost());
@@ -1446,6 +1450,7 @@ export class NotebookView extends FileView {
 		this.axes = null;
 		this.tables = null;
 		this.charts = null;
+		this.figureMarkers = null;
 		this.chem = null;
 		this.calculator = null;
 		this.checklist = null;
@@ -3772,6 +3777,11 @@ export class NotebookView extends FileView {
 		return this.charts;
 	}
 
+	/** 0.30 (#247): numbered markers on a figure of this view (null before the view is open). */
+	get figMarkerTools(): FigureMarkerTools | null {
+		return this.figureMarkers;
+	}
+
 	/** 0.22 (#206): instant axes of this view (null before the view is open). */
 	get axesTools(): AxesTools | null {
 		return this.axes;
@@ -5191,6 +5201,8 @@ export class NotebookView extends FileView {
 			// 0.29 (#244): the selection holds one table a chart can be made from (other items allowed), or is exactly one chart (Update chart).
 			chartable: parts.length === 1 && !!parts[0] && tableInSelection(parts[0].strokes) !== null,
 			chart: parts.length === 1 && !!parts[0] && chartOfSelection(parts[0].strokes, parts[0].elements) !== null,
+			// 0.30 (#247): numbered markers on a figure: what the selection is for (a picture, drawn items, or markers and a legend) and whether a renumber would change anything.
+			markers: parts.length === 1 && parts[0] ? this.figureMarkers?.state(parts[0]) ?? null : null,
 			// 0.28 (#403): the chips the shape of the selection suggests (one page, ink only; empty when the setting is off).
 			suggest: this.suggestionsFor(sel),
 		};
